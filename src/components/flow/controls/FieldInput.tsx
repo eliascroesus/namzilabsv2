@@ -56,7 +56,7 @@ export function FieldInput({
               // affordances cannot drift a ramp step apart.
               className="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center justify-center rounded-control border border-brand-200 bg-brand-50 p-1 text-brand-500 transition-colors hover:border-brand-300 hover:bg-brand-100 hover:text-brand-600"
             >
-              <Database size={14} strokeWidth={2} />
+              <Database size={14} />
             </button>
           ) : (
             // Pick-only from the dataset: a plain dropdown chevron, no data icon.

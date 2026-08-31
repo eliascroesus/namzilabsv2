@@ -162,11 +162,20 @@
    * (see `.stat-numeral`). A second family was buying separation the size step
    * had already paid for.
    */
-  --font-sans:
-    -apple-system, BlinkMacSystemFont, "SF Pro Text", var(--font-inter), "Segoe UI", ui-sans-serif, system-ui, sans-serif;
-  --font-display:
-    -apple-system, BlinkMacSystemFont, "SF Pro Display", var(--font-inter), "Segoe UI", ui-sans-serif, system-ui,
-    sans-serif;
+  /* ONE LINE EACH, AND THE LINE BREAK WAS A REAL BUG RATHER THAN A STYLE
+     PREFERENCE. Written across two lines (which is what the formatter does to
+     them), Tailwind's `@theme` parser did not take the value and fell back to
+     its OWN default `--font-sans` — so the whole app rendered in
+     `ui-sans-serif, system-ui, sans-serif` with `var(--font-inter)` nowhere in
+     the chain. Nothing failed; the interface simply came out in the browser's
+     generic UI face at a different apparent size and weight from the design it
+     was drawn against, which is exactly the "everything looks slightly off and
+     nobody can say why" this file exists to prevent. Measured in the browser,
+     not inferred. */
+  /* prettier-ignore */
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", var(--font-inter, "Inter"), "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  /* prettier-ignore */
+  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", var(--font-inter, "Inter"), "Segoe UI", ui-sans-serif, system-ui, sans-serif;
   /* IDs, API keys, webhook URLs, code. System mono — nothing to load, and
      technical strings stop wearing the browser's fallback serif-mono mix. */
   --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
@@ -294,20 +303,36 @@
    * small text, it is unreadable text, and the only thing legible at that size
    * is a short string in caps with tracking opened up (see `--tracking-label`).
    */
-  --text-2xs: 0.625rem; /* 10px — the caps badge, and nothing else */
-  --text-2xs--line-height: 0.9375rem;
-  --text-xs: 0.75rem; /* 12px — labels, captions, dense controls */
-  --text-xs--line-height: 1rem;
-  --text-sm: 0.875rem; /* 14px — the app's default body */
-  --text-sm--line-height: 1.25rem;
-  --text-md: 1rem; /* 16px — long-form reading prose, and the `lg` button */
-  --text-md--line-height: 1.5rem;
+  /**
+   * THE LADDER SITS ONE STEP ABOVE THE REFERENCE'S, AND THE STEP IS A UNIT
+   * CONVERSION RATHER THAN A DISAGREEMENT.
+   *
+   * The reference is drawn on a 2560px canvas. Its 14px body is 14px OF THAT
+   * CANVAS — read at the width the design is actually presented at, it is the
+   * proportion the interface wants. Rebuilt literally at 14px CSS on a normal
+   * 1440–1920px working display it lands a step under, and every button, label
+   * and title in the product reads as slightly shrunken without any single
+   * element being wrong.
+   *
+   * So each interface step moves up one pixel and the page title moves up two.
+   * The RATIOS are untouched, which is the part that has to hold: the badge is
+   * still two steps under the body, a card description is still one step under
+   * its title, and the numeral is still the loudest thing on a tile.
+   */
+  --text-2xs: 0.6875rem; /* 11px — the caps badge, and nothing else */
+  --text-2xs--line-height: 1rem;
+  --text-xs: 0.8125rem; /* 13px — labels, captions, dense controls */
+  --text-xs--line-height: 1.125rem;
+  --text-sm: 0.9375rem; /* 15px — the app's default body */
+  --text-sm--line-height: 1.375rem;
+  --text-md: 1.0625rem; /* 17px — long-form reading prose, and the `lg` button */
+  --text-md--line-height: 1.625rem;
   --text-lg: 1.125rem; /* 18px */
   --text-lg--line-height: 1.75rem;
   --text-xl: 1.25rem; /* 20px */
   --text-xl--line-height: 1.875rem;
-  --text-display-xs: 1.5rem; /* 24px — page headings */
-  --text-display-xs--line-height: 2rem;
+  --text-display-xs: 1.625rem; /* 26px — page headings */
+  --text-display-xs--line-height: 2.125rem;
   --text-display-sm: 1.875rem; /* 30px */
   --text-display-sm--line-height: 2.375rem;
   --text-display-md: 2.25rem; /* 36px — the tile's headline number */
@@ -395,9 +420,9 @@
    * `tests/page-width.test.ts` was written after. Tokens, so there is one place
    * to change and the skeleton cannot drift from the thing it stands in for.
    */
-  --spacing-rail: 48px; /* the icon rail at rest */
-  --spacing-rail-open: 240px; /* and under the pointer */
-  --spacing-topbar: 40px; /* the bar's CONTENT box; +8px padding each side, +1px rule */
+  --spacing-rail: 60px; /* the icon rail at rest */
+  --spacing-rail-open: 260px; /* and under the pointer */
+  --spacing-topbar: 44px; /* the bar's CONTENT box; +8px padding each side, +1px rule */
 
   /* --- Motion -------------------------------------------------------------
    * Three durations, three curves. The timings were all one-offs — 0.12s,
@@ -1001,6 +1026,33 @@ select:-webkit-autofill {
   [role="switch"]:not(:disabled):active {
     transform: translateY(0.5px);
   }
+}
+
+/**
+ * THE ICON WEIGHT, IN ONE PLACE — the same argument as the focus ring below,
+ * and it had gone exactly the same way.
+ *
+ * The reference draws its icons as FILLED shapes. Lucide draws strokes, and a
+ * 2px stroke at 16px is visibly lighter than a filled glyph of the same size —
+ * so matching the reference is a weight decision, not an icon-set decision.
+ *
+ * It was being made 53 times. `strokeWidth` was spelled SIX ways across the
+ * app — 2, 2.25, 2.5, 2.75, 3, 3.5 — with no default anywhere, so the same
+ * 16px chevron was one weight in the rail and another in a menu, and the only
+ * way to notice was to put two screens side by side. 2.25 was already the
+ * plurality at 28 sites; it is now simply the answer.
+ *
+ * `:where()` keeps specificity at ZERO, which is what makes the exceptions
+ * work: a 11px checkmark inside a 14px swatch genuinely needs 3.5 to read at
+ * all, and those call sites still win by being an attribute on the element.
+ * What they no longer do is silently disagree about the default.
+ *
+ * `scripts/check-ui.ts` fails on a bare `strokeWidth={2}` or `{2.25}` — not on
+ * the heavy ones, which are deliberate — so re-spelling the default is a build
+ * failure rather than a thing nobody sees.
+ */
+:where(svg.lucide) {
+  stroke-width: 2.25;
 }
 
 /**

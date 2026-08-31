@@ -315,6 +315,25 @@ const RULES: Rule[] = [
     find: (line) => line.match(/\bdark:[a-z[]/)?.[0] ?? null,
   },
   {
+    name: "re-spelled icon weight",
+    why: "the kit's icon weight is 2.25 and globals.css declares it once; a bare strokeWidth={2} or {2.25} is the sixth spelling of a decision that already has one",
+    /**
+     * THE SAME FAILURE AS THE FOCUS RING, IN A DIFFERENT ATTRIBUTE.
+     *
+     * `strokeWidth` was spelled SIX ways across 53 call sites — 2, 2.25, 2.5,
+     * 2.75, 3, 3.5 — with no default declared anywhere, so the same 16px
+     * chevron rendered at one weight in the rail and another in a menu and the
+     * only way to notice was to put two screens side by side.
+     *
+     * `:where(svg.lucide)` in globals.css is the answer now. This rule bans
+     * only the two values that RE-SPELL that default; the heavier ones are
+     * deliberate and still pass, because an 11px checkmark inside a 14px swatch
+     * genuinely needs 3.5 to read at all. What is banned is saying the default
+     * out loud, because a call site that says it can drift from it.
+     */
+    find: (line) => line.match(/strokeWidth=\{2(?:\.25)?\}/)?.[0] ?? null,
+  },
+  {
     name: "hex literal",
     why: "colours live in tokens; a hex in a component is invisible to a future theme",
     find: (line) => line.match(/#[0-9a-fA-F]{6}\b/)?.[0] ?? null,

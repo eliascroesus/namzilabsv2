@@ -69,7 +69,7 @@ export function FlowNodeCard({
           ink is drawing, which is the marker's half of the split. */}
       {publishes && (
         <div className="flex items-center gap-1.5 rounded-b-[calc(var(--radius-surface)-1px)] border-t border-brand-100 bg-accent px-3.5 py-2 text-xs font-semibold text-accent-foreground">
-          <LineChart size={14} strokeWidth={2.25} />
+          <LineChart size={14} />
           On your dashboard
         </div>
       )}
@@ -100,7 +100,7 @@ export function CanvasPreview() {
         {/* Duplicates the terminal "Add next step" button from src/components/flow/FlowNodeCard.tsx — it is an opaque, raised card there, not a wash, and it carries the same corner and the same ring-free elevation as the cards above it. */}
         <div className="flex w-[300px] items-center gap-2.5 rounded-surface border-2 border-dashed border-border bg-card p-3 text-sm font-semibold text-muted-foreground shadow-surface">
           <span className="flex h-8 w-8 items-center justify-center rounded-control border-2 border-dashed border-current opacity-70">
-            <Plus size={16} strokeWidth={2} />
+            <Plus size={16} />
           </span>
           Add next step
         </div>
@@ -126,7 +126,7 @@ function Connector() {
       {/* shrink-0: the parent is a w-px flex row, so without it the circle is
           squeezed to an oval — the one thing the real control cannot be. */}
       <span className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-card">
-        <Plus size={14} strokeWidth={2.25} />
+        <Plus size={14} />
       </span>
     </span>
   );

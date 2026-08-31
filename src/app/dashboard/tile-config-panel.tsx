@@ -268,7 +268,7 @@ export function TileConfigPanel({
           <p className="mt-0.5 truncate text-lg font-semibold text-foreground">{config.title || metricName}</p>
         </div>
         <Button variant="ghost" size="iconSm" onClick={onClose} aria-label="Close chart settings" title="Close">
-          <X size={18} strokeWidth={2} />
+          <X size={18} />
         </Button>
       </div>
 

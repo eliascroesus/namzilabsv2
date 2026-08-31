@@ -220,10 +220,10 @@ describe("the page container and the skeleton that stands in for it", () => {
     const code = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
     // The rail's right edge, and the ghost standing in for it.
     expect(code(sidebar)).toMatch(/border-r border-border/);
-    expect(code(skeleton)).toMatch(/w-\[48px\][^"]*border-r border-border/);
+    expect(code(skeleton)).toMatch(/w-\[60px\][^"]*border-r border-border/);
     // The bar's bottom edge, and its ghost.
     expect(code(read("src/components/top-bar.tsx"))).toMatch(/<header className="[^"]*border-b border-border/);
-    expect(code(skeleton)).toMatch(/h-\[56px\][^"]*border-b border-border/);
+    expect(code(skeleton)).toMatch(/h-\[60px\][^"]*border-b border-border/);
   });
 });
 

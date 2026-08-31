@@ -186,7 +186,7 @@ export function ConditionEditor({
                   title="Duplicate this condition"
                   className="inline-flex items-center gap-1 rounded-control text-xs text-muted-foreground transition-colors hover:text-foreground"
                 >
-                  <Copy size={12} strokeWidth={2.25} aria-hidden />
+                  <Copy size={12} aria-hidden />
                   Duplicate
                 </button>
                 <button
@@ -207,7 +207,7 @@ export function ConditionEditor({
         onClick={addRule}
         className="inline-flex items-center gap-1 rounded-control border border-dashed border-border px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:border-ring/50 hover:text-foreground"
       >
-        <Plus size={14} strokeWidth={2.25} aria-hidden /> Add condition
+        <Plus size={14} aria-hidden /> Add condition
       </button>
     </div>
   );

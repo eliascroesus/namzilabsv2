@@ -351,7 +351,7 @@ export function FlowToolbar({
                    in the bar and the only one drawn to no rung of the ladder. */
                 className="flex size-9 shrink-0 items-center justify-center rounded-control text-foreground transition-colors hover:bg-accent"
               >
-                <ChevronLeft size={20} strokeWidth={2} />
+                <ChevronLeft size={20} />
               </Link>
 
               <Button

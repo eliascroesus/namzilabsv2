@@ -38,7 +38,7 @@ function NodeMenu({ id, data }: { id: string; data: NodeData }) {
           title="Step actions"
           aria-label="Step actions"
         >
-          <MoreVertical size={18} strokeWidth={2} />
+          <MoreVertical size={18} />
         </button>
       }
     >
@@ -279,7 +279,7 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
           }`}
           title={publishes ? "This step's result becomes a tile when you publish." : "Switched off in Review & publish — this step publishes nothing."}
         >
-          <LineChart size={14} strokeWidth={2.25} />
+          <LineChart size={14} />
           {publishes ? "On your dashboard" : "Not published"}
         </div>
       )}
@@ -314,7 +314,7 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
           className="nodrag absolute left-1/2 top-full z-10 mt-8 flex w-[300px] -translate-x-1/2 items-center gap-2.5 rounded-surface border-2 border-dashed border-border bg-card p-3 text-left text-sm font-semibold text-muted-foreground shadow-surface transition-colors duration-(--duration-fast) hover:border-marker hover:text-marker"
         >
           <span className="flex h-8 w-8 items-center justify-center rounded-control border-2 border-dashed border-current opacity-70">
-            <Plus size={16} strokeWidth={2} />
+            <Plus size={16} />
           </span>
           Add next step
         </button>
@@ -334,7 +334,7 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
               title={`Add a step to “${h.label}”`}
               className="flex items-center gap-1.5 whitespace-nowrap rounded-full border-2 border-dashed border-border bg-card px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors duration-(--duration-fast) hover:border-marker hover:text-marker"
             >
-              <Plus size={14} strokeWidth={2.25} />
+              <Plus size={14} />
               {h.label}
             </button>
           ))}

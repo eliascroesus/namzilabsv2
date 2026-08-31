@@ -246,7 +246,7 @@ export function RanksPanel({
                   )}
                   aria-hidden
                 >
-                  <Shield size={18} strokeWidth={2} />
+                  <Shield size={18} />
                 </span>
                 <span className="min-w-0 flex-1">
                   {/* 16px, down from 18. The role's name is the biggest string
@@ -449,7 +449,7 @@ export function RanksPanel({
             className="flex w-full items-center gap-2.5 rounded-card border-2 border-dashed border-border p-3 text-left text-md font-semibold text-muted-foreground transition-colors duration-(--duration-fast) hover:border-marker hover:text-accent-foreground"
           >
             <span className="flex size-7 items-center justify-center rounded-control border-2 border-dashed border-current opacity-70">
-              <Plus size={14} strokeWidth={2.25} />
+              <Plus size={14} />
             </span>
             New role
           </button>
@@ -601,7 +601,7 @@ function ToggleRow({
           )}
           aria-hidden
         >
-          <Icon size={14} strokeWidth={2} />
+          <Icon size={14} />
         </span>
       )}
       <span className={cn("min-w-0 flex-1", implied && "opacity-45")}>

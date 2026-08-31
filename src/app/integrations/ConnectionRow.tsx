@@ -334,7 +334,7 @@ export function ConnectionRow({
               title="Rename this connection"
               aria-label="Rename this connection"
             >
-              <Pencil size={14} strokeWidth={2.25} />
+              <Pencil size={14} />
             </Button>
           </span>
         )}
@@ -370,7 +370,7 @@ export function ConnectionRow({
             title={`Disconnect ${name} — stops syncing, keeps your data, reversible`}
             aria-label={`Disconnect ${name}`}
           >
-            <Power size={14} strokeWidth={2.25} />
+            <Power size={14} />
           </Button>
           <DeleteButton name={name} onClick={() => setDeleting(true)} />
         </span>
@@ -490,7 +490,7 @@ function DeleteButton({ name, onClick }: { name: string; onClick: () => void }) 
       title={`Delete ${name} permanently — removes the connection and all its data`}
       aria-label={`Delete ${name} permanently`}
     >
-      <Trash2 size={14} strokeWidth={2.25} />
+      <Trash2 size={14} />
     </Button>
   );
 }

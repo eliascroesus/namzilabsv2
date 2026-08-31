@@ -201,7 +201,7 @@ export default async function ActivityPage({ searchParams }: { searchParams: Pro
                     to the page that hosts the Replay button. */}
                 {dlqByConnection.length > 0
                   ? dlqByConnection.map((d) => (
-                      <Link key={d.connectionId} href={`/connections/${d.connectionId}`} className="rounded-full">
+                      <Link key={d.connectionId} href={`/connections/${d.connectionId}`} className="rounded-xs">
                         <StatusPill tone="danger" className="tnum">
                           {d.count} in dead-letter · {d.name}
                         </StatusPill>

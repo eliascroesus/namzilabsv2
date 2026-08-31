@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils";
 export default function AuthErrorPage() {
   return (
     <main id="main" className="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-6 py-16">
-      <h1 className="font-display text-display-xs font-semibold text-foreground">That sign-in didn&rsquo;t finish</h1>
+      <h1 className="text-display-xs font-semibold text-foreground">That sign-in didn&rsquo;t finish</h1>
       <p className="mt-3 text-sm text-muted-foreground">
         Something interrupted the last step. It&rsquo;s almost always one of these:
       </p>

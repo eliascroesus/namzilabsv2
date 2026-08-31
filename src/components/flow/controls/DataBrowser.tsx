@@ -232,13 +232,13 @@ export function DataBrowser({
               onClick={() => setDrill(drill.trail.length > 1 ? { groupId: drill.groupId, trail: drill.trail.slice(0, -1) } : null)}
               className="flex shrink-0 items-center gap-0.5 rounded-control px-1 transition-colors hover:bg-accent"
             >
-              <ChevronLeft size={12} strokeWidth={2.25} aria-hidden /> Back
+              <ChevronLeft size={12} aria-hidden /> Back
             </button>
             <span className="flex min-w-0 items-center gap-1">
               <span className="truncate">{drillGroup.title}</span>
               {drill.trail.map((f) => (
                 <span key={f.path} className="flex min-w-0 items-center gap-1">
-                  <ChevronRight size={12} strokeWidth={2.25} className="shrink-0" aria-hidden />
+                  <ChevronRight size={12} className="shrink-0" aria-hidden />
                   <span className="truncate">{f.label}</span>
                 </span>
               ))}
@@ -322,7 +322,7 @@ export function DataBrowser({
                     />
                     {g.system ? (
                       <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-muted text-muted-foreground" aria-hidden>
-                        <Settings size={12} strokeWidth={2.25} />
+                        <Settings size={12} />
                       </span>
                     ) : (
                       <SourceBadge source={g.source} size={16} />

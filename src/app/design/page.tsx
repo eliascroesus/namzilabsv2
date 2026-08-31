@@ -190,16 +190,16 @@ const DIRECTION: Array<{ rule: string; why: string }> = [
 const TYPE: Array<{ token: string; cls: string; px: string; use: string; sample: string }> = [
   { token: "text-display-md", cls: "stat-numeral text-display-md", px: "36px", use: "Headline numbers, via formatMetricValue — the ledger numeral", sample: "1,204" },
   { token: "text-display-sm", cls: "font-display text-display-sm font-semibold", px: "30px", use: "Reserved — no in-app consumer since page titles came down to 24", sample: "Speed to lead" },
-  { token: "text-display-xs", cls: "font-display text-display-xs font-semibold", px: "24px", use: "Page titles (PageHeader), and the legal pages' h1", sample: "Speed to lead" },
+  { token: "text-display-xs", cls: "text-display-xs font-semibold", px: "26px", use: "Page titles (PageHeader), and the legal pages' h1", sample: "Speed to lead" },
   { token: "text-xl", cls: "text-xl font-semibold tracking-tight", px: "20px", use: "The step above a card title, where a section needs one", sample: "Speed to lead" },
   { token: "text-lg", cls: "text-lg font-semibold tracking-tight", px: "18px", use: "Card and modal titles", sample: "Speed to lead" },
-  { token: "text-md", cls: "text-md font-semibold", px: "16px", use: "Panel titles, hero list rows", sample: "Speed to lead" },
-  { token: "text-sm", cls: "text-sm", px: "14px", use: "Body, menu items, table cells — the default", sample: "Speed to lead" },
-  { token: "text-xs", cls: "text-xs", px: "12px", use: "Helper text, captions, dense controls, buttons and field labels", sample: "Speed to lead" },
+  { token: "text-md", cls: "text-md font-semibold", px: "17px", use: "Panel titles, hero list rows", sample: "Speed to lead" },
+  { token: "text-sm", cls: "text-sm", px: "15px", use: "Body, menu items, table cells — the default", sample: "Speed to lead" },
+  { token: "text-xs", cls: "text-xs", px: "13px", use: "Helper text, captions, dense controls, buttons and field labels", sample: "Speed to lead" },
   {
     token: "text-2xs",
     cls: "label-micro",
-    px: "10px",
+    px: "11px",
     use: "The micro badge — ALL CAPS at --tracking-label, and never prose. At 10px a sentence is not small text, it is unreadable text",
     sample: "Speed to lead",
   },
@@ -725,19 +725,19 @@ export default function DesignPage() {
             <div className="inline-flex items-start gap-3 rounded-card bg-background px-5 py-4">
               <span className="flex w-14 flex-col items-center">
                 <span className="flex size-10 items-center justify-center rounded-control bg-primary text-primary-foreground">
-                  <LayoutDashboard size={24} strokeWidth={2} />
+                  <LayoutDashboard size={24} />
                 </span>
                 <span className="px-1 text-center text-xs font-medium leading-4 text-white">Active</span>
               </span>
               <span className="flex w-14 flex-col items-center">
                 <span className="flex size-10 items-center justify-center rounded-control bg-neutral-700 text-white">
-                  <Workflow size={24} strokeWidth={2} />
+                  <Workflow size={24} />
                 </span>
                 <span className="px-1 text-center text-xs font-medium leading-4 text-white">Hover</span>
               </span>
               <span className="flex w-14 flex-col items-center">
                 <span className="flex size-10 items-center justify-center rounded-control text-white">
-                  <Plug size={24} strokeWidth={2} />
+                  <Plug size={24} />
                 </span>
                 <span className="px-1 text-center text-xs font-medium leading-4 text-muted-foreground">Rest</span>
               </span>
@@ -988,7 +988,7 @@ export default function DesignPage() {
                     <p className="-ml-1.5 mt-0.5 truncate px-1.5 py-1 text-lg font-semibold tracking-tight text-foreground">Summarize</p>
                   </div>
                   <span className="-mr-1.5 shrink-0 self-start rounded-control p-1.5 text-muted-foreground">
-                    <X size={18} strokeWidth={2} />
+                    <X size={18} />
                   </span>
                 </div>
 

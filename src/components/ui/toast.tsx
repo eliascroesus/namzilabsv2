@@ -65,7 +65,7 @@ export function Toast({ children, action, className }: ToastProps) {
             // The label is the sheet's micro voice — the same ALL CAPS as a chip
             // — because at this size on this surface it is a control, not a word
             // in the sentence beside it.
-            className="shrink-0 rounded-control px-2.5 py-1 text-2xs font-medium uppercase tracking-label text-white/90 transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:bg-white/15 hover:text-white"
+            className="shrink-0 rounded-control px-2.5 py-1 text-xs font-medium uppercase tracking-label text-white/90 transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:bg-white/15 hover:text-white"
           >
             {action.label}
           </button>

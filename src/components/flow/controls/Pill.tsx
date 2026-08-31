@@ -55,7 +55,7 @@ export function DataPill({
   const dim = stale ? "" : "text-muted-foreground";
   return (
     <span className={`inline-flex max-w-full items-center gap-1 rounded-control border px-1.5 py-1 text-xs ${tone}`} title={stale ? "This field's source is missing — pick it again" : label}>
-      {stale ? <AlertTriangle size={12} strokeWidth={2.25} className="shrink-0" aria-hidden /> : <SourceBadge source={source} size={14} />}
+      {stale ? <AlertTriangle size={12} className="shrink-0" aria-hidden /> : <SourceBadge source={source} size={14} />}
       {stepNo != null && <span className={`shrink-0 ${dim}`}>{stepNo}.</span>}
       <button
         type="button"
@@ -73,7 +73,7 @@ export function DataPill({
           title="Clear"
           aria-label="Clear"
         >
-          <X size={12} strokeWidth={2.25} />
+          <X size={12} />
         </button>
       )}
     </span>

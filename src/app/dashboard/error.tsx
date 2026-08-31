@@ -29,7 +29,7 @@ export default function DashboardError({ error, reset }: { error: Error & { dige
 
   return (
     <div className="mx-auto flex max-w-md flex-col justify-center px-6 py-24">
-      <h1 className="font-display text-display-xs font-semibold text-foreground">The board hit an error</h1>
+      <h1 className="text-display-xs font-semibold text-foreground">The board hit an error</h1>
       <p className="mt-3 text-sm text-muted-foreground">
         An unexpected error interrupted this view. Trying again usually clears it — your data is intact.
       </p>

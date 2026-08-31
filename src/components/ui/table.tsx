@@ -44,7 +44,7 @@ export function THead({ className, ...props }: React.ComponentProps<"thead">) {
         // The hairline is the other half: `TBody` divides BETWEEN rows, so the
         // head/body joint was the one unlined seam in the table and the first
         // row read as part of the header block.
-        "border-b border-border bg-control text-2xs uppercase tracking-label text-muted-foreground",
+        "border-b border-border bg-control text-xs uppercase tracking-label text-muted-foreground",
         className,
       )}
       {...props}

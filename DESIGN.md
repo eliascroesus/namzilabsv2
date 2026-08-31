@@ -5,7 +5,7 @@ register: quiet chrome, loud numbers
 surfaces: [ground (rail + top bar + page), card, control, raised, floating]
 accent: one green · 500 draws · 600 fills · nothing else
 neutral: one ramp, cut for #0F1011 — five surfaces below, four inks above
-type: SF Pro (system) / Inter · 10 · 12 · 14 · 16 · 18 · 20 · 24 · 36 · 48
+type: SF Pro (system) / Inter · 11 · 13 · 15 · 17 · 18 · 20 · 26 · 36 · 48
 radius: 4 badge · 8 control · 10 everything that contains something · full avatar
 status: chrome, furniture and primitives SETTLED · metric card and chart card IN PROGRESS
 ---
@@ -73,9 +73,9 @@ its border is not a flatter card, it is an invisible one. That is the single
 most important consequence in this file, and it is why `border border-border` is
 in the base of the Card primitive rather than in any of its variants.
 
-The rail carries no labels at rest. Six 32px slots, each holding a 24px glyph,
+The rail carries no labels at rest. Six 36px slots, each holding an 18px glyph,
 in one flat uniformly-spaced stack from the mark to the foot — and **it opens.**
-Point at it and the column widens in place to 240px with the names fading in
+Point at it and the column widens in place to 260px with the names fading in
 beside the chips. The reference this is drawn from does not do that, and its
 twelve unlabelled icons are the reason to: an icon rail is unreadable until you
 have learned it. Names live in the visible label *and* the accessible name,
@@ -211,11 +211,11 @@ abandoned: the distinction this interface draws is between the chrome and the
 NUMBER, and 36px at -0.03em against a 14px interface already carries it. A
 second family was buying separation the size step had paid for.
 
-Three sizes do the work: **14px** for the interface, **12px** for labels,
-captions and dense controls, and **10px** for the micro badge. 16px is reading
+Three sizes do the work: **15px** for the interface, **13px** for labels,
+captions and dense controls, and **11px** for the micro badge. 17px is reading
 prose only — legal pages, marketing copy — and the app's body is not that.
 
-**The micro-label voice** is the product's signature: 10px, ALL CAPS,
+**The micro-label voice** is the product's signature: 11px, ALL CAPS,
 `--tracking-label`, muted. It is what a status pill, a section heading, a table
 head and a group's sort marker all share, and it is what lets a very small
 string read as a LABEL rather than as very small prose. It is available as

@@ -127,7 +127,7 @@ export default async function FlowsPage({ searchParams }: { searchParams: Promis
     canCreate ? (
       <form action={createFlowAction}>
         <Button>
-          <Plus size={16} strokeWidth={2} />
+          <Plus size={16} />
           Create flow
         </Button>
       </form>
@@ -185,7 +185,7 @@ export default async function FlowsPage({ searchParams }: { searchParams: Promis
                 aria-hidden
                 className="flex size-8 shrink-0 items-center justify-center rounded-card bg-accent-peri text-white [&_svg]:size-[18px]"
               >
-                <Workflow strokeWidth={2.25} />
+                <Workflow />
               </span>
               Flows
             </span>

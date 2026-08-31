@@ -356,10 +356,8 @@ export function ViewTab({
        * every other selected thing in the product runs.
        */
       className={cn(
-        "inline-flex shrink-0 items-center border-b-3 text-sm transition-colors duration-(--duration-fast)",
-        active
-          ? "border-marker font-semibold text-foreground"
-          : "border-transparent font-medium text-muted-foreground hover:text-foreground",
+        "inline-flex shrink-0 items-center border-b-2 text-sm font-medium transition-colors duration-(--duration-fast)",
+        active ? "border-marker text-white" : "border-transparent text-muted-foreground hover:text-foreground",
       )}
     >
       {editing ? (
@@ -405,7 +403,7 @@ export function ViewTab({
              idle labels stay on one baseline; putting it on the active branch
              alone would make the row twitch by 4px each time you changed
              views. */
-          className={cn("inline-flex items-center gap-1.5 border-t-3 border-t-transparent px-1 py-1", editable && "pr-0.5")}
+          className={cn("inline-flex items-center gap-1.5 border-t-2 border-t-transparent px-1 py-1", editable && "pr-0.5")}
         >
           {renamed ?? children}
         </a>
@@ -620,7 +618,22 @@ export function ViewTitle({
    * No `leading-8` either: the named step carries the token's own line-height,
    * where the arbitrary form set the size alone and needed one supplied.
    */
-  const TITLE_TYPE = "font-display text-display-sm font-semibold";
+  /**
+   * NO `font-display`, AND NO 30px STEP.
+   *
+   * Two corrections in one line. The SIZE was `display-sm` (30px) while every
+   * other page title in the product came through `PageHeader` at `display-xs`
+   * (24px) — so the one slot on the screen that names where you are changed
+   * size as you moved between tabs, and both steps being legal is why nothing
+   * reported it.
+   *
+   * The TRACKING went with it. `.font-display` is a -0.022em utility, which is
+   * right for the landing's 48–64px hero and wrong here: the reference tracks
+   * its 24px title at +0.07px — essentially normal — and -0.022em is 0.53px
+   * TIGHTER per character at this size. A title set tighter than the sentence
+   * under it reads as a different typeface rather than as a heading.
+   */
+  const TITLE_TYPE = "text-display-xs font-semibold";
 
   if (editing) {
     return (

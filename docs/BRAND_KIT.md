@@ -172,13 +172,13 @@ the ledger figure.
 
 | token | px | job |
 |---|---|---|
-| `text-2xs` | 10 | **the micro badge** — ALL CAPS, `tracking-label`, and never prose |
-| `text-xs` | 12 | labels, captions, dense controls, buttons |
-| `text-sm` | 14 | **the interface default** — body, menu rows, table cells, card titles |
-| `text-md` | 16 | long-form reading prose only — legal pages, marketing |
+| `text-2xs` | 11 | **the micro badge** — ALL CAPS, `tracking-label`, and never prose |
+| `text-xs` | 13 | labels, captions, dense controls |
+| `text-sm` | 15 | **the interface default** — body, menu rows, table cells, card titles |
+| `text-md` | 17 | long-form reading prose only — legal pages, marketing |
 | `text-lg` | 18 | — |
 | `text-xl` | 20 | the step above a card title |
-| `text-display-xs` | 24 | **page titles** (`PageHeader`) |
+| `text-display-xs` | 26 | **page titles** (`PageHeader`) |
 | `text-display-sm` | 30 | — |
 | `text-display-md` | 36 | the tile's headline number |
 | `text-display-lg` | 48 | the landing hero |
@@ -234,8 +234,8 @@ reading as separate objects.
 **32px is the control height** — buttons, selects, inputs, the period track, the
 date picker. The ladder came down from 28/36/44/52.
 
-**The shell's geometry is tokenised**: `--spacing-rail` (48), `--spacing-rail-open`
-(240) and `--spacing-topbar` (40 content, 56 with padding). Those numbers appear
+**The shell's geometry is tokenised**: `--spacing-rail` (60), `--spacing-rail-open`
+(260) and `--spacing-topbar` (44 content, 60 with padding). Those numbers appear
 in four files including the loading skeleton, and `tests/page-width.test.ts`
 pins them — including **both hairlines**, which now take real pixels, so a ghost
 without them jumps the page 1px in each axis at hydration.

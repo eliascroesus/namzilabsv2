@@ -24,7 +24,7 @@ const pillVariants = cva(/**
    * status badge sitting in a table row was the last capsule on the screen. The
    * caps and the tracking are what carry the label voice; the radius never was.
    */
-  "inline-flex shrink-0 items-center gap-1 rounded-xs px-1.5 py-0.5 text-2xs font-medium uppercase tracking-label", {
+  "inline-flex shrink-0 items-center gap-1.5 rounded-xs px-2 py-0.5 text-xs font-medium uppercase tracking-label", {
   variants: {
     tone: {
       /**
@@ -89,7 +89,7 @@ export function Badge({ className, ...props }: React.ComponentProps<"span">) {
   return (
     <span
       className={cn(
-        "inline-flex shrink-0 items-center rounded-xs bg-neutral-700 px-1.5 py-0.5 text-2xs font-medium text-muted-foreground",
+        "inline-flex shrink-0 items-center rounded-xs bg-neutral-700 px-2 py-0.5 text-xs font-medium text-muted-foreground",
         className,
       )}
       {...props}

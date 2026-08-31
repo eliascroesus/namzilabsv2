@@ -147,12 +147,26 @@ const buttonVariants = cva(
          * product is 44 any more, and a lone rung nobody else stands on is how
          * the ladder grew a sixth step last time.
          */
+        /**
+         * THE HEIGHTS CAME DOWN; THE TYPE SHOULD NOT HAVE COME WITH THEM.
+         *
+         * `default` shipped at `text-xs` for one commit, on the reasoning that a
+         * 32px control is a small control. The reference says otherwise and is
+         * explicit about it: its 32px date picker carries 12px because it is a
+         * DROPDOWN — a compact control in a header — and its actual buttons
+         * carry 14px. 14 on 32 leaves 6px above and below the cap height, which
+         * is the proportion the whole interface is set at.
+         *
+         * The visible effect of getting this wrong is not "the button is small",
+         * it is that every button in the product reads a step quieter than the
+         * body text beside it, and the whole screen feels shrunk.
+         */
         xs: "h-6 gap-1 px-2 text-xs [&_svg]:size-3.5",
         sm: "h-7 gap-1.5 px-2.5 text-xs [&_svg]:size-3.5",
-        default: "h-8 px-3 text-xs [&_svg]:size-3.5",
+        default: "h-8 px-3 text-sm [&_svg]:size-4",
         lg: "h-10 px-4 text-sm [&_svg]:size-4",
-        icon: "size-8 [&_svg]:size-4",
-        iconSm: "size-7 [&_svg]:size-3.5",
+        icon: "size-8 [&_svg]:size-[18px]",
+        iconSm: "size-7 [&_svg]:size-4",
         iconXs: "size-6 [&_svg]:size-3.5",
       },
     },

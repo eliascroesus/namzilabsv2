@@ -237,10 +237,15 @@ export function PageHeader({ title, lede, actions, back, className }: PageHeader
               tracking is what the reference measures, and it is also the step
               `/design` has printed beside "Page titles" the whole time.
 
-              `.font-display` and the app's face are the same stack now (see
-              layout.tsx), so this class buys only its -0.022em tracking. Kept
-              because the tracking is the half that was doing the work. */}
-          <h1 className="font-display text-display-xs font-semibold text-white">{title}</h1>
+              NO `.font-display`. That class is now purely a -0.022em tracking
+              utility (the display face and the app face are one stack), and
+              -0.022em at this size is 0.57px TIGHTER per character — while the
+              reference tracks its title at +0.07px, which is essentially
+              normal. A heading set tighter than the sentence under it reads as
+              a different typeface rather than as a heading, and `.font-display`
+              stays where the negative tracking is actually right: the landing's
+              48–64px hero. */}
+          <h1 className="text-display-xs font-semibold tracking-[0.07px] text-white">{title}</h1>
           {/* 14px, DOWN FROM 16, and the old argument for 16 is retired rather
               than overruled by taste. It said a lede has to be 16px "to read
               as a sentence rather than as a caption of the heading" — true when

@@ -365,7 +365,7 @@ export function ConfigPanel({
             aria-label="Close step settings"
             className="-mr-1.5 shrink-0 self-start rounded-control p-1.5 text-muted-foreground transition-colors duration-(--duration-fast) hover:bg-accent hover:text-foreground"
           >
-            <X size={18} strokeWidth={2} />
+            <X size={18} />
           </button>
         )}
       </div>
@@ -428,7 +428,7 @@ export function ConfigPanel({
                      wash, with an edge off the same ramp. */
                   <div className="rounded-card border border-brand-100 bg-accent px-4 py-8 text-center">
                     <span aria-hidden className="mx-auto flex size-11 items-center justify-center rounded-full bg-card text-accent-foreground shadow-xs">
-                      <Play size={18} strokeWidth={2.25} />
+                      <Play size={18} />
                     </span>
                     <p className="mt-3 text-md font-semibold text-accent-foreground">{status === "setup" ? "Not ready yet" : "Nothing measured yet"}</p>
                     <p className="mt-1 text-sm text-muted-foreground">{status === "setup" ? "Finish the Configure tab first." : "Run the test to see this step’s data."}</p>
@@ -1017,7 +1017,7 @@ function NodeConfig({
                 }}
                 className={ADD_PILL}
               >
-                <Plus size={14} strokeWidth={2.25} /> Add another step
+                <Plus size={14} /> Add another step
               </button>
             )}
             {datasetCandidates.length === 0 && inputs.length === 0 && <p className="text-xs text-muted-foreground">Add a Get data step first, then combine it here.</p>}
@@ -1197,7 +1197,7 @@ function NumberFieldList({
         <FieldInput value={String(cfg.field ?? "value")} groups={groups} onChange={(v) => onChange({ field: v })} placeholder="Pick the number field…" />
         {extra.map((f, i) => (
           <div key={i} className="flex items-center gap-1.5">
-            <Plus size={14} strokeWidth={2.25} className="shrink-0 text-muted-foreground" aria-hidden />
+            <Plus size={14} className="shrink-0 text-muted-foreground" aria-hidden />
             <div className="min-w-0 flex-1">
               <FieldInput
                 value={f}
@@ -1213,7 +1213,7 @@ function NumberFieldList({
               title="Remove this field"
               aria-label="Remove this field"
             >
-              <X size={14} strokeWidth={2.25} />
+              <X size={14} />
             </button>
           </div>
         ))}
@@ -1222,7 +1222,7 @@ function NumberFieldList({
           onClick={() => setExtra([...extra, ""])}
           className={cn(INLINE_LINK, "inline-flex items-center gap-1 text-xs")}
         >
-          <Plus size={14} strokeWidth={2.25} /> Add another field
+          <Plus size={14} /> Add another field
         </button>
         {/* The "+" between the pickers already says these are added; what it
             cannot say is the ORDER — per record first, then across records —
@@ -1370,7 +1370,7 @@ function NumberPicker({
                   title="Clear — type a number instead"
                   aria-label="Clear the picked step"
                 >
-                  <X size={14} strokeWidth={2.25} />
+                  <X size={14} />
                 </button>
               </div>
             ) : (
@@ -1391,7 +1391,7 @@ function NumberPicker({
                  be no glyph. */
               className="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center justify-center rounded-control border border-brand-100 bg-accent p-1 text-accent-foreground transition-colors duration-(--duration-fast) hover:border-brand-300 hover:bg-brand-100"
             >
-              <Database size={14} strokeWidth={2} />
+              <Database size={14} />
             </button>
           </div>
         )}
@@ -1857,7 +1857,7 @@ function MomentInput({
             <span className="block truncate text-foreground">
               {from ? (
                 <span className="text-muted-foreground">
-                  {from} <ChevronRight size={14} strokeWidth={2.25} className="inline -mt-0.5" aria-hidden />{" "}
+                  {from} <ChevronRight size={14} className="inline -mt-0.5" aria-hidden />{" "}
                 </span>
               ) : null}
               {label}

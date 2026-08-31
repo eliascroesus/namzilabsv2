@@ -536,7 +536,7 @@ function SyncControl({
             aria-hidden
             className="flex size-9 shrink-0 items-center justify-center rounded-control bg-accent text-accent-foreground"
           >
-            <Icon size={16} strokeWidth={2} />
+            <Icon size={16} />
           </span>
           <p className="text-md font-semibold text-foreground">{label}</p>
         </div>

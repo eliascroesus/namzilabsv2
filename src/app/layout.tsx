@@ -86,8 +86,24 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     // mutated <html> before hydration and forced the suppression above (there
     // is nothing mutating it now). The theme is declared in CSS: `color-scheme`
     // on <html> and the roles in `:root`, both present in the first byte.
-    <html lang="en">
-      <body className={inter.variable}>
+    // THE FONT VARIABLE GOES ON <html>, NOT <body>, AND THAT IS A BUG FIX
+    // RATHER THAN A TIDY-UP.
+    //
+    // `--font-sans` is declared in `@theme`, which Tailwind emits at `:root` —
+    // and its value contains `var(--font-inter)`. next/font defines that
+    // variable on whatever element carries `inter.variable`. With the class on
+    // <body>, the reference at `:root` was UNRESOLVABLE, which makes the whole
+    // custom property invalid at computed-value time: `--font-sans` computed to
+    // the empty string, and the empty string then INHERITED down to <body>,
+    // where `--font-inter` was defined and could no longer help.
+    //
+    // The visible result was that every surface in the product rendered in the
+    // browser's generic `ui-sans-serif` rather than the stack this file names.
+    // On a Mac that resolves to SF Pro and looks nearly right, which is why it
+    // survived: it was wrong on every other platform and nothing failed.
+    // Measured with getComputedStyle, not inferred.
+    <html lang="en" className={inter.variable}>
+      <body>
         {/* The first stop on every tab order. Without it, reaching a page's
             content by keyboard means tabbing the whole navigation rail again
             on every single navigation. Hidden until focused (globals.css). */}

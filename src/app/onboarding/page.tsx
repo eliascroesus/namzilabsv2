@@ -33,7 +33,7 @@ export default async function OnboardingPage() {
     <main id="main" className="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-6">
       {hasWorkspaces ? (
         <>
-          <h1 className="font-display text-display-xs font-semibold text-foreground">Choose a workspace</h1>
+          <h1 className="text-display-xs font-semibold text-foreground">Choose a workspace</h1>
           <p className="mt-2 text-sm text-muted-foreground">
             You already belong to {orgs.length === 1 ? "a workspace" : `${orgs.length} workspaces`}. Pick one to continue.
           </p>
@@ -54,7 +54,7 @@ export default async function OnboardingPage() {
                   <span className="font-medium text-foreground">{o.name}</span>
                   <span className="inline-flex items-center gap-1.5 text-muted-foreground">
                     Enter
-                    <ArrowRight size={14} strokeWidth={2.25} />
+                    <ArrowRight size={14} />
                   </span>
                 </Button>
               </form>
@@ -63,7 +63,7 @@ export default async function OnboardingPage() {
 
           <details className="group mt-6">
             <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground [&::-webkit-details-marker]:hidden">
-              <ChevronRight size={14} strokeWidth={2.25} className="transition-transform group-open:rotate-90" />
+              <ChevronRight size={14} className="transition-transform group-open:rotate-90" />
               Create another workspace
             </summary>
             <CreateForm className="mt-4" />
@@ -71,7 +71,7 @@ export default async function OnboardingPage() {
         </>
       ) : (
         <>
-          <h1 className="font-display text-display-xs font-semibold text-foreground">Create your workspace</h1>
+          <h1 className="text-display-xs font-semibold text-foreground">Create your workspace</h1>
           <p className="mt-2 text-sm text-muted-foreground">
             A workspace is your organization&rsquo;s private space. All connected integrations and data
             live inside it.

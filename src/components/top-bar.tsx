@@ -207,7 +207,7 @@ export function TopBar({
        this bar's height by matching `<header className="…"`, and a comment
        between the two breaks the check that keeps the loading skeleton's band
        the same height as the real one. */
-    <header className="flex h-[56px] shrink-0 items-center justify-between gap-4 border-b border-border bg-background px-6 py-2">
+    <header className="flex h-[60px] shrink-0 items-center justify-between gap-4 border-b border-border bg-background px-6 py-2">
       {/* ── WHERE YOU ARE ───────────────────────────────────────────────────
           Workspace, then a slash, then how much of it you are measuring. It
           reads as a path because it IS one: the workspace is the root and the
@@ -462,7 +462,7 @@ export function TopBar({
         <Link
           href="/dashboard/settings"
           className={cn(
-            buttonVariants({ variant: "secondary", size: "sm" }),
+            buttonVariants({ variant: "secondary" }),
             // The secondary variant is spelled in ROLES, which the scoped
             // `dark` above would answer in dark — a near-black pill on a
             // near-black bar. Pinned to the chrome's own constants instead,
@@ -484,7 +484,7 @@ export function TopBar({
             has gone; `accent` is `bg-primary` + `text-primary-foreground`.
             The plus is the export's: a verb reads faster with a mark in front
             of it, and this is the one control in the bar that makes something. */}
-        <Link href="/dashboard/flows" className={cn(buttonVariants({ variant: "accent", size: "sm" }))}>
+        <Link href="/dashboard/flows" className={cn(buttonVariants({ variant: "accent" }))}>
           <Plus />
           <span>New flow</span>
         </Link>
@@ -504,7 +504,7 @@ export function TopBar({
             OFF the chip rather than punched into it. */}
         <Button
           variant="ghost"
-          size="iconSm"
+          size="icon"
           aria-label={unread > 0 ? `Notifications — ${unread} unread` : "Notifications"}
           className="relative border border-border bg-card text-foreground hover:bg-neutral-700 active:bg-neutral-700"
         >
@@ -530,7 +530,7 @@ export function TopBar({
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
-                size="iconSm"
+                size="icon"
                 aria-label="Account"
                 className="border border-border bg-card text-xs font-semibold text-foreground hover:bg-neutral-700 active:bg-neutral-700 data-[state=open]:bg-neutral-700"
               >

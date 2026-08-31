@@ -53,7 +53,7 @@ export function InsertEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosit
               }}
               title="Insert a step here"
             >
-              <Plus size={14} strokeWidth={2.25} />
+              <Plus size={14} />
             </button>
           </div>
         </EdgeLabelRenderer>

@@ -197,7 +197,7 @@ function RailChip({ tone, children }: { tone: "rest" | "active"; children: React
   return (
     <span
       className={cn(
-        "flex size-6 items-center justify-center rounded-control transition-colors duration-(--duration-fast) ease-(--ease-standard)",
+        "flex size-8 items-center justify-center rounded-control transition-colors duration-(--duration-fast) ease-(--ease-standard) [&_svg]:size-[18px]",
         tone === "active"
           ? "bg-neutral-700 text-marker"
           : "text-foreground group-hover:bg-neutral-700",
@@ -263,7 +263,7 @@ function RailLabel({ children, className }: { children: ReactNode; className?: s
  * full-width. A 24px square would meet WCAG 2.2's minimum by one pixel and feel
  * like it.
  */
-const ICON_COL = "flex size-6 shrink-0 items-center justify-center";
+const ICON_COL = "flex size-8 shrink-0 items-center justify-center";
 
 /**
  * The row's own class string, shared by the mark, the nav links, the search
@@ -291,7 +291,7 @@ const ICON_COL = "flex size-6 shrink-0 items-center justify-center";
  * under what a rail you click all day should ask for. The extra four cost
  * nothing: the chip is what you see and it is still 24.
  */
-const SLOT = "group flex h-8 w-full shrink-0 items-center justify-start gap-3 rounded-control";
+const SLOT = "group flex h-9 w-full shrink-0 items-center justify-start gap-2.5 rounded-control";
 
 /**
  * THE GUTTER, WRITTEN DOWN.
@@ -309,7 +309,7 @@ const SLOT = "group flex h-8 w-full shrink-0 items-center justify-start gap-3 ro
  * there matches nothing and fails the file with "could not find the rail's top
  * block". Two spellings of 12px, and this is the note that keeps them in step.
  */
-const GUTTER = "px-3";
+const GUTTER = "px-3.5";
 
 export function Sidebar({ hide, views = [] }: { hide?: string[]; views?: BoardView[] }) {
   const pathname = usePathname();
@@ -451,7 +451,7 @@ export function Sidebar({ hide, views = [] }: { hide?: string[]; views?: BoardVi
     // not surface through it. Below 30, because anchored surfaces (menus,
     // popovers, the field browser) have to open OVER the rail, and below 40/50
     // because a toast and a dialog outrank all chrome.
-    <aside className="group/rail relative z-20 h-full w-[48px] shrink-0">
+    <aside className="group/rail relative z-20 h-full w-[60px] shrink-0">
       {/* THE PANEL — the whole rail, floated out of the layout.
           `inset-y-0 left-0` pins it to the footprint above and `w-[48px]`
           keeps the two the same object at rest; the two `group-*` widths are
@@ -474,7 +474,7 @@ export function Sidebar({ hide, views = [] }: { hide?: string[]; views?: BoardVi
           black shadow on #0f1011 is a change of about one count (see the
           elevation ladder) and would buy nothing but a class. The hairline is
           the separation. */}
-      <div className="absolute inset-y-0 left-0 flex w-[48px] flex-col overflow-hidden border-r border-border bg-background transition-[width] duration-(--duration-base) ease-(--ease-standard) group-hover/rail:w-60 group-focus-within/rail:w-60">
+      <div className="absolute inset-y-0 left-0 flex w-[60px] flex-col overflow-hidden border-r border-border bg-background transition-[width] duration-(--duration-base) ease-(--ease-standard) group-hover/rail:w-65 group-focus-within/rail:w-65">
         {/* THE TOP BLOCK IS THE TOP BAR'S OWN HEIGHT, AND THAT IS THE POINT.
             56px with the bar's hairline landing exactly at its foot means the
             rail's rule and the bar's rule meet at ONE corner rather than
@@ -507,12 +507,12 @@ export function Sidebar({ hide, views = [] }: { hide?: string[]; views?: BoardVi
             contained in the announced one, which is what WCAG's Label in Name
             actually asks for. The "NA" tile is `aria-hidden` — without that the
             name would open with two letters nobody says out loud. */}
-        <div className="flex h-[56px] shrink-0 items-center px-3">
+        <div className="flex h-[60px] shrink-0 items-center px-3.5">
           <Link href="/dashboard" aria-label={`${PRODUCT} — dashboard`} className={SLOT}>
             <span className={ICON_COL}>
               <span
                 aria-hidden
-                className="flex size-6 items-center justify-center rounded-full border-2 border-marker text-2xs font-semibold text-marker transition-colors duration-(--duration-fast) ease-(--ease-standard) group-hover:bg-brand-soft"
+                className="flex size-8 items-center justify-center rounded-full border-2 border-marker text-xs font-semibold text-marker transition-colors duration-(--duration-fast) ease-(--ease-standard) group-hover:bg-brand-soft"
               >
                 NA
               </span>
@@ -625,7 +625,7 @@ export function Sidebar({ hide, views = [] }: { hide?: string[]; views?: BoardVi
                       <Link href={href} aria-current={active ? "page" : undefined} className={SLOT}>
                         <span className={ICON_COL}>
                           <RailChip tone={active ? "active" : "rest"}>
-                            <Icon className="size-4" />
+                            <Icon className="size-[18px]" />
                           </RailChip>
                         </span>
                         <RailLabel
@@ -689,14 +689,14 @@ export function Sidebar({ hide, views = [] }: { hide?: string[]; views?: BoardVi
             className={cn(
               SLOT,
               "transition-colors duration-(--duration-fast) ease-(--ease-standard)",
-              "group-hover/rail:-mx-1 group-hover/rail:w-[calc(100%+0.5rem)] group-hover/rail:justify-center group-hover/rail:rounded-full group-hover/rail:bg-primary group-hover/rail:px-1",
-              "group-focus-within/rail:-mx-1 group-focus-within/rail:w-[calc(100%+0.5rem)] group-focus-within/rail:justify-center group-focus-within/rail:rounded-full group-focus-within/rail:bg-primary group-focus-within/rail:px-1",
+              "group-hover/rail:-mx-1 group-hover/rail:w-[calc(100%+0.5rem)] group-hover/rail:justify-center group-hover/rail:rounded-control group-hover/rail:bg-primary group-hover/rail:px-1",
+              "group-focus-within/rail:-mx-1 group-focus-within/rail:w-[calc(100%+0.5rem)] group-focus-within/rail:justify-center group-focus-within/rail:rounded-control group-focus-within/rail:bg-primary group-focus-within/rail:px-1",
             )}
           >
             <span
               aria-hidden
               className={cn(
-                "flex size-6 shrink-0 items-center justify-center",
+                "flex size-8 shrink-0 items-center justify-center [&_svg]:size-[18px]",
                 "rounded-control bg-primary text-primary-foreground transition-colors duration-(--duration-fast) ease-(--ease-standard) group-hover:bg-brand-500",
                 /* THE "+" LEAVES WHEN THE WORDS ARRIVE. Collapsed, the glyph IS
                    the control — it is the only thing a 48px rail can say.
@@ -757,12 +757,15 @@ export function Sidebar({ hide, views = [] }: { hide?: string[]; views?: BoardVi
             >
               <Bell />
               {/* Measured off the ICON COLUMN, not the row and not the glyph:
-                  the row is 24px wide at rest and 216px open, so a dot pinned to
-                  its right edge would fly across the panel as it opens. The 24px
-                  column centres a 16px icon at 4–20px, so `-right-0.5 -top-0.5`
-                  lands on the bell's own top-right corner and stays there at
-                  every width. */}
-              <span aria-hidden className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-primary" />
+                  the row is 32px wide at rest and 228px open, so a dot pinned to
+                  its right edge would fly across the panel as it opens.
+                  MEASURED OFF THE GLYPH, NOT THE BOX. It was `-top-0.5
+                  -right-0.5`, which sat 2px OUTSIDE a 24px column and landed on
+                  the bell's corner. The column is 32px now around an 18px glyph,
+                  so the same offset put the dot ~9px clear of the bell, floating
+                  in the gutter with nothing under it. `top-1 right-1` is the
+                  glyph's own corner again. */}
+              <span aria-hidden className="absolute top-1 right-1 size-2 rounded-full bg-primary" />
             </span>
             <RailLabel className="text-muted-foreground group-hover:text-foreground">Notifications</RailLabel>
           </Button>

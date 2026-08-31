@@ -60,7 +60,7 @@ function Disclosure({ summary, children }: { summary: string; children: ReactNod
         aria-expanded={open}
         className="flex items-center gap-1.5 rounded-control py-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
       >
-        <ChevronRight size={14} strokeWidth={2.25} className={`transition-transform ${open ? "rotate-90" : ""}`} aria-hidden />
+        <ChevronRight size={14} className={`transition-transform ${open ? "rotate-90" : ""}`} aria-hidden />
         {summary}
       </button>
       {open && <div className="mt-1.5 space-y-2.5">{children}</div>}
