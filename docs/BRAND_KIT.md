@@ -237,8 +237,20 @@ one grid in the product whose tiles sat closer to each other than the page sits
 to its own edges. Its row pitch moved with it: `ROW_UNIT_PX` 40 → 48, since the
 pitch is the 24px row plus the gutter beneath it.
 
-**32px is the control height** — buttons, selects, inputs, the period track, the
-date picker. The ladder came down from 28/36/44/52.
+**32px is the control height — every button, select, input, chip, the period
+track and the source picker.** The ladder came down from 28/36/44/52.
+
+Measured across a rendered page, the app was running EIGHT control heights
+(48/40/36/32/28/26/24/18). The worst was **28-beside-32**: four pixels apart is
+a near-miss, and it reads as a rendering fault rather than as a size choice. So
+`sm` resolves to `default`'s 32, fields follow the button (they are stacked in
+every form, which is where the mismatch is unmissable), chips match, and the
+segmented track is 32 OUTSIDE with 28px pills and a 2px inset — so the outer
+control stands at the height of the buttons either side of it.
+
+**16px inside every card, including the metric tile.** It ran `p-5`; one tile
+padded four pixels wider than every other card on the same board is the
+near-miss that makes a row of tiles look hand-placed.
 
 **The shell's geometry is tokenised**: `--spacing-rail` (56), `--spacing-rail-open`
 (260) and `--spacing-topbar` (44 content, 60 with padding). Those numbers appear
