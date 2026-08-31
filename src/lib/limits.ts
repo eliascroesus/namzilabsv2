@@ -81,6 +81,38 @@ export function boardViewCap(): number {
 }
 
 /**
+ * HOW MANY BACKFILL SLICES ONE INVOCATION MAY DRAIN.
+ *
+ * The worker used to run exactly one and wait for the next dispatch tick — five
+ * minutes per slice, so a hundred-slice import took over eight hours. The gap
+ * was never a rate limit (`claimCalls` is, and it is inside the slice); it was
+ * an artifact of how the work was scheduled.
+ *
+ * TWELVE, because the ceiling that matters is the invocation's own: the Inngest
+ * route declares `maxDuration = 60`, and while each STEP gets its own request
+ * and its own sixty seconds, a run that never ends is a run nobody can reason
+ * about. Twelve slices against a provider answering in a second or two is a
+ * minute of real work and two orders of magnitude better than one per tick.
+ *
+ * A COUNT RATHER THAN ONLY A CLOCK because Inngest replays the function body
+ * after every step: a `Date.now()` in the body differs on each replay, so the
+ * count is the deterministic bound and the clock below is the secondary guard.
+ */
+export function backfillSlicesPerRun(): number {
+  return intEnv("BACKFILL_SLICES_PER_RUN", 12);
+}
+
+/**
+ * The wall-clock ceiling on one backfill invocation, measured from a memoized
+ * start. Approximate on purpose — it is read on every replay, so it includes
+ * replay overhead and errs towards stopping early. That is the safe direction:
+ * a stopped loop leaves a checkpointed job the next sweep tick resumes.
+ */
+export function backfillRunBudgetMs(): number {
+  return intEnv("BACKFILL_RUN_BUDGET_MS", 45_000);
+}
+
+/**
  * How many workspaces one person may CREATE.
  *
  * Three, for now, and deliberately low: a workspace is a whole tenant — its own

@@ -1,8 +1,10 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { reconcileAll, reconcileOne } from "@/inngest/functions/reconcile";
 import { processEvent } from "@/inngest/functions/process-event";
 import { runFlowTest } from "@/inngest/functions/test-run";
-import { syncConnection, recomputeStaleFlows, materializeStale, runBackfill, backfillDispatch } from "@/inngest/functions/sync";
+import { syncConnection, recomputeStaleFlows, materializeStale, runBackfill } from "@/inngest/functions/sync";
 
 /**
  * The queue-layer SAFETY behavior lives in Inngest function CONFIGURATION:
@@ -83,14 +85,27 @@ describe("Inngest safety configuration is pinned", () => {
    * configuration is later changed — but that is a backstop, not a reason to
    * leave the configuration unpinned.
    */
-  it("backfillDispatch: single-flight cron, emits at most one job per provider", () => {
-    const o = opts(backfillDispatch);
-    expect(o.id).toBe("backfill-dispatch");
-    expect(o.concurrency).toEqual({ limit: 1 });
-    expect(o.triggers).toEqual([{ cron: "*/5 * * * *" }]);
+  it("backfill dispatch rides the sweep's tick — there is no five-minute cron", () => {
+    /**
+     * THE COST FIX, PINNED AS A SHAPE. Neon bills the hours the endpoint is
+     * AWAKE, and it stays awake for the whole 5-minute autosuspend window after
+     * the last query. A cron every five minutes therefore holds it open
+     * CONTINUOUSLY — the wake at :00 lasts until :05, which the :05 wake
+     * renews. Dispatch moved onto the ten-minute sweep so the database gets
+     * five idle minutes in which to suspend.
+     *
+     * Asserted as the ABSENCE of a five-minute schedule anywhere, because the
+     * regression is somebody adding one back for a good local reason. The next
+     * five-minute cron in this codebase should have to argue with this test.
+     */
+    const src = readFileSync(join(process.cwd(), "src/inngest/functions/sync.ts"), "utf8");
+    expect(src).not.toMatch(/cron: "\*\/5 /);
+    expect(src).toMatch(/dispatch-backfill-jobs/);
+    // And it still emits the same event the worker listens for.
+    expect(src).toMatch(/backfill\/slice\.requested/);
   });
 
-  it("runBackfill: lowest priority, capped per PROVIDER, one slice per job", () => {
+  it("runBackfill: lowest priority, capped per PROVIDER, resumable per job", () => {
     const o = opts(runBackfill);
     expect(o.id).toBe("run-backfill");
     // Below the sweep's 0 and far below the Test's 180.

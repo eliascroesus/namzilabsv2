@@ -17,7 +17,8 @@ import { scanWebhookEventTime } from "@/lib/webhooks/event-time";
  * providers at once, one slice each.
  */
 const BACKFILL_PROVIDERS_PER_TICK = 4;
-import { runBackfillSlice } from "@/lib/backfill/run";
+import { runBackfillSlice, type SliceOutcome } from "@/lib/backfill/run";
+import { backfillRunBudgetMs, backfillSlicesPerRun } from "@/lib/limits";
 import { connections, rawEvents } from "@/db/schema";
 
 /** Sync a connection (full backfill/re-sync or incremental). */
@@ -147,15 +148,70 @@ export const recomputeStaleFlows = inngest.createFunction(
     step.run("materialize-stale", () => materializeStaleAll(getDb(), { orgId: (event.data as { orgId: string }).orgId })),
 );
 
-/** Scheduled backstop: anything the event path missed still recomputes —
- * fleet-wide by design, longest-stale first, under the pass's time budget.
- * The expiry first: sliding-window tiles ("last 7 days") change with the
- * clock, not with data, and would otherwise never recompute again. */
+/**
+ * THE TEN-MINUTE SWEEP — every scheduled concern that has to touch Postgres,
+ * on ONE tick, so the database is woken once instead of twice.
+ *
+ * WHY THE WAKE IS THE UNIT. Neon bills compute by the hour the endpoint is
+ * AWAKE, and it stays awake for the whole autosuspend window (5 minutes) after
+ * the last query. So a query costs five billed minutes whether it takes one
+ * millisecond or thirty seconds, and the only number that matters is HOW MANY
+ * DISTINCT TIMES something wakes it.
+ *
+ * This used to be two crons: this one every ten minutes and
+ * `backfill-dispatch` every FIVE. The five-minute one is what made the pattern
+ * continuous — the wake at :00 held
+ * until :05, the :05 wake held until :10, and the endpoint never got five idle
+ * minutes in which to suspend. Measured on the bill: 35.95 compute-hours in a
+ * fortnight, of which essentially all of it was idle time held open by polls
+ * that found nothing to do.
+ *
+ * Folding dispatch in here halves the wake count and changes NOTHING about the
+ * work: same queries, same events, same budgets. Backfill dispatch moves from
+ * every five minutes to every ten, which `runBackfill` more than pays back by
+ * draining many slices per wake instead of one (see there).
+ *
+ * `reconcile-connections` keeps its own function and its own ten-minute cron — it
+ * already lands on this exact tick, so it shares the wake for free. Merging it
+ * too would buy nothing and would couple the connector sweep to this one.
+ *
+ * ORDER IS CHEAPEST-AND-MOST-INDEPENDENT FIRST, and that is deliberate rather
+ * than cosmetic. A `step.run` that throws aborts the rest of the attempt — the
+ * completed steps stay memoized and the retry resumes past them, so nothing is
+ * lost, but within one attempt a failure blocks what follows. `materializeStaleAll`
+ * is the only expensive step here and the only one that can plausibly exhaust a
+ * budget, so it goes LAST, where it cannot delay a backfill dispatch that costs
+ * one query. Splitting them into separate functions is what we are undoing; this
+ * ordering is what keeps the property that split was giving us.
+ */
 export const materializeStale = inngest.createFunction(
   { id: "materialize-stale", retries: 2, triggers: [{ cron: "*/10 * * * *" }] },
   async ({ step }) => {
+    /**
+     * Backfill dispatch: one narrow read, and an event per runnable job. It
+     * was its own five-minute function; the only thing that changed is the
+     * clock it hangs on.
+     */
+    const dispatched = await step.run("dispatch-backfill-jobs", async () => {
+      const due = await runnableJobsByProvider(getDb(), BACKFILL_PROVIDERS_PER_TICK);
+      return due.map((r) => ({ jobId: r.job.id, orgId: r.job.orgId, provider: r.provider }));
+    });
+    if (dispatched.length > 0) {
+      await step.sendEvent(
+        "dispatch-backfill-slices",
+        dispatched.map((d) => ({ name: "backfill/slice.requested" as const, data: d })),
+      );
+    }
+
+    // The expiry before the recompute: sliding-window tiles ("last 7 days")
+    // change with the CLOCK rather than with data, so nothing else would ever
+    // mark them stale and they would sit frozen behind a green dot.
     await step.run("expire-aged-results", () => expireAgedResults(getDb()));
-    return step.run("materialize-stale", () => materializeStaleAll(getDb()));
+
+    // The backstop, last: anything the event path missed still recomputes —
+    // fleet-wide, longest-stale first, under the pass's own time budget.
+    const swept = await step.run("materialize-stale", () => materializeStaleAll(getDb()));
+    return { dispatched: dispatched.length, ...swept };
   },
 );
 
@@ -274,29 +330,40 @@ export const pruneStorage = inngest.createFunction(
  * dispatched and that bounds what runs — a retry or a redelivery can put work
  * in flight this never emitted.
  */
-export const backfillDispatch = inngest.createFunction(
-  { id: "backfill-dispatch", retries: 2, concurrency: { limit: 1 }, triggers: [{ cron: "*/5 * * * *" }] },
-  async ({ step }) => {
-    const db = getDb();
-    const due = await step.run("pick-runnable-jobs", async () =>
-      (await runnableJobsByProvider(db, BACKFILL_PROVIDERS_PER_TICK)).map((r) => ({
-        jobId: r.job.id,
-        orgId: r.job.orgId,
-        provider: r.provider,
-      })),
-    );
-    if (due.length === 0) return { dispatched: 0 };
-    await step.sendEvent(
-      "dispatch-backfill-slices",
-      due.map((d) => ({ name: "backfill/slice.requested" as const, data: d })),
-    );
-    return { dispatched: due.length };
-  },
-);
+/**
+ * THE DISPATCHER IS NOW A STEP OF THE TEN-MINUTE SWEEP, not a function of its
+ * own — see `materializeStale` for why the wake count is what costs money. The
+ * per-provider bound this comment describes is unchanged: it still emits at
+ * most `BACKFILL_PROVIDERS_PER_TICK` jobs, one per provider, and the worker
+ * below still keys its concurrency on the provider.
+ */
 
 /**
- * The worker. One slice per invocation, so every unit is durable and an
- * interruption costs a slice rather than an import.
+ * The worker. MANY SLICES PER INVOCATION, each its own durable step.
+ *
+ * IT USED TO BE ONE SLICE PER INVOCATION, and the next slice waited for the
+ * dispatcher's next tick — five minutes later. That made a hundred-slice import
+ * take over eight hours of wall clock, and it meant the import's pace was set by
+ * a cron interval rather than by anything about the provider. Moving dispatch to
+ * a ten-minute tick would have made it sixteen hours.
+ *
+ * So the loop moved inside. Each slice is still its own `step.run`, so every one
+ * is individually durable and checkpointed exactly as before — an interruption
+ * still costs a slice rather than an import, which was the original property and
+ * is the one worth keeping.
+ *
+ * THE PACE WAS NEVER THE RATE LIMIT. `claimCalls` is the ceiling on provider
+ * spend and `withConnectionSyncLock` is what stops two walks over one stream;
+ * both live inside the slice and neither changed. The five-minute gap was an
+ * artifact of how the work was scheduled, not a throttle anybody designed — and
+ * a throttle that only exists because of a cron interval is one nobody can tune.
+ *
+ * WHY A COUNT AND NOT ONLY A CLOCK. Inngest re-executes this function body from
+ * the top after every step, replaying memoized results, so a `Date.now()` taken
+ * in the body is a DIFFERENT number on each replay. A slice count is
+ * deterministic across replays; the wall-clock budget rides along as a second
+ * guard and is allowed to be approximate, because exiting the loop early is
+ * always safe — the job keeps its checkpoint and the next tick resumes it.
  *
  * Priority -600 against the sweep's 0 and a Test's 180. The budget ceiling is
  * enforced a layer down in `claimCalls`, where it is derived from the SWEEP's
@@ -322,58 +389,95 @@ export const runBackfill = inngest.createFunction(
     // into strings, and every date comparison in the slice would then compare a
     // string to a Date. Re-reading is also more correct: the row may have moved.
     const { jobId, provider } = event.data as { jobId: string; provider: string };
-    const slice = await step.run("run-slice", async () => {
-      const job = await getJob(db, jobId);
-      if (!job) return { outcome: { kind: "finished" as const, status: "failed" as const }, ref: null };
-      const outcome = await runBackfillSlice(db, job);
-      // Strings only across the boundary, for the same reason as above.
-      return { outcome, ref: { orgId: job.orgId, connectionId: job.connectionId, streamHash: job.streamHash } };
-    });
-    const { outcome, ref } = slice;
-    if (!ref) return { jobId, outcome };
-
     /**
-     * Phase 7 — recompute at CHECKPOINT boundaries, not per record.
-     *
-     * Marking stale and stopping there is the batching: staleness is idempotent,
-     * so however many slices land between two runs of the ten-minute
-     * `materializeStale` cron, they collapse into one recompute. Emitting
-     * `flow/recompute.requested` per checkpoint instead would NOT coalesce —
-     * its debounce window is ten seconds and slices are five minutes apart, so
-     * every slice would drag the whole stale set through a full pass.
-     *
-     * `syncConnection` already works exactly this way: mark, and let the cron
-     * recompute.
+     * MEMOIZED, so the budget is measured from when the RUN began rather than
+     * from whenever the latest replay happened to start. Read in the body on
+     * every replay, which means the elapsed figure includes replay overhead and
+     * the loop errs towards stopping early — the safe direction, because a
+     * stopped loop leaves a checkpointed job the next tick resumes.
      */
-    if (outcome.kind === "progressed" && outcome.rows > 0) {
-      await step.run("mark-stale-at-checkpoint", () =>
-        markStaleForSource(db, ref.orgId, provider, ref.connectionId, [ref.streamHash]),
-      );
-    }
+    const startedAt = await step.run("run-started-at", () => Date.now());
 
-    /**
-     * On completion, ONE authoritative full recompute — and it must not be a
-     * `markStaleForSource` that a concurrent cron pass has already cleared.
-     *
-     * `materializeFlow` reruns the published graph from scratch against stored
-     * data and never consults the stale flag, so the final number is computed
-     * once over everything the import landed rather than accumulated from the
-     * partial passes along the way.
-     *
-     * `failed` is excluded: a failed job imported nothing authoritative, and its
-     * checkpoint recomputes already covered whatever did land.
-     */
-    if (outcome.kind === "finished" && outcome.status !== "failed") {
-      const flowIds = await step.run("collect-affected-flows", () =>
-        markStaleForSource(db, ref.orgId, provider, ref.connectionId, [ref.streamHash]),
-      );
-      if (flowIds.length > 0) {
-        await step.sendEvent(
-          "authoritative-recompute",
-          flowIds.map((flowId) => ({ name: "flow/materialize.requested" as const, data: { orgId: ref.orgId, flowId } })),
+    let slices = 0;
+    let last: SliceOutcome | { kind: "finished"; status: "failed" } = { kind: "finished", status: "failed" };
+
+    for (let i = 0; i < backfillSlicesPerRun(); i++) {
+      const slice = await step.run(`run-slice-${i}`, async () => {
+        const job = await getJob(db, jobId);
+        if (!job) return { outcome: { kind: "finished" as const, status: "failed" as const }, ref: null };
+        const outcome = await runBackfillSlice(db, job);
+        // Strings only across the boundary, for the same reason as above.
+        return { outcome, ref: { orgId: job.orgId, connectionId: job.connectionId, streamHash: job.streamHash } };
+      });
+      const { outcome, ref } = slice;
+      last = outcome;
+      slices = i + 1;
+      if (!ref) return { jobId, outcome, slices };
+
+      /**
+       * Phase 7 — recompute at CHECKPOINT boundaries, not per record.
+       *
+       * Marking stale and stopping there is the batching: staleness is
+       * idempotent, so however many slices land between two runs of the
+       * ten-minute sweep, they collapse into one recompute. Emitting
+       * `flow/recompute.requested` per checkpoint instead would NOT coalesce
+       * usefully — its debounce is ten seconds, and now that slices run back to
+       * back rather than five minutes apart, every slice would drag the whole
+       * stale set through a full pass. Draining the loop made that argument
+       * STRONGER, not weaker.
+       */
+      if (outcome.kind === "progressed" && outcome.rows > 0) {
+        await step.run(`mark-stale-at-checkpoint-${i}`, () =>
+          markStaleForSource(db, ref.orgId, provider, ref.connectionId, [ref.streamHash]),
         );
       }
+
+      /**
+       * On completion, ONE authoritative full recompute — and it must not be a
+       * `markStaleForSource` that a concurrent sweep has already cleared.
+       *
+       * `materializeFlow` reruns the published graph from scratch against stored
+       * data and never consults the stale flag, so the final number is computed
+       * once over everything the import landed rather than accumulated from the
+       * partial passes along the way.
+       *
+       * `failed` is excluded: a failed job imported nothing authoritative, and
+       * its checkpoint recomputes already covered whatever did land.
+       */
+      if (outcome.kind === "finished") {
+        if (outcome.status !== "failed") {
+          const flowIds = await step.run(`collect-affected-flows-${i}`, () =>
+            markStaleForSource(db, ref.orgId, provider, ref.connectionId, [ref.streamHash]),
+          );
+          if (flowIds.length > 0) {
+            await step.sendEvent(
+              `authoritative-recompute-${i}`,
+              flowIds.map((flowId) => ({ name: "flow/materialize.requested" as const, data: { orgId: ref.orgId, flowId } })),
+            );
+          }
+        }
+        return { jobId, outcome, slices };
+      }
+
+      /**
+       * DEFERRED STOPS THE LOOP, and this is the most important line in it.
+       *
+       * `deferred` is the provider budget refusing (`claimCalls`) or a tripped
+       * breaker, and it carries a `retryAfterMs`. Looping past it would do the
+       * exact thing the ceiling exists to prevent — hammer an API that has
+       * already said no, from the lowest-priority work in the system. One slice
+       * per five minutes hid this because the next attempt was always far away;
+       * draining the loop is what makes it something that has to be handled.
+       *
+       * Returning rather than breaking, so the outcome the caller sees is the
+       * refusal itself rather than a count that looks like ordinary progress.
+       */
+      if (outcome.kind === "deferred") return { jobId, outcome, slices };
+
+      // Out of wall clock. The job keeps its checkpoint and the next sweep tick
+      // picks it up exactly where this run stopped.
+      if (Date.now() - startedAt >= backfillRunBudgetMs()) break;
     }
-    return { jobId, outcome };
+    return { jobId, outcome: last, slices };
   },
 );
