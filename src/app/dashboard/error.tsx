@@ -34,11 +34,29 @@ export default function DashboardError({ error, reset }: { error: Error & { dige
         An unexpected error interrupted this view. Trying again usually clears it — your data is intact.
       </p>
       <div className="mt-6 flex gap-3">
-        <Button onClick={reset}>Try again</Button>
+        <Button variant="accent" onClick={reset}>
+          Try again
+        </Button>
         <Link href="/dashboard" className={cn(buttonVariants({ variant: "secondary" }))}>
           Back to the dashboard
         </Link>
       </div>
+      {/* THE DIGEST, ON SCREEN — because "check the console" is not something a
+          customer does and was not something WE could do either.
+          Next redacts a server error's message in production and replaces it
+          with this hash; the same hash is printed beside the real stack in the
+          platform log. Without it on screen there is no thread at all between
+          "the board hit an error" and the line that caused it — the only
+          evidence anybody could hand over was a screenshot of this page, which
+          is exactly the position this boundary put us in.
+          Rendered only when Next supplies one, so a client-side throw (which
+          keeps its real message and has no digest) does not show an empty
+          label. */}
+      {error.digest && (
+        <p className="mt-6 font-mono text-xs text-muted-foreground">
+          Reference <span className="text-foreground">{error.digest}</span>
+        </p>
+      )}
     </div>
   );
 }
