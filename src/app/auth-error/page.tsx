@@ -30,7 +30,7 @@ export default function AuthErrorPage() {
         <li>The page sat open a while before you finished. Just start again — it takes seconds.</li>
       </ul>
       <div className="mt-6 flex gap-3">
-        <Link href="/sign-in" className={cn(buttonVariants())}>
+        <Link href="/sign-in" className={cn(buttonVariants({ variant: "accent" }))}>
           Try signing in again
         </Link>
         <Link href="/" className={cn(buttonVariants({ variant: "secondary" }))}>

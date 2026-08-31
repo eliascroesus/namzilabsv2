@@ -15,7 +15,7 @@ export default function NotFound() {
         This page doesn&rsquo;t exist — the link may be stale, or what it pointed at has been removed.
       </p>
       <div className="mt-6">
-        <Link href="/dashboard" className={cn(buttonVariants())}>
+        <Link href="/dashboard" className={cn(buttonVariants({ variant: "accent" }))}>
           Go to dashboard
         </Link>
       </div>

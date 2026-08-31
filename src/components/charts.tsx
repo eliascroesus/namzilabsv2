@@ -245,15 +245,24 @@ export function TargetBar({ value, target, format }: { value: number; target: nu
   const met = pct >= 100;
   return (
     <div className="mt-2.5">
-      {/* THE TRACK IS THE FILL'S OWN COLOUR AT A SIXTH, not the grey gutter it
-          used to be. A violet bar sitting in a neutral channel is two
-          materials; the track is the same measure UNFILLED, so it should be the
-          same colour with the light out of it. It follows the fill to success
-          when the goal is met, so the whole meter changes state rather than
-          just the liquid in it. */}
-      <div className={cn(TRACK, "w-full", met ? "bg-success/15" : "bg-marker/15")}>
+      {/* THE UNMET BAR IS NEUTRAL NOW, AND THAT IS THE SUCCESS/BRAND COLLISION
+          landing on the one component it actually breaks.
+          This drew the in-progress meter in `--marker` and the met one in
+          `--success`, which was a real distinction while the marker was violet
+          and success was green. They are the same green today — `--success` IS
+          `brand-500` — so both states rendered identically and the meter stopped
+          reporting the only thing it exists to report.
+          So the change of state is carried by COLOUR ARRIVING rather than by one
+          colour becoming another: an unmet meter is greyscale and a met one goes
+          green. That is also the honest reading of the kit's own rule that green
+          means good — a bar at 40% is not good, it is 40%.
+          The track stays the fill's own colour at a sixth, which was right and
+          is unaffected: the track is the same measure UNFILLED, so it should be
+          the same colour with the light out of it, and it follows the fill to
+          green so the whole meter changes state rather than just the liquid. */}
+      <div className={cn(TRACK, "w-full", met ? "bg-success/15" : "bg-neutral-500/30")}>
         <div
-          className={cn("h-full rounded-full", met ? "bg-success" : "bg-marker")}
+          className={cn("h-full rounded-full", met ? "bg-success" : "bg-neutral-400")}
           style={{ width: `${Math.max(pct, 2)}%` }}
         />
       </div>

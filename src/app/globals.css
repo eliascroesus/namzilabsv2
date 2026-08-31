@@ -535,7 +535,22 @@
   --secondary: var(--color-neutral-700);
   --secondary-foreground: var(--color-neutral-200);
 
-  --muted: var(--color-neutral-800);
+  /**
+   * MUTED IS RECESSED; ACCENT IS RAISED. Two roles, two directions, and on this
+   * surface they must not be the same value.
+   *
+   * `--muted` was `neutral-800` for one draft, which is EXACTLY `--card` — so
+   * `hover:bg-muted` on a card painted the card onto itself, and six call sites
+   * had an invisible hover on the only control in their row that had to say "you
+   * can press me". That is the same bug the light theme had when `--muted` and
+   * the page were both #f5f5f5; it survived the re-theme by being re-introduced
+   * rather than by being kept.
+   *
+   * So they are pushed to opposite sides of the card: muted is a step DOWN
+   * (#141518 — a skeleton's track, a table's head, a disabled fill) and accent
+   * is a step UP (#222325 — every hover and every selected row in the product).
+   */
+  --muted: var(--color-neutral-900);
   --muted-foreground: var(--color-neutral-300); /* #9ca3af — 6.78:1 on a card */
 
   /* shadcn's hover wash, and it is NEUTRAL now. It was the marker's tint pair,

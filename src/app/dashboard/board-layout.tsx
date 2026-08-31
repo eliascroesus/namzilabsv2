@@ -403,7 +403,7 @@ export function BoardLayout({
                     which no fixed step of the grey ramp does — the same
                     correction `Chip`'s own count pill carries.
                     The count sits INSIDE it, like the columns' do. */}
-                <span className="flex items-center gap-1.5 rounded-full bg-foreground/5 py-1 pl-2 pr-2">
+                <span className="flex items-center gap-1.5 rounded-xs bg-foreground/5 py-1 pl-2 pr-2">
                   <span className="size-2 shrink-0 rounded-full bg-neutral-400" aria-hidden />
                   <span className="text-sm font-semibold text-muted-foreground">Ungrouped</span>
                   <span className="tnum shrink-0 pl-0.5 text-xs font-semibold text-muted-foreground opacity-70">
@@ -520,7 +520,7 @@ export function BoardLayout({
           mark={
             <span
               className="size-5 shrink-0 rounded-control"
-              style={{ background: drag.accent || "var(--color-neutral-300)" }}
+              style={{ background: drag.accent || "var(--color-neutral-500)" }}
             />
           }
         />

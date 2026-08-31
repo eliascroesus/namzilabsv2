@@ -91,7 +91,7 @@ function DialogContent({
             // no hit area of its own: a 16px target where the kit's minimum is
             // 32, and a hover that brightened the icon rather than lighting a
             // control.
-            className="absolute top-4 right-4 flex size-8 items-center justify-center rounded-control text-muted-foreground transition-colors duration-(--duration-fast) hover:bg-muted hover:text-foreground disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
+            className="absolute top-4 right-4 flex size-8 items-center justify-center rounded-control text-muted-foreground transition-colors duration-(--duration-fast) hover:bg-accent hover:text-foreground disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
           >
             <XIcon />
             <span className="sr-only">Close</span>

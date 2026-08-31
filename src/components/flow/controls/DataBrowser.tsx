@@ -201,7 +201,7 @@ export function DataBrowser({
               onClick={() => setOpen(false)}
               title="Close"
               aria-label="Close the field browser"
-              className="shrink-0 rounded-control p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              className="shrink-0 rounded-control p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             >
               <X size={16} />
             </button>
@@ -230,7 +230,7 @@ export function DataBrowser({
             <button
               type="button"
               onClick={() => setDrill(drill.trail.length > 1 ? { groupId: drill.groupId, trail: drill.trail.slice(0, -1) } : null)}
-              className="flex shrink-0 items-center gap-0.5 rounded-control px-1 transition-colors hover:bg-muted"
+              className="flex shrink-0 items-center gap-0.5 rounded-control px-1 transition-colors hover:bg-accent"
             >
               <ChevronLeft size={12} strokeWidth={2.25} aria-hidden /> Back
             </button>
@@ -313,7 +313,7 @@ export function DataBrowser({
                   <button
                     type="button"
                     onClick={() => toggleGroup(g.stepId)}
-                    className="flex w-full items-center gap-1.5 rounded-control px-2 py-1.5 text-left transition-colors hover:bg-muted"
+                    className="flex w-full items-center gap-1.5 rounded-control px-2 py-1.5 text-left transition-colors hover:bg-accent"
                   >
                     <ChevronRight
                       size={14}
@@ -386,7 +386,7 @@ export function DataBrowser({
               onCustom(q.trim());
               setOpen(false);
             }}
-            className="border-t border-border px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-muted"
+            className="border-t border-border px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-accent"
           >
             {/* Says what it DOES — now that search also matches values, this
                 hatch must not read as "pick the record with this email". */}

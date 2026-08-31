@@ -107,7 +107,7 @@ export function PageContainer({
  * that disagrees with the real one does the single thing a skeleton exists to
  * prevent.
  */
-export const BOARD_GRID = "grid gap-4 sm:grid-cols-2 xl:grid-cols-3";
+export const BOARD_GRID = "grid gap-6 sm:grid-cols-2 xl:grid-cols-3";
 
 /**
  * THE HEADER'S TIME CONTROL — the groove, and the pills that sit in it.
@@ -184,7 +184,7 @@ export function PageHeader({ title, lede, actions, back, className }: PageHeader
          */
         <Link
           href={back.href}
-          className="-ml-2 inline-flex h-8 items-center gap-1.5 rounded-control pl-2 pr-3 text-sm text-muted-foreground transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:bg-muted hover:text-foreground"
+          className="-ml-2 inline-flex h-8 items-center gap-1.5 rounded-control pl-2 pr-3 text-sm text-muted-foreground transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:bg-accent hover:text-foreground"
         >
           <ArrowLeft size={14} />
           {back.label}

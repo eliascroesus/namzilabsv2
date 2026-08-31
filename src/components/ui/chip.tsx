@@ -53,7 +53,7 @@ export function Chip({ className, active, count, children, ...props }: ChipProps
             // means lighter.
             "bg-primary text-primary-foreground hover:bg-brand-500 active:bg-brand-700"
           : // OFF-HOVER IS A RAISED STEP, NOT A TINT. It was the marker's violet
-            // wash, because on a light page `hover:bg-muted` and the page were
+            // wash, because on a light page `hover:bg-accent` and the page were
             // the same #f5f5f5 — an invisible hover on the only control in the
             // row that has to say "you can pick me".
             //

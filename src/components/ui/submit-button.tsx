@@ -37,11 +37,33 @@ export type SubmitButtonProps = Omit<ButtonProps, "type"> & {
   pendingLabel?: string;
 };
 
-export function SubmitButton({ pendingLabel, children, disabled, className, ...props }: SubmitButtonProps) {
+export function SubmitButton({
+  pendingLabel,
+  children,
+  disabled,
+  className,
+  /**
+   * THE BRAND, BY DEFAULT, AND IT HAS TO BE STATED HERE RATHER THAN INHERITED.
+   *
+   * `Button`'s `default` variant used to be a near-black fill — the highest-
+   * contrast object on a light page — so a form's submit was automatically the
+   * loudest thing in it and this component never had to say so. That variant is
+   * a bordered card chip now, which is right for a console's ordinary act and
+   * wrong for the one control a form exists to reach: "Save" and "Cancel"
+   * rendering as the same object is a form with no primary.
+   *
+   * A SUBMIT IS THE PRIMARY ACT BY DEFINITION, which is what makes this a
+   * default rather than something eleven call sites remember to pass. The
+   * destructive submits already pass `variant="destructive"` and are unaffected.
+   */
+  variant = "accent",
+  ...props
+}: SubmitButtonProps) {
   const { pending } = useFormStatus();
   return (
     <Button
       type="submit"
+      variant={variant}
       // `disabled` while pending is the double-submit guard AND the visual
       // state — one attribute doing both, so they cannot disagree.
       disabled={disabled || pending}

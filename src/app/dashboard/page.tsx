@@ -760,7 +760,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
               pills reads as a control from a different set. h-9 is 36px, which
               is `size="sm"`: the same height as the buttons either side of it,
               stated here because a <summary> cannot be a Button. */}
-          <summary className="inline-flex h-9 cursor-pointer list-none items-center gap-1.5 whitespace-nowrap rounded-full border border-border bg-card px-3.5 text-sm font-medium text-foreground shadow-xs transition-colors duration-(--duration-fast) hover:bg-muted [&::-webkit-details-marker]:hidden">
+          <summary className="inline-flex h-8 cursor-pointer list-none items-center gap-1.5 whitespace-nowrap rounded-control border border-border bg-card px-3 text-xs font-medium text-foreground shadow-xs transition-colors duration-(--duration-fast) hover:bg-accent [&::-webkit-details-marker]:hidden">
             {boardSource && <SourceMark source={boardSource} />}
             {activeSourceLabel}
             <ChevronDown size={14} className="text-muted-foreground transition-transform group-open/src:rotate-180" />

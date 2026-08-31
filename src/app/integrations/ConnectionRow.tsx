@@ -875,7 +875,7 @@ function AppCard({ app, onConnect }: { app: DirectoryApp; onConnect: () => void 
           here" — seven of them is a catalogue with no act in it at all. */}
       <div className="mt-auto pt-4">
         {app.oauthHref ? (
-          <a href={app.oauthHref} className={cn(buttonVariants(), "w-full")}>
+          <a href={app.oauthHref} className={cn(buttonVariants({ variant: "accent" }), "w-full")}>
             Connect with Google
           </a>
         ) : (

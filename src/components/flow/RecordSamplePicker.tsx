@@ -79,7 +79,7 @@ export function RecordSamplePicker({ records, selectedIndex, onSelect }: { recor
               /* Selection is the marker's, edge and wash alike: `bg-accent` is
                  marker-50, so its border comes off the same ramp rather than
                  off the brand's, which at these steps is a pale gold. */
-              selected ? "border-marker-300 bg-accent/60" : "border-border bg-muted/40 hover:border-marker-200 hover:bg-muted",
+              selected ? "border-marker-300 bg-accent/60" : "border-border bg-muted/40 hover:border-marker-200 hover:bg-accent",
             )}
           >
             <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-2.5 py-2 text-xs">

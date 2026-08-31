@@ -74,7 +74,7 @@ export default async function Home() {
         <span className="font-display text-lg font-semibold text-foreground">Namzilabs</span>
         <nav className="flex items-center gap-1 sm:gap-2">
           {user ? (
-            <Link className={cn(buttonVariants())} href="/dashboard">
+            <Link className={cn(buttonVariants({ variant: "accent" }))} href="/dashboard">
               Go to dashboard
             </Link>
           ) : (
@@ -82,7 +82,7 @@ export default async function Home() {
               <a className={cn(buttonVariants({ variant: "ghost" }))} href="/sign-in">
                 Sign in
               </a>
-              <a className={cn(buttonVariants())} href="/sign-up">
+              <a className={cn(buttonVariants({ variant: "accent" }))} href="/sign-up">
                 Get started
               </a>
             </>
@@ -116,7 +116,7 @@ export default async function Home() {
                 you one figure you can take into a Monday meeting.
               </p>
               <div className="mt-9 flex flex-wrap items-center gap-3">
-                <a className={cn(buttonVariants({ size: "lg" }), "gap-2")} href={user ? "/dashboard" : "/sign-up"}>
+                <a className={cn(buttonVariants({ variant: "accent", size: "lg" }), "gap-2")} href={user ? "/dashboard" : "/sign-up"}>
                   {user ? "Go to dashboard" : "Start free"}
                   <ArrowRight />
                 </a>
@@ -137,7 +137,7 @@ export default async function Home() {
         </section>
 
         {/* ---- What you connect -------------------------------------------- */}
-        <section className="border-y border-border bg-neutral-50">
+        <section className="border-y border-border bg-card">
           <div className="mx-auto w-full max-w-6xl px-5 py-14 sm:px-8 sm:py-20">
             <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
               What you can connect today
@@ -179,14 +179,14 @@ export default async function Home() {
         </section>
 
         {/* ---- Closing ----------------------------------------------------- */}
-        <section className="border-t border-border bg-neutral-50">
+        <section className="border-t border-border bg-card">
           <div className="mx-auto w-full max-w-6xl px-5 py-16 text-center sm:px-8 sm:py-20">
             <h2 className="font-display text-display-lg font-semibold text-foreground">Stop reconciling by hand.</h2>
             <p className="mx-auto mt-4 max-w-lg text-lg text-muted-foreground">
               Connect one tool and build your first metric in an afternoon.
             </p>
             <div className="mt-8 flex justify-center">
-              <a className={cn(buttonVariants({ size: "lg" }), "gap-2")} href={user ? "/dashboard" : "/sign-up"}>
+              <a className={cn(buttonVariants({ variant: "accent", size: "lg" }), "gap-2")} href={user ? "/dashboard" : "/sign-up"}>
                 {user ? "Go to dashboard" : "Start free"}
                 <ArrowRight />
               </a>

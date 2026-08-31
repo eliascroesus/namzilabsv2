@@ -88,7 +88,7 @@ function Gridlines({ ticks, lo, hi }: { ticks: number[]; lo: number; hi: number 
           y2={yPct(t, lo, hi)}
           // The zero line is the one you read magnitude against, so it is a
           // shade heavier than the rest.
-          stroke={t === 0 ? "var(--color-neutral-300)" : "var(--color-border)"}
+          stroke={t === 0 ? "var(--color-neutral-500)" : "var(--color-border)"}
           strokeWidth="1"
           vectorEffect="non-scaling-stroke"
         />

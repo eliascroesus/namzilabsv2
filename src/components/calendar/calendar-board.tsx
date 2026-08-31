@@ -367,7 +367,7 @@ export function CalendarBoard({
               picker's Calendar card wears, so the board you land on is the card
               you pressed. */}
           <Select
-            triggerClassName="h-9 rounded-full border-border bg-card px-1.5 py-0 pr-3 text-sm font-medium shadow-xs"
+            triggerClassName="h-8 rounded-control border-border bg-card px-1.5 py-0 pr-3 text-xs font-medium shadow-xs"
             leading={
               <span
                 aria-hidden

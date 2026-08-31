@@ -1104,7 +1104,7 @@ function KitIndex() {
             <li key={s}>
               <a
                 href={`#${sectionId(s)}`}
-                className="block rounded-control px-2 py-1 text-xs text-muted-foreground transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:bg-muted hover:text-foreground"
+                className="block rounded-control px-2 py-1 text-xs text-muted-foreground transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:bg-accent hover:text-foreground"
               >
                 {s}
               </a>

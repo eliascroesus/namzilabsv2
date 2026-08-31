@@ -165,7 +165,7 @@ export function FlowNameField({ name, onRename }: { name: string; onRename?: (v:
                      * for.
                      */
                     size={1}
-                    className="col-start-1 row-start-1 h-9 w-full min-w-0 rounded-control border border-transparent bg-transparent px-1.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus-visible:border-ring focus-visible:bg-card focus-visible:outline-none"
+                    className="col-start-1 row-start-1 h-9 w-full min-w-0 rounded-control border border-transparent bg-transparent px-1.5 text-sm font-semibold text-foreground transition-colors hover:bg-accent focus-visible:border-ring focus-visible:bg-card focus-visible:outline-none"
                   />
                 </span>
     </span>
@@ -235,7 +235,7 @@ function IslandButton({
       disabled={disabled}
       title={label}
       aria-label={label}
-      className={`flex shrink-0 items-center justify-center rounded-control text-foreground transition-colors hover:bg-muted disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent [&_svg]:stroke-[2] ${
+      className={`flex shrink-0 items-center justify-center rounded-control text-foreground transition-colors hover:bg-accent disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent [&_svg]:stroke-[2] ${
         compact ? "size-9 [&_svg]:size-[18px]" : "h-[42px] w-[42px] [&_svg]:size-[26px]"
       } ${className}`}
     >
@@ -349,7 +349,7 @@ export function FlowToolbar({
                    arrow is the same object as the pills it sits beside. It was
                    42px square around a 26px chevron — bigger than every control
                    in the bar and the only one drawn to no rung of the ladder. */
-                className="flex size-9 shrink-0 items-center justify-center rounded-control text-foreground transition-colors hover:bg-muted"
+                className="flex size-9 shrink-0 items-center justify-center rounded-control text-foreground transition-colors hover:bg-accent"
               >
                 <ChevronLeft size={20} strokeWidth={2} />
               </Link>
@@ -439,7 +439,7 @@ export function FlowToolbar({
                       setMenuOpen(false);
                       onDuplicate();
                     }}
-                    className="flex w-full items-center gap-2.5 rounded-control px-2.5 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+                    className="flex w-full items-center gap-2.5 rounded-control px-2.5 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
                   >
                     <Copy size={16} />
                     Duplicate flow
@@ -507,7 +507,7 @@ export function FlowToolbar({
           <button
             onClick={onFitView}
             title="Fit the whole flow on screen"
-            className="tnum h-[42px] w-[42px] rounded-control text-sm font-semibold text-foreground transition-colors hover:bg-muted"
+            className="tnum h-[42px] w-[42px] rounded-control text-sm font-semibold text-foreground transition-colors hover:bg-accent"
           >
             {zoomPct}%
           </button>

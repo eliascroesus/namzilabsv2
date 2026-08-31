@@ -95,7 +95,7 @@ function SheetContent({
         {showCloseButton && (
           // The Dialog's dismiss, to the class — one close button in the
           // product, not one per overlay primitive.
-          <SheetPrimitive.Close className="absolute top-4 right-4 flex size-8 items-center justify-center rounded-control text-muted-foreground transition-colors duration-(--duration-fast) hover:bg-muted hover:text-foreground disabled:pointer-events-none">
+          <SheetPrimitive.Close className="absolute top-4 right-4 flex size-8 items-center justify-center rounded-control text-muted-foreground transition-colors duration-(--duration-fast) hover:bg-accent hover:text-foreground disabled:pointer-events-none">
             <XIcon className="size-4" />
             <span className="sr-only">Close</span>
           </SheetPrimitive.Close>

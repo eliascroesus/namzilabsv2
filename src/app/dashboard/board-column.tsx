@@ -217,7 +217,7 @@ export function BoardColumn({
                on white, which is the rule for a 4px mark and nowhere near enough
                for 13px text. See groupInk. */
             <span
-              className="flex min-w-0 items-center gap-1.5 rounded-full py-1 pl-2 pr-2"
+              className="flex min-w-0 items-center gap-1.5 rounded-xs py-1 pl-2 pr-2"
               style={{ background: groupBadge(g.color) }}
             >
               <span className="size-2 shrink-0 rounded-full" style={{ background: groupAccent(g.color) }} aria-hidden />

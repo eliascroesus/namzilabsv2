@@ -363,7 +363,7 @@ export function ConfigPanel({
             onClick={onClose}
             title="Close"
             aria-label="Close step settings"
-            className="-mr-1.5 shrink-0 self-start rounded-control p-1.5 text-muted-foreground transition-colors duration-(--duration-fast) hover:bg-muted hover:text-foreground"
+            className="-mr-1.5 shrink-0 self-start rounded-control p-1.5 text-muted-foreground transition-colors duration-(--duration-fast) hover:bg-accent hover:text-foreground"
           >
             <X size={18} strokeWidth={2} />
           </button>
@@ -1209,7 +1209,7 @@ function NumberFieldList({
             <button
               type="button"
               onClick={() => setExtra(extra.filter((_, j) => j !== i))}
-              className="rounded-control p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              className="rounded-control p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
               title="Remove this field"
               aria-label="Remove this field"
             >
@@ -1366,7 +1366,7 @@ function NumberPicker({
                     // different step must not inherit a column it never had.
                     onSetField(null);
                   }}
-                  className="absolute right-8 top-1/2 -translate-y-1/2 rounded-control p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  className="absolute right-8 top-1/2 -translate-y-1/2 rounded-control p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                   title="Clear — type a number instead"
                   aria-label="Clear the picked step"
                 >
@@ -1851,7 +1851,7 @@ function MomentInput({
         <button
           type="button"
           onClick={toggle}
-          className={cn(fieldClasses, "relative py-2 pl-3 pr-9 text-left transition-colors hover:bg-muted")}
+          className={cn(fieldClasses, "relative py-2 pl-3 pr-9 text-left transition-colors hover:bg-accent")}
         >
           {label ? (
             <span className="block truncate text-foreground">
