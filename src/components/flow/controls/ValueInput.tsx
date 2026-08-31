@@ -91,7 +91,7 @@ export function ValueInput({
               // steps here were the violet ramp under its old `brand-*` name;
               // the same spellings today are a #fefae6 wash under a #f5d91f
               // icon, which is a gold on cream at 1.4:1 — the affordance, gone.
-              className="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center justify-center rounded-control border border-marker-200 bg-marker-50 p-1 text-marker-500 transition-colors hover:border-marker-300 hover:bg-marker-100 hover:text-marker-600"
+              className="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center justify-center rounded-control border border-brand-200 bg-brand-50 p-1 text-brand-500 transition-colors hover:border-brand-300 hover:bg-brand-100 hover:text-brand-600"
             >
               <Database size={14} strokeWidth={2} />
             </button>

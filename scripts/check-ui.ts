@@ -267,6 +267,54 @@ const RULES: Rule[] = [
     find: (line) => line.match(/\b(?:bg|text|border|divide|ring|outline|fill|stroke|from|via|to)-accent-yellow\b/)?.[0] ?? null,
   },
   {
+    name: "retired token",
+    why: "these tokens were deleted with the light theme; the classes still PARSE, compile to nothing, and leave the object with no colour at all",
+    /**
+     * THE PUNISHMENT THAT FITS THE CRIME, and this rule exists because the
+     * re-theme committed exactly this offence twice before anyone looked.
+     *
+     * Deleting a colour token is not like deleting a size token. An unresolved
+     * `text-micro` renders at the inherited SIZE, which is wrong and visible.
+     * An unresolved `border-marker-300` renders with NO BORDER — the selected
+     * step in the flow builder simply stopped having an edge — and an
+     * unresolved `text-marker-ink` renders in whatever colour its parent
+     * happened to be. Both look plausible. Neither throws, neither warns, and
+     * neither fails a build.
+     *
+     * That is precisely what happened: 27 `marker-*` ramp classes and three
+     * `text-marker-ink` in the builder survived the sweep that retired their
+     * tokens, and they were found by grepping rather than by anything failing.
+     * A named failure says which word to use instead.
+     *
+     * The mapping, for whoever trips this:
+     *   --ground / --ground-ink / --ground-ink-muted  ->  background / foreground / muted-foreground
+     *   --chrome-*  (nine of them)                    ->  border / card / primary / muted-foreground
+     *   --period-bg / -line / -ink                    ->  control / border / muted-foreground
+     *   --tab-underline                               ->  marker
+     *   --marker-ink                                  ->  marker  (9.83:1 — it needs no ink step)
+     *   --marker-<n>  (the violet ramp)               ->  brand-<n>
+     *   --ink-<n>     (the dark-surface ramp)         ->  neutral-<n>
+     *   --rail / --sidebar / --sidebar-accent         ->  background / neutral-700
+     *   --accent-yellow                               ->  primary
+     */
+    find: (line) =>
+      line.match(
+        /\b(?:bg|text|border|divide|ring|outline|fill|stroke|from|via|to|shadow)-(?:ink-\d+|chrome-[a-z-]+|ground(?:-ink)?(?:-muted)?|period-[a-z]+|marker-ink|marker-\d+|tab-underline|accent-yellow|rail|sidebar(?:-accent)?)\b/,
+      )?.[0] ?? null,
+  },
+  {
+    name: "dead dark: variant",
+    why: "the product has ONE theme; `dark:` is bound to a class nothing stamps, so the utility compiles and never fires",
+    /**
+     * `@custom-variant dark` is deliberately KEPT in globals.css — deleting it
+     * hands `dark:` back to Tailwind's default `prefers-color-scheme` binding,
+     * where a stray class would fire on half the machines loading the page with
+     * nobody here able to see it. So the variant compiles and matches nothing,
+     * and this is what stops the dead spelling accumulating behind it.
+     */
+    find: (line) => line.match(/\bdark:[a-z[]/)?.[0] ?? null,
+  },
+  {
     name: "hex literal",
     why: "colours live in tokens; a hex in a component is invisible to a future theme",
     find: (line) => line.match(/#[0-9a-fA-F]{6}\b/)?.[0] ?? null,

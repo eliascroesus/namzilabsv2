@@ -158,7 +158,7 @@ export function ReviewPublishModal({
                  too. The browser picks the tick's colour from the fill's
                  luminance, so a yellow box gets a dark tick without being
                  asked. */
-              <div key={ep.nodeId} className={`rounded-card border p-3.5 transition-colors ${m.enabled ? "border-marker-200 bg-accent/60" : "border-border bg-card opacity-80"}`}>
+              <div key={ep.nodeId} className={`rounded-card border p-3.5 transition-colors ${m.enabled ? "border-brand-200 bg-accent/60" : "border-border bg-card opacity-80"}`}>
                 <label className="flex items-center justify-between gap-2">
                   <span className="flex min-w-0 items-center gap-2">
                     <input type="checkbox" checked={m.enabled} onChange={(e) => set(ep.nodeId, { enabled: e.target.checked })} className="h-4 w-4 accent-brand-600" />

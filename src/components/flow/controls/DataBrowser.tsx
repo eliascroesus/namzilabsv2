@@ -20,7 +20,7 @@ function FieldRow({ field, onDrill, onPick }: { field: DataField; onDrill: () =>
     <button
       type="button"
       onClick={field.container ? onDrill : onPick}
-      className="flex w-full items-center gap-3 rounded-control border border-border bg-muted/40 px-2.5 py-2 text-left transition-colors hover:border-marker-200 hover:bg-accent/60"
+      className="flex w-full items-center gap-3 rounded-control border border-border bg-muted/40 px-2.5 py-2 text-left transition-colors hover:border-brand-200 hover:bg-accent/60"
     >
       <span className="flex min-w-0 max-w-[55%] shrink-0 items-center gap-1.5">
         <span className="truncate text-sm text-foreground">{field.label}</span>
@@ -181,7 +181,7 @@ export function DataBrowser({
             is spelled — so its hover wash is the marker's. At `brand-200` it
             would be a #fae98a hairline on a white panel, under 1.2:1: a handle
             that stops answering the pointer. */}
-        <div onPointerDown={startResize} title="Drag to resize" className="absolute inset-y-0 left-0 z-10 w-1.5 cursor-ew-resize transition-colors hover:bg-marker-200/70" />
+        <div onPointerDown={startResize} title="Drag to resize" className="absolute inset-y-0 left-0 z-10 w-1.5 cursor-ew-resize transition-colors hover:bg-brand-200/70" />
 
         <div className="space-y-2 border-b border-border p-2.5">
           <div className="flex items-center gap-1.5">

@@ -81,7 +81,7 @@ const GUTTER = "px-5";
  * cannot do at any step of its ramp.
  */
 const NOTE_WARN = "rounded-card border border-warn-soft bg-warn-soft/50 p-3 text-xs text-warn-ink";
-const NOTE_BRAND = "rounded-card border border-marker-100 bg-accent p-3 text-xs text-accent-foreground";
+const NOTE_BRAND = "rounded-card border border-brand-100 bg-accent p-3 text-xs text-accent-foreground";
 const NOTE_NEUTRAL = "rounded-card border border-border bg-muted/50 p-3 text-xs text-muted-foreground";
 
 /**
@@ -120,7 +120,7 @@ const BOX = "rounded-card border border-border bg-card p-3";
  * not dim, gone. Yellow fills; it never writes.
  */
 const ADD_PILL =
-  "inline-flex items-center gap-1.5 rounded-full border border-dashed border-marker-300 bg-accent/60 px-3 py-1.5 text-xs font-semibold text-accent-foreground transition-colors duration-(--duration-fast) hover:border-marker-400 hover:bg-accent";
+  "inline-flex items-center gap-1.5 rounded-full border border-dashed border-brand-300 bg-accent/60 px-3 py-1.5 text-xs font-semibold text-accent-foreground transition-colors duration-(--duration-fast) hover:border-brand-400 hover:bg-accent";
 
 /**
  * A LINK INSIDE THE PANEL — "Add another field", "Change", "Remove category".
@@ -426,7 +426,7 @@ export function ConfigPanel({
                      card with a chip on it, in the accent that means "the
                      branded action" everywhere else in the app — the marker's
                      wash, with an edge off the same ramp. */
-                  <div className="rounded-card border border-marker-100 bg-accent px-4 py-8 text-center">
+                  <div className="rounded-card border border-brand-100 bg-accent px-4 py-8 text-center">
                     <span aria-hidden className="mx-auto flex size-11 items-center justify-center rounded-full bg-card text-accent-foreground shadow-xs">
                       <Play size={18} strokeWidth={2.25} />
                     </span>
@@ -1389,7 +1389,7 @@ function NumberPicker({
                  panel is now set in. `--primary` is the yellow today, so the
                  old spelling would not be a weak glyph on this wash — it would
                  be no glyph. */
-              className="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center justify-center rounded-control border border-marker-100 bg-accent p-1 text-accent-foreground transition-colors duration-(--duration-fast) hover:border-marker-300 hover:bg-marker-100"
+              className="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center justify-center rounded-control border border-brand-100 bg-accent p-1 text-accent-foreground transition-colors duration-(--duration-fast) hover:border-brand-300 hover:bg-brand-100"
             >
               <Database size={14} strokeWidth={2} />
             </button>
@@ -2153,7 +2153,7 @@ function DedupeSection({ cfg, fallbackGroups, onChange }: { cfg: Record<string, 
        wears the violet wash and an edge off the same ramp, and a section that
        is off stays a plain hairline box. Nothing moves; only the colour
        changes, which is what keeps the panel from jumping as it is toggled. */
-    <div className={cn("space-y-2.5 rounded-card border p-3 transition-colors duration-(--duration-base)", on ? "border-marker-200 bg-accent/50" : "border-border bg-card")}>
+    <div className={cn("space-y-2.5 rounded-card border p-3 transition-colors duration-(--duration-base)", on ? "border-brand-200 bg-accent/50" : "border-border bg-card")}>
       <button
         type="button"
         onClick={() => onChange({ dedupe: !on })}

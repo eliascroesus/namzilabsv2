@@ -68,7 +68,7 @@ export function FlowNodeCard({
           hairline between them comes off that ramp too — a wash under coloured
           ink is drawing, which is the marker's half of the split. */}
       {publishes && (
-        <div className="flex items-center gap-1.5 rounded-b-[calc(var(--radius-surface)-1px)] border-t border-marker-100 bg-accent px-3.5 py-2 text-xs font-semibold text-accent-foreground">
+        <div className="flex items-center gap-1.5 rounded-b-[calc(var(--radius-surface)-1px)] border-t border-brand-100 bg-accent px-3.5 py-2 text-xs font-semibold text-accent-foreground">
           <LineChart size={14} strokeWidth={2.25} />
           On your dashboard
         </div>

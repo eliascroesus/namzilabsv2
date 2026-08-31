@@ -240,7 +240,7 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
                owes 4.5:1, which `marker-500` misses at 4.41:1. It read
                `text-brand-600` while that ramp was the violet; the same
                spelling today is a #d4b800 gold at 2.0:1. */
-            <span className="mt-0.5 block truncate text-xs text-marker-ink" title={refLine}>
+            <span className="mt-0.5 block truncate text-xs text-marker" title={refLine}>
               {refLine}
             </span>
           )}
@@ -275,7 +275,7 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
       {publishes != null && (
         <div
           className={`flex items-center gap-1.5 rounded-b-[calc(var(--radius-surface)-1px)] border-t px-3.5 py-2 text-xs font-semibold ${
-            publishes ? "border-marker-100 bg-accent text-accent-foreground" : "border-border bg-muted/50 text-muted-foreground"
+            publishes ? "border-brand-100 bg-accent text-accent-foreground" : "border-border bg-muted/50 text-muted-foreground"
           }`}
           title={publishes ? "This step's result becomes a tile when you publish." : "Switched off in Review & publish — this step publishes nothing."}
         >
@@ -311,7 +311,7 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
             (data as NodeData).onAddFrom?.(id, null, anchorFromRect(e.currentTarget.getBoundingClientRect()));
           }}
           title="Add the next step"
-          className="nodrag absolute left-1/2 top-full z-10 mt-8 flex w-[300px] -translate-x-1/2 items-center gap-2.5 rounded-surface border-2 border-dashed border-border bg-card p-3 text-left text-sm font-semibold text-muted-foreground shadow-surface transition-colors duration-(--duration-fast) hover:border-marker hover:text-marker-ink"
+          className="nodrag absolute left-1/2 top-full z-10 mt-8 flex w-[300px] -translate-x-1/2 items-center gap-2.5 rounded-surface border-2 border-dashed border-border bg-card p-3 text-left text-sm font-semibold text-muted-foreground shadow-surface transition-colors duration-(--duration-fast) hover:border-marker hover:text-marker"
         >
           <span className="flex h-8 w-8 items-center justify-center rounded-control border-2 border-dashed border-current opacity-70">
             <Plus size={16} strokeWidth={2} />
@@ -332,7 +332,7 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
                 (data as NodeData).onAddFrom?.(id, h.id, anchorFromRect(e.currentTarget.getBoundingClientRect()));
               }}
               title={`Add a step to “${h.label}”`}
-              className="flex items-center gap-1.5 whitespace-nowrap rounded-full border-2 border-dashed border-border bg-card px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors duration-(--duration-fast) hover:border-marker hover:text-marker-ink"
+              className="flex items-center gap-1.5 whitespace-nowrap rounded-full border-2 border-dashed border-border bg-card px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors duration-(--duration-fast) hover:border-marker hover:text-marker"
             >
               <Plus size={14} strokeWidth={2.25} />
               {h.label}
