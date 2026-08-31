@@ -13,6 +13,7 @@ import { SubmitButton } from "@/components/ui/submit-button";
 import { refreshFlowAction } from "@/app/dashboard/flows/actions";
 import { formatMetricValue, relativeTime } from "@/lib/format";
 import { monthGrid, monthLabel, WEEKDAYS, type MonthKey } from "@/lib/metrics/calendar";
+import { PERIOD_PILL, PERIOD_TRACK } from "@/components/ui/page";
 // Its own directive-free module, so the server-rendered skeleton can read it
 // as a string rather than as a client reference. See day-cell.ts.
 import { DAY_CELL_H } from "./day-cell";
@@ -314,22 +315,31 @@ export function CalendarBoard({
    */
   const tools = (
     <div className="flex min-w-0 items-center gap-2">
-          {/* THE VIEW KIND'S CHIP. It began as an echo of the rail — that row
-              filled orange when you were on the Calendar page — and the page is
-              gone. The chip stays because the colour now carries the kind:
-              orange is what the template picker's Calendar card wears, so the
-              board you land on is the card you pressed. Decorative; the Select
-              beside it is what actually says what you are looking at. */}
-          <span
-            aria-hidden
-            className="flex size-9 shrink-0 items-center justify-center rounded-control bg-accent-orange text-white"
-          >
-            <CalendarDays className="size-4" />
-          </span>
           {/* The builder's own combobox, not a native select: this is the same
               act as picking a field inside a step, and it searches once a
-              workspace has twenty metrics. */}
+              workspace has twenty metrics.
+              WEARING THE DASHBOARD'S CONTROL SHAPE, not the config panel's. Its
+              default shell is a rounded RECTANGLE, which is right in a column of
+              fields and wrong in this row: "+ Add", "All sources" and "Refresh
+              all" are all 36px pills, and a rounded rectangle among them reads
+              as a control from a different set. `triggerClassName` replaces the
+              shape and nothing else — every caller in the builder is untouched.
+              THE CHIP MOVED INSIDE IT, as `leading`, which is exactly what the
+              source picker does with its `SourceMark`. Beside the control it was
+              a second object on the row; inside it, it is this control's mark.
+              Orange still carries the view kind — it is what the template
+              picker's Calendar card wears, so the board you land on is the card
+              you pressed. */}
           <Select
+            triggerClassName="h-9 rounded-full border-border bg-card px-1.5 py-0 pr-3 text-sm font-medium shadow-xs"
+            leading={
+              <span
+                aria-hidden
+                className="flex size-6 shrink-0 items-center justify-center rounded-full bg-accent-orange text-white"
+              >
+                <CalendarDays className="size-3.5" />
+              </span>
+            }
             /* `metricId`, NOT `metric?.id` — they differ in exactly the case
                that matters. When the stored metric is gone `metric` is
                undefined, and reading the id off it would blank the control, so
@@ -356,19 +366,22 @@ export function CalendarBoard({
    */
   const period = (
     <div className="flex items-center gap-1.5">
-          {/* THE STEPPER IS ONE OBJECT, NOT THREE CONTROLS IN A ROW. Two arrows
-              and a label sitting loose on the bar read as three unrelated
-              things; sunk into their own track they read as a single control
-              that moves the month, which is what they are.
-              `bg-background` for the track and `bg-card` on hover, rather than
-              muted: `--muted` and `--card` are the SAME value under `.dark`, so
-              a muted well inside a card is invisible in one of the two themes.
-              The page colour is a step below the card in both. */}
-          <div className="flex items-center gap-0.5 rounded-full border border-border bg-background p-0.5">
+          {/* THE SAME GROOVE THE PERIOD PILLS SIT IN — `PERIOD_TRACK`, imported
+              rather than approximated. This control answers the same question
+              in the same slot as the dashboard's range track, so it has to be
+              the same object: it drew its own 36px well on `bg-background`
+              beside a 40px one on `--period-bg`, which meant switching from a
+              Columns tab to a Calendar tab moved the header row and changed the
+              surface under it.
+              THE STEPPER IS STILL ONE OBJECT, NOT THREE CONTROLS IN A ROW: two
+              arrows and a label loose on the bar read as three unrelated things;
+              sunk into the track they read as a single control that moves the
+              month, which is what they are. */}
+          <div className={PERIOD_TRACK}>
             <Button
               variant="ghost"
               size="iconSm"
-              className="hover:bg-card"
+              className="rounded-full text-period-ink hover:bg-ground-ink/10 hover:text-ground-ink"
               onClick={() => setMonthIdx((i) => Math.max(0, i - 1))}
               disabled={monthIdx === 0}
               title={monthIdx === 0 ? "The calendar keeps two months" : `Go to ${monthLabel(months[monthIdx - 1])}`}
@@ -378,18 +391,36 @@ export function CalendarBoard({
             </Button>
             {/* Fixed width so stepping between months does not shuffle the
                 buttons either side of the label — sized for the longest month
-                name there is ("September 2026"), not for the one on screen. */}
-            <span className="w-40 whitespace-nowrap text-center text-md font-semibold text-foreground">{monthLabel(month)}</span>
+                name there is ("September 2026"), not for the one on screen.
+                `text-ground-ink` because this track sits on the GROUND: the
+                page's own ink is white on the dark group and near-black on the
+                light one, where `--foreground` would be wrong in exactly one
+                theme. Same reasoning the range pills' hover already carries. */}
+            <span className="w-40 whitespace-nowrap text-center text-sm font-semibold text-ground-ink">
+              {monthLabel(month)}
+            </span>
             <Button
               variant="ghost"
               size="iconSm"
-              className="hover:bg-card"
+              className="rounded-full text-period-ink hover:bg-ground-ink/10 hover:text-ground-ink"
               onClick={() => setMonthIdx((i) => Math.min(months.length - 1, i + 1))}
               disabled={monthIdx === months.length - 1}
               title={monthIdx === months.length - 1 ? "This is the current month" : `Go to ${monthLabel(months[monthIdx + 1])}`}
               aria-label="Next month"
             >
               <ChevronRight />
+            </Button>
+            {/* "This month" LIVES IN THE GROOVE TOO, as a pill — it is one of
+                the spans this control can select, exactly as "Today" is on the
+                range track. Outside it, it was a fourth loose object on a row
+                that already had three. */}
+            <Button
+              variant="ghost"
+              onClick={() => setMonthIdx(months.length - 1)}
+              disabled={monthIdx === months.length - 1}
+              className={cn(PERIOD_PILL, "text-period-ink hover:bg-ground-ink/10 hover:text-ground-ink")}
+            >
+              This month
             </Button>
           </div>
           {/* THE ONE FACT THE DELETED LEDE WAS CARRYING.
@@ -404,23 +435,10 @@ export function CalendarBoard({
               be the third hue in a bar that already has two. */}
           <span
             title="Days are UTC — the same days your metrics are counted in"
-            className="rounded-full bg-muted px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+            className="rounded-full border border-period-line px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-period-ink"
           >
             UTC
           </span>
-          {/* The branded act in this bar — "put me back on the month that is
-              still moving" — so it takes the sheet's violet wash rather than
-              another bordered grey. Black is reserved here for the banner's
-              Compute now, which is the only thing on the page that changes
-              data. */}
-          <Button
-            variant="soft"
-            size="sm"
-            onClick={() => setMonthIdx(months.length - 1)}
-            disabled={monthIdx === months.length - 1}
-          >
-            This month
-          </Button>
     </div>
   );
 
@@ -452,37 +470,6 @@ export function CalendarBoard({
           {period}
         </div>
       )}
-
-      {/* The month, in one line — and the as-of, because a calendar of stored
-          numbers has to say when they were last true, exactly as a tile does.
-          Each fact is now a chip on the same material as the bar above it: as a
-          run-on sentence with three bold numbers in it, the eye had to parse
-          prose to find the figure, and the middot between the facts kept
-          reading as part of the value. */}
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        {stats ? (
-          <>
-            <StatChip label="Best day">
-              <span className="tnum font-semibold text-foreground">{formatMetricValue(stats.best.value, fmt)}</span>
-              <span className="text-muted-foreground"> on {monthDayLabel(stats.best.key)}</span>
-            </StatChip>
-            <StatChip label="Average day">
-              <span className="tnum font-semibold text-foreground">{formatMetricValue(stats.average, fmt)}</span>
-            </StatChip>
-            <StatChip label="Days with data">
-              <span className="tnum font-semibold text-foreground">{stats.days}</span>
-            </StatChip>
-          </>
-        ) : missing ? null : (
-          // Not said when the metric itself is gone: "no days carry a value for
-          // this metric" describes a metric that exists and is quiet, which is a
-          // different fact from the one the banner below is reporting.
-          <span className="text-xs text-muted-foreground">No days in {monthLabel(month)} carry a value for this metric.</span>
-        )}
-        {metric?.computedAt && (
-          <span className="ms-auto text-xs text-muted-foreground">Numbers as of {relativeTime(new Date(metric.computedAt))}</span>
-        )}
-      </div>
 
       {metric?.status === "error" && metric.error && (
         <p className="mt-3 rounded-card border border-danger-soft bg-danger-soft/50 p-3 text-md text-danger-ink">
@@ -606,6 +593,43 @@ export function CalendarBoard({
           </div>
         )}
       </Card>
+      )}
+
+      {/* THE SUMMARY READS AFTER THE SHEET, NOT BEFORE IT.
+          Best day, average day, days with data and the as-of are all CONCLUSIONS
+          drawn from the squares — "24 on Aug 10" means nothing until you have
+          seen the month it is describing, and the as-of is a footnote about the
+          numbers above it. Sitting between the controls and the grid, they were
+          three figures asking to be read before the thing they summarise, and
+          they pushed the calendar itself further down the page.
+          The same order a table puts its total in, and the same order the tile
+          cards use: the picture, then what it adds up to. */}
+      {!missing && (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {stats ? (
+            <>
+              <StatChip label="Best day">
+                <span className="tnum font-semibold text-foreground">{formatMetricValue(stats.best.value, fmt)}</span>
+                <span className="text-muted-foreground"> on {monthDayLabel(stats.best.key)}</span>
+              </StatChip>
+              <StatChip label="Average day">
+                <span className="tnum font-semibold text-foreground">{formatMetricValue(stats.average, fmt)}</span>
+              </StatChip>
+              <StatChip label="Days with data">
+                <span className="tnum font-semibold text-foreground">{stats.days}</span>
+              </StatChip>
+            </>
+          ) : (
+            <span className="text-xs text-muted-foreground">
+              No days in {monthLabel(month)} carry a value for this metric.
+            </span>
+          )}
+          {metric?.computedAt && (
+            <span className="ms-auto text-xs text-muted-foreground">
+              Numbers as of {relativeTime(new Date(metric.computedAt))}
+            </span>
+          )}
+        </div>
       )}
     </>
   );

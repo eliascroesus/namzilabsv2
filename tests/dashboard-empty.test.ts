@@ -222,6 +222,26 @@ describe("one picker, reached from both places", () => {
     expect(picker).not.toMatch(/onClick=\{\(\) => [^}]*addView/);
   });
 
+  it("leads with the picture and says nothing else but the name", () => {
+    /**
+     * THE SENTENCES ARE GONE, and the pictures took the width they were using.
+     * Three descriptions in a chooser is a paragraph asking to be read before a
+     * decision the thumbnail already makes — and the thumbnails are drawn from
+     * the real thing, so they were always the more accurate half. What survives
+     * is the NAME, which is what you say to somebody else afterwards.
+     *
+     * TWO PER ROW, not three. Three fitted the three kinds neatly and made each
+     * tile ~150px wide, at which size a twelve-column grid and a month of
+     * squares are both "a small grey pattern" — the exact failure a thumbnail
+     * picker exists to avoid.
+     */
+    expect(picker).not.toMatch(/blurb/);
+    expect(picker).toMatch(/sm:grid-cols-2/);
+    expect(picker).not.toMatch(/sm:grid-cols-3/);
+    // The tile grows with the column instead of staying at a fixed height.
+    expect(picker).toMatch(/aspect-\[4\/3\]/);
+  });
+
   it("shows a picture of each layout rather than an icon of it", () => {
     // Miro and Notion both lead a template picker with a thumbnail: the fastest
     // way to say what an arrangement looks like is to show a small one. Drawn

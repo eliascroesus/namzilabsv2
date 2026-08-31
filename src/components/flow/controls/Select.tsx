@@ -22,6 +22,8 @@ export function Select({
   searchable = false,
   width = 260,
   disabled = false,
+  triggerClassName,
+  leading,
 }: {
   value: string;
   options: Option[];
@@ -30,6 +32,19 @@ export function Select({
   searchable?: boolean;
   width?: number;
   disabled?: boolean;
+  /**
+   * OVERRIDE THE TRIGGER'S SHELL, for a caller whose row is not the config
+   * panel's. The builder's fields are rounded rectangles because they sit in a
+   * column of fields; the dashboard's control rows are PILLS, and a rounded
+   * rectangle among them reads as a control from a different set.
+   *
+   * The trigger keeps its behaviour either way — this replaces the shape, not
+   * the combobox. Undefined leaves the field shell exactly as it was, so every
+   * existing caller in the builder is untouched.
+   */
+  triggerClassName?: string;
+  /** A mark before the label — the shape the dashboard's source picker uses. */
+  leading?: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
@@ -124,9 +139,10 @@ export function Select({
           }}
           aria-haspopup="listbox"
           aria-expanded={open}
-          className={BTN}
+          className={triggerClassName ? cn(BTN, triggerClassName) : BTN}
         >
-          <span className={`min-w-0 truncate ${current ? "text-foreground" : "text-muted-foreground"}`}>{current?.label ?? placeholder}</span>
+          {leading}
+          <span className={`min-w-0 flex-1 truncate ${current ? "text-foreground" : "text-muted-foreground"}`}>{current?.label ?? placeholder}</span>
           <ChevronDown size={16} className="shrink-0 text-muted-foreground" aria-hidden />
         </button>
       }

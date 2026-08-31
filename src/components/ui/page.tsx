@@ -91,6 +91,31 @@ export function PageContainer({
 export const BOARD_GRID = "grid gap-4 sm:grid-cols-2 xl:grid-cols-3";
 
 /**
+ * THE HEADER'S TIME CONTROL — the groove, and the pills that sit in it.
+ *
+ * Every view answers "what span am I reading" in the same slot beside the page
+ * title, and until this constant existed each one drew that answer itself: the
+ * dashboard's six period links in one spelling, the calendar's month stepper in
+ * another. They came out at different HEIGHTS on different SURFACES with
+ * different RADII, which is exactly the drift `BOARD_GRID` is spelled here to
+ * prevent one layout down — and it is the kind nobody files a bug for, because
+ * each control looks fine until you switch tabs and the row moves.
+ *
+ * 40px around 32px pills: the 2px padding is the groove the selected pill sits
+ * IN, and the remaining 4px is what stops a lit pill touching the rim.
+ *
+ * `--period-bg` and `--period-line` rather than card/border, because this group
+ * sits on the GROUND and answers differently under `.dark` — see their notes in
+ * globals.css, which carry the ratios.
+ */
+export const PERIOD_TRACK =
+  "inline-flex h-10 items-center gap-0.5 rounded-full border border-period-line bg-period-bg p-0.5";
+
+/** One control inside that groove — a period link, a month arrow, "This month". */
+export const PERIOD_PILL =
+  "inline-flex h-8 shrink-0 items-center rounded-full px-3.5 text-sm font-medium transition-colors duration-(--duration-fast)";
+
+/**
  * Title row: optional back link, one h1 recipe, optional lede, actions on
  * the right. The h1 is the ONLY page-title spelling in the product.
  */

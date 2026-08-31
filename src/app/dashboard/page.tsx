@@ -9,7 +9,7 @@ import { MetricCard } from "@/components/metric-card";
 import { EmptyBoard } from "@/components/board-empty";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { PageContainer, PageHeader } from "@/components/ui/page";
+import { PageContainer, PageHeader, PERIOD_PILL, PERIOD_TRACK } from "@/components/ui/page";
 import { Sparkbars, TargetBar } from "@/components/charts";
 import { FreshnessPoller } from "@/components/freshness-poller";
 import { SourceMark } from "@/components/source-mark";
@@ -1186,10 +1186,10 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                keyboard user reaches them. See `PageHeader`'s own note for why
                its right slot had to stop being `shrink-0` for this to work. */
             <div className="-mx-1 min-w-0 overflow-x-auto px-1">
-              {/* 40px tall around 32px pills: the 2px padding is the groove the
-                  selected pill sits IN, and the remaining 4px is what stops a
-                  lit pill touching the rim. */}
-              <div className="inline-flex h-10 items-center gap-0.5 rounded-full border border-period-line bg-period-bg p-0.5">
+              {/* The groove is `PERIOD_TRACK` now, imported rather than spelled:
+                  the calendar's month stepper sits in the same slot and has to
+                  be the same object, not a second one that looks like it. */}
+              <div className={PERIOD_TRACK}>
                 {RANGE_OPTIONS.map((r) => (
                   // The press lands NOW: the pill lights and the tiles become
                   // skeletons while this page re-renders, instead of a second
@@ -1199,7 +1199,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                     href={qs({ range: r.key })}
                     rangeKey={r.key}
                     activeRange={rangeKey}
-                    className="inline-flex h-8 shrink-0 items-center rounded-full px-3.5 text-sm font-medium transition-colors duration-(--duration-fast)"
+                    className={PERIOD_PILL}
                     activeClassName="bg-primary text-primary-foreground"
                     /* Hover reaches for `--ground-ink`, which is the page's own
                        ink at both exposures — white on the dark group, near-

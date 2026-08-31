@@ -44,15 +44,27 @@ import { addViewAction } from "./board-actions";
  * never state. success/warn/danger keep their monopoly on meaning something.
  */
 function ColumnsPreview() {
+  /* Three lanes with coloured caps and tiles inside them — what
+     `board-column.tsx` draws, at a fifth of the size rather than a twelfth.
+     Each tile carries a HEADLINE BAR and a fainter second line, because that is
+     what a metric card actually looks like and it is the difference between a
+     picture of the board and a grey pattern. The lanes hold different numbers of
+     tiles, which is the one thing a columns board always does. */
+  const lanes = [
+    { cap: "bg-success", tiles: 3 },
+    { cap: "bg-accent-peri", tiles: 2 },
+    { cap: "bg-accent-pink", tiles: 3 },
+  ];
   return (
-    /* Three lanes, each a tinted column with a coloured cap and two tiles —
-       which is exactly what `board-column.tsx` draws, at a twelfth the size. */
-    <div className="flex h-full gap-1.5 p-3">
-      {["bg-success", "bg-accent-peri", "bg-accent-pink"].map((cap, lane) => (
-        <div key={cap} className="flex flex-1 flex-col gap-1 overflow-hidden rounded-sm bg-foreground/5 p-1">
-          <span aria-hidden className={`h-1 w-full shrink-0 rounded-full ${cap}`} />
-          {Array.from({ length: lane === 1 ? 1 : 2 }).map((_, i) => (
-            <span key={i} aria-hidden className="h-3.5 w-full shrink-0 rounded-sm bg-card shadow-xs" />
+    <div className="flex h-full gap-2 p-4">
+      {lanes.map(({ cap, tiles }) => (
+        <div key={cap} className="flex flex-1 flex-col gap-1.5 overflow-hidden rounded-card bg-foreground/5 p-1.5">
+          <span aria-hidden className={`h-1.5 w-full shrink-0 rounded-full ${cap}`} />
+          {Array.from({ length: tiles }).map((_, i) => (
+            <span key={i} aria-hidden className="flex flex-col gap-1 rounded-sm bg-card p-1.5 shadow-xs">
+              <span className="h-1.5 w-3/5 rounded-full bg-foreground/25" />
+              <span className="h-1 w-2/5 rounded-full bg-foreground/10" />
+            </span>
           ))}
         </div>
       ))}
@@ -61,20 +73,33 @@ function ColumnsPreview() {
 }
 
 function CustomPreview() {
-  /* A twelve-column grid with boxes of different sizes and one full-width row,
-     which is the one thing a canvas can do that columns cannot. */
-  const boxes = [
-    "col-span-7 row-span-2",
-    "col-span-5",
-    "col-span-5",
-    "col-span-4",
-    "col-span-8",
-  ];
+  /* A twelve-column grid with boxes of different sizes — the one thing a canvas
+     can do that columns cannot. The big one carries a CHART (bars rising off a
+     baseline) rather than being an empty rectangle, because "place and size
+     charts on a grid" was the sentence this picture now has to say by itself. */
   return (
-    <div className="grid h-full grid-cols-12 grid-rows-3 gap-1.5 p-3">
-      {boxes.map((box, i) => (
-        <span key={i} aria-hidden className={`rounded-sm bg-card shadow-xs ${box}`} />
-      ))}
+    <div className="grid h-full grid-cols-12 grid-rows-6 gap-2 p-4">
+      <span aria-hidden className="col-span-7 row-span-4 flex flex-col justify-end gap-1 rounded-card bg-card p-2 shadow-xs">
+        <span className="h-1.5 w-2/5 rounded-full bg-foreground/25" />
+        {/* The bars, at hand-picked heights so the thumbnail is identical on
+            every render — `Math.random()` in a component is a hydration
+            mismatch, and a chart that reshuffles is not a picture of anything. */}
+        <span className="flex flex-1 items-end gap-1">
+          {[45, 70, 35, 90, 60, 80].map((h, i) => (
+            <span key={i} className="flex-1 rounded-xs bg-primary/70" style={{ height: `${h}%` }} />
+          ))}
+        </span>
+      </span>
+      <span aria-hidden className="col-span-5 row-span-2 flex flex-col gap-1 rounded-card bg-card p-2 shadow-xs">
+        <span className="h-1.5 w-1/2 rounded-full bg-foreground/25" />
+        <span className="h-3 w-2/3 rounded-xs bg-foreground/15" />
+      </span>
+      <span aria-hidden className="col-span-5 row-span-2 flex flex-col gap-1 rounded-card bg-card p-2 shadow-xs">
+        <span className="h-1.5 w-2/5 rounded-full bg-foreground/25" />
+        <span className="h-3 w-1/2 rounded-xs bg-foreground/15" />
+      </span>
+      <span aria-hidden className="col-span-4 row-span-2 rounded-card bg-card shadow-xs" />
+      <span aria-hidden className="col-span-8 row-span-2 rounded-card bg-card shadow-xs" />
     </div>
   );
 }
@@ -95,22 +120,32 @@ function CustomPreview() {
 function CalendarPreview() {
   /* Two leading blanks, then a month of squares whose weight rises and falls —
      hand-picked rather than random so the thumbnail is the same every render
-     (and because `Math.random()` in a component is a hydration mismatch). */
-  const heat = [0, 0, 15, 30, 55, 20, 10, 40, 75, 35, 60, 25, 90, 45, 15, 70, 30, 55, 20, 80, 40];
+     (and because `Math.random()` in a component is a hydration mismatch).
+     A WEEKDAY HEADER ROW, which is what makes this read as a CALENDAR rather
+     than as a heat grid: seven ticks above seven columns is the shape everyone
+     recognises before they have read anything. */
+  const heat = [0, 0, 15, 30, 55, 20, 10, 40, 75, 35, 60, 25, 90, 45, 15, 70, 30, 55, 20, 80, 40, 50, 25, 65, 35, 10, 45, 30];
   return (
-    <div className="grid h-full grid-cols-7 gap-1 p-3">
-      {heat.map((h, i) => (
-        <span
-          key={i}
-          aria-hidden
-          className="rounded-xs"
-          style={
-            h === 0
-              ? undefined
-              : { background: `color-mix(in srgb, var(--color-accent-orange) ${h}%, var(--color-card))` }
-          }
-        />
-      ))}
+    <div className="flex h-full flex-col gap-1.5 p-4">
+      <div className="grid shrink-0 grid-cols-7 gap-1.5">
+        {Array.from({ length: 7 }).map((_, i) => (
+          <span key={i} aria-hidden className="h-1 rounded-full bg-foreground/15" />
+        ))}
+      </div>
+      <div className="grid flex-1 grid-cols-7 gap-1.5">
+        {heat.map((h, i) => (
+          <span
+            key={i}
+            aria-hidden
+            className="rounded-sm"
+            style={
+              h === 0
+                ? { background: "var(--color-card)" }
+                : { background: `color-mix(in srgb, var(--color-accent-orange) ${h}%, var(--color-card))` }
+            }
+          />
+        ))}
+      </div>
     </div>
   );
 }
@@ -122,13 +157,11 @@ const TEMPLATES = [
   {
     kind: "groups",
     label: "Columns",
-    blurb: "Group your metrics into named, coloured columns. The board most teams read every morning.",
     Preview: ColumnsPreview,
   },
   {
     kind: "custom",
     label: "Custom",
-    blurb: "Place and size charts on a grid. One metric can appear several times, drawn several ways.",
     Preview: CustomPreview,
   },
   {
@@ -154,7 +187,6 @@ const TEMPLATES = [
      */
     kind: "calendar",
     label: "Calendar",
-    blurb: "One metric, broken down day by day, with the busy days shaded. Two months at a time.",
     Preview: CalendarPreview,
   },
 ] as const;
@@ -190,10 +222,16 @@ export function ViewTemplatePicker({
         are laid out. You can add more later.
       </p>
 
-      {/* THREE CARDS, THREE COLUMNS — which is `BOARD_GRID`'s own ceiling
-          rather than a number picked for this modal. It was two while there
-          were two kinds. */}
-      <div className="mt-5 grid gap-4 sm:grid-cols-3">
+      {/* TWO PER ROW, WHICH IS WHAT MAKES THE PICTURES BIG ENOUGH TO WORK.
+          Three columns fitted the three kinds neatly and made each thumbnail
+          ~150px wide — at that size a twelve-column grid and a month of squares
+          are both "a small grey pattern", which is the failure a thumbnail
+          picker exists to avoid. Miro and Notion both run two or three LARGE
+          tiles and let the row wrap; the picture is the control, so the picture
+          gets the width.
+          `items-start` so a wrapped third card does not stretch to the height of
+          the two above it. */}
+      <div className="mt-5 grid items-start gap-4 sm:grid-cols-2">
         {TEMPLATES.map((t) => {
           /* THE WHOLE CARD IS THE CONTROL, and this is the one place that is
              right. The connector catalogue's rule — a card is not a button,
@@ -223,17 +261,22 @@ export function ViewTemplatePicker({
             "group/tpl h-full w-full flex-col items-stretch justify-start gap-0 whitespace-normal rounded-[var(--radius-surface)] border border-border bg-card p-0 text-left transition-colors hover:border-primary hover:bg-card";
           const face = (
             <>
-              {/* THE THUMBNAIL, on the page's own ground rather than the card's
-                  white — a layout is a thing that sits ON a board, and drawing
-                  it on the same surface as the card would leave its tiles with
-                  nothing to be seen against. */}
-              <span className="block h-28 w-full overflow-hidden rounded-t-[calc(var(--radius-surface)-1px)] border-b border-border bg-ground">
+              {/* THE THUMBNAIL IS THE CARD NOW, and the sentence under it is
+                  gone. Three descriptions in a chooser is a paragraph asking to
+                  be read before a decision that a picture already makes — and
+                  the pictures are drawn from the real thing, so they are more
+                  accurate than the prose was. What survives is the NAME, which
+                  is what you say to somebody else afterwards.
+                  `aspect-[4/3]` rather than a fixed height: the tile grows with
+                  the column instead of staying 112px while the card gets wider,
+                  which is what let the previews read as small grey patterns.
+                  On the page's own ground rather than the card's surface — a
+                  layout is a thing that sits ON a board, and drawing it on the
+                  card's own colour leaves its tiles nothing to be seen against. */}
+              <span className="block aspect-[4/3] w-full overflow-hidden rounded-t-[calc(var(--radius-surface)-1px)] border-b border-border bg-ground">
                 <t.Preview />
               </span>
-              <span className="block p-4">
-                <span className="block text-md font-semibold text-foreground">{t.label}</span>
-                <span className="mt-1 block text-sm font-normal leading-snug text-muted-foreground">{t.blurb}</span>
-              </span>
+              <span className="block px-4 py-3 text-md font-semibold text-foreground">{t.label}</span>
             </>
           );
 

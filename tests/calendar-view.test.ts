@@ -129,6 +129,39 @@ describe("the board still has its furniture", () => {
     expect(page).toMatch(/hosted\b/);
   });
 
+  it("sits in the SAME groove the period pills do, imported not re-spelled", () => {
+    /**
+     * THE DRIFT THIS CATCHES, WHICH NOBODY FILES A BUG FOR. Both controls
+     * answer "what span am I reading" in the same header slot, and each used to
+     * draw its own well: the range track 40px on `--period-bg`, the month
+     * stepper 36px on `--background`. Switching from a Columns tab to a
+     * Calendar tab moved the header row and changed the surface under it — each
+     * one looks fine alone, which is exactly why a test has to hold them
+     * together. `BOARD_GRID` is spelled once for the same reason one layout
+     * down.
+     */
+    expect(board).toMatch(/className=\{PERIOD_TRACK\}/);
+    expect(page).toMatch(/className=\{PERIOD_TRACK\}/);
+    // Neither may go back to spelling the groove itself.
+    for (const [name, src] of [["calendar-board", board], ["page", page]] as const) {
+      expect(src, `${name} re-spells the period groove`).not.toMatch(/h-10 items-center gap-0\.5 rounded-full/);
+    }
+  });
+
+  it("puts the month's summary AFTER the sheet it summarises", () => {
+    /**
+     * Best day, average day, days with data and the as-of are conclusions drawn
+     * from the squares — "24 on Aug 10" means nothing until you have seen the
+     * month. Above the grid they were three figures asking to be read before
+     * the thing they describe, and they pushed the calendar itself down.
+     */
+    const grid = board.indexOf('<Card variant="surface" padding="none"');
+    const stats = board.indexOf('<StatChip label="Best day">');
+    expect(grid).toBeGreaterThan(-1);
+    expect(stats).toBeGreaterThan(grid);
+    expect(board.indexOf("Numbers as of")).toBeGreaterThan(grid);
+  });
+
   it("keeps a self-contained bar when there is no chrome to portal into", () => {
     // `/design` renders the board bare. A kit page showing a calendar with no
     // controls would be documenting something that does not exist.
