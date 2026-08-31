@@ -41,7 +41,7 @@ Furniture that shouts is why most operational tools are exhausting by 4pm.
 ## 2. One surface, and the hairline that is now structural
 
 The product's identity is **a single near-black surface** — `#0F1011` — carrying
-a 48px icon rail down the left, a 56px bar across the top, and the page inside
+a 60px icon rail down the left, a 60px bar across the top, and the page inside
 them. All three are the same colour. **Every separation in the product is a 1px
 `#2B2D2F` rule and nothing else.**
 
