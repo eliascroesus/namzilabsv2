@@ -231,10 +231,16 @@ them. 24 / 24 / 16 is a rhythm; 24 / 24 / 24 is a page where the space inside a
 card and the space between two cards are the same measurement and the cards stop
 reading as separate objects.
 
+**And 24 BETWEEN cards, on every grid.** The board's `BOARD_GRID` and the custom
+view's `.board-canvas` both gap at 24 now — the canvas was 16, which made it the
+one grid in the product whose tiles sat closer to each other than the page sits
+to its own edges. Its row pitch moved with it: `ROW_UNIT_PX` 40 → 48, since the
+pitch is the 24px row plus the gutter beneath it.
+
 **32px is the control height** — buttons, selects, inputs, the period track, the
 date picker. The ladder came down from 28/36/44/52.
 
-**The shell's geometry is tokenised**: `--spacing-rail` (60), `--spacing-rail-open`
+**The shell's geometry is tokenised**: `--spacing-rail` (56), `--spacing-rail-open`
 (260) and `--spacing-topbar` (44 content, 60 with padding). Those numbers appear
 in four files including the loading skeleton, and `tests/page-width.test.ts`
 pins them — including **both hairlines**, which now take real pixels, so a ghost

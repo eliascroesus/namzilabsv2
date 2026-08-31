@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { createTestDb } from "./helpers/testdb";
-import { dashboardGroups, dashboardTilePlacements, rankAssignments, workspaceRanks } from "@/db/schema";
+import { dashboardGroups, dashboardTilePlacements, dashboardViews, rankAssignments, workspaceRanks } from "@/db/schema";
 import { compareKeys } from "@/lib/board/order";
 import type { DB } from "@/db/types";
 
@@ -34,6 +34,7 @@ const {
   setTilePlacementsAction,
   setGroupPositionsAction,
   setGroupSortAction,
+  setCalendarMetricAction,
 } = await import("@/app/dashboard/board-actions");
 
 const A = "org_a";
@@ -284,5 +285,59 @@ describe("how a column sorts itself", () => {
     if (!g.ok) throw new Error("setup");
     expect(await setGroupSortAction(g.group.id, "by_vibes")).toEqual({ ok: false, error: "That sort isn't one of ours." });
     expect((await groupsOf(A))[0].sortKey).toBe("manual");
+  });
+});
+
+/**
+ * A CALENDAR POINTED AT THE METRIC IT IS ALREADY SHOWING.
+ *
+ * `setCalendarMetricAction` is a data-modifying CTE — a DELETE of the view's
+ * placements and an INSERT of the new one, as one statement, because the
+ * deployed `neon-http` driver has no transactions (see `newViewCte`).
+ *
+ * The two halves of such a CTE run against the SAME SNAPSHOT, so the INSERT
+ * cannot see what the DELETE removed. Re-selecting the CURRENT metric therefore
+ * deleted the row and immediately re-inserted it against a snapshot in which it
+ * still existed, and `dashboard_placements_key_uq` fired: the customer got a raw
+ * "Failed query: with cleared as ( delete from …" across the top of their board.
+ *
+ * Switching to a DIFFERENT metric was always fine, which is exactly why this
+ * survived — the broken path is the one that looks like it should do nothing.
+ * Reproduced against real Postgres before the fix, which is `ON CONFLICT DO
+ * UPDATE`. All three assertions below fail without it.
+ */
+describe("pointing a calendar at a metric", () => {
+  const view = async (id: string) =>
+    db.insert(dashboardViews).values({ id, orgId: A, name: "Cal", pos: "a0", kind: "calendar" });
+  const pick = (id: string, tileKey: string) => {
+    const fd = new FormData();
+    fd.set("tileKey", tileKey);
+    return setCalendarMetricAction(id, fd);
+  };
+  const keys = async () =>
+    (await db.select().from(dashboardTilePlacements)).map((r) => r.tileKey).sort();
+
+  it("switches from one metric to another, keeping exactly one placement", async () => {
+    await view("v1");
+    expect(await pick("v1", "flow:f1:n1")).toEqual({ ok: true });
+    expect(await pick("v1", "flow:f2:n2")).toEqual({ ok: true });
+    expect(await keys()).toEqual(["flow:f2:n2"]);
+  });
+
+  it("survives being pointed at the metric it already shows", async () => {
+    await view("v1");
+    await pick("v1", "flow:f1:n1");
+    // THE REGRESSION. This returned `{ ok: false }` carrying a duplicate-key
+    // error, and the board rendered the SQL.
+    expect(await pick("v1", "flow:f1:n1")).toEqual({ ok: true });
+    expect(await keys()).toEqual(["flow:f1:n1"]);
+  });
+
+  it("still refuses a view that is not a calendar, and one in another org", async () => {
+    await db.insert(dashboardViews).values({ id: "v2", orgId: A, name: "Board", pos: "a0", kind: "columns" });
+    await db.insert(dashboardViews).values({ id: "v3", orgId: B, name: "Cal", pos: "a0", kind: "calendar" });
+    await pick("v2", "flow:f1:n1");
+    await pick("v3", "flow:f1:n1");
+    expect(await keys()).toEqual([]);
   });
 });

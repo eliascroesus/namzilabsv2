@@ -77,7 +77,7 @@ export function ShellSkeleton({
           same token. Nothing else in the rail is drawn: the real one is about to
           occupy this space and a shimmering ghost of furniture that never moves
           is noise. */}
-      <div className="w-[60px] shrink-0 border-r border-border bg-background" />
+      <div className="w-[56px] shrink-0 border-r border-border bg-background" />
       <div className="flex min-w-0 flex-1 flex-col">
         {/* THE TOP BAR WAS MISSING ENTIRELY ONCE, AND IT IS 56px TALL.
             This file's whole argument is that a skeleton whose geometry

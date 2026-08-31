@@ -220,7 +220,7 @@ describe("the page container and the skeleton that stands in for it", () => {
     const code = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
     // The rail's right edge, and the ghost standing in for it.
     expect(code(sidebar)).toMatch(/border-r border-border/);
-    expect(code(skeleton)).toMatch(/w-\[60px\][^"]*border-r border-border/);
+    expect(code(skeleton)).toMatch(/w-\[56px\][^"]*border-r border-border/);
     // The bar's bottom edge, and its ghost.
     expect(code(read("src/components/top-bar.tsx"))).toMatch(/<header className="[^"]*border-b border-border/);
     expect(code(skeleton)).toMatch(/h-\[60px\][^"]*border-b border-border/);
@@ -291,7 +291,16 @@ describe("the calendar's day square", () => {
      * What survives is the constant itself, and the guard below, which is the
      * half that was load-bearing.
      */
-    expect(cell).toMatch(/export const DAY_CELL_H = "min-h-\[92px\]";/);
+    /**
+     * A RATIO PLUS A FLOOR, NOT A HEIGHT. The board runs uncapped, so seven
+     * columns are ~158px wide inside 1152px and ~340px on a 2560px display —
+     * and a flat 92px against the second is the letterbox slot the flat value
+     * was introduced to prevent. 16/9 is within a hair of what the capped page
+     * produced by hand (158/92 = 1.72), so it preserves the shape rather than
+     * choosing a new one. The `min-h` survives as the floor that stops a phone's
+     * ~40px column clipping a date and a percentage into a 22px cell.
+     */
+    expect(cell).toMatch(/export const DAY_CELL_H = "aspect-\[16\/9\] min-h-\[92px\]";/);
     expect(read("src/components/calendar/calendar-board.tsx")).toContain('from "./day-cell"');
   });
 

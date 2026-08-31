@@ -451,7 +451,7 @@ export function Sidebar({ hide, views = [] }: { hide?: string[]; views?: BoardVi
     // not surface through it. Below 30, because anchored surfaces (menus,
     // popovers, the field browser) have to open OVER the rail, and below 40/50
     // because a toast and a dialog outrank all chrome.
-    <aside className="group/rail relative z-20 h-full w-[60px] shrink-0">
+    <aside className="group/rail relative z-20 h-full w-[56px] shrink-0">
       {/* THE PANEL — the whole rail, floated out of the layout.
           `inset-y-0 left-0` pins it to the footprint above and `w-[48px]`
           keeps the two the same object at rest; the two `group-*` widths are
@@ -474,7 +474,7 @@ export function Sidebar({ hide, views = [] }: { hide?: string[]; views?: BoardVi
           black shadow on #0f1011 is a change of about one count (see the
           elevation ladder) and would buy nothing but a class. The hairline is
           the separation. */}
-      <div className="absolute inset-y-0 left-0 flex w-[60px] flex-col overflow-hidden border-r border-border bg-background transition-[width] duration-(--duration-base) ease-(--ease-standard) group-hover/rail:w-65 group-focus-within/rail:w-65">
+      <div className="absolute inset-y-0 left-0 flex w-[56px] flex-col overflow-hidden border-r border-border bg-background transition-[width] duration-(--duration-base) ease-(--ease-standard) group-hover/rail:w-65 group-focus-within/rail:w-65">
         {/* THE TOP BLOCK IS THE TOP BAR'S OWN HEIGHT, AND THAT IS THE POINT.
             56px with the bar's hairline landing exactly at its foot means the
             rail's rule and the bar's rule meet at ONE corner rather than

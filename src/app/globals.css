@@ -420,7 +420,7 @@
    * `tests/page-width.test.ts` was written after. Tokens, so there is one place
    * to change and the skeleton cannot drift from the thing it stands in for.
    */
-  --spacing-rail: 60px; /* the icon rail at rest */
+  --spacing-rail: 56px; /* the icon rail at rest */
   --spacing-rail-open: 260px; /* and under the pointer */
   --spacing-topbar: 44px; /* the bar's CONTENT box; +8px padding each side, +1px rule */
 
@@ -923,7 +923,13 @@ select:-webkit-autofill {
    properties and the media query picks one. No JavaScript, no flash, no
    server/client mismatch to reconcile.
 
-   `grid-auto-rows` is 24px against a 16px gap, which is a PITCH of 40 — the
+   THE GAP IS THE PAGE'S OWN GUTTER. It was 16 against a 24px page inset and a
+   24px gap on every other board in the product, so the custom view was the one
+   grid in the app whose tiles sat closer together than the page's own edges —
+   which reads as the tiles being crowded rather than as a different rhythm.
+   One number: 24 on the sides, 24 to the top, 24 between two tiles.
+
+   `grid-auto-rows` is 24px against a 24px gap, which is a PITCH of 48 — the
    `ROW_UNIT_PX` the resize gesture converts pixels to rows with. The two numbers
    are one fact spelled two ways, and src/lib/board/grid.ts owns it; a tile `h`
    rows tall measures `h * 40 - 16` px. If they ever disagree, a tile settles a
@@ -932,7 +938,7 @@ select:-webkit-autofill {
   display: grid;
   grid-template-columns: repeat(1, minmax(0, 1fr));
   grid-auto-rows: 24px;
-  gap: 16px;
+  gap: 24px;
 }
 .board-cell {
   grid-column: var(--c1);

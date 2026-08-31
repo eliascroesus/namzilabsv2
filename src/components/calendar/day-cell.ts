@@ -1,11 +1,24 @@
 /**
- * A DAY SQUARE'S HEIGHT — ONE NUMBER, AT EVERY VIEWPORT.
+ * A DAY SQUARE'S SHAPE — A RATIO, NOT A HEIGHT.
  *
- * It briefly grew at two breakpoints, to stop a month grid stretched across an
- * uncapped page turning its cells into letterbox slots. The page has a cap
- * again, so the sheet is a sheet at every size: seven columns inside 1152px is
- * a ~150px square, and 92px of height against it reads as a day rather than a
- * strip. Nothing about the calendar should change when you resize the window.
+ * This was `min-h-[92px]`, flat at every viewport, and the note here argued that
+ * "nothing about the calendar should change when you resize the window". That
+ * held while the page was capped at 1152px, where seven columns are ~158px wide
+ * and 92px tall reads as a day rather than a strip.
+ *
+ * The board runs UNCAPPED (`width="full"` — a grid of cards gains columns as the
+ * window grows), so the same 92px against a 340px-wide cell on a 2560px display
+ * is exactly the letterbox slot the flat value was meant to prevent. A fixed
+ * height cannot be right at both widths; a RATIO is right at every width.
+ *
+ * 16/9 is within a hair of what the capped page produced by hand (158/92 =
+ * 1.72), so the shape nobody complained about is the shape this preserves —
+ * it just keeps it as the calendar gets wider instead of flattening.
+ *
+ * `min-h` SURVIVES AS A FLOOR. On a phone the seven columns are ~40px wide and
+ * the ratio would give a 22px cell with a date and a percentage in it; when the
+ * aspect-derived height falls under the floor, the floor wins and the cell grows
+ * to fit its content instead of clipping it.
  *
  * ── WHY THIS IS ITS OWN FILE, WITH NO `"use client"` ───────────────────────
  *
@@ -29,4 +42,4 @@
  * module with no directive. Adding `"use client"` here re-breaks the skeleton
  * silently; tests/page-width.test.ts pins that it stays absent.
  */
-export const DAY_CELL_H = "min-h-[92px]";
+export const DAY_CELL_H = "aspect-[16/9] min-h-[92px]";

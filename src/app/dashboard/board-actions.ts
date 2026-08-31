@@ -597,6 +597,22 @@ export async function addViewAction(fd: FormData): Promise<void> {
  * arity is the writer's job — `dashboard_placements_key_uq` stops the SAME key
  * being stored twice but has nothing to say about two different ones. Both
  * statements run as one, for the reason `addViewAction` gives at length.
+ *
+ * `ON CONFLICT` IS NOT BELT-AND-BRACES HERE, IT IS THE WHOLE CORRECTNESS OF THE
+ * STATEMENT — and without it, picking the metric the calendar is ALREADY
+ * showing threw a duplicate-key error in the user's face.
+ *
+ * The two halves of a data-modifying CTE run against the SAME SNAPSHOT: the
+ * INSERT cannot see what the DELETE removed. So a re-select deletes the row and
+ * then immediately re-inserts it against a snapshot in which it still exists,
+ * and `(org_id, view_id, tile_key)` collides with itself. Switching to a
+ * DIFFERENT metric was always fine, which is exactly why this survived — the
+ * failing path is the one that looks like a no-op.
+ *
+ * A transaction would be the ordinary fix and is unavailable (see
+ * `newViewCte`). `DO UPDATE` is: it makes the re-select land on the row the
+ * DELETE is pretending not to have removed, and the DELETE still clears any
+ * OTHER metric the view was holding. Pinned by tests/board-actions.test.ts.
  */
 export async function setCalendarMetricAction(viewId: string, fd: FormData): Promise<Result> {
   const ctx = await requireOrg();
@@ -617,6 +633,8 @@ export async function setCalendarMetricAction(viewId: string, fd: FormData): Pro
          select 1 from ${dashboardViews}
           where id = ${viewId} and org_id = ${ctx.orgId} and kind = 'calendar'
        )
+      on conflict (org_id, view_id, tile_key)
+      do update set group_id = null, pos = excluded.pos, updated_at = now()
     `);
     /**
      * NO `revalidatePath` — the rule this whole module follows, and it holds

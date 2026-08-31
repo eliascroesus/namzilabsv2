@@ -162,7 +162,7 @@ const buttonVariants = cva(
          * body text beside it, and the whole screen feels shrunk.
          */
         xs: "h-6 gap-1 px-2 text-xs [&_svg]:size-3.5",
-        sm: "h-7 gap-1.5 px-2.5 text-xs [&_svg]:size-3.5",
+        sm: "h-7 gap-1.5 px-3 text-sm [&_svg]:size-4",
         default: "h-8 px-3 text-sm [&_svg]:size-4",
         lg: "h-10 px-4 text-sm [&_svg]:size-4",
         icon: "size-8 [&_svg]:size-[18px]",

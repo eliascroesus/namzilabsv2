@@ -235,13 +235,19 @@ describe("canvasCells — the properties the CSS actually reads", () => {
   });
 
   it("keeps the pixel pitch the CSS and the resize gesture must agree on", () => {
-    // 40 is a row PLUS its gutter, so `grid-auto-rows: 24px` with `gap: 16px`.
-    // Sabotage: treat 40 as the row and add the gap on top and every tile grows
-    // 16px per row — 64px on a number tile, which reads as a padding bug.
+    // 48 is a row PLUS its gutter, so `grid-auto-rows: 24px` with `gap: 24px`.
+    // Sabotage: treat 48 as the row and add the gap on top and every tile grows
+    // 24px per row — 96px on a number tile, which reads as a padding bug.
+    //
+    // THE GUTTER MOVED 16 -> 24 AND THE ROW DID NOT. The gap is the page's own
+    // gutter now: this was the one grid in the product whose tiles sat closer to
+    // each other than the page sits to its own edges. The row is still 24, so
+    // the assertion below is unchanged and only the pitch grew.
     expect(ROW_UNIT_PX - GRID_GAP_PX).toBe(24);
+    expect(GRID_GAP_PX).toBe(24);
     const css = readFileSync(join(process.cwd(), "src/app/globals.css"), "utf8");
     expect(css).toMatch(/grid-auto-rows:\s*24px/);
-    expect(css).toMatch(/\.board-canvas\s*\{[^}]*gap:\s*16px/);
+    expect(css).toMatch(/\.board-canvas\s*\{[^}]*gap:\s*24px/);
   });
 });
 
