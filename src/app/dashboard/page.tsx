@@ -730,7 +730,15 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           server with no client JS to submit a form. Collapsing the sources
           behind their own current value is also what stops the row growing
           every time a workspace connects another app. */}
-      {sources.length > 0 && (
+      {/* NOT ON A CALENDAR VIEW, for the reason the period track is not either.
+          The source filter narrows which EVENTS a number is computed from, and
+          a calendar draws values that were already computed and stored — every
+          square comes from the tile's `byDay`, which no filter on this page can
+          reach. Pressing a source would have changed the URL, re-rendered the
+          page and left all 31 squares exactly as they were.
+          "Refresh all" stays: recomputing every flow is what fills these
+          squares in, so it is the one control on this row that still acts. */}
+      {sources.length > 0 && activeKind !== "calendar" && (
         <details className="group/src relative shrink-0">
           {/* PILL, not `rounded-control`. It sits between New group and Refresh
               all, both of which are `Button`s and therefore `rounded-full` from

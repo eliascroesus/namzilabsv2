@@ -213,11 +213,54 @@ describe("the states a calendar view can be in", () => {
     expect(branch.slice(0, 2000)).toMatch(/access\.canSeeMetric\(`flow:\$\{r\.flowId\}`\)/);
   });
 
-  it("refuses to create a calendar with nothing to show", () => {
-    // Creating it anyway and letting it explain itself spends a view and a
-    // click to deliver the same sentence.
-    expect(picker).toMatch(/calendarOptions\.length === 0 \? \(/);
-    expect(picker).toMatch(/No published metrics yet/);
+  it("creates on the first press, without asking which metric", () => {
+    /**
+     * THIS ASSERTION REPLACED ITS OWN OPPOSITE, and the swap is the point.
+     *
+     * The Calendar card briefly opened a SECOND STEP listing every published
+     * metric, and refused to create anything when the list was empty
+     * (`calendarOptions.length === 0 ? …`). Both halves were wrong for the same
+     * reason: the board already carries a metric dropdown, so the modal was
+     * charging a decision up front for something the view lets you change in one
+     * press and then remembers — and the refusal made the template work for some
+     * workspaces and not others, to deliver a sentence the empty view says
+     * anyway.
+     *
+     * So all three cards post immediately, and the calendar carries the first
+     * metric with it.
+     */
+    expect(picker).not.toMatch(/needsMetric/);
+    expect(picker).not.toMatch(/setPicking/);
+    expect(picker).toMatch(/name="tileKey" value=\{calendarOptions\[0\]\?\.key \?\? ""\}/);
+  });
+
+  it("names the view Calendar, not the metric it opens on", () => {
+    // Name a tab after its first metric and switching the dropdown makes the
+    // strip lie. The metric is not what the view IS.
+    expect(picker).toMatch(/name="label" value="Calendar"/);
+  });
+
+  it("treats a missing first metric as ordinary, not as a refusal", () => {
+    /**
+     * A workspace with nothing published has no first metric to send. The view
+     * is created with no placement row and the board says there is nothing
+     * published yet — which is the truth, and is where that sentence belongs.
+     */
+    const fn = actions.slice(actions.indexOf("export async function addViewAction"));
+    expect(fn).not.toMatch(/error=no_metric/);
+    // The key is still shape-checked, so a malformed one cannot be stored.
+    expect(fn).toMatch(/\^flow:\[\\w-\]\+:\[\\w-\]\+\$/);
+    // And a calendar with no key takes the plain insert rather than the CTE.
+    expect(fn).toMatch(/if \(tileKey\) \{/);
+  });
+
+  it("drops the source filter, which cannot reach a stored day map", () => {
+    // The source narrows which EVENTS a number is computed from; every square
+    // here comes from the tile's `byDay`, already computed. Pressing a source
+    // would re-render the page and leave all 31 squares identical.
+    expect(page).toMatch(/sources\.length > 0 && activeKind !== "calendar" &&/);
+    // Refresh all stays — recomputing the flows is what fills the squares in.
+    expect(page).toMatch(/refreshAllFlowsAction/);
   });
 });
 

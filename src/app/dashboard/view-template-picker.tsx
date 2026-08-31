@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
-import { CalendarDays, ChevronLeft, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Modal, ModalTitle } from "@/components/ui/modal";
 import { SubmitButton } from "@/components/ui/submit-button";
@@ -134,7 +133,7 @@ const TEMPLATES = [
   },
   {
     /**
-     * THE THIRD KIND, AND THE ONE THAT ASKS A SECOND QUESTION.
+     * THE THIRD KIND, CREATED IN ONE PRESS LIKE THE OTHER TWO.
      *
      * It was a page of its own with a row in the rail, which said the calendar
      * was a separate part of the product. It is not: `materializeFlow` computes
@@ -142,15 +141,21 @@ const TEMPLATES = [
      * stores them side by side, so a calendar is a third way of drawing numbers
      * the board already has. That is a view.
      *
-     * Unlike the other two it cannot be created blind — a calendar is a
-     * breakdown OF something, so `needsMetric` sends this card to a second step
-     * instead of straight to the server.
+     * IT BRIEFLY ASKED WHICH METRIC FIRST, as a second step in this modal, and
+     * that was a question with nowhere good to put the answer. The board already
+     * carries a metric dropdown — switching is one press, right where you are
+     * looking — so the modal was charging a decision up front for something the
+     * view lets you change instantly and then remembers. It opens on the first
+     * metric and you change it there.
+     *
+     * Named plainly "Calendar" rather than after that first metric, because the
+     * metric is not what the view IS: name a tab "Bookings" and then switch it
+     * to Revenue and the strip is lying. The tab is renameable like any other.
      */
     kind: "calendar",
     label: "Calendar",
     blurb: "One metric, broken down day by day, with the busy days shaded. Two months at a time.",
     Preview: CalendarPreview,
-    needsMetric: true,
   },
 ] as const;
 
@@ -177,83 +182,6 @@ export function ViewTemplatePicker({
    */
   calendarOptions?: CalendarOption[];
 }) {
-  /**
-   * WHICH KIND IS MID-CHOICE. `null` is step one.
-   *
-   * Only the calendar ever sets it — the other two post on the first press,
-   * which is the behaviour that was already there and worth not spending.
-   */
-  const [picking, setPicking] = useState<string | null>(null);
-
-  if (picking === "calendar") {
-    return (
-      <Modal onClose={onClose} size="lg">
-        <ModalTitle>Which metric?</ModalTitle>
-        <p className="mt-1.5 text-sm text-muted-foreground">
-          A calendar breaks one metric down day by day. You can change it later, and the view will remember.
-        </p>
-        {calendarOptions.length === 0 ? (
-          /* NOTHING TO OFFER, SAID PLAINLY. The alternative — create the view
-             anyway and let it explain itself — spends a view and a click to
-             deliver the same sentence. */
-          <div className="mt-5 rounded-surface border border-border bg-ground p-6 text-center">
-            <p className="text-md font-semibold text-foreground">No published metrics yet</p>
-            <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
-              A calendar needs a published metric to break down. Build a flow and publish it, then this view will have
-              something to show.
-            </p>
-            <Button asChild variant="yellow" className="mt-4">
-              <Link href="/dashboard/flows">Go to flows</Link>
-            </Button>
-          </div>
-        ) : (
-          <div className="mt-5 max-h-80 space-y-2 overflow-y-auto">
-            {calendarOptions.map((o) => (
-              /* One form per row, for the reason the cards below use one each:
-                 the choice is a SUBMIT, so the existing server action and its
-                 redirect are untouched. `label` names the view after the metric
-                 so the tab says which calendar it is. */
-              <form key={o.key} action={addViewAction}>
-                <input type="hidden" name="range" value={rangeKey} />
-                <input type="hidden" name="source" value={source ?? ""} />
-                <input type="hidden" name="kind" value="calendar" />
-                <input type="hidden" name="tileKey" value={o.key} />
-                <input type="hidden" name="label" value={o.name} />
-                <SubmitButton
-                  variant="ghost"
-                  pendingLabel="Creating…"
-                  className="h-auto w-full justify-start whitespace-normal rounded-card border border-border bg-card p-3 text-left transition-colors hover:border-primary hover:bg-card"
-                >
-                  <span className="flex min-w-0 items-center gap-3">
-                    <span
-                      aria-hidden
-                      className="flex size-8 shrink-0 items-center justify-center rounded-control bg-accent-orange text-white"
-                    >
-                      <CalendarDays className="size-4" />
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block truncate text-md font-semibold text-foreground">{o.name}</span>
-                      {o.hint && <span className="block truncate text-sm font-normal text-muted-foreground">{o.hint}</span>}
-                    </span>
-                  </span>
-                </SubmitButton>
-              </form>
-            ))}
-          </div>
-        )}
-        {/* BACK, NOT CANCEL. A second step with only a way out is a dead end;
-            this returns to the three cards, which is where a reader who came
-            here by mistake wants to be. */}
-        <div className="mt-5 flex justify-start">
-          <Button variant="ghost" onClick={() => setPicking(null)}>
-            <ChevronLeft />
-            Back
-          </Button>
-        </div>
-      </Modal>
-    );
-  }
-
   return (
     <Modal onClose={onClose} size="lg">
       <ModalTitle>Choose a layout</ModalTitle>
@@ -309,23 +237,31 @@ export function ViewTemplatePicker({
             </>
           );
 
-          /* A CALENDAR IS A VIEW OF SOMETHING, so its card opens the second
-             step rather than posting. The other two carry everything the server
-             needs already, and sending them through a step that asks nothing
-             would be ceremony. */
-          return "needsMetric" in t && t.needsMetric ? (
-            <Button key={t.kind} variant="ghost" className={shell} onClick={() => setPicking(t.kind)}>
-              {face}
-            </Button>
-          ) : (
-            /* A submit rather than a click handler, so the existing server
-               action and its redirect are untouched. */
-            /* `h-full` on the FORM too: it is the grid item, so it is what the
-               row stretches, and the button's own `h-full` resolves against it. */
+          /* ALL THREE POST ON THE FIRST PRESS. A submit rather than a click
+             handler, so the existing server action and its redirect are
+             untouched.
+             `h-full` on the FORM too: it is the grid item, so it is what the
+             row stretches, and the button's own `h-full` resolves against it. */
+          return (
             <form key={t.kind} action={addViewAction} className="h-full">
               <input type="hidden" name="range" value={rangeKey} />
               <input type="hidden" name="source" value={source ?? ""} />
               <input type="hidden" name="kind" value={t.kind} />
+              {t.kind === "calendar" && (
+                <>
+                  {/* THE FIRST METRIC, CHOSEN HERE SO NOBODY IS ASKED. The list
+                      is already sorted by name, so "first" is stable rather than
+                      whichever row the database happened to return. An empty
+                      value is fine and deliberate: `addViewAction` stores no
+                      placement, and the board opens on its "nothing published
+                      yet" state — which is the truth, and better than a modal
+                      refusing to create anything. */}
+                  <input type="hidden" name="tileKey" value={calendarOptions[0]?.key ?? ""} />
+                  {/* Named for what it IS, not for the metric it opens on —
+                      see the note on the template. */}
+                  <input type="hidden" name="label" value="Calendar" />
+                </>
+              )}
               <SubmitButton variant="ghost" pendingLabel="Creating…" className={shell}>
                 {face}
               </SubmitButton>

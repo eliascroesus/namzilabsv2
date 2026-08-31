@@ -487,8 +487,9 @@ export async function addViewAction(fd: FormData): Promise<void> {
   const kind = asViewKind(fd.get("kind"));
 
   /**
-   * A CALENDAR IS A VIEW OF ONE METRIC, and it is chosen in the same modal that
-   * chose the kind — so the tile key arrives on this very post.
+   * WHICH METRIC A CALENDAR OPENS ON — the picker sends the first one so that
+   * nobody is asked, and the board's own dropdown is where it is actually
+   * chosen.
    *
    * Validated against the KEY FORMAT rather than against the metric list. A
    * post naming a metric that does not exist is not an error worth a round trip
@@ -496,15 +497,21 @@ export async function addViewAction(fd: FormData): Promise<void> {
    * how republishing a flow restores a board), so "points at nothing" is a
    * state the calendar already renders honestly. What must not get through is a
    * malformed key, which would sit in the table forever matching nothing.
+   *
+   * ABSENT IS ALLOWED, AND IS NOT AN ERROR. A workspace with nothing published
+   * has no first metric to send, and refusing to create the view would be the
+   * modal explaining an empty state instead of the view explaining it — one
+   * more press to reach the same sentence, and a template that works for some
+   * workspaces and not others. The view is created with no placement and the
+   * board says there is nothing published yet.
    */
   const rawKey = String(fd.get("tileKey") ?? "");
   const tileKey = kind === "calendar" && /^flow:[\w-]+:[\w-]+$/.test(rawKey) ? rawKey : null;
-  if (kind === "calendar" && !tileKey) redirect(back("error=no_metric"));
 
   /**
-   * THE NAME. A calendar view is named after its metric, so the tab says which
-   * calendar it is rather than `View 3` — three calendars called View 3, View 4
-   * and View 5 is a tab strip that has to be clicked through to be read.
+   * THE NAME. A calendar is called "Calendar", not after the metric it happens
+   * to open on: the metric is switched from the board in one press, and a tab
+   * reading "Bookings" over a sheet showing Revenue is a strip that lies.
    *
    * Falls back to the counted name when the label is missing or unusable, which
    * keeps a hand-rolled post from minting a view with an empty tab.
