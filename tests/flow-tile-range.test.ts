@@ -100,7 +100,7 @@ describe("a range the stored tile has no entry for", () => {
     expect(html).toContain("Error");
     expect(html).toContain("Fix in the editor");
     // Provenance and the way out of it: when it was last true, and a recompute.
-    expect(html).toContain("2 hours ago");
+    expect(html).toContain("2 hr ago");
     expect(html).toContain("Refresh");
     expect(html).toContain("Open");
   });
@@ -126,7 +126,7 @@ describe("a range the stored tile has no entry for", () => {
     expect(html).not.toContain("Up to date");
     expect(html).toContain("Not computed yet for this range");
     expect(html).toContain("Edited since publishing");
-    expect(html).toContain("2 hours ago");
+    expect(html).toContain("2 hr ago");
     expect(html).toContain("Refresh");
     expect(html).toContain("Open");
   });

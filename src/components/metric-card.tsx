@@ -121,11 +121,19 @@ export function MetricCard({
                   reference sets a card's name at exactly the same 14px/500 as
                   its body. The micro-label voice is for a STATUS or a column
                   head — strings you scan — not for a name the customer wrote. */}
-              <h3 className="flex min-w-0 items-baseline text-sm font-medium text-foreground">
+              {/* `flex-1` IS WHAT MAKES `truncate` WORK. The h3 had `min-w-0`
+                  and its span had `truncate`, and a long name still wrapped to
+                  two lines — because without a flex basis the h3 sizes to its
+                  CONTENT inside a `justify-between` row, so there is no width
+                  for the ellipsis to trigger against. "Speed To Lead (Armaan)"
+                  was the case that showed it. */}
+              <h3 className="flex min-w-0 flex-1 items-baseline text-sm font-medium text-foreground">
                 <span className="truncate">{title}</span>
                 {titleSuffix}
               </h3>
-              {marker}
+              {/* The same reserved lane the chart frame's header keeps — see the
+                  note there. The board's tile menu floats over this corner. */}
+              <span className="flex shrink-0 items-center pr-6">{marker}</span>
             </div>
 
             {headline !== undefined && (

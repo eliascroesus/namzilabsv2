@@ -344,3 +344,40 @@ describe("the calendar's day square", () => {
     expect(firstStatementOf(cell)).not.toMatch(/^["']use client["']/);
   });
 });
+
+/**
+ * THE RAIL'S TWO MODES, AND WHY THE PINNED ONE IS A LAYOUT FACT.
+ *
+ * Unpinned, the `<aside>` is a flat 56px footprint and the panel inside it
+ * OVERLAYS — widening in flow on a pointer-move would re-lay-out every tile on
+ * the dashboard as the cursor passed it.
+ *
+ * Pinned, the aside itself is 260px, so the top bar and the page are laid out
+ * beside it. That is what "expanded" has to mean if the content is not to sit
+ * underneath it — and it is why the preference is a COOKIE read on the server
+ * rather than localStorage: the width has to be known in the first paint, or
+ * the bar and the whole page snap sideways a frame later. That jump is the
+ * exact failure this file exists to catch.
+ */
+describe("the rail's pinned mode", () => {
+  const shell = read("src/components/app-shell.tsx");
+  const frame = read("src/components/app-frame.tsx");
+
+  it("is read on the server, from a cookie, and threaded to the rail", () => {
+    expect(shell).toMatch(/cookies\(\)\)\.get\("rail"\)\?\.value === "pinned"/);
+    expect(shell).toMatch(/railPinned=/);
+    expect(frame).toMatch(/pinned=\{railPinned\}/);
+  });
+
+  it("changes the FOOTPRINT, not just the panel", () => {
+    // The panel widening alone is the hover behaviour. If only the inner div
+    // grows, a "pinned" rail covers the page instead of making room in it.
+    const code = sidebar.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    expect(code).toMatch(/<aside[\s\S]{0,400}pinned \? "w-65" : "w-\[56px\]"/);
+  });
+
+  it("keeps the overlay behaviour when it is NOT pinned", () => {
+    const code = sidebar.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    expect(code).toMatch(/w-\[56px\] group-hover\/rail:w-65 group-focus-within\/rail:w-65/);
+  });
+});

@@ -33,6 +33,7 @@ export function AppFrame({
   views,
   surface,
   hide,
+  railPinned,
   ownsMain = false,
   children,
 }: {
@@ -73,6 +74,13 @@ export function AppFrame({
   surface: string;
   /** Rail items (by label) this viewer shouldn't see; AppShell decides. */
   hide?: string[];
+  /**
+   * Whether the rail is pinned open. A pass-through, read from a cookie by
+   * `AppShell` — it has to be known during RENDER, because a pinned rail is
+   * 260px of the layout rather than an overlay, and discovering that a frame
+   * later would drag the top bar and the whole page sideways on every load.
+   */
+  railPinned?: boolean;
   /**
    * Render the scroll region AS the page's `<main>` landmark.
    *
@@ -162,7 +170,7 @@ export function AppFrame({
           every reference puts them. Passing them anyway would be two props a
           component ignores, which is how a signature stops describing what a
           thing actually needs. */}
-      <Sidebar hide={hide} views={views} />
+      <Sidebar hide={hide} views={views} pinned={railPinned} />
       {/* The top bar belongs to the CONTENT column, not the viewport: the
           sidebar runs full height beside it, exactly as it does in Miro and
           Notion. A bar spanning both would put the workspace switcher above

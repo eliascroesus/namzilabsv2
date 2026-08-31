@@ -173,6 +173,21 @@ export function useCanvasDrag(
   const onPointerDown = useCallback(
     (e: React.PointerEvent<HTMLElement>, item: { id: string; mode: "move" | "resize" }) => {
       if (e.button !== 0 || e.ctrlKey || e.metaKey) return;
+      /**
+       * A PRESS THAT STARTED ON A CHART IS A READ, NOT A DRAG.
+       *
+       * The plot is the largest press target on a tile, so reading one meant
+       * picking the card up: the crosshair appeared, you moved a few pixels to
+       * follow the series, and the tile came with you. Every chart's plot box
+       * carries `data-plot` (see `AxisFrame`), and a gesture beginning inside
+       * one simply never starts — which also leaves the pointer free for the
+       * hover readout, since nothing captures it.
+       *
+       * The GRIP still drags, and so does every other part of the card: the
+       * header band, the numeral, the padding. Nothing became unmovable, the
+       * one region that was ambiguous stopped being.
+       */
+      if ((e.target as HTMLElement).closest("[data-plot]")) return;
       const root = rootRef.current;
       if (!root) return;
       const m = measureCanvas(root, item.id, boxes);

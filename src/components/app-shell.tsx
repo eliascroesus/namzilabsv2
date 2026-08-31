@@ -1,7 +1,7 @@
+import { cookies } from "next/headers";
 import { unstable_cache } from "next/cache";
-import Link from "next/link";
 import { getWorkOS } from "@workos-inc/authkit-nextjs";
-import { LogOut, UserRound } from "lucide-react";
+import { LogOut } from "lucide-react";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { requestAccess } from "@/lib/auth";
@@ -11,8 +11,7 @@ import { connections, flows, workspaceOwners } from "@/db/schema";
 import { AppFrame } from "./app-frame";
 import { navViewsOrNone } from "@/lib/board/nav-views";
 import { OrgSwitcher } from "./org-switcher";
-import { Button, buttonVariants } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import { signOutAction } from "@/app/actions";
 
 /**
@@ -190,6 +189,14 @@ export async function AppShell({
     <AppFrame
       surface="overflow-y-auto"
       hide={hide}
+      /* THE RAIL'S OWN PREFERENCE, READ ON THE SERVER.
+         A cookie rather than localStorage for one reason: a pinned rail is
+         260px of the LAYOUT, so the width has to be known in the first paint or
+         the bar and the page snap sideways a frame later. localStorage cannot
+         be read during render; a cookie can.
+         Anything other than "pinned" is the hover behaviour, so a missing or
+         corrupted value degrades to the default rather than to a broken one. */
+      railPinned={(await cookies()).get("rail")?.value === "pinned"}
       workspace={workspace}
       metricCount={metricCount}
       views={await railViewsP}
@@ -266,22 +273,16 @@ export async function AppShell({
                 )}
               </div>
             </div>
-            {/* THE WAY TO YOUR OWN PAGE, in the band that is already about you.
-                Clicking your avatar and finding only a workspace list and a way
-                out is the gap this closes — "my name, my picture" is the first
-                thing that control implies. */}
-            <div className="border-t border-border p-1.5">
-              <Link
-                href="/dashboard/profile"
-                className={cn(
-                  buttonVariants({ variant: "ghost", size: "sm" }),
-                  "h-9 w-full justify-start gap-2.5 rounded-[var(--radius-control)] px-2 font-normal text-foreground [&_svg]:text-muted-foreground",
-                )}
-              >
-                <UserRound />
-                Your profile
-              </Link>
-            </div>
+            {/* "YOUR PROFILE" IS NOT IN THIS MENU ANY MORE.
+                It was added here to close a real gap — clicking your avatar and
+                finding only a workspace list and a way out. The gap is closed
+                at the other end now: the avatar IS the link to your profile,
+                so a row here would be a second route to one page, reachable
+                from the panel you open by pressing the thing that already goes
+                there.
+                What is left is what this panel is actually for: which account
+                this browser is signed into, which workspace you are in, and the
+                way out. */}
             {/* `p-1.5` matches the padding DropdownMenuContent would have given
                 this band if the panel were not `p-0` — the rows have to clear
                 the panel's own 16px corner, and 6px is the number the menu

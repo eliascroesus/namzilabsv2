@@ -77,14 +77,34 @@ export function formatDuration(value: number, valueUnit: string, display: string
 
 /** "4 minutes ago" / "2 hours ago" / a date past a week — for freshness lines. */
 export function relativeTime(then: Date, now: Date = new Date()): string {
+  /**
+   * ABBREVIATED, AND THE REASON IS WHERE THIS STRING LIVES.
+   *
+   * It was "23 minutes ago". Almost every call site is a tile's footline —
+   * beside a chart kind, a kebab and a status dot, on a card that can be a
+   * third of a board wide — and "minutes" is nine characters buying nothing:
+   * nobody reads "23 min ago" as anything other than what it is.
+   *
+   * It cost real layout. On a narrow tile the long form pushed the kebab into
+   * the text beside it, which is what made the two look like they were
+   * overlapping rather than sharing a row.
+   *
+   * NO PLURALS, deliberately. "1 min ago" is correct English for an
+   * abbreviation and "1 mins ago" is not, so dropping the branch removes a
+   * decision rather than taking a shortcut. "sec" appears at all because the
+   * old "just now" swallowed the entire first minute, which on a page whose
+   * whole point is freshness is the one interval worth being precise about.
+   */
   const ms = now.getTime() - then.getTime();
-  if (ms < 60_000) return "just now";
-  const min = Math.floor(ms / 60_000);
-  if (min < 60) return `${min} minute${min === 1 ? "" : "s"} ago`;
+  const sec = Math.floor(ms / 1000);
+  if (sec < 10) return "just now";
+  if (sec < 60) return `${sec} sec ago`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min} min ago`;
   const h = Math.floor(min / 60);
-  if (h < 24) return `${h} hour${h === 1 ? "" : "s"} ago`;
+  if (h < 24) return `${h} hr ago`;
   const d = Math.floor(h / 24);
-  if (d < 7) return `${d} day${d === 1 ? "" : "s"} ago`;
+  if (d < 7) return `${d} d ago`;
   return formatDate(then);
 }
 

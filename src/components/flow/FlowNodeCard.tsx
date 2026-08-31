@@ -97,7 +97,23 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
    * 40%-opacity yellow ring measuring under 1.3:1 against the canvas — the
    * selection state, invisible.
    */
-  const border = selected ? "border-border ring-[3px] ring-marker/40" : "border-border";
+  /**
+   * SELECTED IS A 1px BRAND EDGE, NOT A 3px GLOW.
+   *
+   * It was `ring-[3px] ring-marker/40` — a nine-pixel-wide soft halo (3px out,
+   * plus the card's own border, plus the shadow under it) in a translucent
+   * green. At 40% over the canvas it reads as a smudge rather than an edge, it
+   * changes the card's apparent SIZE when you pick it, and three of them beside
+   * each other look like the canvas is glowing rather than like one step is
+   * chosen.
+   *
+   * A selection needs to be unmistakable, not loud. The border it already draws
+   * simply becomes the brand and gains a 1px ring in the same colour, so the
+   * edge doubles in weight and changes hue while the card's footprint stays
+   * exactly where it was. That is the same thing the board's tiles do and the
+   * same thing the rail's active row does: come forward, do not inflate.
+   */
+  const border = selected ? "border-marker ring-1 ring-marker" : "border-border";
   /**
    * The card stays exactly where it is while it is being carried — a ghost
    * follows the cursor and a dashed gap opens at the destination, so nothing
@@ -185,7 +201,14 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
      * rule is simply: this box does not clip.
      */
     /*
-       * `has-[[data-add-btn]:hover]:shadow-card` is not a flourish. The "Add
+       * THE RESTING ELEVATION IS `shadow-card`, DOWN FROM `shadow-surface`.
+       * A step is a card on a canvas, not a dialog over one: `shadow-surface`
+       * is the float rung — a hairline ring plus a 15px ambient — and a column
+       * of them read as boxes hovering an inch off the page rather than laid on
+       * it. `shadow-card` is what every other card in the product rests at, and
+       * the hover rung still lifts on the pointer so the response survives.
+       *
+       * `has-[[data-add-btn]:hover]:shadow-card-hover` is not a flourish. The "Add
        * next step" ghost and the branch chips are absolutely positioned CHILDREN
        * of this box — they have to be, a React Flow node is one element — so
        * hovering them satisfies this element's own `:hover` and lit the card
@@ -201,7 +224,7 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
          inner strip: the radius clips it for free and nothing inside the card
          can knock it out of alignment. */
       style={{ borderLeftWidth: 4, borderLeftColor: accent }}
-      className={`group/card w-[300px] rounded-surface border bg-card shadow-surface transition-shadow duration-(--duration-fast) hover:shadow-card-hover has-[[data-add-btn]:hover]:shadow-surface ${border} ${carried ? "opacity-40" : ""}`}
+      className={`group/card w-[300px] rounded-surface border bg-card shadow-card transition-shadow duration-(--duration-fast) hover:shadow-card-hover has-[[data-add-btn]:hover]:shadow-card-hover ${border} ${carried ? "opacity-40" : ""}`}
     >
       {isCompare ? (
         <>

@@ -28,6 +28,23 @@ import type { ChartFormat, SeriesPoint } from "@/components/charts";
  */
 
 const AXIS_LABEL = "tnum whitespace-nowrap text-xs leading-none text-muted-foreground";
+/**
+ * THE X ROW NEEDS A TALLER LINE BOX THAN THE Y GUTTER, and the difference is
+ * the reason this is a second constant rather than one shared string.
+ *
+ * `leading-none` sets a line box exactly the font size — 13px at 13px — so
+ * anything below the baseline falls OUTSIDE it. The y-gutter can afford that
+ * and wants it: those labels are positioned by `justify-between`, and a line
+ * box larger than the glyph pushes the top and bottom ticks off the plot lines
+ * they name.
+ *
+ * The x row is clipped by its own `overflow-hidden` (which is there to stop a
+ * long date spilling sideways), so the same tight box cut the descender off
+ * every "Aug" on the board. `leading-4` is 16px against 13px type: enough for
+ * the descender, and still short enough that the row does not steal height
+ * from the plot.
+ */
+const AXIS_LABEL_X = "tnum whitespace-nowrap text-xs leading-4 text-muted-foreground";
 
 /** Where a value sits in the plot, as a percentage from the TOP. */
 const yPct = (v: number, lo: number, hi: number) => (hi === lo ? 100 : ((hi - v) / (hi - lo)) * 100);
@@ -54,13 +71,20 @@ function AxisFrame({
           </span>
         ))}
       </div>
-      <div className="relative min-w-0">{children}</div>
+      {/* `data-plot` IS A CONTRACT WITH THE BOARD'S DRAG, not decoration.
+          A tile on the custom board is dragged by pressing it, and the plot is
+          the largest press target on the card — so reading a chart meant
+          picking the card up. `useCanvasDrag` refuses to start a gesture that
+          began inside this box; see the guard in canvas-drag.ts. */}
+      <div data-plot className="relative min-w-0">
+        {children}
+      </div>
       <span aria-hidden />
       {/* First, middle and last. Three is what fits at the narrowest tile the
           grid allows, and the server cannot measure to promise more. */}
       <div className="mt-1 flex justify-between gap-2 overflow-hidden">
         {labels.map((l, i) => (
-          <span key={`${l}-${i}`} className={AXIS_LABEL}>
+          <span key={`${l}-${i}`} className={AXIS_LABEL_X}>
             {l}
           </span>
         ))}
@@ -217,6 +241,17 @@ export function LineChart({
             width={points.length === 1 ? 100 : 100 / (points.length - 1)}
             height="100"
             fill="transparent"
+            /* `data-x` / `data-y` ARE THE POINT, not the band. The band is a
+               fat invisible column so that pointing at a 1.5px line is not
+               asked of anyone — but its own centre is NOT the point (the first
+               and last bands are half-width and hang off their point), so a
+               crosshair drawn from the rect's box would sit wrong at both ends.
+               These are percentages of the plot, which is the only frame both
+               the SVG and the tooltip agree in. `data-y` is absent for a gap in
+               the series: there is no point to mark, and a dot on the baseline
+               would claim a zero the series does not have. */
+            data-x={x(i)}
+            data-y={p.value == null ? undefined : yPct(p.value, lo, hi)}
             data-tip={`${bucketLabel(p.bucket, unit)} · ${p.value == null ? "no data" : formatMetricValue(p.value, format)}`}
           />
         ))}

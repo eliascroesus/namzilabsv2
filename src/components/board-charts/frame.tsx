@@ -139,10 +139,22 @@ export function ChartFrame({
             </CardDescription>
           )}
         </div>
-        <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+        {/* `pr-6` IS THE KEBAB'S LANE, and it is reserved rather than negotiated.
+            The board floats a tile menu at `absolute right-2 top-2` — 8px in,
+            28px square — which lands inside this header's own 16px padding and
+            straight on top of "16 min ago". The two components cannot see each
+            other: the menu belongs to the board's cell wrapper and this belongs
+            to the card, so there is nothing to measure against at runtime.
+            Reserving the width unconditionally costs 24px of air on the tiles
+            that have no menu and buys every card's freshness landing on the
+            same line as every other card's. Shifting it on hover instead would
+            move the text under the cursor, which is worse than the overlap. */}
+        <span className="flex shrink-0 items-center gap-1.5 pr-6 text-xs text-muted-foreground">
           {status && <Freshness status={status} />}
           {computedAt && (
-            <span title={formatDateTime(new Date(computedAt))}>{relativeTime(new Date(computedAt))}</span>
+            <span className="whitespace-nowrap" title={formatDateTime(new Date(computedAt))}>
+              {relativeTime(new Date(computedAt))}
+            </span>
           )}
         </span>
       </CardHeader>

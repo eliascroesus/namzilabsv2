@@ -2,9 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import Link from "next/link";
 import {
-  ChevronLeft,
   Copy,
   Maximize2,
   MoreVertical,
@@ -194,7 +192,13 @@ function TopBarStatusPortal({ children }: { children: React.ReactNode }) {
 
 function Island({ className = "", children }: { className?: string; children: React.ReactNode }) {
   return (
-    <div className={`pointer-events-auto flex items-center gap-1 rounded-control border border-border bg-card p-[7px] shadow-surface ${className}`}>
+    /* `p-1` and `rounded-card`, on the kit's own grid. `p-[7px]` was an
+       arbitrary value chosen to centre 42px buttons in a 56px island; the
+       buttons are 32px now and 4px of inset is what every other padded shell in
+       the product uses. `shadow-card` rather than `shadow-surface`: this floats
+       over the canvas, but the float rung is for modals and it made a six-button
+       column read as a panel hovering an inch off the page. */
+    <div className={`pointer-events-auto flex items-center gap-0.5 rounded-card border border-border bg-card p-1 shadow-card ${className}`}>
       {children}
     </div>
   );
@@ -213,10 +217,18 @@ function IslandButton({
    * the canvas island's buttons with it, leaving them mismatched against the
    * zoom readout they sit either side of.
    *
-   * The canvas keeps its 42px/26px, deliberately: it is a floating island over
-   * a drawing surface, pressed while dragging, and it is not mine to restyle.
-   * The bar takes `iconSm` — 36px around an 18px glyph — so its icons are the
-   * same object as the pills beside them.
+   * BOTH RUNGS CAME DOWN TO THE KIT'S. The canvas island kept 42px around a
+   * 26px glyph on the argument that it is a floating island over a drawing
+   * surface, pressed while dragging. It was also the only control in the
+   * product drawn to no rung of the ladder at all: a 26px icon is larger than
+   * anything else on screen, in the corner furthest from where the eye is, and
+   * six of them stacked made the canvas look like it had a toolbar bolted on.
+   *
+   * The island is now `icon` (32px / 18px glyph) and the bar is `iconSm`
+   * (28px / 16px), which are the two rungs every other icon button in the app
+   * stands on. The island stays the LARGER of the two, which is what the
+   * original note was actually protecting — it is still the thing you press
+   * mid-drag.
    */
   compact,
   className = "",
@@ -235,8 +247,8 @@ function IslandButton({
       disabled={disabled}
       title={label}
       aria-label={label}
-      className={`flex shrink-0 items-center justify-center rounded-control text-foreground transition-colors hover:bg-accent disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent [&_svg]:stroke-[2] ${
-        compact ? "size-9 [&_svg]:size-[18px]" : "h-[42px] w-[42px] [&_svg]:size-[26px]"
+      className={`flex shrink-0 items-center justify-center rounded-control text-foreground transition-colors hover:bg-accent disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent ${
+        compact ? "size-7 [&_svg]:size-4" : "size-8 [&_svg]:size-[18px]"
       } ${className}`}
     >
       {children}
@@ -330,30 +342,20 @@ export function FlowToolbar({
           move out of anything's way. */}
       <TopBarPortal>
           <div className="flex min-w-0 flex-1 items-center gap-4">
-            {/* WHERE YOU CAME FROM, THEN WHAT YOU DO WITH THE FLOW.
-                Ship, run, on/off — the three acts, together at the reading
-                edge; the name stays centred by the grid regardless. */}
-            {/* ONE GAP FOR THE WHOLE GROUP. It was `gap-1` plus an `ml-1` on
-                the publish button plus an `mx-1` on the switch — three spacings
-                for one row, so the arrow sat 4px from the button and the switch
-                8px from the thing before it. */}
-            {/* `gap-4` — the exact spacing between "Invite members" and "New
-                flow" on the other end of this bar. Every group in the top bar
-                is spaced this way now, so the switch no longer sits tight
-                against the publish button while the chrome's own pills breathe. */}
+            {/* WHAT YOU DO WITH THE FLOW. Ship, run, on/off — the three acts,
+                together at the reading edge; the name stays centred by the grid
+                regardless.
+                THE BACK ARROW IS GONE. It pointed at /dashboard/flows, which is
+                one row down in the rail and reachable from every screen in the
+                product — so it was a fourth control in a group of three acts,
+                the only one that navigated rather than did something, and the
+                first thing your eye met on a page you had just chosen to be on.
+                Leaving a route is what the rail is for; the browser's own back
+                gesture covers the rest.
+                `gap-4` — the exact spacing between "Invite members" and "New
+                flow" on the other end of this bar, so every group in the top bar
+                is spaced the same way. */}
             <span className="flex min-w-0 items-center gap-4">
-              <Link
-                href="/dashboard/flows"
-                title="All flows"
-                /* size-9 and a 20px glyph: the kit's `iconSm` geometry, so the
-                   arrow is the same object as the pills it sits beside. It was
-                   42px square around a 26px chevron — bigger than every control
-                   in the bar and the only one drawn to no rung of the ladder. */
-                className="flex size-9 shrink-0 items-center justify-center rounded-control text-foreground transition-colors hover:bg-accent"
-              >
-                <ChevronLeft size={20} />
-              </Link>
-
               <Button
                 onClick={onReview}
                 disabled={publishing}
@@ -507,7 +509,7 @@ export function FlowToolbar({
           <button
             onClick={onFitView}
             title="Fit the whole flow on screen"
-            className="tnum h-[42px] w-[42px] rounded-control text-sm font-semibold text-foreground transition-colors hover:bg-accent"
+            className="tnum size-8 rounded-control text-xs font-medium text-foreground transition-colors hover:bg-accent"
           >
             {zoomPct}%
           </button>

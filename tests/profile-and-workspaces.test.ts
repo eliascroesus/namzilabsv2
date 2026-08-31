@@ -156,11 +156,31 @@ describe("editing your own profile", () => {
   });
 });
 
-describe("the row that reaches the profile", () => {
-  it("is in the band that is already about you", () => {
-    // Clicking your own avatar and finding only a workspace list and a way out
-    // is the gap this closes.
-    expect(shell).toMatch(/href="\/dashboard\/profile"/);
+describe("the control that reaches the profile", () => {
+  it("is the avatar itself, and only the avatar", () => {
+    /**
+     * THE ROW MOVED OUT OF THE MENU AND BECAME THE PICTURE.
+     *
+     * This used to assert a "Your profile" row inside the account panel, added
+     * to close a real gap: clicking your own avatar and finding only a
+     * workspace list and a way out. The gap is closed at the other end now —
+     * the avatar IS the link — so a row in the panel it no longer opens would
+     * be a second route to one page, reachable from the thing that already goes
+     * there.
+     *
+     * Asserted as a PAIR, because either half alone is the bug: the link
+     * present in the bar and the row still in the shell is the duplication;
+     * neither present is a profile page nobody can reach.
+     */
+    expect(read("src/components/top-bar.tsx")).toMatch(/href="\/dashboard\/profile"/);
+    expect(shell).not.toMatch(/href="\/dashboard\/profile"/);
+  });
+
+  it("still leaves the account panel with the two things it is for", () => {
+    // Which workspace you are in, and the way out. Losing either to the tidy-up
+    // would have been a worse regression than the duplication it fixed.
+    expect(shell).toMatch(/OrgSwitcher/);
+    expect(shell).toMatch(/signOutAction/);
   });
 
   it("shows the picture in the chrome once there is one", () => {

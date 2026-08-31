@@ -521,15 +521,29 @@ export function TopBar({
             #d4b800 — 2.0:1 on a white chip, and the kind of breakage a rename
             causes silently, because the class still compiles and still looks
             deliberate. The export sets them in #1a1a1a. */}
+        {/* THE AVATAR GOES STRAIGHT TO THE PROFILE, and it is a LINK now rather
+            than a menu trigger.
+            It opened a panel holding your email, a "Your profile" row, the
+            workspace switcher and Sign out — four things, of which exactly one
+            is what a picture of your own face implies. The workspace switcher
+            is already reachable from the workspace name at the other end of
+            this bar, which is where it belongs (it is a fact about WHERE you
+            are, not about WHO you are), and that panel keeps it along with the
+            way out.
+            So this control does the single obvious thing, and `Your profile`
+            has been deleted from the other menu rather than duplicated: two
+            routes to one page, one of them behind a picture of you, is the
+            arrangement that made the avatar feel like a menu in the first
+            place. */}
         {account && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label="Account"
-                className="border border-border bg-card text-xs font-semibold text-foreground hover:bg-accent active:bg-accent data-[state=open]:bg-accent"
-              >
+          <Link
+            href="/dashboard/profile"
+            aria-label="Your profile"
+            className={cn(
+              buttonVariants({ variant: "ghost", size: "icon" }),
+              "border border-border bg-card text-xs font-semibold text-foreground hover:bg-accent active:bg-accent",
+            )}
+          >
                 {/* THE PICTURE IF THERE IS ONE, the initials if not — and the
                     initials are not a placeholder for a missing image, they are
                     the default. `<img>` rather than `next/image` because the
@@ -538,18 +552,13 @@ export function TopBar({
                     CLOSED at runtime on a 28px image it can barely improve.
                     `object-cover` so a non-square upload is cropped rather than
                     squashed — the one thing that makes an avatar look broken. */}
-                {account.avatarUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={account.avatarUrl} alt="" className="size-full rounded-full object-cover" />
-                ) : (
-                  account.initials
-                )}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-64 p-0">
-              {account.panel}
-            </DropdownMenuContent>
-          </DropdownMenu>
+            {account.avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={account.avatarUrl} alt="" className="size-full rounded-full object-cover" />
+            ) : (
+              account.initials
+            )}
+          </Link>
         )}
       </div>
     </header>

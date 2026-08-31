@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Bell, LayoutDashboard, Plug, Plus, Radio, Search, Settings, Workflow } from "lucide-react";
+import { Bell, LayoutDashboard, PanelLeftClose, PanelLeftOpen, Plug, Plus, Radio, Search, Settings, Workflow } from "lucide-react";
 import { Fragment, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -232,7 +232,7 @@ function RailChip({ tone, children }: { tone: "rest" | "active"; children: React
  * would only be a place for the two to disagree.
  */
 const REVEAL =
-  "opacity-0 transition-opacity duration-(--duration-fast) ease-(--ease-standard) group-hover/rail:opacity-100 group-focus-within/rail:opacity-100";
+  "opacity-0 transition-opacity duration-(--duration-fast) ease-(--ease-standard) group-hover/rail:opacity-100 group-focus-within/rail:opacity-100 group-data-[pinned=true]/rail:opacity-100";
 
 /**
  * The name beside a chip. `shrink-0` + `whitespace-nowrap` rather than a
@@ -311,7 +311,25 @@ const SLOT = "group flex h-9 w-full shrink-0 items-center justify-start gap-2.5 
  */
 const GUTTER = "px-3.5";
 
-export function Sidebar({ hide, views = [] }: { hide?: string[]; views?: BoardView[] }) {
+export function Sidebar({
+  hide,
+  views = [],
+  /**
+   * PINNED OPEN, READ ON THE SERVER FROM A COOKIE.
+   *
+   * It arrives as a prop rather than being read here because the alternative is
+   * a layout jump on every cold load: `localStorage` is not knowable during
+   * render, so a pinned rail would paint at 56px and snap to 260px a frame
+   * later — dragging the top bar and the whole page with it. That is the exact
+   * failure `tests/page-width.test.ts` exists for, and a preference is not
+   * worth reintroducing it. `AppShell` reads the cookie; this only toggles it.
+   */
+  pinned: initialPinned = false,
+}: {
+  hide?: string[];
+  views?: BoardView[];
+  pinned?: boolean;
+}) {
   const pathname = usePathname();
   const params = useSearchParams();
   /**
@@ -322,6 +340,19 @@ export function Sidebar({ hide, views = [] }: { hide?: string[]; views?: BoardVi
    * on history nobody can see.
    */
   const [allViews, setAllViews] = useState(false);
+  /**
+   * Local state as well as the cookie, so the press is instant. The cookie is
+   * for the NEXT page load; this is for this one. Writing only the cookie would
+   * mean the rail did nothing until you navigated.
+   */
+  const [pinned, setPinned] = useState(initialPinned);
+  const togglePin = () => {
+    const next = !pinned;
+    setPinned(next);
+    // A year, path-wide, Lax: it is a display preference, so it wants to
+    // survive a restart and does not want to ride on cross-site requests.
+    document.cookie = `rail=${next ? "pinned" : "hover"}; path=/; max-age=31536000; samesite=lax`;
+  };
   /**
    * The strip's own order, and the same comparator the board uses. An adopted
    * default sorts first because its key was minted to; a view dragged elsewhere
@@ -451,7 +482,24 @@ export function Sidebar({ hide, views = [] }: { hide?: string[]; views?: BoardVi
     // not surface through it. Below 30, because anchored surfaces (menus,
     // popovers, the field browser) have to open OVER the rail, and below 40/50
     // because a toast and a dialog outrank all chrome.
-    <aside className="group/rail relative z-20 h-full w-[56px] shrink-0">
+    <aside
+      className={cn(
+        "group/rail relative z-20 h-full shrink-0 transition-[width] duration-(--duration-base) ease-(--ease-standard)",
+        // THE FOOTPRINT IS THE WHOLE DIFFERENCE BETWEEN THE TWO MODES.
+        // Pinned, the <aside> itself is 260px, so the top bar and the page are
+        // laid out beside it and every board reflows into what is left — which
+        // is what "expanded" has to mean if the content is not to sit under it.
+        // Unpinned it stays 56px and the panel inside overlays, which is the
+        // behaviour that must not change: widening in flow on a pointer-move
+        // would re-lay-out every tile on the dashboard as the cursor passed.
+        pinned ? "w-65" : "w-[56px]",
+      )}
+      /* Read by `REVEAL` through `group-data-[pinned=true]/rail:`, so every
+         label, the keycap and the view list open together without any of them
+         taking a prop. A pinned rail is not "permanently hovered" — it is a
+         third state, and the one class that expresses it is here. */
+      data-pinned={pinned}
+    >
       {/* THE PANEL — the whole rail, floated out of the layout.
           `inset-y-0 left-0` pins it to the footprint above and `w-[48px]`
           keeps the two the same object at rest; the two `group-*` widths are
@@ -474,7 +522,12 @@ export function Sidebar({ hide, views = [] }: { hide?: string[]; views?: BoardVi
           black shadow on #0f1011 is a change of about one count (see the
           elevation ladder) and would buy nothing but a class. The hairline is
           the separation. */}
-      <div className="absolute inset-y-0 left-0 flex w-[56px] flex-col overflow-hidden border-r border-border bg-background transition-[width] duration-(--duration-base) ease-(--ease-standard) group-hover/rail:w-65 group-focus-within/rail:w-65">
+      <div
+        className={cn(
+          "absolute inset-y-0 left-0 flex flex-col overflow-hidden border-r border-border bg-background transition-[width] duration-(--duration-base) ease-(--ease-standard)",
+          pinned ? "w-65" : "w-[56px] group-hover/rail:w-65 group-focus-within/rail:w-65",
+        )}
+      >
         {/* THE TOP BLOCK IS THE TOP BAR'S OWN HEIGHT, AND THAT IS THE POINT.
             56px with the bar's hairline landing exactly at its foot means the
             rail's rule and the bar's rule meet at ONE corner rather than
@@ -519,6 +572,26 @@ export function Sidebar({ hide, views = [] }: { hide?: string[]; views?: BoardVi
             </span>
             <RailLabel className="font-semibold text-foreground">{PRODUCT}</RailLabel>
           </Link>
+          {/* THE PIN, AND IT ONLY EXISTS ONCE THE PANEL IS OPEN.
+              Calendly's rail is the reference: a chevron at the head that keeps
+              the column out rather than letting it fall shut. It rides `REVEAL`
+              like every other label, so at 56px it is not in the way of the
+              mark — and it is the one control here whose job is the rail
+              itself, which is why it sits with the mark rather than in the foot
+              with the acts.
+              `ml-auto` pushes it to the panel's right edge, where a disclosure
+              belongs; at 56px it is clipped along with everything else. */}
+          <Button
+            variant="ghost"
+            size="iconSm"
+            onClick={togglePin}
+            aria-pressed={pinned}
+            aria-label={pinned ? "Unpin the navigation" : "Keep the navigation open"}
+            title={pinned ? "Unpin the navigation" : "Keep the navigation open"}
+            className={cn("ml-auto shrink-0 text-muted-foreground hover:bg-accent hover:text-foreground", REVEAL)}
+          >
+            {pinned ? <PanelLeftClose /> : <PanelLeftOpen />}
+          </Button>
         </div>
 
         {/* `aria-label` because a strip of icons is only "the navigation" to
