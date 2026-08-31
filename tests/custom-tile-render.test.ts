@@ -67,6 +67,9 @@ const RICH = {
  * assertion cannot see that: the file contains the space. Only the rendered
  * string does, so the rendered string is what these read.
  */
+/** Rendered markup with every tag and attribute removed — what a reader sees. */
+const text = (html: string) => html.replace(/<[^>]*>/g, " ");
+
 describe("the sentences the tile writes", () => {
   const undated = (n: number) =>
     render("number", flow({ format: "number", precision: 0, byRange: { today: { value: 12, undated: n } } }))
@@ -475,7 +478,13 @@ describe("a pin the tile cannot honour", () => {
         config: { rangeKey: "today" as const },
       }),
     );
-    expect(html).not.toContain("500");
+    // TEXT, NOT MARKUP. This read `expect(html).not.toContain("500")` and broke
+    // the day a card variant grew `hover:border-neutral-500` — a class name
+    // containing the same three digits as the figure being guarded against.
+    // The assertion means "the un-windowed number is not SHOWN"; stripping tags
+    // and attributes is what makes it say that rather than "these characters
+    // appear nowhere in the document".
+    expect(text(html)).not.toContain("500");
     expect(html).toContain("Not computed yet for this period");
   });
 
@@ -488,7 +497,7 @@ describe("a pin the tile cannot honour", () => {
         source: flow({ format: "number", precision: 0, value: 500 }),
       }),
     );
-    expect(html).toContain("500");
+    expect(text(html)).toContain("500");
   });
 });
 

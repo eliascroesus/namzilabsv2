@@ -259,7 +259,10 @@ describe("the board grid", () => {
      * column. Asserting both directions keeps the class and the token from
      * outliving each other in either order.
      */
-    expect(page).toMatch(/BOARD_GRID = "grid gap-4 sm:grid-cols-2 xl:grid-cols-3";/);
+    // 24px, matching the page gutter and the reference's own grid gap. It was
+    // 16: a page inset 24 with its cards 16 apart reads as a grid that does not
+    // know how wide its own page is.
+    expect(page).toMatch(/BOARD_GRID = "grid gap-6 sm:grid-cols-2 xl:grid-cols-3";/);
     expect(page).not.toMatch(/BOARD_GRID = "[^"]*3xl:/);
     expect(css).not.toMatch(/--breakpoint-3xl:/);
   });

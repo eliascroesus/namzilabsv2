@@ -27,15 +27,22 @@ describe("cn keeps a colour when a custom type token follows it", () => {
   }
 
   /**
-   * BOTH PRIMARIES, because the kit has two and they carry different inks.
-   * `default` is the brand sheet's DEEP BLACK (`text-background`); `accent` is
-   * its VIBRANT VIOLET (`text-primary-foreground`). This test only ever named
-   * the violet one, so when black became the default it failed for a reason
-   * that had nothing to do with what it guards — which is that `cn()` must not
-   * eat a button's text COLOUR when a caller appends a text SIZE.
+   * BOTH WORKHORSES, because the kit has two and they carry different inks.
+   *
+   * `default` was the brand sheet's DEEP BLACK — `bg-foreground text-background`,
+   * the highest-contrast object on a light page. It is a BORDERED CARD CHIP now,
+   * which is what a console's ordinary act looks like, and the consequence is
+   * that the primary act has to say so explicitly (see `SubmitButton`, which
+   * defaults to `accent` for exactly this reason).
+   *
+   * The pair is still asserted together, because what this guards has not
+   * changed: `cn()` must not eat a button's text COLOUR when a caller appends a
+   * text SIZE. The `default` row simply names a different ink now — and it is
+   * `text-foreground` rather than a background-derived one, which is the whole
+   * shape of the change in one token.
    */
   for (const [variant, fill, ink] of [
-    ["default", "bg-foreground", "text-background"],
+    ["default", "bg-card", "text-foreground"],
     ["accent", "bg-primary", "text-primary-foreground"],
   ] as const) {
     it(`the ${variant} button keeps its foreground when the caller sets a size`, () => {

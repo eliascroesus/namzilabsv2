@@ -341,22 +341,37 @@ describe("the kit's shape", () => {
      * the change was mechanical rather than a redesign. The marks were spelled
      * `bg-primary` — the role, correctly — and `--primary` stopped being violet
      * and became #eecf00. Six class names moved from `primary` to `marker` so
-     * the series stay the colour that paragraph already chose for them; the
-     * ramp underneath them is the same violet it always was, now under its own
-     * name.
+     * the series stay the colour that paragraph already chose for them.
      *
-     * Leaving them would have been the silent failure the rebrand's whole gate
-     * exists to catch: `bg-primary` still compiles, so nothing would have
-     * failed, and a dashboard's worth of series bars would have rendered at
-     * roughly 1.1:1 on a white card. "Yellow stays out" above was written as a
-     * ratio rule and survives as a legibility one — a bar carries no ink, so it
-     * never collects the 11.24:1 that licenses yellow to be a surface.
+     * Leaving them would have been the silent failure that gate exists to
+     * catch: `bg-primary` still compiles, so nothing would have failed, and a
+     * dashboard's worth of series bars would have rendered at roughly 1.1:1 on
+     * a white card.
+     *
+     * AND MOVED ONCE MORE FOR THE DARK CONSOLE — one component, and this time
+     * it is a BEHAVIOUR change rather than a rename, which is exactly what this
+     * hash exists to force somebody to write down.
+     *
+     * `TargetBar` drew an unmet meter in `--marker` and a met one in
+     * `--success`. That was a real distinction while the marker was violet and
+     * success was green; they are the SAME GREEN now — `--success` is
+     * `brand-500` — so the component rendered both states identically and
+     * stopped reporting the only thing it exists to report.
+     *
+     * The unmet meter is greyscale and colour ARRIVES when the goal lands. The
+     * state is carried by a colour appearing rather than by one colour becoming
+     * another, which is also the honest reading of the kit's own rule that green
+     * means good: a bar at 40% is not good, it is 40%.
+     *
+     * The series marks themselves are untouched — a series is a MARK and stays
+     * `--marker`, and the argument above about a bar carrying no ink of its own
+     * is satisfied either way now, since both steps of the green ramp clear 8:1
+     * on a card.
      *
      * Still no honesty rule moved. Zero-anchoring, `formatMetricValue` and the
-     * direction-blind delta are all untouched, and the diff is six colour
-     * tokens and the prose around them.
+     * direction-blind delta are all untouched.
      */
     const hash = createHash("sha256").update(readFileSync(join(process.cwd(), "src/components/charts.tsx"))).digest("hex");
-    expect(hash).toBe("d41fcc138f75697296437cbab96f24b2c733996aba6b208a00a1f45c80de7b93");
+    expect(hash).toBe("2b041883c78dbe465437f969d328b30b239cf1bd03026d80d39e4c52c0afea59");
   });
 });
