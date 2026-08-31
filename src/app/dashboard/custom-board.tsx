@@ -37,7 +37,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { SectionHeading } from "@/components/ui/page";
 import { CHARTS, asChartId, blockKindOf, blockTileKey, minSize, type BlockId, type ChartId } from "@/lib/board/charts";
-import type { BoardTileRow, CustomTileOption } from "@/lib/board/types";
+import { UNSET_TILE_KEY, type BoardTileRow, type CustomTileOption } from "@/lib/board/types";
 import type { TileConfig } from "@/lib/board/tile-config";
 import { CustomTile, type CustomTileSource } from "@/components/custom-tile";
 import { CANVAS_ATTR, CELL_ATTR, HANDLE_ATTR, useCanvasDrag } from "./canvas-drag";
@@ -613,7 +613,6 @@ export function CustomBoard({
               open={picking}
               setOpen={setPicking}
               busy={busy}
-              options={options}
               onPick={(chart, tileKey) => addTile(tileKey, chart)}
             />
           )}
@@ -700,6 +699,23 @@ export function CustomBoard({
               {(() => {
                 const t = byId.get(tile.id);
                 if (!t) return <PendingCard />;
+                /**
+                 * A TILE NOBODY HAS POINTED AT ANYTHING YET.
+                 *
+                 * It must NOT fall through to `CustomTile`, whose answer to a
+                 * null source is `DeadTile` — "It isn't published any more",
+                 * which is a deletion notice for a metric that has never been
+                 * chosen. Different fact, different card.
+                 *
+                 * Rendered here rather than inside `CustomTile` because this is
+                 * where the metric picker lives: `setRepointing` is this
+                 * component's state, and the empty card's whole job is to open
+                 * it. Passing a callback down into the tile to reach back up
+                 * would be the same wiring with an extra hop.
+                 */
+                if (t.tileKey === UNSET_TILE_KEY) {
+                  return <EmptyTile chart={t.chart} canEdit={canEdit} onPick={() => setRepointing(tile.id)} />;
+                }
                 return (
                   <CustomTile
                     chart={t.chart}
@@ -845,13 +861,14 @@ function AddChartMenu({
   open,
   setOpen,
   busy,
-  options,
   onPick,
 }: {
   open: boolean;
   setOpen: (o: boolean) => void;
   busy: boolean;
-  options: CustomTileOption[];
+  /* NO `options` ANY MORE. It was here to find "the first metric that can draw
+     this", which is exactly the guess that was removed — a menu of chart SHAPES
+     has no business reading the metric list. */
   onPick: (chart: ChartId, tileKey: string) => void;
 }) {
   return (
@@ -873,13 +890,25 @@ function AddChartMenu({
           const Icon = CHART_ICONS[c.id];
           const block = blockKindOf(blockTileKey(c.id as BlockId));
           /**
-           * A BLOCK NEEDS NO METRIC AND CANNOT BE UNAVAILABLE. Every chart above
-           * binds to the first metric that can draw it, and is greyed with the
-           * reason when nothing can; a heading has nothing to bind and is
-           * therefore always offerable, on an empty board as much as a full one.
+           * NOTHING BINDS TO A METRIC HERE ANY MORE.
+           *
+           * Every chart used to bind to "the first metric that can draw it", so
+           * a new tile arrived already showing a number nobody chose — and the
+           * reader's first job was to notice it was the wrong one. That
+           * contradicted this flow's own intent, written at the top of
+           * `add-tile-picker.tsx`: landing a chart immediately is right, and
+           * "the metric question is asked LATER, by the person, on the tile".
+           * Guessing the answer is not asking it later.
+           *
+           * SO EVERY CHART IS ALWAYS OFFERABLE, which a block already was. The
+           * "no metric here can be drawn this way yet" greying goes with the
+           * binding — and the fact it carried is not lost, it MOVES to where it
+           * is actionable: `MetricList` filters by eligibility and says exactly
+           * that sentence at the moment somebody picks. Better there, because on
+           * an empty workspace the old menu offered nothing at all and gave the
+           * impression the product could not draw.
            */
-          const first = block ? null : options.find((o) => o.charts.includes(c.id));
-          const key = block ? blockTileKey(block) : first?.key;
+          const key = block ? blockTileKey(block) : UNSET_TILE_KEY;
           return (
             <div key={c.id}>
               {/* The rule between drawings and furniture. They are different
@@ -889,21 +918,18 @@ function AddChartMenu({
               {...{ "data-add-chart": c.id }}
               variant="ghost"
               size="sm"
-              disabled={busy || !key}
+              disabled={busy}
               onClick={() => {
-                if (!key) return;
                 setOpen(false);
                 onPick(c.id, key);
               }}
               className="h-auto w-full items-start justify-start gap-2.5 whitespace-normal px-2 py-2 text-left"
-              title={!key ? `No metric on this board can be drawn as a ${c.label.toLowerCase()}` : undefined}
+
             >
               <Icon className="mt-0.5 shrink-0 text-muted-foreground" />
               <span className="flex min-w-0 flex-col gap-0.5">
                 <span className="text-sm font-semibold text-foreground">{c.label}</span>
-                <span className="text-xs font-normal text-muted-foreground">
-                  {key ? c.blurb : "No metric here can be drawn this way yet."}
-                </span>
+                <span className="text-xs font-normal text-muted-foreground">{c.blurb}</span>
               </span>
             </Button>
             </div>
@@ -911,6 +937,61 @@ function AddChartMenu({
         })}
       </div>
     </Popover>
+  );
+}
+
+/**
+ * A CHART WITH NO METRIC YET — an invitation, not a fault.
+ *
+ * The distinction this card exists to draw is against `DeadTile`, which says
+ * "It isn't published any more" and is right when a metric a person chose has
+ * gone. Nothing has gone here. Nothing has been chosen, because adding a chart
+ * no longer guesses, and because a layout template is a shape whose metrics are
+ * the one part it cannot bring with it.
+ *
+ * SO IT LOOKS LIKE AN EMPTY SLOT AND READS LIKE A PROMPT: a dashed edge, which
+ * is the conventional mark for "something goes here", the chart's own icon so
+ * the box says what SHAPE it is while it waits, and the one instruction.
+ *
+ * THE WHOLE CARD IS THE BUTTON, which the connector catalogue's rule allows
+ * for exactly this shape — it carries one act. `EmptyBoard`'s Get-started card
+ * and the template picker both made the same call for the same reason.
+ *
+ * A VIEWER WHO MAY NOT EDIT GETS THE SAME BOX WITHOUT THE INVITATION. Offering
+ * a control that `setCustomTileAction` will refuse is the pattern `ViewTab`
+ * already rules out, and an empty tile is still worth drawing — it is where the
+ * board's author has said something will be.
+ */
+function EmptyTile({ chart, canEdit, onPick }: { chart: string; canEdit: boolean; onPick: () => void }) {
+  const Icon = CHART_ICONS[asChartId(chart)];
+  const label = CHARTS.find((c) => c.id === chart)?.label ?? "chart";
+  const face = (
+    <>
+      <Icon className="size-5 text-muted-foreground" />
+      <span className="text-sm font-medium text-foreground">
+        {canEdit ? "Pick a metric" : "No metric yet"}
+      </span>
+      <span className="text-xs text-muted-foreground">
+        {canEdit ? `This ${label.toLowerCase()} is waiting for one` : `An empty ${label.toLowerCase()}`}
+      </span>
+    </>
+  );
+  /* `rounded-surface` and the tile's own padding, so an empty slot occupies
+     exactly the footprint its filled version will — the board must not reflow
+     when a metric is finally chosen. */
+  const shell = "flex h-full w-full flex-col items-center justify-center gap-1.5 rounded-surface border border-dashed border-border bg-card/40 p-4 text-center";
+  if (!canEdit) return <div className={shell}>{face}</div>;
+  return (
+    <Button
+      variant="ghost"
+      onClick={onPick}
+      /* `h-auto`/`w-full` because `buttonVariants` opens as a one-line pill, and
+         the arbitrary radius spelling is what displaces its `rounded-full` —
+         `rounded-surface` loses to it in `cn()`. */
+      className={`${shell} h-auto rounded-[var(--radius-surface)] whitespace-normal hover:border-primary hover:bg-card/60`}
+    >
+      {face}
+    </Button>
   );
 }
 

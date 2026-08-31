@@ -171,7 +171,12 @@ describe("one picker, reached from both places", () => {
     // stretches, and the button's own `h-full` has something definite to
     // resolve against. Measured: without it the Custom card sat 19px short of
     // its neighbours.
-    expect(picker).toMatch(/<form key=\{t\.kind\} action=\{addViewAction\} className="h-full">/);
+    // Keyed on `id`, not `kind`: two cards are `kind: "custom"` now (the blank
+    // canvas and the Report preset), and keying on the kind collided — React
+    // logged "two children with the same key" and is free to drop or duplicate
+    // one. Caught by looking at the page, not by a test, which is why the id
+    // uniqueness is asserted below.
+    expect(picker).toMatch(/<form key=\{t\.id\} action=\{addViewAction\} className="h-full">/);
     for (const field of ["range", "source", "kind"]) {
       expect(picker).toMatch(new RegExp(`name="${field}"`));
     }

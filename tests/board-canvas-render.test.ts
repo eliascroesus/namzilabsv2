@@ -176,11 +176,17 @@ describe("adding lands immediately; the metric question is asked later", () => {
   it("the Add menu is a popover of chart types with NO metric step", () => {
     /**
      * The shipped flow asked chart → metric → landed, in a modal, and the
-     * metric step was the wrong question at the wrong time. Add now lands the
-     * chart bound to the FIRST metric that can draw it — the options list the
-     * page already computed — and changing the metric happens on the tile.
+     * metric step was the wrong question at the wrong time. Add lands the chart
+     * immediately and the metric question happens on the tile.
+     *
+     * IT USED TO LAND BOUND TO "THE FIRST METRIC THAT CAN DRAW IT", and this
+     * assertion pinned that binding — `options.find((o) => o.charts.includes(...))`.
+     * That was still guessing the answer, just earlier: a new tile arrived
+     * showing a number nobody chose, and the reader's first job was to notice it
+     * was the wrong one. It now lands UNSET and the tile asks.
      */
-    expect(board).toMatch(/options\.find\(\(o\) => o\.charts\.includes\(c\.id\)\)/);
+    expect(board).not.toMatch(/options\.find\(\(o\) => o\.charts\.includes\(c\.id\)\)/);
+    expect(board).toMatch(/const key = block \? blockTileKey\(block\) : UNSET_TILE_KEY/);
     expect(board).toMatch(/onPick\(c\.id, key\)/);
     // A popover in the + view menu's shape, never a modal.
     const menu = board.slice(board.indexOf("function AddChartMenu"), board.indexOf("function PendingCard"));
@@ -188,9 +194,24 @@ describe("adding lands immediately; the metric question is asked later", () => {
     expect(menu).not.toContain("<Modal");
   });
 
-  it("greys an undrawable chart with the reason, and never hides it", () => {
-    expect(board).toContain("No metric here can be drawn this way yet.");
-    expect(board).toMatch(/disabled=\{busy \|\| !key\}/);
+  it("offers every chart, because none of them binds to a metric any more", () => {
+    /**
+     * THIS ASSERTION IS THE INVERSE OF THE ONE IT REPLACED, which required an
+     * undrawable chart to be greyed with "No metric here can be drawn this way
+     * yet." That greying was a consequence of binding to a metric at add time,
+     * and the binding is gone — so there is nothing to be unavailable.
+     *
+     * THE FACT IT CARRIED IS NOT LOST, IT MOVED. `MetricList` filters by
+     * eligibility and says exactly that sentence at the moment somebody picks a
+     * metric, which is where it is actionable. It is also better there: on a
+     * workspace with nothing published the old menu offered NOTHING at all,
+     * which read as a product that could not draw rather than a board with no
+     * data yet.
+     */
+    expect(board).not.toContain("No metric here can be drawn this way yet.");
+    expect(board).toMatch(/disabled=\{busy\}/);
+    // The sentence still exists where the choice is made.
+    expect(picker).toMatch(/Nothing here can be drawn as a/);
   });
 
   it("offers a block whatever the board holds, because there is nothing to bind", () => {
@@ -200,8 +221,10 @@ describe("adding lands immediately; the metric question is asked later", () => {
      * and therefore cannot be unavailable — it is offerable on an empty board
      * exactly as on a full one, which is the point of furniture.
      */
-    expect(board).toMatch(/const first = block \? null : options\.find/);
-    expect(board).toMatch(/const key = block \? blockTileKey\(block\) : first\?\.key/);
+    // Furniture keeps its own key; everything else lands unset. A block was
+    // always offerable because it had nothing to bind — now nothing binds, and
+    // that is the only reason this assertion changed shape.
+    expect(board).toMatch(/const key = block \? blockTileKey\(block\) : UNSET_TILE_KEY/);
     // And they are their own section, under a rule: nine items in one flat
     // list says drawings and furniture are the same kind of thing.
     // The rule is drawn when the FIRST block is reached, whatever element ends

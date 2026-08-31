@@ -195,6 +195,27 @@ export const tileKeyOfMetric = (metricId: string) => `metric:${metricId}`;
  */
 export type CanvasRowFate = "render" | "hidden" | "dead";
 
+/**
+ * A CHART THAT HAS NOT BEEN POINTED AT ANYTHING YET.
+ *
+ * Adding a chart used to bind it to "the first metric that can draw it" — so a
+ * new tile arrived already showing a number nobody asked for, and the reader's
+ * first job was to notice it was wrong. That is the opposite of what the add
+ * flow's own note intends ("the metric question is asked LATER, by the person,
+ * on the tile"): landing a chart immediately is right, guessing its contents is
+ * not.
+ *
+ * It is also what makes a LAYOUT TEMPLATE possible. A template is a shape —
+ * two charts over four numbers — and a shape cannot come with metrics, because
+ * they are the one part that is specific to the workspace using it.
+ *
+ * NOT NULL, because `dashboard_tiles.tile_key` is NOT NULL and a nullable
+ * column would mean a migration plus every reader learning a third case. A
+ * sentinel keeps the column's shape and puts the meaning in one exported
+ * constant that the schema, the renderer and the fate function all read.
+ */
+export const UNSET_TILE_KEY = "unset";
+
 export function canvasRowFate(tileKey: string, joined: boolean, existing: ReadonlySet<string>): CanvasRowFate {
   if (joined) return "render";
   /**
@@ -203,8 +224,14 @@ export function canvasRowFate(tileKey: string, joined: boolean, existing: Readon
    * in no unfiltered set, which is indistinguishable from a deleted one to
    * every test this function performs — so without this line every block on
    * every board renders "It isn't published any more."
+   *
+   * AN UNSET TILE IS THE SAME CASE, arrived at deliberately rather than by
+   * loss: it joins to nothing because nothing has been chosen. Without this
+   * line every freshly added chart, and every tile of every template, would
+   * render "It isn't published any more" — a deletion notice for something
+   * that has never existed.
    */
-  if (blockKindOf(tileKey)) return "render";
+  if (tileKey === UNSET_TILE_KEY || blockKindOf(tileKey)) return "render";
   return existing.has(tileKey) ? "hidden" : "dead";
 }
 

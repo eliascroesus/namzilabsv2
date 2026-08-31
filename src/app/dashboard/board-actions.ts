@@ -13,9 +13,10 @@ import { boardGroupCap, boardPlacementCap, boardTileCap, boardViewCap } from "@/
 import { compareKeys, keyBetween, keysBetween } from "@/lib/board/order";
 import { adoptDefaultView } from "@/lib/board/store";
 import { compact, GRID_COLS } from "@/lib/board/grid";
+import { asPreset } from "@/lib/board/presets";
 import { BLOCK_IDS, CHART_IDS, asChartId, blockKindOf, defaultSize, minSize } from "@/lib/board/charts";
 import { parseTileConfig, TILE_CONFIG_KEYS } from "@/lib/board/tile-config";
-import { asViewKind, type BoardTileRow } from "@/lib/board/types";
+import { asViewKind, UNSET_TILE_KEY, type BoardTileRow } from "@/lib/board/types";
 import { GROUP_ACCENT } from "@/components/flow/node-accent";
 import type { BoardGroup } from "@/lib/board/types";
 
@@ -526,11 +527,41 @@ export async function addViewAction(fd: FormData): Promise<void> {
    * Non-calendar kinds take the plain insert: there is no second row to keep in
    * step with the first.
    */
+  /**
+   * A LAYOUT TO START FROM — the custom kind's templates.
+   *
+   * The preset carries POSITIONS AND CHART KINDS and no metrics: every tile
+   * lands as `UNSET_TILE_KEY`, because an arrangement is portable between
+   * workspaces and the metrics in it never are. See `lib/board/presets.ts`.
+   *
+   * Unknown reads as none, the same rule `asViewKind` follows — a hand-edited
+   * post gets an empty custom view rather than a layout nobody defined.
+   */
+  const preset = kind === "custom" ? asPreset(fd.get("preset")) : null;
+
   if (tileKey) {
     await db.execute(sql`
       ${newViewCte(id, ctx.orgId, name, keyBetween(last, null), kind)}
       insert into ${dashboardTilePlacements} (org_id, tile_key, group_id, view_id, pos)
       select ${ctx.orgId}, ${tileKey}, null, v.id, ${keyBetween(null, null)} from v
+    `);
+  } else if (preset) {
+    /**
+     * ONE STATEMENT, so a template is never half-created — see `newViewCte`.
+     * A view holding four of its six boxes looks like a board somebody built
+     * badly, and the customer cannot tell it is half.
+     */
+    await db.execute(sql`
+      ${newViewCte(id, ctx.orgId, name, keyBetween(last, null), kind)}
+      insert into ${dashboardTiles} (id, org_id, view_id, tile_key, chart, config, x, y, w, h)
+      select t.id, ${ctx.orgId}, v.id, ${UNSET_TILE_KEY}, t.chart, '{}'::jsonb, t.x, t.y, t.w, t.h
+        from v cross join (values ${sql.join(
+          preset.tiles.map(
+            (t) =>
+              sql`(${crypto.randomUUID()}::text, ${t.chart}::text, ${t.x}::int, ${t.y}::int, ${t.w}::int, ${t.h}::int)`,
+          ),
+          sql`, `,
+        )}) as t(id, chart, x, y, w, h)
     `);
   } else {
     await db.insert(dashboardViews).values({
@@ -866,7 +897,10 @@ export async function deleteViewAction(id: string): Promise<Result> {
 const tileKeySchema = z
   .string()
   .max(200)
-  .regex(new RegExp(`^(flow:[^:]+:.+|metric:[^:]+|block:(${BLOCK_IDS.join("|")}))$`), "Bad tile key.");
+  .regex(
+    new RegExp(`^(${UNSET_TILE_KEY}|flow:[^:]+:.+|metric:[^:]+|block:(${BLOCK_IDS.join("|")}))$`),
+    "Bad tile key.",
+  );
 
 /**
  * A BLOCK'S CHART AND ITS KEY MUST BE THE SAME WORD.

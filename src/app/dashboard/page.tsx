@@ -20,10 +20,11 @@ import { BoardControls, RangeLink, SourceLink, TileArea, ViewTab, ViewTitle } fr
 import { BoardLayout } from "./board-layout";
 import { CustomBoard, type CanvasTile } from "./custom-board";
 import type { CustomTileSource } from "@/components/custom-tile";
-import { CHARTS, blockKindOf, chartsFor, shapeOfClassic, shapeOfTile } from "@/lib/board/charts";
+import { CHART_IDS, CHARTS, blockKindOf, chartsFor, shapeOfClassic, shapeOfTile } from "@/lib/board/charts";
 import { parseTileConfig } from "@/lib/board/tile-config";
 import { listBoardGroups, listTilePlacements } from "@/lib/board/store";
 import { navViews } from "@/lib/board/nav-views";
+import { UNSET_TILE_KEY } from "@/lib/board/types";
 import { listBoardTiles } from "@/lib/board/tiles-store";
 import {
   canvasRowFate,
@@ -962,6 +963,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     const stored = (flow?.tile ?? {}) as { name?: string };
     /** Furniture: no metric to name it after, no freshness to rank. */
     const block = blockKindOf(row.tileKey);
+    /** Chosen nothing yet — an invitation, not a loss. See `UNSET_TILE_KEY`. */
+    const unset = row.tileKey === UNSET_TILE_KEY;
     /**
      * THE WHOLE CONTRACT, not the half that used to cross. `unpublished`,
      * `importing` and `error` were dropped right here — the rows carry all
@@ -1000,22 +1003,38 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       // A block is named after its KIND — "Heading", "Divider" — so the tile
       // menu has something to call it. "Untitled" is what a metric with no name
       // is, and a divider is not an untitled anything.
+      // A block is named after its KIND, and an UNSET tile after its absence —
+      // "Untitled" is what a metric with no name is, and neither a divider nor
+      // an empty slot is an untitled anything.
       metricName: block
         ? (CHARTS.find((c) => c.id === block)?.label ?? "Block")
-        : (stored.name ?? classic?.metric.name ?? "Untitled"),
+        : unset
+          ? "No metric"
+          : (stored.name ?? classic?.metric.name ?? "Untitled"),
       // Through the one parser, so a corrupt bag costs its own keys and
       // nothing else. The CLIENT derives the title — it owns the optimistic
       // rename, and a derivation here would be a second opinion it overrides.
       config: parseTileConfig(row.config),
       // What its METRIC could be drawn as — the same `chartsFor` the renderer
       // enforces with, so the menu can never offer a chart the tile refuses.
-      charts: chartsFor(flow ? shapeOfTile(flow.tile) : shapeOfClassic(classic && classic.kind !== "error" ? classic.result : null, classic?.metric.target == null ? null : Number(classic.metric.target))) as string[],
+      // NOTHING CONSTRAINS AN UNSET TILE, so every chart is on offer: the rule
+      // this list enforces is "a metric's shape decides what can draw it", and
+      // there is no metric yet. Narrowing it to the empty set instead would
+      // leave a fresh tile unable to change its own chart — the one edit
+      // somebody is most likely to want before picking data.
+      charts: unset
+        ? (CHART_IDS as readonly string[]).slice()
+        : (chartsFor(flow ? shapeOfTile(flow.tile) : shapeOfClassic(classic && classic.kind !== "error" ? classic.result : null, classic?.metric.target == null ? null : Number(classic.metric.target))) as string[]),
       // The groups board's own attention rules, extended to the canvas: a dead
       // tile ranks as stale rather than fine, because "needs a look" is true.
       // A block can never need a look: it has no run to fail, no result to go
       // stale, and no published version to drift from. Without this it ranked
       // as `1` — the "dead metric" tier — and sorted above real problems.
-      attention: block ? 0 : flow ? attentionOf(flow, value) : classic?.kind === "error" ? 3 : classic ? 0 : 1,
+      // An unset tile can never need a look, for the reason a block cannot: no
+      // run to fail, no result to go stale, no published version to drift from.
+      // Without this it ranked `1` — the DEAD-metric tier — and an empty slot
+      // would sort above a genuinely broken number.
+      attention: block || unset ? 0 : flow ? attentionOf(flow, value) : classic?.kind === "error" ? 3 : classic ? 0 : 1,
       data: source,
     }];
   });

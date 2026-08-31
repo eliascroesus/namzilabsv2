@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Modal, ModalTitle } from "@/components/ui/modal";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { addViewAction } from "./board-actions";
+import { PRESET_COLS, REPORT_PRESET, presetRows } from "@/lib/board/presets";
 
 /**
  * PICKING A LAYOUT — one modal, reached from both places a view can be created.
@@ -151,18 +152,91 @@ function CalendarPreview() {
 }
 
 /**
- * The two kinds, and the one place they are described.
+ * THE PRESET, DRAWN FROM THE PRESET.
+ *
+ * Every other preview here is a hand-made impression of a board. This one is
+ * the actual layout: same twelve columns, same boxes, same rows, read straight
+ * off `REPORT_PRESET`. So the card cannot promise an arrangement the template
+ * does not create — which is the same argument the file already makes for
+ * drawing previews from tokens instead of shipping screenshots, taken one step
+ * further. A picture and the thing it depicts drift the moment they are two
+ * objects; here they are one.
+ *
+ * The two plots carry bars and the four numbers carry a label-and-figure, so
+ * the shape reads as "charts over headline numbers" rather than as six grey
+ * rectangles — the same reason `CustomPreview` grew its bars.
+ */
+function ReportPreview() {
+  const rows = presetRows(REPORT_PRESET);
+  return (
+    <div
+      className="grid h-full gap-1.5 p-4"
+      style={{ gridTemplateColumns: `repeat(${PRESET_COLS}, 1fr)`, gridTemplateRows: `repeat(${rows}, 1fr)` }}
+    >
+      {REPORT_PRESET.tiles.map((t, i) => (
+        <span
+          key={i}
+          aria-hidden
+          className="flex flex-col gap-1 overflow-hidden rounded-card bg-card p-1.5 shadow-xs"
+          style={{ gridColumn: `${t.x + 1} / span ${t.w}`, gridRow: `${t.y + 1} / span ${t.h}` }}
+        >
+          <span className="h-1 w-1/2 shrink-0 rounded-full bg-foreground/25" />
+          {t.chart === "number" ? (
+            <span className="h-2.5 w-2/3 rounded-xs bg-foreground/15" />
+          ) : (
+            <span className="flex flex-1 items-end gap-1">
+              {[50, 75, 40, 90, 60].map((h, b) => (
+                <span key={b} className="flex-1 rounded-xs bg-primary/70" style={{ height: `${h}%` }} />
+              ))}
+            </span>
+          )}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * The kinds, and the one place they are described.
  */
 const TEMPLATES = [
   {
+    /**
+     * `id` IS NOT `kind`, and that distinction arrived with the Report preset.
+     * Two cards are now `kind: "custom"` — the blank canvas and the preset —
+     * so keying React on the kind silently collided: "Encountered two children
+     * with the same key". React is then free to drop or duplicate one of them,
+     * which is a bug that renders correctly right up until it does not.
+     */
+    id: "groups",
     kind: "groups",
     label: "Columns",
     Preview: ColumnsPreview,
   },
   {
+    id: "custom",
     kind: "custom",
     label: "Custom",
     Preview: CustomPreview,
+  },
+  {
+    /**
+     * A CUSTOM VIEW THAT ARRIVES WITH ITS BOXES PLACED. Same kind, same board,
+     * same everything you can do to it afterwards — the only difference is that
+     * it starts as a shape instead of as an empty canvas. `preset` is what says
+     * so on the post; `addViewAction` lands the tiles in the same statement as
+     * the view, so a template is never half-created.
+     *
+     * NONE OF ITS TILES POINT AT A METRIC, and that is the property that makes
+     * a template possible at all: an arrangement travels between workspaces and
+     * the metrics in it never do. Each box opens the metric picker when pressed,
+     * exactly as a hand-added chart now does.
+     */
+    id: REPORT_PRESET.id,
+    kind: "custom",
+    preset: REPORT_PRESET.id,
+    label: REPORT_PRESET.label,
+    Preview: ReportPreview,
   },
   {
     /**
@@ -185,6 +259,7 @@ const TEMPLATES = [
      * metric is not what the view IS: name a tab "Bookings" and then switch it
      * to Revenue and the strip is lying. The tab is renameable like any other.
      */
+    id: "calendar",
     kind: "calendar",
     label: "Calendar",
     Preview: CalendarPreview,
@@ -286,10 +361,11 @@ export function ViewTemplatePicker({
              `h-full` on the FORM too: it is the grid item, so it is what the
              row stretches, and the button's own `h-full` resolves against it. */
           return (
-            <form key={t.kind} action={addViewAction} className="h-full">
+            <form key={t.id} action={addViewAction} className="h-full">
               <input type="hidden" name="range" value={rangeKey} />
               <input type="hidden" name="source" value={source ?? ""} />
               <input type="hidden" name="kind" value={t.kind} />
+              {"preset" in t && <input type="hidden" name="preset" value={t.preset} />}
               {t.kind === "calendar" && (
                 <>
                   {/* THE FIRST METRIC, CHOSEN HERE SO NOBODY IS ASKED. The list
