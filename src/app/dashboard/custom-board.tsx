@@ -765,7 +765,7 @@ export function CustomBoard({
                     e.stopPropagation();
                     onPointerDown(e, { id: tile.id, mode: "resize" });
                   }}
-                  className="absolute bottom-0.5 right-0.5 z-10 size-4 cursor-se-resize rounded-control opacity-0 [touch-action:none] after:absolute after:bottom-1 after:right-1 after:size-2 after:rounded-control after:border-b-2 after:border-r-2 after:border-neutral-400 focus-within:opacity-100 group-hover/cell:opacity-100 pointer-coarse:opacity-100"
+                  className="absolute bottom-0.5 right-0.5 z-10 size-4 cursor-se-resize rounded-control opacity-0 [touch-action:none] after:absolute after:bottom-1 after:right-1 after:size-2 after:rounded-control after:border-b-2 after:border-r-2 after:border-muted-foreground focus-within:opacity-100 group-hover/cell:opacity-100 pointer-coarse:opacity-100"
                 />
               )}
             </div>

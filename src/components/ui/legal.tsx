@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
  *
  * /privacy and /terms were two copies of one layout that had already drifted
  * apart in small ways, and both were the last pages in the product still
- * written in raw palette classes — `text-neutral-700` body, `text-neutral-500`
+ * written in raw palette classes — `text-foreground` body, `text-muted-foreground`
  * captions, and links in `text-blue-600` on a product whose own kit says, in
  * as many words, "blue is dead". A visitor reading the privacy policy was
  * looking at a different piece of software from the one they had just been
@@ -109,5 +109,5 @@ export function LegalLink({ className, ...props }: React.ComponentProps<"a">) {
 
 /** The bulleted list used inside a clause. */
 export function LegalList({ children }: { children: React.ReactNode }) {
-  return <ul className="list-disc space-y-2 pl-5 marker:text-neutral-400">{children}</ul>;
+  return <ul className="list-disc space-y-2 pl-5 marker:text-muted-foreground">{children}</ul>;
 }

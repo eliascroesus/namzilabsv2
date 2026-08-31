@@ -37,8 +37,11 @@ exhausting by 4pm.
 5. **Numbers are typeset.** Every metric wears `.tnum` and goes through
    `formatMetricValue`; every date goes through `formatDate`/`formatDateTime`.
    Users never see raw storage keys (`gsheets`) or raw enums (`error`).
-6. **One theme.** The light theme is deleted, not hidden. `dark:` is bound to a
-   class nothing stamps and `check:ui` fails on it (§11).
+6. **Two themes, one vocabulary.** Light and dark are two blocks of the SAME
+   role names — `tests/design-swatches.test.ts` fails if a role is declared in
+   one and not the other, which is how the metric card once ended up carrying
+   ink solved for the opposite surface. `dark:` at a call site is still a build
+   failure (§11): a value that differs between themes is a role.
 
 ## 2. Color
 

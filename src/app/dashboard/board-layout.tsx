@@ -404,7 +404,7 @@ export function BoardLayout({
                     correction `Chip`'s own count pill carries.
                     The count sits INSIDE it, like the columns' do. */}
                 <span className="flex items-center gap-1.5 rounded-xs bg-foreground/5 py-1 pl-2 pr-2">
-                  <span className="size-2 shrink-0 rounded-full bg-neutral-400" aria-hidden />
+                  <span className="size-2 shrink-0 rounded-full bg-muted-foreground" aria-hidden />
                   <span className="text-sm font-semibold text-muted-foreground">Ungrouped</span>
                   <span className="tnum shrink-0 pl-0.5 text-xs font-semibold text-muted-foreground opacity-70">
                     {board.ungrouped.tiles.length}

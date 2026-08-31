@@ -159,7 +159,7 @@ export function TopBar({
           same kind of object. */}
       <span
         aria-hidden
-        className="flex size-7 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-neutral-700 text-xs font-semibold text-foreground"
+        className="flex size-7 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-accent text-xs font-semibold text-foreground"
       >
         {initial}
       </span>
@@ -240,7 +240,7 @@ export function TopBar({
                 // chevron's own `size-3` on specificity no matter which order
                 // they are written in. Overriding at the same level is the only
                 // spelling that actually lands.
-                className="-mx-2 h-auto min-w-0 gap-2.5 rounded-[var(--radius-control)] px-2 py-1.5 text-left hover:bg-neutral-700 active:bg-neutral-700 [&_svg]:size-3"
+                className="-mx-2 h-auto min-w-0 gap-2.5 rounded-[var(--radius-control)] px-2 py-1.5 text-left hover:bg-accent active:bg-accent [&_svg]:size-3"
                 aria-label={`${workspace} — workspace and account`}
               >
                 {identity}
@@ -330,7 +330,7 @@ export function TopBar({
                         r={RING_RADIUS}
                         fill="none"
                         strokeWidth="3"
-                        className="stroke-neutral-500"
+                        className="stroke-rule"
                       />
                       {arc > 0 && (
                         <circle
@@ -470,7 +470,7 @@ export function TopBar({
             // a white chip, the chrome's hairline, near-black ink. These are
             // the same three values the bell and the account chip wear, which
             // is what makes the four controls read as one row.
-            "border-border bg-card text-foreground hover:bg-neutral-700 active:bg-neutral-700",
+            "border-border bg-card text-foreground hover:bg-accent active:bg-accent",
           )}
           title="Invite someone to this workspace"
         >
@@ -506,7 +506,7 @@ export function TopBar({
           variant="ghost"
           size="icon"
           aria-label={unread > 0 ? `Notifications — ${unread} unread` : "Notifications"}
-          className="relative border border-border bg-card text-foreground hover:bg-neutral-700 active:bg-neutral-700"
+          className="relative border border-border bg-card text-foreground hover:bg-accent active:bg-accent"
         >
           <Bell />
           {unread > 0 && (
@@ -532,7 +532,7 @@ export function TopBar({
                 variant="ghost"
                 size="icon"
                 aria-label="Account"
-                className="border border-border bg-card text-xs font-semibold text-foreground hover:bg-neutral-700 active:bg-neutral-700 data-[state=open]:bg-neutral-700"
+                className="border border-border bg-card text-xs font-semibold text-foreground hover:bg-accent active:bg-accent data-[state=open]:bg-accent"
               >
                 {/* THE PICTURE IF THERE IS ONE, the initials if not — and the
                     initials are not a placeholder for a missing image, they are

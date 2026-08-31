@@ -260,9 +260,9 @@ export function TargetBar({ value, target, format }: { value: number; target: nu
           is unaffected: the track is the same measure UNFILLED, so it should be
           the same colour with the light out of it, and it follows the fill to
           green so the whole meter changes state rather than just the liquid. */}
-      <div className={cn(TRACK, "w-full", met ? "bg-success/15" : "bg-neutral-500/30")}>
+      <div className={cn(TRACK, "w-full", met ? "bg-success/15" : "bg-rule/30")}>
         <div
-          className={cn("h-full rounded-full", met ? "bg-success" : "bg-neutral-400")}
+          className={cn("h-full rounded-full", met ? "bg-success" : "bg-muted-foreground")}
           style={{ width: `${Math.max(pct, 2)}%` }}
         />
       </div>

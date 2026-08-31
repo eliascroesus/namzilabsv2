@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
 // you are IN rather than a thing you pressed: the border itself going violet
 // plus a soft halo says "typing lands here", where a detached outline ring says
 // "this is selected". Buttons want the second, fields the first.
-// `hover:border-neutral-500` gives a field the pointer feedback every other
+// `hover:border-rule` gives a field the pointer feedback every other
 // control in the kit already had.
 //
 // `aria-invalid:border-destructive` because the message under a bad field was
@@ -31,7 +31,7 @@ import { cn } from "@/lib/utils";
 // the kit's, so an override emits BOTH classes and lets stylesheet order pick
 // the winner. Verified, not assumed.
 const FIELD_BASE =
-  "w-full border border-input bg-control text-sm text-foreground transition-colors duration-(--duration-fast) placeholder:text-muted-foreground hover:border-neutral-500 focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 aria-invalid:border-destructive disabled:pointer-events-none disabled:opacity-50 disabled:bg-muted";
+  "w-full border border-input bg-control text-sm text-foreground transition-colors duration-(--duration-fast) placeholder:text-muted-foreground hover:border-rule focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 aria-invalid:border-destructive disabled:pointer-events-none disabled:opacity-50 disabled:bg-muted";
 
 /**
  * THE SHEET IS PILL-FIRST, so a single-line field is fully round — the same

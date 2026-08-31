@@ -116,21 +116,21 @@ describe("the theme-color meta matches the app background", () => {
   const layout = readFileSync(join(root, "src/app/layout.tsx"), "utf8");
 
   /**
-   * ONE COLOUR, BECAUSE THERE IS ONE THEME.
+   * ONE COLOUR PER THEME, because there are two themes again.
    *
-   * This used to assert a media-query PAIR — a light answer and a dark one —
-   * and the pair is now the bug rather than the fix. With the light theme gone,
-   * a `prefers-color-scheme: light` entry would paint the address bar `#f5f5f5`
-   * above an app that is `#0f1011` on every machine, for every visitor whose OS
-   * happens to be set to light. So the shape being pinned is a bare string, and
-   * the assertion below is what stops the pair growing back.
+   * This has now been asserted three ways — a pair, then a bare string when the
+   * light theme was deleted, and a pair again — which is exactly why it is
+   * pinned at all: the tag is a build-time literal that no stylesheet can
+   * reach, so it is the one colour in the product that cannot follow a token
+   * and has to be checked instead.
    */
-  const declared = layout.match(/themeColor:\s*"(#[0-9a-fA-F]{6})"/)?.[1].toLowerCase();
+  const declared = [...layout.matchAll(/color:\s*"(#[0-9a-fA-F]{6})"/g)].map((m) => m[1].toLowerCase());
 
-  it("declares exactly one themeColor, with no per-scheme split", () => {
-    expect(declared).toBeTruthy();
-    expect(layout).not.toMatch(/prefers-color-scheme/);
-    expect(layout).toMatch(/colorScheme:\s*"dark"/);
+  it("declares one themeColor per scheme", () => {
+    expect(layout).toMatch(/prefers-color-scheme: light/);
+    expect(layout).toMatch(/prefers-color-scheme: dark/);
+    expect(layout).toMatch(/colorScheme:\s*"light dark"/);
+    expect(declared).toHaveLength(2);
   });
 
   /**
@@ -147,18 +147,41 @@ describe("the theme-color meta matches the app background", () => {
     return css.match(new RegExp(`--${alias}:\\s*(#[0-9a-fA-F]{6})`))?.[1].toLowerCase();
   };
 
-  it("equals --background in :root", () => {
+  it("the light one equals --background in :root", () => {
     const background = resolve(":root");
     expect(background).toBeTruthy();
-    expect(declared).toBe(background);
+    expect(declared[0]).toBe(background);
+  });
+
+  it("the dark one equals --background in .dark", () => {
+    const background = resolve("\\.dark");
+    expect(background).toBeTruthy();
+    expect(declared[1]).toBe(background);
   });
 
   /**
-   * THE THEME THAT IS GONE MUST STAY GONE. A `.dark` block reappearing in
-   * globals.css means either the light theme came back without this file
-   * hearing about it, or forty roles are being kept in step by hand again.
+   * EVERY ROLE IS DECLARED IN BOTH BLOCKS, AND THIS IS THE HALF A MACHINE CAN
+   * CHECK.
+   *
+   * A role present in one block and not the other inherits whatever the other
+   * left behind — which is how the metric tile once carried ink solved for the
+   * opposite surface and shipped muted labels at 2.52:1. Sixty-odd tokens kept
+   * in step by hand is precisely the arrangement that produced that bug, so the
+   * pairing is asserted rather than trusted.
+   *
+   * `--heading` is the newest example of why: it was `text-white` hard-coded for
+   * the dark theme, and the moment light came back the page title was simply
+   * not on the screen.
    */
-  it("has no .dark role block to disagree with", () => {
-    expect(css).not.toMatch(/(?:^|\n)\.dark\s*\{/);
+  it("declares the same role names in both blocks", () => {
+    const names = (selector: string) => {
+      const src = css.match(new RegExp(`(?:^|\\n)${selector}\\s*\\{([\\s\\S]*?)\\n\\}`))?.[1] ?? "";
+      return new Set([...src.matchAll(/^\s*(--[a-z0-9-]+):/gm)].map((m) => m[1]));
+    };
+    const light = names(":root");
+    const dark = names("\\.dark");
+    expect(light.size, "no :root roles found — the parser missed the block").toBeGreaterThan(20);
+    expect([...light].filter((n) => !dark.has(n)), "declared in light but not dark").toEqual([]);
+    expect([...dark].filter((n) => !light.has(n)), "declared in dark but not light").toEqual([]);
   });
 });

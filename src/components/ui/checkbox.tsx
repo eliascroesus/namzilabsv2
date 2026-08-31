@@ -38,10 +38,10 @@ function Checkbox({
         // as an empty box, and shadcn patched only the dark side of that with
         // `dark:bg-input/30`. The token does both.
         //
-        // `hover:border-neutral-400` is the pointer feedback every other
+        // `hover:border-muted-foreground` is the pointer feedback every other
         // control in the kit has; `transition-colors` because what moves is
         // the border and the fill, not the shadow.
-        "peer size-4 shrink-0 rounded-xs border border-neutral-500 bg-control shadow-xs transition-colors duration-(--duration-fast) hover:border-neutral-400 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive data-[state=checked]:border-transparent data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground",
+        "peer size-4 shrink-0 rounded-xs border border-rule bg-control shadow-xs transition-colors duration-(--duration-fast) hover:border-muted-foreground disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive data-[state=checked]:border-transparent data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground",
         className
       )}
       {...props}

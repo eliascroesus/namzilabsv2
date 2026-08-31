@@ -59,7 +59,7 @@ const pillVariants = cva(/**
       success: "bg-success-soft text-success-ink ring-1 ring-inset ring-brand-soft-line",
       warn: "bg-warn-soft text-warn-ink ring-1 ring-inset ring-warn/25",
       danger: "bg-danger-soft text-danger-ink ring-1 ring-inset ring-danger/25",
-      pending: "bg-neutral-700 text-muted-foreground",
+      pending: "bg-accent text-muted-foreground",
       brand: "bg-brand-soft text-marker ring-1 ring-inset ring-brand-soft-line",
     },
   },
@@ -89,7 +89,7 @@ export function Badge({ className, ...props }: React.ComponentProps<"span">) {
   return (
     <span
       className={cn(
-        "inline-flex shrink-0 items-center rounded-xs bg-neutral-700 px-2 py-0.5 text-xs font-medium text-muted-foreground",
+        "inline-flex shrink-0 items-center rounded-xs bg-accent px-2 py-0.5 text-xs font-medium text-muted-foreground",
         className,
       )}
       {...props}

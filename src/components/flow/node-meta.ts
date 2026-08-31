@@ -365,7 +365,7 @@ export const STATUS_META: Record<NodeStatus, { label: string; cls: string; borde
   ready: { label: "Tested", cls: "bg-success-soft text-success-ink", border: "border-border", dot: "bg-success", hint: "text-muted-foreground" },
   setup: { label: "Needs setup", cls: "bg-warn-soft text-warn-ink", border: "border-warn/45", dot: "bg-warn", hint: "text-warn-ink" },
   untested: { label: "Not tested", cls: "bg-muted text-muted-foreground", border: "border-border", dot: "bg-neutral-300", hint: "text-muted-foreground" },
-  updating: { label: "Testing…", cls: "bg-muted text-muted-foreground", border: "border-border", dot: "bg-neutral-400", hint: "text-muted-foreground" },
+  updating: { label: "Testing…", cls: "bg-muted text-muted-foreground", border: "border-border", dot: "bg-muted-foreground", hint: "text-muted-foreground" },
   error: { label: "Test failed", cls: "bg-danger-soft text-danger-ink", border: "border-danger/45", dot: "bg-danger", hint: "text-danger-ink" },
 };
 

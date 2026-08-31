@@ -63,7 +63,7 @@ export function Chip({ className, active, count, children, ...props }: ChipProps
             // hoverable thing in the product answers the pointer the same way.
             // Selecting still says "this is the one" in the brand's voice —
             // two statements, spelled apart, one of them now in greyscale.
-            "text-muted-foreground hover:bg-neutral-700 hover:text-foreground",
+            "text-muted-foreground hover:bg-accent hover:text-foreground",
         className,
       )}
       {...props}

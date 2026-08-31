@@ -75,7 +75,7 @@ const buttonVariants = cva(
          * Black comes through the `foreground` ROLE, not a raw near-black fill:
          * it inverts with the theme, and the kit gate bans that literal.
          */
-        default: "border border-border bg-card text-foreground shadow-xs hover:bg-neutral-700 active:bg-neutral-700",
+        default: "border border-border bg-card text-foreground shadow-xs hover:bg-accent active:bg-accent",
         /**
          * THE BRAND — the act the screen exists for, in yellow under near-black
          * ink at 11.24:1.
@@ -97,7 +97,7 @@ const buttonVariants = cva(
         accent: "bg-primary text-primary-foreground shadow-xs hover:bg-brand-500 active:bg-brand-700",
         /** The recessed twin of `default` — a control sitting ON a card, where
          *  the card's own colour would give the button no edge to be found by. */
-        secondary: "border border-border bg-control text-foreground shadow-xs hover:bg-neutral-700 active:bg-neutral-700",
+        secondary: "border border-border bg-control text-foreground shadow-xs hover:bg-accent active:bg-accent",
         /** THE REFERENCE'S OWN BADGE-AS-BUTTON: a 10% brand wash inside a 20%
          *  brand ring, carrying brand ink. On a light page this shape was
          *  impossible in the brand — a yellow wash under yellow ink needs
@@ -107,11 +107,11 @@ const buttonVariants = cva(
         soft: "bg-brand-soft text-marker ring-1 ring-inset ring-brand-soft-line hover:bg-brand-soft/70",
         /** Outlined brand, for a secondary act in a branded flow. */
         outlineAccent: "border border-brand-soft-line bg-transparent text-marker hover:bg-brand-soft",
-        ghost: "text-muted-foreground hover:bg-neutral-700 hover:text-foreground active:bg-neutral-700",
+        ghost: "text-muted-foreground hover:bg-accent hover:text-foreground active:bg-accent",
         destructive: "bg-destructive text-destructive-foreground shadow-xs hover:brightness-110 active:brightness-95",
         success: "bg-success-soft text-success-ink ring-1 ring-inset ring-brand-soft-line hover:bg-success-soft/70",
         destructiveGhost: "text-muted-foreground hover:bg-danger-soft hover:text-danger-ink",
-        destructiveOutline: "border border-red-200 bg-card text-danger-ink hover:bg-danger-soft",
+        destructiveOutline: "border border-danger/30 bg-card text-danger-ink hover:bg-danger-soft",
         link: "text-marker underline-offset-4 hover:underline",
       },
       size: {

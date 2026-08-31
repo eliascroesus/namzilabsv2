@@ -303,8 +303,8 @@ const RULES: Rule[] = [
       )?.[0] ?? null,
   },
   {
-    name: "dead dark: variant",
-    why: "the product has ONE theme; `dark:` is bound to a class nothing stamps, so the utility compiles and never fires",
+    name: "dark: variant",
+    why: "a value that differs between the themes is a ROLE; `dark:` is a second answer living at a call site, which is how the two themes drifted last time",
     /**
      * `@custom-variant dark` is deliberately KEPT in globals.css — deleting it
      * hands `dark:` back to Tailwind's default `prefers-color-scheme` binding,

@@ -93,7 +93,7 @@ export function DropGap({ accent, height }: { accent?: string; height?: number }
       }}
     >
       <span
-        className={`flex size-7 items-center justify-center rounded-full ${brand ? "bg-primary text-primary-foreground" : "text-white"}`}
+        className={`flex size-7 items-center justify-center rounded-full ${brand ? "bg-primary text-primary-foreground" : "text-foreground"}`}
         style={brand ? undefined : { background: accent }}
       >
         <Plus size={16} strokeWidth={2.5} />

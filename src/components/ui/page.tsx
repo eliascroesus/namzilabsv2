@@ -222,13 +222,13 @@ export function PageHeader({ title, lede, actions, back, className }: PageHeader
               The display face's one in-app appearance besides the metric
               numeral. `.font-display` carries its own tracking (-0.022em), so
               no `tracking-tight` here — the two would compound. */}
-          {/* `text-white`, NOT `text-foreground`, and it is the one place in the
-              product that reaches past the ink ramp's top rung on purpose. The
-              body ink is #dcdcdc; a page title in it is the same weight of grey
-              as the sentence under it, and the reference draws the title in
-              pure white for exactly that reason — it is the one heading with
-              nothing above it to defer to, so it gets the one value nothing
-              else may have.
+          {/* `text-heading`, NOT `text-foreground`, and it is the one place in the
+              product that reaches past the body ink on purpose: a page title in
+              the same grey as the sentence under it is not a title.
+              IT WAS `text-white`, which was correct in a one-theme product and
+              INVISIBLE the moment the light theme came back — the kit page's own
+              h1 simply was not on the screen. A value that has to differ between
+              the two themes is a ROLE; that is the whole reason roles exist.
 
               24px (`display-xs`), DOWN FROM 30. It went UP to 30 when the title
               shared its row with a 40px period band and read as a caption
@@ -245,7 +245,7 @@ export function PageHeader({ title, lede, actions, back, className }: PageHeader
               a different typeface rather than as a heading, and `.font-display`
               stays where the negative tracking is actually right: the landing's
               48–64px hero. */}
-          <h1 className="text-display-xs font-semibold tracking-[0.07px] text-white">{title}</h1>
+          <h1 className="text-display-xs font-semibold tracking-[0.07px] text-heading">{title}</h1>
           {/* 14px, DOWN FROM 16, and the old argument for 16 is retired rather
               than overruled by taste. It said a lede has to be 16px "to read
               as a sentence rather than as a caption of the heading" — true when

@@ -63,17 +63,19 @@
 }
 
 /**
- * `dark:` IS INERT, AND IT IS DEFINED HERE SO THAT IT STAYS THAT WAY.
+ * `dark:` FOLLOWS THE CLASS, NOT THE OPERATING SYSTEM.
  *
- * The product has ONE theme now. The obvious move is to delete this line, and
- * it is the wrong one: Tailwind v4 ships `dark:` wired to `prefers-color-scheme`
- * by default, so removing the override does not disable the variant — it hands
- * it to the operating system, and a stray `dark:bg-card` starts firing on half
- * the machines that load the page with no way for anyone here to see it.
+ * Tailwind v4 ships `dark:` wired to `prefers-color-scheme`, which cannot be
+ * overridden by somebody who has explicitly chosen the other theme — the media
+ * query does not care what our control thinks. Redefining the variant against
+ * `.dark` on the root element makes the class the single source of truth, and
+ * `next-themes` is what puts it there (including before the first paint, so
+ * there is no flash of the wrong theme).
  *
- * Bound to `.dark` instead, which nothing in the app ever stamps. The variant
- * compiles, matches nothing, and `scripts/check-ui.ts` fails the build on any
- * `dark:` in `src` so the dead spelling cannot accumulate.
+ * IT IS RARELY THE RIGHT TOOL. Ninety-nine times in a hundred the answer is a
+ * ROLE that already differs between the two blocks — `bg-card` is white here
+ * and #1a1b1e there without a single `dark:` anywhere. Reach for the variant
+ * only when a value genuinely has no role, and expect to be asked why.
  */
 @custom-variant dark (&:where(.dark, .dark *));
 
@@ -120,7 +122,7 @@
   /* --- The stock scales, cleared ------------------------------------------
    * Tailwind ships its own type, radius and elevation scales, and for as long
    * as they resolved alongside ours the app had BOTH: `text-lg` beside
-   * `text-title` (17px vs 18px — near-misses, which read as sloppiness rather
+   * `text-heading` (17px vs 18px — near-misses, which read as sloppiness rather
    * than hierarchy), `rounded-lg` beside `rounded-control` (the same 8px under
    * two names), `shadow-sm` beside a four-rung ladder built on purpose.
    *
@@ -218,6 +220,7 @@
   --color-brand-600: #00bc7d; /* THE FILL — 7.70:1 under #0f1011 ink */
   --color-brand-700: #00a46d; /* pressed */
   --color-brand-800: #008c5c;
+  --color-brand-900: #00734b; /* THE LIGHT THEME'S STROKE — 5.91:1 on white */
 
   /* --- The decorative set -------------------------------------------------
    * The kit page draws its chips and pins in a fixed set beside the neutrals.
@@ -492,13 +495,15 @@
  * and they are what makes a surface change a one-file edit instead of a
  * find-and-replace across ninety components.
  *
- * THIS BLOCK USED TO HAVE A TWIN. There was a `:root` of light values and a
- * `.dark` of dark ones, and roughly forty tokens had to be kept in step across
- * the two by hand. The product ships one theme now, so there is one block, and
- * the whole class of "these two disagreed and nobody noticed until a screenshot"
- * bug is gone with it.
+ * THERE ARE TWO BLOCKS AGAIN — `:root` for light, `.dark` for the console — and
+ * the pair is the thing to be careful with, not the values. Roughly sixty
+ * tokens have to be kept in step across them by hand, and the last time this
+ * product had a pair they drifted: the metric tile ended up pinned white in the
+ * dark theme, which changed the surface and not the ink, and every muted label
+ * on it measured 2.52:1 against 4.5 required.
  *
- * The tokens that were RETIRED in that collapse are worth naming, because their
+ * The tokens RETIRED when the pair briefly collapsed into one are still retired,
+ * and are worth naming because their
  * classes still parse and would compile to nothing:
  *
  *   --ground, --ground-ink, --ground-ink-muted   the page was a different
@@ -518,14 +523,125 @@
  *   --rail, --sidebar, --sidebar-accent          the rail is `--background`.
  *   --marker-ink                                 the split's second step. The
  *       violet needed one because 4.41:1 clears the 3:1 a rule owes and falls
- *       short of the 4.5:1 a link does. The green is 9.83:1 and clears both.
+ *       short of the 4.5:1 a link does. The green is 9.83:1 on the console and
+ *       5.91:1 on white, and clears both at both exposures.
  *
  * `scripts/check-ui.ts` fails the build on every one of them.
  */
+/**
+ * THE LIGHT ROLES.
+ *
+ * The theme came back, and the argument for deleting it is worth keeping on the
+ * record because it was right at the time: one theme meant one block, and the
+ * whole class of "these two disagreed and nobody noticed until a screenshot"
+ * bug went with it. What brings it back is a product decision rather than a
+ * design one — people work in daylight, and a console that can only be
+ * near-black is a console some of them cannot use.
+ *
+ * WHAT MUST NOT COME BACK WITH IT is the way the old pair drifted. Two rules:
+ *
+ * 1. EVERY ROLE IS DECLARED IN BOTH BLOCKS. A role that exists in one and not
+ *    the other inherits whatever the other left behind, which is how the metric
+ *    tile once carried ink solved for the opposite surface.
+ * 2. THE DIRECTIONS ARE MIRRORED, NOT COPIED. `--control` recesses from the
+ *    card and `--accent` raises off it, in BOTH themes — which on near-black
+ *    means darker/lighter and on white means the reverse. Getting that backwards
+ *    is depth pointing the wrong way, and it is the single easiest thing to get
+ *    wrong here.
+ *
+ * THE BRAND CANNOT BE ONE VALUE, AND THAT IS THE SAME TRAP THE YELLOW FELL IN.
+ * #00d492 measures 1.9:1 on white — invisible as a rule, a link or a glyph, in
+ * exactly the way #eecf00 was. So the FILL stays `brand-600` in both themes
+ * (it carries near-black ink at 7.70:1 either way, because a filled button is
+ * the same object at both exposures) and the STROKE step drops to `brand-900`
+ * here: 5.91:1 on white, 5.56:1 on the ground. Two rungs of one ramp, one role
+ * name each, which is the arrangement `--primary` / `--marker` was built for.
+ */
 :root {
+  /* ---- Surface ----------------------------------------------------------- */
+  --background: #f7f8f9; /* the ground — off-white, so a white card reads as one */
+  --foreground: #1f2328; /* 14.4:1 on a card */
+  /* THE ONE INK THAT OUTRANKS THE BODY — a page title, and the active tab.
+     It exists because the dark theme needs pure white there (the body ink is
+     #dcdcdc, and a title in it is the same weight of grey as the sentence under
+     it) and `text-white` hard-coded for that reason is INVISIBLE here. Found by
+     rendering the light theme, where the kit page's own h1 simply was not on
+     the screen. */
+  --heading: #0f1011;
+
+  --card: #ffffff;
+  --card-foreground: #1f2328;
+  --popover: #ffffff;
+  --popover-foreground: #1f2328;
+
+  /* RECESSED, exactly as in dark. A field on a white card is a slot cut into
+     it; white-on-white would make a row of them read as a stack of panels. */
+  --control: #f1f3f5;
+
+  /* ---- Brand ------------------------------------------------------------- */
+  --primary: var(--color-brand-600); /* the fill does not change with the theme */
+  --primary-foreground: var(--color-neutral-950);
+  --marker: var(--color-brand-900); /* 5.91:1 on white, where brand-500 is 1.9:1 */
+  --brand-soft: rgb(0 188 125 / 0.1);
+  /* 30%, not the dark theme's 20%: the same alpha over white is a third of the
+     edge it is over #1a1b1e, and a wash with no ring is not a badge. */
+  --brand-soft-line: rgb(0 188 125 / 0.3);
+
+  /* ---- Neutral roles ----------------------------------------------------- */
+  --secondary: #f1f3f5;
+  --secondary-foreground: #1f2328;
+
+  --muted: #f1f3f5;
+  --muted-foreground: #5b6472; /* 5.98:1 on a card */
+
+  /* RAISED. On white, coming forward means getting DARKER — the mirror of the
+     dark theme's step, not a copy of it. */
+  --accent: #ebeef1;
+  --accent-foreground: #1f2328;
+
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+
+  /* ---- The hairline ------------------------------------------------------
+   * Doing less work here than it does in dark, and that asymmetry is real
+   * rather than an oversight: a white card on a #f7f8f9 ground is announced by
+   * its FILL as well as its edge, where #1a1b1e on #0f1011 is a 1.11:1 step and
+   * the border is the only thing there at all.
+   */
+  --border: #e3e6ea;
+  --input: var(--border);
+  --ring: var(--marker);
+
+  /* The heavier rule a control owes 3:1 for — a switch track, a checkbox at
+     rest, a table divider, a chart's zero line. 2.5:1 on white. */
+  --rule: #c9ced5;
+
+  --radius: 0.5rem;
+
+  /* ---- State ------------------------------------------------------------- */
+  --success: var(--color-brand-900);
+  --success-soft: rgb(0 188 125 / 0.12);
+  --success-ink: #00603e;
+  --warn: #b45309;
+  --warn-soft: rgb(180 83 9 / 0.12);
+  --warn-ink: #92400e;
+  --danger: #b42318;
+  --danger-soft: rgb(180 35 24 / 0.1);
+  --danger-ink: #912018;
+
+  /* ---- The builder's canvas ---------------------------------------------- */
+  --canvas-bg: #f5f5f5;
+  --canvas-dot: #d6d6d6;
+  --canvas-edge: #98a2b3;
+
+  --group-ink-end: #0c111d;
+}
+
+.dark {
   /* ---- Surface ----------------------------------------------------------- */
   --background: var(--color-neutral-950); /* #0f1011 — rail, top bar and page */
   --foreground: var(--color-neutral-200); /* #dcdcdc — 12.9:1 on the ground */
+  --heading: #ffffff; /* see `--heading` in the light block */
 
   --card: var(--color-neutral-800); /* #1a1b1e — a 1.11:1 step; it draws its edge */
   --card-foreground: var(--color-neutral-200);
@@ -607,6 +723,11 @@
    */
   --border: var(--color-neutral-600);
   --input: var(--border);
+  /* The heavier rule a control owes 3:1 for — a switch track, a checkbox at
+     rest, a table divider, a chart's zero line. 2.4:1 on the ground; it is a
+     CONTROL's edge rather than a seam between surfaces, which is why it is a
+     step up from `--border` rather than the same value. */
+  --rule: var(--color-neutral-500);
   /* THE RING IS A STROKE, so it is the marker's. 9.83:1 on the ground — the
      single most important indicator in the product, and on this surface the
      brand is finally the right colour for it, which on the light page it
@@ -687,6 +808,8 @@
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
   --color-marker: var(--marker);
+  --color-rule: var(--rule);
+  --color-heading: var(--title);
   --color-brand-soft: var(--brand-soft);
   --color-brand-soft-line: var(--brand-soft-line);
   --color-secondary: var(--secondary);
@@ -726,13 +849,17 @@ html {
      scrollbars, spinners, native <select> popups and form controls, none of
      which we style. Get it wrong and every native control on the page arrives
      as a light widget on a near-black surface.
-     ONE VALUE NOW, and this line is also why deleting the light theme did not
-     need a `prefers-color-scheme` fallback: the app declares its own scheme
-     rather than asking. */
-  color-scheme: dark;
+     DECLARED PER THEME, because there are two again — and it is the app's own
+     class that decides, not `prefers-color-scheme`, so somebody who has chosen
+     light on a dark machine gets light scrollbars rather than the OS's. */
+  color-scheme: light;
   /* Anchored headings otherwise land flush against the top of the viewport
      with their first line under the edge. */
   scroll-padding-top: 5rem;
+}
+
+html.dark {
+  color-scheme: dark;
 }
 
 /**

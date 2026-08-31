@@ -417,7 +417,7 @@ export function CalendarBoard({
             <Button
               variant="ghost"
               size="iconSm"
-              className="rounded-full text-muted-foreground hover:bg-neutral-700 hover:text-foreground"
+              className="rounded-full text-muted-foreground hover:bg-accent hover:text-foreground"
               onClick={() => setMonthIdx((i) => Math.max(0, i - 1))}
               disabled={monthIdx === 0}
               title={monthIdx === 0 ? "The calendar keeps two months" : `Go to ${monthLabel(months[monthIdx - 1])}`}
@@ -438,7 +438,7 @@ export function CalendarBoard({
             <Button
               variant="ghost"
               size="iconSm"
-              className="rounded-full text-muted-foreground hover:bg-neutral-700 hover:text-foreground"
+              className="rounded-full text-muted-foreground hover:bg-accent hover:text-foreground"
               onClick={() => setMonthIdx((i) => Math.min(months.length - 1, i + 1))}
               disabled={monthIdx === months.length - 1}
               title={monthIdx === months.length - 1 ? "This is the current month" : `Go to ${monthLabel(months[monthIdx + 1])}`}
@@ -454,7 +454,7 @@ export function CalendarBoard({
               variant="ghost"
               onClick={() => setMonthIdx(months.length - 1)}
               disabled={monthIdx === months.length - 1}
-              className={cn(PERIOD_PILL, "text-muted-foreground hover:bg-neutral-700 hover:text-foreground")}
+              className={cn(PERIOD_PILL, "text-muted-foreground hover:bg-accent hover:text-foreground")}
             >
               This month
             </Button>

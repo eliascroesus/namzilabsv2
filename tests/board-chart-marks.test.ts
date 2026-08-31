@@ -368,10 +368,16 @@ describe("the kit's shape", () => {
      * is satisfied either way now, since both steps of the green ramp clear 8:1
      * on a card.
      *
+     * AND MOVED A FOURTH TIME FOR THE LIGHT THEME, mechanically. `TargetBar`'s
+     * unmet meter was `bg-neutral-500` on a `bg-neutral-500/30` track — raw ramp
+     * steps, cut for the console, which on white would have been a near-black
+     * bar in a grey channel. They are `--rule` and `--muted-foreground` now:
+     * roles, so the meter follows the surface it is drawn on.
+     *
      * Still no honesty rule moved. Zero-anchoring, `formatMetricValue` and the
      * direction-blind delta are all untouched.
      */
     const hash = createHash("sha256").update(readFileSync(join(process.cwd(), "src/components/charts.tsx"))).digest("hex");
-    expect(hash).toBe("2b041883c78dbe465437f969d328b30b239cf1bd03026d80d39e4c52c0afea59");
+    expect(hash).toBe("49fae91cb1e4bc260c958a910bbf0a26c2fe6dc7fec70f714f8fa907ba036203");
   });
 });

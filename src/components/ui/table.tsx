@@ -73,7 +73,7 @@ export function TR({ className, static: isStatic, ...props }: React.ComponentPro
         // `bg-muted`, not `bg-muted/40`: every table in the app sits on a white
         // card, and 40% of the recessed wash over white is #fbfbfb — a hover
         // state you cannot see is the same as not having one.
-        !isStatic && "transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:bg-neutral-700",
+        !isStatic && "transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:bg-accent",
         className,
       )}
       {...props}

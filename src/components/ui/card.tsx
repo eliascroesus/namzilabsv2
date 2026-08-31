@@ -48,7 +48,7 @@ const cardVariants = cva("border border-border bg-card", {
        * also moves the box is one motion too many (it also shifts the bounding
        * boxes `scripts/canvas-check.mjs` measures overlap with).
        */
-      tile: "rounded-surface shadow-card transition-colors duration-(--duration-base) ease-(--ease-standard) hover:border-neutral-500",
+      tile: "rounded-surface shadow-card transition-colors duration-(--duration-base) ease-(--ease-standard) hover:border-rule",
     },
     /**
      * 16px IS THE DEFAULT NOW, DOWN FROM 24.

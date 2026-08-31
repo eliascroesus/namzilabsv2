@@ -27,10 +27,10 @@ const alertVariants = cva(
       variant: {
         default: "border-border bg-card text-card-foreground",
         destructive:
-          // `border-red-200` is the tinted hairline the trio has no token for
+          // `border-danger/30` is the tinted hairline the trio has no token for
           // — the same one `Button variant="destructiveOutline"` draws, and the
           // reason `src/components/ui` is allowlisted for raw tints at all.
-          "border-red-200 bg-danger-soft text-danger-ink *:data-[slot=alert-description]:text-danger-ink/90 [&>svg]:text-current",
+          "border-danger/30 bg-danger-soft text-danger-ink *:data-[slot=alert-description]:text-danger-ink/90 [&>svg]:text-current",
       },
     },
     defaultVariants: {

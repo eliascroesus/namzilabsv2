@@ -357,7 +357,7 @@ export function ViewTab({
        */
       className={cn(
         "inline-flex shrink-0 items-center border-b-2 text-sm font-medium transition-colors duration-(--duration-fast)",
-        active ? "border-marker text-white" : "border-transparent text-muted-foreground hover:text-foreground",
+        active ? "border-marker text-heading" : "border-transparent text-muted-foreground hover:text-foreground",
       )}
     >
       {editing ? (
@@ -750,7 +750,7 @@ export function ViewTitle({
     >
       <span
         style={{ lineHeight: 1 }}
-        className="rounded-control px-2 py-1 text-foreground transition-colors duration-(--duration-fast) group-hover/title:bg-neutral-700 group-active/title:bg-background-ink/15"
+        className="rounded-control px-2 py-1 text-foreground transition-colors duration-(--duration-fast) group-hover/title:bg-accent group-active/title:bg-background-ink/15"
       >
         {shown}
       </span>

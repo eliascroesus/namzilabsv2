@@ -131,7 +131,7 @@ function TabsTrigger({
         // the label is free to do what the reference does — step up the ink ramp
         // to white while the four beside it stay muted. That reads as SELECTED
         // rather than as LINKED, which is what a coloured word says.
-        "group-data-[variant=line]/tabs-list:bg-transparent group-data-[variant=line]/tabs-list:data-[state=active]:bg-transparent group-data-[variant=line]/tabs-list:data-[state=active]:text-white group-data-[variant=line]/tabs-list:data-[state=active]:border-transparent",
+        "group-data-[variant=line]/tabs-list:bg-transparent group-data-[variant=line]/tabs-list:data-[state=active]:bg-transparent group-data-[variant=line]/tabs-list:data-[state=active]:text-heading group-data-[variant=line]/tabs-list:data-[state=active]:border-transparent",
         // The line variant's mark, and the one class in this file the rebrand
         // moved. It was `after:bg-primary`, and `after:bg-foreground` before
         // that — a near-black underline said "current" in the same voice as the

@@ -26,6 +26,7 @@ import "./globals.css";
  */
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
 
+import { ThemeProvider } from "@/components/theme";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthKitProvider } from "@workos-inc/authkit-nextjs/components";
 import { withAuth } from "@workos-inc/authkit-nextjs";
@@ -48,21 +49,29 @@ export const metadata: Metadata = {
  */
 export const viewport: Viewport = {
   /**
-   * ONE COLOUR, BECAUSE THERE IS ONE THEME.
+   * ONE COLOUR PER THEME, and the pair is back because the themes are.
    *
-   * This was a media-query pair — a light answer and a dark one — for as long
-   * as the product had two themes. Keeping the pair now would mean the address
-   * bar on a machine set to light rendered `#f5f5f5` above an app that is
-   * `#0f1011` on every machine, which is the one piece of chrome CSS cannot
-   * reach: the browser paints it from this tag alone.
+   * This is the one piece of chrome CSS cannot reach — mobile Safari and Chrome
+   * paint their own address bar from this tag alone — so a single value leaves
+   * it mismatched for everybody on the other theme.
    *
-   * Pinned to `--background` by tests/design-swatches.test.ts rather than
-   * trusted, because it must be a build-time literal — Next cannot read a
-   * custom property here — and a surface change that misses it leaves a pale
-   * band above the app on mobile with nothing failing.
+   * IT KEYS OFF `prefers-color-scheme`, WHICH IS NOT THE QUESTION THE APP ASKS.
+   * The app's theme is a stored preference that DEFAULTS to the OS; this tag can
+   * only see the OS. So somebody who has explicitly chosen light on a dark
+   * machine gets a dark address bar above a light app. That is a browser
+   * limitation rather than a bug we can close — the tag is read before any
+   * script runs, which is the whole reason it exists.
+   *
+   * Both are pinned to `--background` by tests/design-swatches.test.ts rather
+   * than trusted, because they must be build-time literals — Next cannot read a
+   * custom property here — and a surface change that misses one leaves a
+   * mismatched band above the app on mobile with nothing failing.
    */
-  themeColor: "#0f1011",
-  colorScheme: "dark",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f7f8f9" },
+    { media: "(prefers-color-scheme: dark)", color: "#0f1011" },
+  ],
+  colorScheme: "light dark",
   viewportFit: "cover",
 };
 
@@ -78,14 +87,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   }
 
   return (
-    // `suppressHydrationWarning` AND THE BLOCKING SCRIPT ARE BOTH GONE.
-    //
-    // next-themes existed to solve two problems, and a one-theme app has
-    // neither. It injected a script into <head> to stamp the theme class before
-    // the first paint (there is no stored preference to read), which in turn
-    // mutated <html> before hydration and forced the suppression above (there
-    // is nothing mutating it now). The theme is declared in CSS: `color-scheme`
-    // on <html> and the roles in `:root`, both present in the first byte.
+    // `suppressHydrationWarning` IS REQUIRED, NOT DEFENSIVE: next-themes stamps
+    // the theme class onto <html> from a blocking script before React hydrates,
+    // so this one element is knowingly different on the client. See theme.tsx
+    // for why that script has to be blocking — without it every cold load
+    // paints the default theme for a frame, which is a white flash for anyone
+    // in dark mode.
     // THE FONT VARIABLE GOES ON <html>, NOT <body>, AND THAT IS A BUG FIX
     // RATHER THAN A TIDY-UP.
     //
@@ -102,7 +109,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     // On a Mac that resolves to SF Pro and looks nearly right, which is why it
     // survived: it was wrong on every other platform and nothing failed.
     // Measured with getComputedStyle, not inferred.
-    <html lang="en" className={inter.variable}>
+    <html lang="en" className={inter.variable} suppressHydrationWarning>
       <body>
         {/* The first stop on every tab order. Without it, reaching a page's
             content by keyboard means tabbing the whole navigation rail again
@@ -117,9 +124,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             tooltips label icon-only controls, and a control whose only label
             appears after a beat is a control you have to hover twice. The rail
             is icon-only at rest, so this is most of its labelling. */}
-        <TooltipProvider>
-          <AuthKitProvider initialAuth={initialAuth}>{children}</AuthKitProvider>
-        </TooltipProvider>
+        <ThemeProvider>
+          <TooltipProvider>
+            <AuthKitProvider initialAuth={initialAuth}>{children}</AuthKitProvider>
+          </TooltipProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

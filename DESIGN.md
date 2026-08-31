@@ -3,7 +3,8 @@ name: Namzilabs
 tagline: Six tools disagree; this one answers in a figure you can defend.
 register: quiet chrome, loud numbers
 surfaces: [ground (rail + top bar + page), card, control, raised, floating]
-accent: one green · 500 draws · 600 fills · nothing else
+themes: dark (the console) + light · per device · defaults to the OS
+accent: one green · 500 draws on dark, 900 on light · 600 fills on both
 neutral: one ramp, cut for #0F1011 — five surfaces below, four inks above
 type: SF Pro (system) / Inter · 11 · 13 · 15 · 17 · 18 · 20 · 26 · 36 · 48
 radius: 4 badge · 8 control · 10 everything that contains something · full avatar

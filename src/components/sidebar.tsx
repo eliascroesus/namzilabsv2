@@ -199,8 +199,8 @@ function RailChip({ tone, children }: { tone: "rest" | "active"; children: React
       className={cn(
         "flex size-8 items-center justify-center rounded-control transition-colors duration-(--duration-fast) ease-(--ease-standard) [&_svg]:size-[18px]",
         tone === "active"
-          ? "bg-neutral-700 text-marker"
-          : "text-foreground group-hover:bg-neutral-700",
+          ? "bg-accent text-marker"
+          : "text-foreground group-hover:bg-accent",
       )}
     >
       {children}
@@ -393,8 +393,8 @@ export function Sidebar({ hide, views = [] }: { hide?: string[]; views?: BoardVi
               className={cn(
                 "flex h-8 items-center rounded-control pl-4 pr-2 text-sm transition-colors duration-(--duration-fast)",
                 on
-                  ? "bg-neutral-700 font-medium text-foreground"
-                  : "text-muted-foreground hover:bg-neutral-700 hover:text-foreground",
+                  ? "bg-accent font-medium text-foreground"
+                  : "text-muted-foreground hover:bg-accent hover:text-foreground",
               )}
             >
               {/* A DASH, DRAWN RATHER THAN TYPED. It marks these rows as
@@ -422,7 +422,7 @@ export function Sidebar({ hide, views = [] }: { hide?: string[]; views?: BoardVi
                16px by their dash and its margin, so this is level with their
                NAMES. A fold that starts left of the names it folds reads as
                belonging to the section rather than to them. */
-            className="h-8 w-full justify-start rounded-control pl-8 pr-2 text-xs font-medium text-muted-foreground hover:bg-neutral-700 hover:text-foreground active:bg-neutral-700"
+            className="h-8 w-full justify-start rounded-control pl-8 pr-2 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground active:bg-accent"
           >
             {allViews ? "Show less" : `Show all ${ordered.length}`}
           </Button>
@@ -752,7 +752,7 @@ export function Sidebar({ hide, views = [] }: { hide?: string[]; views?: BoardVi
             <span
               className={cn(
                 ICON_COL,
-                "relative rounded-control transition-colors duration-(--duration-fast) ease-(--ease-standard) group-hover:bg-neutral-700",
+                "relative rounded-control transition-colors duration-(--duration-fast) ease-(--ease-standard) group-hover:bg-accent",
               )}
             >
               <Bell />

@@ -46,7 +46,7 @@ export function Toast({ children, action, className }: ToastProps) {
           // Asymmetric padding on purpose — the action button carries its own
           // 10px, so an even inset would leave the right side visibly airier
           // than the left.
-          "flow-pop-in pointer-events-auto flex max-w-[min(32rem,calc(100vw-2rem))] items-center gap-3 rounded-surface bg-neutral-700 py-3 pl-5 pr-3 text-sm text-foreground shadow-surface",
+          "flow-pop-in pointer-events-auto flex max-w-[min(32rem,calc(100vw-2rem))] items-center gap-3 rounded-surface bg-accent py-3 pl-5 pr-3 text-sm text-foreground shadow-surface",
           className,
         )}
       >

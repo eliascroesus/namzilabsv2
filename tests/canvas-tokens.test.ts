@@ -26,19 +26,14 @@ const css = readFileSync(join(root, "src/app/globals.css"), "utf8");
 const canvas = readFileSync(join(root, "src/components/flow/flow-canvas.tsx"), "utf8");
 
 /**
- * ONE BLOCK NOW, NOT TWO.
+ * TWO BLOCKS AGAIN, AND THE LOOP IS WHY THIS FILE SURVIVED THE ROUND TRIP.
  *
- * This file used to resolve every token TWICE — once in `:root` and once in
- * `.dark` — because the canvas had a light answer and a dark one, and a lookup
- * that ignored the block would return whichever came first in the file and
- * quietly measure the light theme twice. The product has one theme, so there is
- * one block and the loop below runs once. It is kept as a loop rather than
- * flattened so that the relationship being asserted stays visible: it is a
- * property of a THEME, and if a second one ever returns it wants the same check.
- *
- * The `(?:,[^{]*)?` selector-list tolerance is gone with the thing that needed
- * it — `:root` was written `:root, .dark .tile-surface { … }` while the metric
- * tile was a light island inside the dark theme.
+ * Every token is resolved once per theme, scoped by block — a lookup that
+ * ignored the block would return whichever definition came first in the file
+ * and quietly measure one theme twice. The loop briefly ran over a single
+ * entry while the product had one theme; it was kept as a loop rather than
+ * flattened precisely because the relationship being asserted is a property of
+ * a THEME, and a second one might come back. It did.
  */
 function block(selector: string): string {
   const m = css.match(new RegExp(`(?:^|\\n)${selector}\\s*\\{([\\s\\S]*?)\\n\\}`));
@@ -59,7 +54,10 @@ function token(name: string, selector: string): string {
   return m[1].toLowerCase();
 }
 
-const THEMES = [{ name: "the one theme", selector: ":root" }];
+const THEMES = [
+  { name: "light", selector: ":root" },
+  { name: "dark", selector: "\\.dark" },
+];
 
 describe("the canvas Background matches the theme tokens", () => {
   const bg = canvas.match(/<Background\b[^>]*\/>/);
