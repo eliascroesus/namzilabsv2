@@ -154,24 +154,24 @@ const DIRECTION: Array<{ rule: string; why: string }> = [
     why: "Six tools disagree and this app answers in one figure. The number is the only thing allowed to be loud; everything around it is furniture, and furniture that shouts is why most operational tools are exhausting by 4pm.",
   },
   {
-    rule: "The band never inverts",
-    why: "The rail and top bar are ink-950 at both exposures; only the page inside them switches. A rail that changes colour with the theme is a rail with no identity — it is the one thing on screen that says where you are before you read a word.",
+    rule: "One surface, and a hairline",
+    why: "The rail, the top bar and the page are ALL #0F1011, and every separation in the product is a 1px #2B2D2F rule. This is the reverse of the band that wrapped a light page, and the reversal is the whole re-theme: with one material there is no 40-point luminance step to find its own edge, so the hairline stops being trim and becomes the structure. A card is #1A1B1E — a 1.11:1 step — so a card without its border is not a flatter card, it is an invisible one.",
   },
   {
     rule: "Content floats on the ground",
-    why: "Nothing sits flat on the page but a heading or a caption. Everything with content in it is an island with an edge — and it follows the theme rather than fighting it, because a card pinned to one exposure carries ink solved for the other.",
+    why: "Nothing sits flat on the page but a heading or a caption. Everything with content in it is an island with an EDGE, and the edge is the whole of it: a card is a 1.11:1 step off the page, so the border is not trim on a surface you can already see, it is the only thing making the surface visible at all.",
   },
   {
-    rule: "Yellow fills, violet draws",
-    why: "#EECF00 is 1.55:1 as a stroke on white and 11.24:1 as a fill under #1A1A1A ink, so the brand is every FILLED object and the marker's violet is every line and coloured glyph. This replaced 'yellow is the hero at most once per screen', which died of being uncheckable — nothing failed when a second yellow arrived. check:ui's yellow-as-stroke rule fails the build the moment the primary is spelled as text, a border or a ring; it could never have counted.",
+    rule: "One green, in three shapes",
+    why: "The fill/stroke split existed because #EECF00 is 1.55:1 as a stroke on white and 11.24:1 as a fill — an absent line and a superb box, so the brand could only safely do one of the two jobs and a second colour had to hold the other. On #0F1011 the green is 9.83:1 drawn and 7.70:1 filled, so the split has nothing left to prevent and yellow-as-stroke retires with it. What replaces it is a rule about SHAPE, all three visible at once in the rail: a RING is identity (the mark), a GLYPH is location (the active row), a FILL is action (the +, every primary button). Green is also success now — warn and danger are the only separate state hues — and what stops that becoming a wall of green is that status is quiet when fine.",
   },
   {
-    rule: "Pills press, rectangles contain",
-    why: "Everything clickable is a full pill; everything holding something takes 8 / 12 / 16px. The exception proves it — a control that WRAPS takes the 8px radius, because a full radius on a two-line box renders as a circle.",
+    rule: "Ten contains, eight presses",
+    why: "Everything that contains something is 10px — cards, panels, popovers, selects, the period track. Everything pressable is 8. A badge is 4. An avatar and a status dot are the only full radii left. This replaced 'everything pressable is a full pill', which needed an exception it could never justify: a control that WRAPS cannot be a pill, because a full radius on a two-line box renders as a circle around the words. There is no exception now.",
   },
   {
-    rule: "Two sizes do the work",
-    why: "14px interface, 12px labels. 16px is reading prose only. The micro-label voice — 12px, ALL CAPS, tracked, muted — is the product's signature and what lets a small string read as a label rather than as very small prose.",
+    rule: "Three sizes do the work",
+    why: "14px interface, 12px labels, 10px for the micro badge. 16px is reading prose only. The micro-label voice — 10px, ALL CAPS, tracked, muted, available as .label-micro — is the product's signature and what lets a very small string read as a LABEL rather than as very small prose. A chip is the one small object that is NOT caps: a badge carries a status you scan, a chip carries a name the customer chose.",
   },
   {
     rule: "The active thing is the heavier one",
@@ -188,14 +188,21 @@ const DIRECTION: Array<{ rule: string; why: string }> = [
 ];
 
 const TYPE: Array<{ token: string; cls: string; px: string; use: string; sample: string }> = [
-  { token: "text-display-md", cls: "stat-numeral text-display-md", px: "36px", use: "Headline numbers, via formatMetricValue — set in the display face", sample: "1,204" },
-  { token: "text-display-sm", cls: "font-display text-display-sm font-semibold", px: "30px", use: "Page titles (PageHeader) — display face", sample: "Speed to lead" },
-  { token: "text-display-xs", cls: "font-display text-display-xs font-semibold", px: "24px", use: "Document headings — the legal pages' h1", sample: "Speed to lead" },
+  { token: "text-display-md", cls: "stat-numeral text-display-md", px: "36px", use: "Headline numbers, via formatMetricValue — the ledger numeral", sample: "1,204" },
+  { token: "text-display-sm", cls: "font-display text-display-sm font-semibold", px: "30px", use: "Reserved — no in-app consumer since page titles came down to 24", sample: "Speed to lead" },
+  { token: "text-display-xs", cls: "font-display text-display-xs font-semibold", px: "24px", use: "Page titles (PageHeader), and the legal pages' h1", sample: "Speed to lead" },
   { token: "text-xl", cls: "text-xl font-semibold tracking-tight", px: "20px", use: "The step above a card title, where a section needs one", sample: "Speed to lead" },
   { token: "text-lg", cls: "text-lg font-semibold tracking-tight", px: "18px", use: "Card and modal titles", sample: "Speed to lead" },
   { token: "text-md", cls: "text-md font-semibold", px: "16px", use: "Panel titles, hero list rows", sample: "Speed to lead" },
   { token: "text-sm", cls: "text-sm", px: "14px", use: "Body, menu items, table cells — the default", sample: "Speed to lead" },
-  { token: "text-xs", cls: "text-xs", px: "12px", use: "Helper text, captions, badges, and field labels — which are ALL CAPS with tracking", sample: "Speed to lead" },
+  { token: "text-xs", cls: "text-xs", px: "12px", use: "Helper text, captions, dense controls, buttons and field labels", sample: "Speed to lead" },
+  {
+    token: "text-2xs",
+    cls: "label-micro",
+    px: "10px",
+    use: "The micro badge — ALL CAPS at --tracking-label, and never prose. At 10px a sentence is not small text, it is unreadable text",
+    sample: "Speed to lead",
+  },
 ];
 const RADII: Array<{ cls: string; label: string; body: string }> = [
   { cls: "rounded-control", label: "control · pill", body: "Buttons, inputs, menu rows" },
@@ -355,7 +362,7 @@ export default function DesignPage() {
             DESIGN.md, which this section is the index to. */}
         <Section
           title="The direction"
-          note="DESIGN.md is the argued version — this is the shape of it. The band and the furniture are settled; the metric card and the chart card are mid-rework and are deliberately NOT a reference for anything else yet."
+          note="DESIGN.md is the argued version — this is the shape of it. The chrome, the furniture and the primitives are settled; the metric card, the chart card and the builder's canvas are out of scope for this pass and are deliberately NOT a reference for anything else yet."
         >
           <Card padding="none" className="divide-y divide-border">
             {DIRECTION.map((d) => (
@@ -369,14 +376,14 @@ export default function DesignPage() {
 
         <Section
           title="Brand sheet"
-          note="The supplied sheets, rendered from the shipping components rather than drawn — deep black doing the work, the brand's yellow carrying the act, the marker's violet drawing every line and link, and a three-colour accent set for chips and tabs. Everything is a full pill and every micro label is ALL CAPS, which is the sheet's own voice. Where the two sheets disagreed, the first won on hierarchy: black is the workhorse and colour arrives only where it means something."
+          note="The supplied sheets, rendered from the shipping components rather than drawn. Kept as the historical record of a language this kit no longer speaks: deep black doing the work, a yellow carrying the act, a violet drawing every line, and everything shaped as a full pill. What survived the re-theme is the argument rather than the palette — the workhorse is quiet and colour arrives only where it means something, which is now one green in three shapes on a single near-black surface."
         >
           <BrandSheet />
         </Section>
 
         <Section
           title="Colour"
-          note="YELLOW FILLS. VIOLET DRAWS. That is a measurement, not a preference: #EECF00 is 1.55:1 as a stroke or as text on white and 11.24:1 as a fill under #1A1A1A ink, so the brand is spent on filled objects — the mark, the active rail chip, primary buttons, the unread badge, step markers — and never on a rule, a ring, a border or a glyph standing on the page. Everything that draws is the marker's violet: focus rings, links, hover borders, selection rings, the active tab's rule. The one place yellow may stroke is a dark surface, where it measures 8.77:1 — which is why the top bar's progress arc is yellow and a link never is. check:ui's yellow-as-stroke rule fails the build the moment the primary is spelled as text, a border, a ring, a stroke, a fill or a divide, which is what makes this rule enforceable where 'yellow is the hero at most once per screen' never was — nothing could ever count the yellows on a screen. Beside the two sits a three-colour accent set (orange, pink, periwinkle) for surfaces that need to be identifiable rather than to mean something; success, warn and danger keep the job of meaning."
+          note="ONE GREEN, IN THREE SHAPES. That is a measurement, not a preference: #EECF00 is 1.55:1 as a stroke or as text on white and 11.24:1 as a fill under #1A1A1A ink, so the brand is spent on filled objects — the mark, the active rail chip, primary buttons, the unread badge, step markers — and never on a rule, a ring, a border or a glyph standing on the page. Everything that draws is the marker's violet: focus rings, links, hover borders, selection rings, the active tab's rule. The one place yellow may stroke is a dark surface, where it measures 8.77:1 — which is why the top bar's progress arc is yellow and a link never is. check:ui's yellow-as-stroke rule fails the build the moment the primary is spelled as text, a border, a ring, a stroke, a fill or a divide, which is what makes this rule enforceable where 'yellow is the hero at most once per screen' never was — nothing could ever count the yellows on a screen. Beside the two sits a three-colour accent set (orange, pink, periwinkle) for surfaces that need to be identifiable rather than to mean something; success, warn and danger keep the job of meaning."
         >
           <p className="mb-2 text-xs font-medium text-muted-foreground">Brand — 500 draws, 600 fills, brand-*</p>
           <div className="flex overflow-hidden rounded-card border border-border">
@@ -491,7 +498,7 @@ export default function DesignPage() {
           </p>
         </Section>
 
-        <Section title="Buttons" note="One component, eleven variants, six sizes — every clickable thing in the product comes from it. There were twelve: `yellow` and `accent` were two names for the loudest button on the screen, which made sense while the primary was violet and the hero act needed a colour the primary could not give it. Yellow IS the primary now, so the two resolved to one object and `yellow` was deleted. Links dressed as buttons compose buttonVariants() rather than re-typing the string.">
+        <Section title="Buttons" note="One component, eleven variants, seven sizes — every clickable thing in the product comes from it, and 32px is the default because every control in the reference is 32: the date picker, the selects, the segmented groups. The ladder came down from 28/36/44/52, which put a 44px button beside a 40px period track beside a 24px title with nothing in the row standing on the same line. The WORKHORSE is a bordered card chip rather than a solid fill — what a console's ordinary act looks like — which is exactly why the PRIMARY act has to say so: SubmitButton defaults to the brand, because a submit is the primary act by definition and Save rendering as the same object as Cancel is a form with no primary. Links dressed as buttons compose buttonVariants() rather than re-typing the string.">
           <div className="flex flex-wrap items-center gap-3">
             <Button>Publish flow</Button>
             <Button variant="accent">Review &amp; publish</Button>
@@ -707,7 +714,7 @@ export default function DesignPage() {
 
         <Section
           title="Rail"
-          note="The 30 of the 60/30/10 split: ink-950 charcoal carrying a 70px icon column, so the brand's yellow has something to be the one filled object on. These tiles are a swatch — the real markup lives in src/components/sidebar.tsx and nowhere else."
+          note="A 48px icon column in the SAME #0F1011 as the page beside it, separated by one hairline. These tiles are a swatch — the real markup lives in src/components/sidebar.tsx and nowhere else, and it has moved on from what is drawn here: the active row is a green GLYPH on a raised chip rather than a filled brand square, because the fill is spent once in this column and it is spent on the + in the foot, which is the one verb."
         >
           <div className="flex items-stretch gap-4">
             {/* `bg-background`, the band's own token, rather than `bg-rail`: that
@@ -755,7 +762,7 @@ export default function DesignPage() {
 
         <Section
           title="Frame"
-          note="Every authenticated page, not just the builder: the app cuts the 16px frame radius out of the ground's TOP-LEFT corner and lets the band's charcoal show through, so the shape of the application never changes as you move around it. One corner, because that is the single place the page meets both halves of the band at once — the rail to its left and the top bar above it. The other three run to the viewport; rounding them would float the page inside the window like a card, which it is not."
+          note="THE NOTCH IS GONE AND --radius-frame IS 0. It cut 16px out of the page's top-left so the band's charcoal showed through — the one corner where the page met both halves of the band at once. A radius reveals whatever is BEHIND the element it is cut into, and the thing behind the page is now the same #0F1011 as the page: cutting a corner out of it to reveal it draws nothing, at the cost of a curved notch the top bar's hairline then has to stop short of. What frames the application now is the pair of rules, not a shape."
         >
           <div className="flex h-40 overflow-hidden rounded-card bg-background">
             <div className="w-[100px] shrink-0" />
@@ -771,7 +778,7 @@ export default function DesignPage() {
 
         <Section
           title="Marks"
-          note="What a dashboard tile is made of. The series is the MARKER's violet, the last bucket takes the ink (a positional fact, not a verdict), a met goal turns success, and a breakdown walks the marker plus the accent three. The brand is deliberately almost absent — a bar is a shape read by its edge against the card it sits on, and yellow manages 1.55:1 there against the marker's 4.41:1, so the only place the brand appears is the 5% wash BEHIND the sparkbars, which is a surface rather than a graphic. Every value goes through formatMetricValue, so the tooltip and the headline say the same quantity the same way. A delta is never green or red: up is good for Booked Leads and bad for Speed to Lead, and nothing on a tile knows which — so it is coloured by WHETHER it moved, and the arrow alone carries direction."
+          note="What a dashboard tile is made of. The series is the MARKER — a series is a mark, and the fill step is reserved for things you press — the last bucket takes the ink (a positional fact, not a verdict), and a breakdown walks the marker plus the accent three. TargetBar is the exception and it is the success/brand collision landing: it drew met in --success and in-progress in --marker, which are the same green today, so it rendered both states identically and stopped reporting the only thing it exists to report. The unmet meter is greyscale now and colour ARRIVES when the goal lands, which is the honest reading anyway — a bar at 40% is not good, it is 40%. Every value goes through formatMetricValue, so the tooltip and the headline say the same quantity the same way. A delta is never green or red: up is good for Booked Leads and bad for Speed to Lead, and nothing on a tile knows which — so it is coloured by WHETHER it moved, and the arrow alone carries direction."
         >
           <div className="grid gap-4 rounded-card bg-canvas-bg p-4 sm:grid-cols-2">
             <div className="rounded-surface border border-border bg-card p-5 shadow-card">
