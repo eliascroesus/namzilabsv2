@@ -17,6 +17,7 @@ import { formatDate } from "@/lib/format";
 import { CanvasPreview, FlowNodeCard } from "@/components/flow/flow-canvas-preview";
 import { EmptyCanvasPreview } from "@/components/flow/empty-canvas-preview";
 import { EmptyBoard } from "@/components/board-empty";
+import { ConditionEditorPreview } from "@/components/flow/condition-editor-preview";
 import { NodeIcon } from "@/components/flow/icons";
 import { PanelTabsPreview } from "@/components/flow/panel-preview";
 import { PANEL_SHELL } from "@/components/flow/panel-chrome";
@@ -919,6 +920,21 @@ export default function DesignPage() {
         </Section>
 
         <Section
+          title="Filter conditions"
+          note="The REAL ConditionEditor, live — press Duplicate and it copies the condition in place, directly under the one it came from. It is here because it could not be looked at anywhere else: this control only appears inside a Filter step's panel, which is behind auth, and it earned a Duplicate button precisely because building three alternatives on one field meant choosing that field and its operator three times. Position is cosmetic — every condition joins by the same combinator — so the copy goes where it reads best."
+        >
+          {/* On the canvas colour and at the panel's real 452px, because that
+              is the width these controls are actually laid out in: a condition
+              card measured across a full page proves nothing about the box it
+              ships in. */}
+          <div className="rounded-card bg-canvas-bg p-6">
+            <div className="w-[452px] max-w-full rounded-card border border-border bg-card p-5">
+              <ConditionEditorPreview />
+            </div>
+          </div>
+        </Section>
+
+        <Section
           title="Every component"
           note="All 138 exports from the 31 files in src/components/ui, with every variant axis enumerated to its last value. The nine primitives this page used to show were the nine that happened to be interesting; the twenty-odd that arrive through a trailing export block — alert, avatar, breadcrumb, command, progress, scroll-area, sheet, tabs — were not on the page at all, which is most of how they came to ship unused. Anything that portals (dialog, sheet, select, menu, popover, tooltip) renders nothing until you open it, so those are working triggers rather than pictures."
         >
@@ -973,6 +989,7 @@ const SECTIONS = [
   "The canvas",
   "Step cards",
   "Config panel",
+  "Filter conditions",
   "Every component",
   "Coverage",
   "Patterns, and what is wrong with each",

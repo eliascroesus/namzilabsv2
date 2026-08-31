@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus } from "lucide-react";
+import { Copy, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fieldClasses } from "@/components/ui/input";
 import { FieldLabel } from "@/components/ui/field";
@@ -63,6 +63,33 @@ export function ConditionEditor({
   const updateRule = (i: number, patch: Partial<Rule>) => setRules(rules.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
   const removeRule = (i: number) => setRules(rules.filter((_, idx) => idx !== i));
   const addRule = () => setRules([...rules, { field: "", op: "equals", value: "", value2: undefined, valueKind: "fixed", valueField: undefined }]);
+  /**
+   * COPY A CONDITION, NEXT TO THE ONE IT CAME FROM.
+   *
+   * The case this exists for is the one that produced it: three conditions on
+   * the SAME field with the same operator and only the value differing —
+   * `willing_to_invest starts with $1,000 / $2,500 / $5,000`. Building that from
+   * "Add condition" means choosing the field and the operator again for each,
+   * out of a field list that can run to forty entries, when the only thing that
+   * actually differs is the last box.
+   *
+   * INSERTED AT `i + 1`, not appended. A copy that appears at the bottom of a
+   * list of six is a copy you then have to find. Position is purely cosmetic
+   * here — every rule joins by the SAME combinator, so a flat list means the
+   * same thing in any order — which is exactly why the copy can go where it
+   * reads best rather than where it is cheapest.
+   *
+   * SPREAD, so the copy shares no reference with its original. `value2` and
+   * `valueField` are plain strings and the rest are primitives, so one level is
+   * the whole object — but a rule that ever grows a nested bag would need this
+   * to grow with it, or editing the copy would silently edit the original.
+   *
+   * Safe against the index keys this list renders with: `ValueInput`,
+   * `FieldInput` and `OperatorSelect` are all fully controlled — none of them
+   * holds state of its own — so a row shifting down by one carries nothing
+   * with it that could be wrong.
+   */
+  const duplicateRule = (i: number) => setRules([...rules.slice(0, i + 1), { ...rules[i] }, ...rules.slice(i + 1)]);
 
   const allFields = groups.flatMap((g) => g.fields);
   const fieldMeta = (path: string) => allFields.find((f) => f.path === path);
@@ -142,7 +169,26 @@ export function ConditionEditor({
                   </div>
                 )}
               </div>
-              <div className="mt-2 flex justify-end">
+              {/* TWO ACTS, SAME VOICE. Duplicate joins Remove in the row that
+                  was already there rather than becoming a floating icon in a
+                  corner — they are the two things you can do to a condition and
+                  a reader should find them in one place.
+                  IT CARRIES A WORD AS WELL AS A GLYPH. A bare icon beside a
+                  text link reads as two different kinds of control, and "copy"
+                  and "remove" are close enough in consequence that guessing
+                  between them from a 13px picture is a bad trade for the space
+                  saved. Remove keeps its exact appearance and its danger hover;
+                  Duplicate is neutral, because copying costs nothing. */}
+              <div className="mt-2 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => duplicateRule(i)}
+                  title="Duplicate this condition"
+                  className="inline-flex items-center gap-1 rounded-control text-xs text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  <Copy size={12} strokeWidth={2.25} aria-hidden />
+                  Duplicate
+                </button>
                 <button
                   type="button"
                   onClick={() => removeRule(i)}
