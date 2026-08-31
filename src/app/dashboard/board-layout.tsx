@@ -103,8 +103,8 @@ export function BoardLayout({
    * is the one control on the row that is CLIENT state: it calls `addGroup`
    * below, which writes optimistically into the same `groups` this component
    * owns. It renders FIRST of the three, so the row runs
-   * arrangement → filter → action from left to right and the yellow lands on
-   * the outside edge where a hero belongs.
+   * arrangement → filter → action from left to right, and the one control that
+   * wears the brand's fill lands on the outside edge, where the act belongs.
    */
   boardActions?: ReactNode;
 }) {

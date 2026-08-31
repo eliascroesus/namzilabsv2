@@ -46,7 +46,13 @@ export function GetStartedCard({
   steps: ReadonlyArray<{ n: number; title: string; detail?: string }>;
   /** Sizing and placement — the caller's, not the shell's. */
   className?: string;
-  /** The act. One per card: see the yellow's ratio rule. */
+  /**
+   * The act. One per card, and that is a rule about the CARD rather than about
+   * the colour: this shell exists to say "there is nothing here yet, do this",
+   * and a surface offering two next steps has chosen neither. The yellow itself
+   * is spent freely here — the cap and every step numeral are filled objects,
+   * which is the one shape the brand is legible in.
+   */
   children: ReactNode;
 }) {
   return (

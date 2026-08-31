@@ -207,10 +207,12 @@ export function FlowTile({ row, rangeKey }: { row: FlowResultRow; rangeKey?: str
          area bigger than its word. `size="xs"` is the kit's own dense geometry
          now; it used to be `sm` plus a four-class override, retyped here twice.
 
-         NO YELLOW HERE, and that is the ratio rule doing its job rather than an
-         omission: the hero colour is at most one per SCREEN, and a board renders
-         twelve of these. The single spot of colour a tile spends is the accent
-         that arrives under the pointer on `Open`. */
+         NO YELLOW HERE, and it is the fill/stroke split rather than scarcity
+         that keeps it out: a ghost pill is a WORD, and the brand as text
+         measures 1.55:1 on this card. Yellow needs an object to fill and dark
+         ink to carry; two bare labels in a footline are neither. The single
+         spot of colour a tile spends is the marker's ink, which arrives under
+         the pointer on `Open`. */
       actions={
         <>
           <form action={refreshFlowAction}>

@@ -8,10 +8,10 @@ import { cn } from "@/lib/utils";
 /**
  * THE FRONT DOOR.
  *
- * This page was the one screen excluded from the kit — black buttons on an
- * ultramarine-primary product, raw neutrals, no focus states, and a hero that
- * was one sentence floating in about 600px of nothing. It was also the first
- * thing anybody ever saw.
+ * This page was the one screen excluded from the kit — black buttons spelled by
+ * hand while the kit's own primary went unused, raw neutrals, no focus states,
+ * and a hero that was one sentence floating in about 600px of nothing. It was
+ * also the first thing anybody ever saw.
  *
  * THE HERO IS THE THESIS, NOT A DESCRIPTION OF IT. The obvious move here is a
  * product screenshot or a big number under a gradient, and both are decoration:
@@ -95,7 +95,11 @@ export default async function Home() {
         <section className="mx-auto w-full max-w-6xl px-5 pb-16 pt-10 sm:px-8 sm:pb-24 sm:pt-16">
           <div className="grid items-center gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,480px)] lg:gap-16">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-widest text-primary">
+              {/* THE MARKER, NOT THE BRAND. Coloured TEXT is a stroke, and the
+                  brand's #eecf00 measures 1.42:1 on this ground — a caps
+                  eyebrow set in it is a blank line with letter-spacing. Yellow
+                  fills on this page (the buttons below); violet draws. */}
+              <p className="text-xs font-semibold uppercase tracking-widest text-marker-ink">
                 For teams running on six tools
               </p>
               {/* `text-banner` is fluid — it resolves to 40px on a phone and
@@ -159,7 +163,12 @@ export default async function Home() {
           <ol className="mt-8 grid gap-10 md:grid-cols-3 md:gap-8">
             {STEPS.map((step, i) => (
               <li key={step.title}>
-                <span className="stat-numeral block text-display-xs leading-none text-primary">{i + 1}</span>
+                {/* Violet again, and this one is worth stating: the brand sheet
+                    draws its step numerals in yellow, but it draws them as
+                    filled discs carrying near-black ink. This numeral is bare
+                    glyph on the ground with nothing behind it, so it is a
+                    stroke and it takes the marker. */}
+                <span className="stat-numeral block text-display-xs leading-none text-marker-ink">{i + 1}</span>
                 <h3 className="mt-4 text-lg font-semibold tracking-tight text-foreground">{step.title}</h3>
                 {/* 16px, not the app's 14 — reading copy, not chrome. See the
                     note in ui/legal.tsx: `leading-relaxed` is the tell. */}

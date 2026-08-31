@@ -24,7 +24,7 @@ export default function AuthErrorPage() {
       </p>
       <ul className="mt-4 list-disc space-y-2 pl-5 text-sm text-muted-foreground">
         <li>
-          <b className="font-semibold">Joining from an invite?</b> Open the invite link again and finish in one go —
+          <b className="font-semibold">Joining from an invite?</b>{" "}Open the invite link again and finish in one go —
           and make sure you sign in with <b className="font-semibold">the same email address the invite was sent to</b>.
         </li>
         <li>The page sat open a while before you finished. Just start again — it takes seconds.</li>

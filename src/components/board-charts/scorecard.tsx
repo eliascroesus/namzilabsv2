@@ -95,23 +95,28 @@ export function Sparkline({
  * because that is the one moment the tile has good news to give.
  *
  * SPELLED LIKE `TargetBar` IN charts.tsx, deliberately. That is the same bar
- * on the other board, and the two had drifted: this one ran a raw `brand-600`
- * fill over a grey `muted` track and set its whole caption in one muted grey,
- * while the legacy board tinted the track in the fill's own colour and gave
- * the percentage the weight. A customer with both boards open was looking at
- * one measurement drawn two ways.
+ * on the other board, and the two had drifted: this one ran a raw ramp step
+ * (`brand-600`, back when that name held the violet) over a grey `muted` track
+ * and set its whole caption in one muted grey, while the legacy board tinted
+ * the track in the fill's own colour and gave the percentage the weight. A
+ * customer with both boards open was looking at one measurement drawn two ways.
  *
  * The track is the fill at 15% rather than neutral: a goal bar reads as "how
  * much of THIS", and a grey gutter makes the empty part look like a different
  * quantity from the full part.
+ *
+ * THE BAR IS THE MARKER, not the brand. It is a 6px measure carrying no ink of
+ * its own, so all it has is its edge against the card — and yellow is 1.55:1
+ * there. Every mark in `charts.tsx` measures in the same violet for the same
+ * reason.
  */
 export function GoalBar({ value, target, format }: { value: number; target: number; format: ChartFormat }) {
   const pct = target > 0 ? Math.min(100, Math.max(0, (value / target) * 100)) : 0;
   const met = value >= target && target > 0;
   return (
     <div className="mt-3">
-      <div className={cn("h-1.5 w-full overflow-hidden rounded-full", met ? "bg-success/15" : "bg-primary/15")}>
-        <div className={cn("h-full rounded-full", met ? "bg-success" : "bg-primary")} style={{ width: `${pct}%` }} />
+      <div className={cn("h-1.5 w-full overflow-hidden rounded-full", met ? "bg-success/15" : "bg-marker/15")}>
+        <div className={cn("h-full rounded-full", met ? "bg-success" : "bg-marker")} style={{ width: `${pct}%` }} />
       </div>
       {/* The kit's micro-label voice for the word, the figure in tabular
           numerals beside it, and the percentage carrying the emphasis — it is

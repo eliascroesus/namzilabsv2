@@ -88,10 +88,15 @@ export function MetricList({
               aria-pressed={o.key === selected}
               className="h-auto w-full justify-start gap-2 px-2 py-2 text-left"
             >
+              {/* A tick is a COLOURED GLYPH — three strokes and nothing
+                  filled — so it is the marker's, not the brand's. `text-primary`
+                  is the yellow, which measures 1.55:1 on this white panel: the
+                  one state the menu has to communicate, drawn in a colour that
+                  is not there. `marker-ink` is the step that survives at 13px. */}
               <Check
                 size={13}
                 strokeWidth={3}
-                className={`shrink-0 ${o.key === selected ? "text-primary" : "invisible"}`}
+                className={`shrink-0 ${o.key === selected ? "text-marker-ink" : "invisible"}`}
                 aria-hidden
               />
               <span className="truncate text-sm font-medium text-foreground">{o.title}</span>

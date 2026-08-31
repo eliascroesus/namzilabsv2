@@ -26,9 +26,14 @@ import { cn } from "@/lib/utils"
  *           so a menu row is a LOZENGE. That is the brand sheet's first
  *           instruction and the reason `px-3` rather than shadcn's `px-2`: at
  *           full round, 8px of inset puts the first glyph inside the curve.
- *   ACTIVE  `bg-accent text-accent-foreground` — the violet wash carrying the
- *           violet INK. Not `--primary`: brand-500 is 4.42:1 on our off-white
- *           and fails AA as text. Fills take the 500, words take the 700.
+ *   ACTIVE  `bg-accent text-accent-foreground` — the MARKER's tint pair: a
+ *           violet wash carrying violet INK. Not `--primary`, and the reason is
+ *           a shape rather than a ratio: the yellow is a FILL that carries
+ *           near-black, where a highlighted row is a wash BEHIND ink. A yellow
+ *           row would read as a pressed button sitting in a list of eight. The
+ *           ink is the 700 for the ratio that is left — marker-500 is 4.41:1 on
+ *           our off-white and fails AA as text — so the mark is the 500 and the
+ *           word is the 700.
  *   LABEL   `text-xs font-semibold uppercase tracking-wide` — the same micro
  *           label the rail's section headings and every `StatusPill` use.
  *

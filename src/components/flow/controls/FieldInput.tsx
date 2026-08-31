@@ -50,7 +50,11 @@ export function FieldInput({
               tabIndex={-1}
               title="Pick a field from your data"
               aria-label="Pick a field from your data"
-              className="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center justify-center rounded-control border border-brand-200 bg-brand-50 p-1 text-brand-500 transition-colors hover:border-brand-300 hover:bg-brand-100 hover:text-brand-600"
+              // The same tint chip as ValueInput's, and the marker's for the
+              // same reason: a wash carrying a coloured glyph is drawing, not
+              // filling. Kept spelled identically to that one so the two data
+              // affordances cannot drift a ramp step apart.
+              className="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center justify-center rounded-control border border-marker-200 bg-marker-50 p-1 text-marker-500 transition-colors hover:border-marker-300 hover:bg-marker-100 hover:text-marker-600"
             >
               <Database size={14} strokeWidth={2} />
             </button>

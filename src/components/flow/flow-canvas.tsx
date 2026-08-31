@@ -2239,28 +2239,32 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
  */
 export function EmptyCanvas({ hasConnections, onStart }: { hasConnections: boolean; onStart: () => void }) {
   /**
-   * THE THREE MOVES, EACH IN ITS OWN COLOUR.
+   * THE THREE MOVES, AND THEY ARE ONE COLOUR NOW.
    *
    * The numerals were three identical grey discs, which is the shape of a
    * disabled list — and this is the most optimistic screen in the product. They
-   * take three of the sheet's four decorative accents instead, in the order the
-   * sheet prints them, so the card reads as a set of steps rather than as a
-   * paragraph with bullets.
+   * were then three of the sheet's decorative accents, one each, so the card
+   * read as a set of steps rather than as a paragraph with bullets.
    *
-   * NOT the state trios, and not the step palette: an orange numeral here does
-   * not mean "warning" and does not mean "this move is a Time-between step". It
-   * is decoration, which is exactly what the accent four are for.
+   * They are the BRAND now, all three, and so are the cap above them and the
+   * button below: five yellow objects on one card, deliberately. A numeral is a
+   * filled disc carrying near-black ink at 11.24:1, which is the one shape
+   * yellow is legible in at all — as a stroke or as text it measures 1.55:1.
+   * The note that used to sit here said a yellow rule over a yellow button
+   * would be "two heroes, which is none". That was the scarcity rule talking,
+   * and it died of being uncheckable: nothing failed when a second yellow
+   * arrived. What replaced it is testable — yellow fills, violet draws — and
+   * nothing on this card strokes in yellow.
    *
-   * The fourth accent — the neon yellow — is spent on the BUTTON below and
-   * nowhere else on this screen, because the sheet ties it to the single ACT a
-   * screen exists for rather than to decoration. A yellow rule across the top
-   * of this card AND a yellow button under it would be two heroes, which is
-   * none.
+   * Still NOT the state trios and not the step palette: a yellow numeral here
+   * does not mean "warning" and does not mean "this move is a Time-between
+   * step". Meaning stays with success/warn/danger and with `node-accent.ts`.
    *
-   * The ink on each is `ui/badge.tsx`'s, not a fresh judgement: the sheet sets
-   * black on its two light fills and white on its two saturated ones, and a
-   * numeral chip that disagreed with the StatusPill sitting in the panel next
-   * door would be the same colour wearing two inks.
+   * The ink is `primary-foreground`, and it is a CONSTANT rather than
+   * `--foreground`, because the yellow does not invert with the theme and
+   * neither may what is written on it. All of this lives in `GetStartedCard`
+   * rather than in this array, so these numerals and the dashboard's cannot
+   * drift apart.
    */
   const steps = [
     { n: 1, title: "Get the records", detail: "from an app you've connected" },
@@ -2278,10 +2282,13 @@ export function EmptyCanvas({ hasConnections, onStart }: { hasConnections: boole
         which take `shadow-surface`. Same reasoning as the panel: one height for
         everything that floats.
 
-        The cap is the three moves themselves, in the same three colours the
-        numerals below wear and read off the SAME array — so it is a picture of
-        the list rather than a stripe someone liked, and the two cannot drift.
-        The shell clips it, so it takes the card's own top corners.
+        The cap is a solid 6px of `--primary`. It used to be the three moves
+        themselves, one segment per numeral in the numerals' own colours — a
+        picture of the list rather than a stripe someone liked. The numerals are
+        all the brand now, so a three-part cap would be three identical yellows
+        with two invisible seams in it, which is a stripe. It lives in
+        `GetStartedCard`; the shell clips it, so it takes the card's own top
+        corners.
       */}
       {/* The shell is shared with the dashboard's empty board — see
           `GetStartedCard`. `pointer-events-auto` is this caller's alone: the
@@ -2295,18 +2302,23 @@ export function EmptyCanvas({ hasConnections, onStart }: { hasConnections: boole
       >
         {hasConnections ? (
           /* THE HERO ACT. This screen exists to get one step onto the canvas;
-             there is no second thing to do on it, which is the precise
-             condition the sheet reserves the neon yellow for. */
-          <Button onClick={onStart} variant="yellow" size="lg" className="mt-8 w-full">
+             there is no second thing to do on it, so it gets a filled brand
+             button and nothing to compete with it. It is `accent` rather than
+             the `yellow` variant it used to name: yellow IS the primary now, so
+             the hero is spelled as the primary and the second name for the same
+             object has gone. */
+          <Button onClick={onStart} variant="accent" size="lg" className="mt-8 w-full">
             <Database />
             Start with Get data
           </Button>
         ) : (
           <>
             {/* With no account connected, THIS is the one act the screen exists
-                for instead — so the yellow moves with it rather than appearing
-                twice or not at all. */}
-            <Link href="/integrations" className={cn(buttonVariants({ variant: "yellow", size: "lg" }), "mt-8 w-full")}>
+                for instead — so the brand button moves with it rather than
+                being spent on a press that ends at an empty panel. Same
+                `accent` variant, because it is the same object wearing a
+                different label. */}
+            <Link href="/integrations" className={cn(buttonVariants({ variant: "accent", size: "lg" }), "mt-8 w-full")}>
               <Plug size={16} />
               Connect an app first
             </Link>

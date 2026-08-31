@@ -148,6 +148,23 @@ describe("the page container and the skeleton that stands in for it", () => {
      * the column, and the only line in it is the bar's own, which the skeleton
      * already draws beside it. A test asserting the height of a rule that no
      * longer exists is a test that fails for being right.
+     *
+     * AND NOW THERE IS NO LINE AT ALL, which is the same lesson a second time.
+     * The skeleton's band was matched as `border-b border-chrome-line bg-ink-950`
+     * — the bar's own spelling at the time. The charcoal rebrand removed both of
+     * the band's internal seams: below the bar is the ground at #f5f5f5 and
+     * right of the rail is the same, so each "seam" was a hairline drawn where
+     * two different materials already meet, which DESIGN.md §5 says is a rule
+     * doing nothing. The export agrees — it closes the bar with #2d2d2d on
+     * #2e2e2e, a ratio of 1.005:1, which is not a line, it is the habit of
+     * drawing one.
+     *
+     * The border is out of the pattern rather than made optional. This test
+     * measures the HEIGHT the two bands reserve, and every class it names
+     * beyond that is a hostage: matching on decoration means a colour change
+     * fails an assertion about geometry, and the failure names the wrong thing.
+     * `bg-ink-950` stays because it is what identifies the band among the
+     * skeleton's several `h-… shrink-0` boxes.
      */
     const band = (src: string, where: RegExp, what: string) => {
       const code = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
@@ -161,7 +178,7 @@ describe("the page container and the skeleton that stands in for it", () => {
     // `flex` — it opens with the scoped `dark` that re-inks whatever the flow
     // builder portals into it.
     const bar = band(topBar, /<header className="[^"]*?\bh-(\S+) shrink-0/, "the top bar's height");
-    expect(band(skeleton, /className="h-(\S+) shrink-0 border-b border-chrome-line bg-ink-950"/, "the skeleton's top bar band")).toEqual(bar);
+    expect(band(skeleton, /className="h-(\S+) shrink-0 bg-ink-950"/, "the skeleton's top bar band")).toEqual(bar);
     // The rail's top block: the first `flex h-… shrink-0 items-center` in the
     // file. The `<aside>` above it cannot match — its own height is `h-full`
     // and `w-[70px]` sits between that and its `shrink-0`.

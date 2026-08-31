@@ -444,8 +444,10 @@ export function TileConfigPanel({
                   label="Colour"
                   /* On a scorecard the accent reaches the TREND LINE and
                      nothing else — the number is ink and the goal bar is a
-                     success/brand token. Saying so is the difference between a
-                     control that appears broken and one whose scope is known. */
+                     success/marker token, because a 6px measure carrying no ink
+                     of its own is a stroke and the brand cannot draw one.
+                     Saying so is the difference between a control that appears
+                     broken and one whose scope is known. */
                   hint={chart === "number" ? "Colours the trend line, when it's shown." : undefined}
                 >
                   {/* THE SAME GRID THE GROUP PICKER USES — twelve swatches, two

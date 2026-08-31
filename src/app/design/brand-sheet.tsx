@@ -10,16 +10,26 @@ import { FieldLabel } from "@/components/ui/field";
  *
  * Two sheets were supplied and they are one system with two halves:
  *
- *   · The first is the VOICE — deep black doing the work, a neon yellow hero,
- *     everything a full pill, micro labels in ALL CAPS, and a four-colour
- *     accent set (yellow, orange, pink, periwinkle) for chips and tabs.
- *   · The second is the FOUNDATION — #1A1A1A / #F5F5F5 / #7C4DFF, Helvetica
- *     Neue, an 8px baseline, and a button matrix of Default, Button, Hover,
- *     Preview, Pressed and Deject.
+ *   · The first is the VOICE — deep black doing the work, yellow carrying the
+ *     act, everything a full pill, micro labels in ALL CAPS, and a decorative
+ *     accent set (orange, pink, periwinkle) for chips and tabs.
+ *   · The second is the FOUNDATION — #1A1A1A / #F5F5F5 / #EECF00 / #7C4DFF,
+ *     Helvetica Neue, an 8px baseline, and a button matrix of Default, Button,
+ *     Hover, Preview, Pressed and Deject.
  *
  * Where they disagreed, the first won on hierarchy: its workhorse button is
- * black and colour arrives only where it means something. Treating violet as
- * the default made the product read violet-and-grey, which is neither sheet.
+ * black and colour arrives only where it means something. Treating a brand
+ * colour as the default made the product read as one hue and grey, which is
+ * neither sheet.
+ *
+ * YELLOW FILLS, VIOLET DRAWS, and that sentence is a measurement rather than a
+ * preference: #EECF00 is 1.55:1 as a stroke or as text on white and 11.24:1 as
+ * a fill under #1A1A1A ink. So every yellow object on this sheet is a FILLED
+ * shape carrying near-black — the branded button, the timer chip, the first
+ * card — and every line, link and coloured glyph is the marker's violet: the
+ * heading tags, the soft button's wash and its ink, the outlined button's edge.
+ * `scripts/check-ui.ts` fails the build on `text-primary`, `border-primary` and
+ * `ring-primary` so the two halves cannot re-merge.
  *
  * Every specimen below is the SHIPPING component with its real props — not a
  * mock-up — so this page cannot drift from the product the way a picture of a
@@ -38,9 +48,14 @@ function Block({ title, children }: { title: string; children: React.ReactNode }
 export function BrandSheet() {
   return (
     <div className="space-y-10">
-      {/* ── THE THREE COLOURS ─────────────────────────────────────────── */}
+      {/* ── THE FOUR COLOURS ──────────────────────────────────────────────
+          The sheet showed three, because for as long as violet was the primary
+          the yellow was decoration and lived in the accent row below. It is the
+          brand now, so it comes up here and violet comes with it — the two are
+          a PAIR, and neither is legible as a rule about the product on its own:
+          yellow is what a filled object is, violet is what a line is. */}
       <Block title="Colour palette">
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-4">
           <div className="flex h-32 flex-col justify-end rounded-card bg-foreground p-4">
             <p className="text-sm font-semibold uppercase tracking-wide text-background">Deep black</p>
             <p className="font-mono text-xs text-background/70">#1A1A1A</p>
@@ -49,17 +64,38 @@ export function BrandSheet() {
             <p className="text-sm font-semibold uppercase tracking-wide text-foreground">Off-white</p>
             <p className="font-mono text-xs text-muted-foreground">#F5F5F5</p>
           </div>
+          {/* The BRAND, rendered through `--primary` rather than through the
+              ramp, because that is the name every filled object in the product
+              actually says. Its ink is a constant near-black and not
+              `--foreground`: the yellow does not invert, so neither may the
+              thing written on it. */}
           <div className="flex h-32 flex-col justify-end rounded-card bg-primary p-4">
-            <p className="text-sm font-semibold uppercase tracking-wide text-primary-foreground">Vibrant violet</p>
-            <p className="font-mono text-xs text-primary-foreground/80">#7C4DFF</p>
+            <p className="text-sm font-semibold uppercase tracking-wide text-primary-foreground">Brand yellow</p>
+            <p className="font-mono text-xs text-primary-foreground/80">#EECF00</p>
+          </div>
+          {/* The MARKER — the exact violet this sheet used to call the brand,
+              with its name and its job changed rather than its value. White on
+              it measures 4.42:1, which is AA for the 14px semibold above and
+              the reason the caption below it runs at 80% rather than lower. */}
+          <div className="flex h-32 flex-col justify-end rounded-card bg-marker p-4">
+            <p className="text-sm font-semibold uppercase tracking-wide text-white">Marker violet</p>
+            <p className="font-mono text-xs text-white/80">#7C4DFF</p>
           </div>
         </div>
-        {/* The accent four. Deliberately separate from the three above: these
+        {/* The accent three. Deliberately separate from the four above: these
             are decoration, and they are NOT states — success, warn and danger
-            own that vocabulary, so a yellow chip can never read as a warning. */}
-        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            own that vocabulary, so a decorative chip can never read as a
+            warning.
+
+            THERE WERE FOUR, AND THE YELLOW LEFT. It was `--color-accent-yellow`
+            #FAF63C, a highlighter neon that sat here as one decorative colour
+            among four while the primary was violet. Yellow is the primary now,
+            and a second yellow four counts off it under a second name is a pair
+            nobody could have kept in step and nobody could have told apart on
+            screen — so the token is deleted and `check:ui` fails on the class,
+            which would otherwise compile to no background at all. */}
+        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
           {[
-            { cls: "bg-accent-yellow text-neutral-900", name: "Yellow" },
             { cls: "bg-accent-orange text-white", name: "Orange" },
             { cls: "bg-accent-pink text-neutral-900", name: "Pink" },
             { cls: "bg-accent-peri text-white", name: "Periwinkle" },
@@ -94,7 +130,13 @@ export function BrandSheet() {
       <Block title="Buttons">
         <div className="grid gap-6 sm:grid-cols-2">
           <div className="flex max-w-xs flex-col items-stretch gap-3">
-            <Button variant="yellow" size="lg">
+            {/* `accent` — the sheet's hero act. It was `variant="yellow"`, a
+                second spelling that existed only because the primary was
+                violet and the loudest button on the screen needed a colour the
+                primary could not give it. Yellow IS the primary now, so the
+                two resolved to one object under two names and `yellow` was
+                deleted. */}
+            <Button variant="accent" size="lg">
               Sign in with Apple
             </Button>
             <Button size="lg">Sign in with Apple</Button>
@@ -174,7 +216,13 @@ export function BrandSheet() {
         </div>
       </Block>
 
-      {/* ── CARDS: the second sheet's violet / black / outline trio ────── */}
+      {/* ── CARDS: the second sheet's brand / black / outline trio ────────
+          The first card is `bg-primary`, so it turned yellow with the rebrand
+          and its ink turned near-black with it. That is the whole rule visible
+          in one object: a coloured card is a FILL, and a fill is where the
+          brand is allowed to be. Its button is `soft` — a marker wash under
+          marker ink — because a yellow-on-yellow control inside a yellow card
+          is the one combination the split forbids. */}
       <Block title="Cards">
         <div className="grid gap-3 sm:grid-cols-3">
           <div className="flex flex-col justify-between rounded-card bg-primary p-5">

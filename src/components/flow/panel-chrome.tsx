@@ -35,9 +35,13 @@ export type PanelTab = "configure" | "test";
  * The tab row. `data-config-tabs` is load-bearing — the field browser measures
  * it to know where the panel's scrolling body starts.
  *
- * The active underline is `primary`. It was brand-500, one step off the
- * product's own accent — and this is the single accent moment in the panel,
- * which is the one place two almost-identical blues cannot be afforded.
+ * The active underline is `marker`, because an underline is a LINE. It read
+ * `primary` while the primary was violet, and that spelling is now the yellow:
+ * 1.55:1 on this card, which is not a faint rule, it is no rule — the tab
+ * row's only state signal, gone. `--marker` is the same violet the underline
+ * has always been, at 4.41:1, past the 3:1 an indicator carrying state owes.
+ * It names the role rather than a ramp step because this is the single accent
+ * moment in the panel, and one accent moment cannot afford two spellings.
  *
  * GENERIC OVER ITS IDS rather than fixed to `PanelTab`. The repo had three tab
  * implementations and no primitive; a second panel that needed two different
@@ -62,7 +66,7 @@ export function PanelTabs<T extends string>({
  key={t}
  onClick={() => onSelect(t)}
  className={`-mb-px border-b-2 py-3 text-sm capitalize transition-colors ${
- active === t ?"border-primary font-semibold text-foreground" :"border-transparent font-medium text-muted-foreground hover:text-foreground"
+ active === t ?"border-marker font-semibold text-foreground" :"border-transparent font-medium text-muted-foreground hover:text-foreground"
  }`}
  >
  {t}

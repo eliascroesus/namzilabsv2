@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { LayoutDashboard } from "lucide-react";
+import { Database } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { GetStartedCard } from "@/components/get-started-card";
 import { ViewTemplatePicker, type CalendarOption } from "@/app/dashboard/view-template-picker";
@@ -42,9 +42,9 @@ import { ViewTemplatePicker, type CalendarOption } from "@/app/dashboard/view-te
  * describe a metric rather than a sequence of clicks.
  */
 const STEPS = [
-  { n: 1, title: "Get started" },
-  { n: 2, title: "Select a template" },
-  { n: 3, title: "Add your metrics" },
+  { n: 1, title: "Get Started" },
+  { n: 2, title: "Select a Template" },
+  { n: 3, title: "Add your Metrics" },
 ];
 
 export function EmptyBoard({
@@ -83,28 +83,43 @@ export function EmptyBoard({
        thing on it. Keeping them together also means they centre as a unit
        instead of the heading pinning to the top-left while the card floats in
        the middle, which is what it did.
-       `max-w-md` matches the card, so the heading's left edge is the card's. */
-    <div className="w-full max-w-md">
-      {/* The same shell the flow builder's empty canvas uses — see
-          `GetStartedCard`. Sharing it is the point: two ways of saying "there is
-          nothing here yet" is a product telling you something about itself. */}
+       THE HEADING IS CENTRED OVER THE CARD, not flush with its left edge, and
+       the 64px between them is the export's own. It was `max-w-md` with a
+       left-aligned h1 4px above the card — a heading captioning a card. The
+       export makes them two centred objects with a full 64px of air, which
+       reads as a page that is DELIBERATELY empty rather than as a card that has
+       been labelled. */
+    <div className="flex w-full flex-col items-center gap-16">
       {/* `PageHeader`'s own h1 recipe rather than a second spelling of it — but
           not `PageHeader` itself: that component's right slot is where the
           period track lives, and the period track is exactly the furniture
-          there is nothing here to filter. */}
-      <h1 className="mb-4 font-display text-display-sm font-semibold text-ground-ink">Build your dashboard</h1>
-      <GetStartedCard eyebrow="New dashboard" title="Build a dashboard in three clicks" steps={STEPS}>
-        {/* The one yellow on the screen, which is the whole ratio rule: this is
-            the single act the page exists for right now — when there is one. A
-            viewer who may not create says so in a sentence instead, rather than
-            being offered a button that will refuse. */}
+          there is nothing here to filter.
+          `display-lg` — 48px, the export's size, and the one step in the scale
+          reserved for a moment that is meant to be impressive. It was
+          `display-sm` at 30px, which is a page title; this is the only thing on
+          the screen. */}
+      <h1 className="font-display text-display-lg font-semibold text-ground-ink">Build your Dashboard</h1>
+      {/* The same shell the flow builder's empty canvas uses — see
+          `GetStartedCard`. Sharing it is the point: two ways of saying "there is
+          nothing here yet" is a product telling you something about itself.
+          `max-w-md` is 448px, which is the export's card width exactly. */}
+      <GetStartedCard
+        eyebrow="New dashboard"
+        title="Build a dashboard in three clicks"
+        steps={STEPS}
+        className="w-full max-w-md"
+      >
+        {/* THE ACT. It is `accent` rather than the `yellow` variant it used to
+            name: yellow is the primary now, so the hero is spelled as the
+            primary and the second name for it has gone. The 28px above it is
+            the export's gap from the last step. */}
         {canCreate ? (
-          <Button onClick={() => setOpen(true)} variant="yellow" size="lg" className="mt-8 w-full">
-            <LayoutDashboard />
-            Get started
+          <Button onClick={() => setOpen(true)} variant="accent" size="lg" className="mt-7 w-full">
+            <Database />
+            Get Started
           </Button>
         ) : (
-          <p className="mt-8 text-sm text-muted-foreground">
+          <p className="mt-7 text-sm text-muted-foreground">
             Nobody has set this workspace&rsquo;s dashboard up yet. Someone who can build metrics needs to add the first
             view.
           </p>

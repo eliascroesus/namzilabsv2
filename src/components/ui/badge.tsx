@@ -20,13 +20,18 @@ const pillVariants = cva(/**
   variants: {
     tone: {
       /**
-       * THE SHEET'S FOUR DECORATIVE TONES. They say WHICH, never HOW IT IS
-       * GOING — success, warn and danger keep the job of meaning, so a yellow
-       * chip can never be mistaken for a warning. Ink is black on the two light
-       * fills and white on the two saturated ones, which is how the sheet sets
-       * every one of them.
+       * THE SHEET'S DECORATIVE TONES. They say WHICH, never HOW IT IS GOING —
+       * success, warn and danger keep the job of meaning, so a decorative chip
+       * can never be mistaken for a warning. Ink is black on the light fills
+       * and white on the saturated ones, which is how the sheet sets them.
+       *
+       * `yellow` NOW DRAWS FROM THE BRAND rather than from a decorative token
+       * of its own. It was `bg-accent-yellow` — the old #faf63c neon — which
+       * stopped existing when yellow became the primary: two yellows four
+       * counts apart, one called "brand" and one called "accent", is a pair
+       * nobody could have kept in step and nobody could have told apart.
        */
-      yellow: "bg-accent-yellow text-neutral-900",
+      yellow: "bg-primary text-primary-foreground",
       orange: "bg-accent-orange text-white",
       pink: "bg-accent-pink text-neutral-900",
       peri: "bg-accent-peri text-white",

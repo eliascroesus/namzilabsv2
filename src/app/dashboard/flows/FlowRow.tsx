@@ -45,11 +45,12 @@ const FILTERS: Array<{ key: "all" | FlowState; label: string }> = [
  * STATE KEEPS THE TRIOS, AND THE ACCENT SET STAYS OFF IT.
  *
  * The list wants colour and it gets it on the connector chip — but not here.
- * The sheet's four accents are the DECORATIVE range ("which one is this"), and
+ * The sheet's three accents are the DECORATIVE range ("which one is this"), and
  * success/warn/danger are the only vocabulary allowed to say how something is
- * GOING. A peri or a yellow pill in this column would be a fifth status colour
- * that means nothing, in the one cell of the row where a colour is read as a
- * verdict.
+ * GOING. A peri pill — or the brand, which left the decorative set when it
+ * became the brand and would arrive here carrying even more weight — would be a
+ * fourth status colour that means nothing, in the one cell of the row where a
+ * colour is read as a verdict.
  *
  * `pending` is grey on purpose: nothing transient gets a colour of its own.
  */
@@ -107,10 +108,11 @@ const COL = {
  *     page — a recessed band inside a white card, the way Miro's templates rail
  *     is a tinted strip inside a white page rather than a wash over everything.
  *     Two materials in one object is what gives the list a head.
- *   · THE ROW ANSWERS THE POINTER IN VIOLET, fill and text together, because
- *     the whole row is one link and the accent's job on this sheet is exactly
- *     that: selection. Hovering previews what clicking does, which is the same
- *     argument `Chip` makes for its own off-state hover.
+ *   · THE ROW ANSWERS THE POINTER IN VIOLET, wash and text together, because
+ *     the whole row is one link and the marker's tint pair is exactly what the
+ *     kit gives a thing that is selected without being a filled object.
+ *     Hovering previews what clicking does, which is the same argument `Chip`
+ *     makes for its own off-state hover.
  *
  * What was already right and is kept whole: the row as one stretched link, the
  * optimistic switch that reverts when the server disagrees, the filter chips
@@ -141,8 +143,8 @@ export function FlowList({ flows }: { flows: FlowListItem[] }) {
         {/* Counts live on the tabs, so "how many are actually running" is
             answered without clicking anything. `Chip` is already the sheet's
             pill — `rounded-full`, 12px, ALL CAPS, `tracking-wide` — and the
-            selected one takes the vibrant violet as a FILL, which is the one
-            job that colour has. */}
+            selected one takes the brand as a FILL, which is the one shape the
+            brand is allowed to take. */}
         <div className="flex flex-wrap items-center gap-1">
           {FILTERS.map((f) => (
             <Chip key={f.key} active={filter === f.key} count={counts[f.key]} onClick={() => setFilter(f.key)}>

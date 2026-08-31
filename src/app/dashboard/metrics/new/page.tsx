@@ -99,7 +99,10 @@ export default async function NewMetricPage({ searchParams }: { searchParams: Pr
           title="New metric"
           lede="Pick what to measure. Preview updates with your live data; save when it looks right."
           actions={
-            <Link href="/dashboard/funnels/new" className="text-sm text-primary hover:underline">
+            /* A LINK IS TEXT, so it is drawn rather than filled: `marker-ink` is
+               the step the kit reserves for exactly this, at 6.79:1, where the
+               brand yellow would put this escape hatch on the page at 1.55:1. */
+            <Link href="/dashboard/funnels/new" className="text-sm text-marker-ink hover:underline">
               Build a funnel instead
             </Link>
           }

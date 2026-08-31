@@ -51,17 +51,45 @@ export type CalendarMetric = {
  *
  * THE FLOOR AND THE RISE. 12% at the bottom, 56% at the top. It ran 8–38 and
  * before that 4–22, each pass finding the same thing: a heat map whose loudest
- * day is a pale wash is a table with extra steps. 56% of the sheet's violet
- * still carries the numeral at 7.5:1 and the records line at better than 5:1,
- * which is the constraint that decides the ceiling — the number stays the loud
- * thing, the fill stays the shape you read from across the room.
+ * day is a pale wash is a table with extra steps. The ceiling was decided by
+ * ink: 56% of the violet still carried the numeral at 7.5:1, and going deeper
+ * would have cost the figure that the square exists to show.
+ *
+ * THE NUMBERS MOVED WITH THE HUE AND THE RANGE DID NOT, deliberately. On the
+ * brand's yellow the same 56% carries that numeral at 13.47:1, so the old
+ * constraint is no longer the binding one and the ramp could run deeper than
+ * it does. It is left where it is because the range was tuned against the EYE
+ * as well as the ratio — 12–56 is where the five legend stops separate — and
+ * re-cutting a working ramp on the grounds that a new hue would permit it is
+ * how a settled thing gets unsettled for nothing. The headroom is recorded
+ * here rather than spent.
  */
 const HEAT_FLOOR = 12;
 const HEAT_RISE = 44;
 function heatFill(share: number, negative = false): string {
-  // The sheet's VIBRANT VIOLET — the fill colour of the brand, and fills are
-  // the one job it has. The 700 next to it is for text, and never appears here.
-  const hue = negative ? "--color-accent-orange" : "--color-brand-500";
+  // THE BRAND, BECAUSE THIS SQUARE CARRIES INK.
+  //
+  // The split's full form is that yellow fills WHERE SOMETHING SITS ON IT — the
+  // 11.24:1 it holds against near-black is the entire licence for it to be a
+  // surface, and a fill with nothing written on it never collects that number.
+  // A heat cell is the clearest case of the other kind: it is a tint with a
+  // date chip, a figure and a records line printed on top, so it collects the
+  // ratio in full. That is why this ramp is the brand while the chart bars two
+  // files away are not — those carry nothing and have only their edge against
+  // the card, where the yellow is 1.42:1.
+  //
+  // IT READS BETTER THAN THE VIOLET IT REPLACES, which is not the usual
+  // direction for this kind of change. At the top of the ramp the figure sits
+  // at 13.47:1 against the old violet's 7.5:1, and the records line — already
+  // spelled `foreground/80` precisely because `muted-foreground` collapsed on
+  // the deep end — comes up to 7.8:1. The ceiling was set by ink contrast, and
+  // a paler hue simply has more room under it.
+  //
+  // NEGATIVE STAYS ORANGE. Two warm hues are closer than violet-and-orange
+  // were, but they part company exactly where it matters: at the deep end,
+  // where a day that lost ground actually needs to be told from one that
+  // gained it, 56% orange is a flushed pink and 56% yellow is a flat gold.
+  const hue = negative ? "--color-accent-orange" : "--color-brand-600";
   return `color-mix(in srgb, var(${hue}) ${(HEAT_FLOOR + share * HEAT_RISE).toFixed(1)}%, var(--card))`;
 }
 
@@ -105,11 +133,15 @@ function Slot({ id, children }: { id: string; children: ReactNode }) {
  * here: the boundaries a value was filed under are UTC, and a browser in
  * Auckland deciding locally which square is "today" would ring the wrong one.
  *
- * WHERE THE COLOUR GOES, now that there is some. The sheet's ratio is black for
- * the work, violet for selection and identity, yellow once. Here that reads:
- * the ramp and today's date chip are violet, the month's best day carries the
- * single yellow mark, and the accent set appears exactly once more — orange, on
- * the chip beside the picker.
+ * WHERE THE COLOUR GOES, now that there is some. The sheet's rule is that
+ * YELLOW FILLS AND VIOLET DRAWS, and this view spends both. Today's date is a
+ * filled yellow chip — the same object as the rail's active row and the period
+ * control's lit pill, so all three "you are here" marks in the product are
+ * spelled one way. Today's square is edged in violet, because an edge is a
+ * line. The heat ramp is violet too, as a wash rather than a fill: it has to be
+ * something the yellow chip can sit ON without disappearing into. The best day
+ * takes ink, not the brand — see `DayCell`. And the accent set appears exactly
+ * once more: orange, on the chip beside the picker.
  *
  * THAT ORANGE USED TO BE AN ECHO OF THE RAIL, back when the calendar was its own
  * destination and the rail filled its row orange when you were on it. There is
@@ -268,14 +300,18 @@ export function CalendarBoard({
         title="No published metrics yet"
         description="The calendar breaks a published metric down day by day. Build a flow, publish it, and it appears in the picker here."
         action={
-          // THE SHEET'S HERO, spent on the one act this screen exists for.
-          // Yellow is scarce by rule — at most once per screen — and a screen
-          // with nothing on it but a single instruction is exactly the case
-          // the rule was written for. It also retires a link set in
-          // `text-primary`: the violet 500 is a FILL colour at 4.42:1 on the
-          // off-white page, under AA as text, and the kit's link step (the
-          // 700) is what a violet word is supposed to be set in.
-          <Button asChild variant="yellow">
+          // THE BRAND, spent on the one act this screen exists for — and it is
+          // a BUTTON, which is the only shape the yellow is legible in: a
+          // filled pill carrying near-black at 11.24:1. This used to be a word
+          // set in `text-primary`, which is the same colour doing the one thing
+          // it cannot do — 1.55:1 as text on the page, an instruction nobody
+          // could read.
+          //
+          // `variant="accent"`, not `variant="yellow"`: that variant existed
+          // because the primary was violet and the hero act needed a colour the
+          // primary could not give it. Yellow IS the primary now, so the two
+          // resolved to one object under two names and one of them had to go.
+          <Button asChild variant="accent">
             <Link href="/dashboard/flows">Go to flows</Link>
           </Button>
         }
@@ -493,10 +529,12 @@ export function CalendarBoard({
             {/* BLACK, WHICH IS WHAT THE SHEET SAYS DOES THE WORK. It was a
                 bordered secondary — a grey outline on a pale wash, the least
                 decisive control on the page attached to the only sentence
-                asking to be acted on. Not the yellow: this banner and the
-                month's yellow best-day mark cannot appear together (no days at
-                all means no best day), but a hero fill inside a state banner
-                reads as a second state rather than as an act. */}
+                asking to be acted on. Not the yellow, and the reason survived
+                the rebrand intact: a brand fill inside a warn banner is a
+                second coloured object inside a coloured surface, and it reads
+                as another piece of the state rather than as the way out of it.
+                The empty state above spends the yellow, because there is no
+                wash there for it to argue with. */}
             <SubmitButton size="sm" pendingLabel="Computing…">
               Compute now
             </SubmitButton>
@@ -552,9 +590,9 @@ export function CalendarBoard({
                     // Exactly one square can carry it, because it is asserted
                     // from the summary's own answer rather than recomputed per
                     // cell — a `value === peak` test would flag every day of a
-                    // tie, and the yellow's whole meaning is that there is one.
-                    // A month of zeros has a "best" day and no scale at all, so
-                    // the peak gate keeps the mark off it.
+                    // tie, and a mark reading "Best" on four squares is not a
+                    // superlative. A month of zeros has a "best" day and no
+                    // scale at all, so the peak gate keeps the mark off it.
                     best={scale.peak > 0 && day.key === stats?.best.key}
                     format={metric?.format ?? {}}
                   />
@@ -699,7 +737,7 @@ function DayCell({
   peak: number;
   today: boolean;
   future: boolean;
-  /** The month's best day — the one square allowed to carry the yellow. */
+  /** The month's best day — the one square allowed to carry the "Best" pill. */
   best: boolean;
   format: CalendarMetric["format"];
 }) {
@@ -720,9 +758,12 @@ function DayCell({
         // A day still to come is drawn quieter — it can carry a real number
         // (a meeting already booked for Friday), but it is not a result yet.
         future && !has && "border-dashed border-border",
-        // Today is violet because violet marks SELECTION and identity, and
-        // "the day you are in" is the only selection a calendar has.
-        today && "border-primary",
+        // Today's edge is violet because an EDGE IS A LINE, and the split hands
+        // every line to the marker: the brand measures 1.55:1 as a stroke and a
+        // yellow rim round one square in thirty-five is a rim nobody finds. The
+        // date chip inside it is the yellow — same square, two colours, each
+        // doing the job it can actually do.
+        today && "border-marker",
         // The empty day's well takes the PAGE colour rather than `muted`: the
         // two are identical in the light theme and `muted` collapses into the
         // card in the dark one, so the recession only survived one theme.
@@ -731,31 +772,33 @@ function DayCell({
       style={tint ? { backgroundColor: tint } : undefined}
     >
       <div className="flex items-center gap-1">
-        {/* THE SHEET'S ONE YELLOW, ON THE SQUARE IT IS ABOUT. The summary strip
-            already names the best day and its number; this is where that
-            sentence points. Full-strength neon is the only one to the right of
-            the rail, and there can be at most one per month by construction —
-            which is the whole argument for the colour: scarcity is its meaning.
-            Black ink, because the sheet sets this yellow in black every time it
-            appears and nothing else is readable on it. */}
+        {/* THE BEST DAY IS MARKED IN INK, NOT IN THE BRAND. The summary strip
+            already names it and its number; this is where that sentence points.
+            It carried the kit's decorative `yellow` once, and that tone has been
+            deleted — a second yellow beside the primary was two colours four
+            counts apart that could never be kept in step.
+            The brand does not inherit the job either, and the square itself is
+            the argument: the best day CAN BE TODAY, and today's date already
+            wears a filled yellow chip 20px away. Two yellow chips on one square
+            say nothing. Beyond that, the brand marks an ACT — the thing on the
+            screen to press — and "Best" is a reading of the data, which is what
+            ink is for. Ink also survives the heat wash under it at every step of
+            the ramp, where a coloured chip would not. Only the padding is
+            overridden: a 92px square has no room for the standard px-3. */}
         {best && (
-          // NOT THE NEON. `yellow` is one of the kit's decorative tones and it
-          // cannot be misread as a state — but it is also the HERO colour, and
-          // the hero is at most one per screen, spent on the act the screen
-          // exists for. A month grid put it on a calendar square: the loudest
-          // colour in the product, on a day that is merely the highest of
-          // eleven. Ink on the page's own surface says the same thing without
-          // shouting it. Only the padding is overridden: a 92px square has no
-          // room for the standard px-3.
           <StatusPill className="bg-foreground px-1.5 py-px text-background">
             Best
           </StatusPill>
         )}
-        {/* TODAY'S DATE IS A FILLED CHIP, not violet text. The 500 is a fill
-            colour — as 12px text on white it measures 4.42:1, under AA — and
-            the same value carrying white the other way round measures 4.81:1.
-            The stronger mark is also the more accessible one, which is usually
-            how it goes when a colour is used for the job it was picked for. */}
+        {/* TODAY'S DATE IS A FILLED CHIP, and the reason is the same one it has
+            always been — a coloured word is the weaker and less legible mark —
+            but the colour changed hands. It is the BRAND now: a 20px disc
+            carrying near-black at 11.24:1, which is the shape and the ratio the
+            yellow exists for, and the same object the rail's active row and the
+            period control's lit pill are. All three say "you are here", so all
+            three are spelled one way. Coloured text at this size would be the
+            one thing neither hue can do: the brand is 1.55:1 on the card and
+            the marker's 500 is 4.41:1, under the 4.5:1 a 12px numeral owes. */}
         <span
           className={cn(
             "tnum ms-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-xs font-semibold",

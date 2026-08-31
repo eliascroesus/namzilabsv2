@@ -226,8 +226,13 @@ export async function AppShell({
             <div className="flex items-center gap-2.5 px-3 py-2.5">
               {/* The trigger's avatar again, at the same size and in the same
                   violet tint, so the panel visibly belongs to the control that
-                  opened it. Violet is the sheet's identity colour, and the ink
-                  is the 700: the 500 is a fill, and 4.42:1 as text. */}
+                  opened it. IDENTITY IS THE ONE JOB THE REBRAND LEFT THE
+                  VIOLET a fill for — which workspace you are in is a fact about
+                  the account, not a control, so it is not competing with the
+                  yellow for a press. This is the tint pair rather than the
+                  full-strength `chrome-avatar` the top bar wears: a wash
+                  carrying the ink step, because the 500 is 4.41:1 and the
+                  initials are text at 6.79:1 on the 700. */}
               {profile.avatarUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img

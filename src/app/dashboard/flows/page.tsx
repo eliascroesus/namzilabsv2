@@ -104,24 +104,24 @@ export default async function FlowsPage({ searchParams }: { searchParams: Promis
   const unpublished = await unpublishedFlowIds(getReadDb(), orgId).catch(() => new Set<string>());
 
   /**
-   * ONE ACT, TWO PLACES, AND THE SAME BUTTON IN BOTH — BLACK, NOT NEON.
+   * ONE ACT, TWO PLACES, AND THE SAME BUTTON IN BOTH — BLACK, NOT THE BRAND.
    *
-   * The header's Create was the yellow hero on the argument that "Create flow"
-   * is the single thing this screen exists to let you do. That argument holds
-   * for a landing page and it does not hold here. The sheet's rule is at most
-   * one yellow per screen because the scarcity IS the meaning, and the thing
-   * that makes it mean anything is that the yellow is the LOUDEST thing in
-   * view. On a page whose whole body is a list you came to read — a list where
-   * the violet already marks the row under your pointer and every connector
-   * chip carries its vendor's colour — a neon block in the top right is the
-   * loudest thing on a screen that has plenty to say, competing with the
-   * content rather than crowning it.
+   * The header's Create wore the brand on the argument that "Create flow" is the
+   * single thing this screen exists to let you do. That argument holds for a
+   * landing page and it does not hold here. `accent` is the variant the kit
+   * reserves for the act a screen EXISTS FOR, and this screen exists to be read:
+   * its whole body is a list where the marker already marks the row under your
+   * pointer and every connector chip carries its vendor's colour. A brand block
+   * in the top right competes with that content rather than crowning it.
    *
-   * So it takes the workhorse black, which is what the sheet gives to the
-   * default action everywhere else, and the yellow stays where it is worth
-   * something. Both call sites are the same button now: two blacks on one page
-   * is the workhorse doing its job, which is the one colour the ratio rule
-   * expects to see more than once.
+   * THE FILL/STROKE SPLIT DOES NOT SETTLE THIS, and saying so is the point of
+   * keeping the note. Both buttons are filled objects, so the split permits
+   * either; all it rules out is a brand colour used as a line or as text. Which
+   * fill an act takes is still an editorial call about what the surface is for,
+   * and this one takes the workhorse black — what the kit gives the default
+   * action everywhere else. Both call sites are the same button now: two blacks
+   * on one page is the workhorse doing its job, which is the one colour the
+   * ratio rule expects to see more than once.
    */
   const createButton = () =>
     canCreate ? (

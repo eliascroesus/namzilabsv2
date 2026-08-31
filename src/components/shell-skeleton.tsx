@@ -52,10 +52,17 @@ export function ShellSkeleton({
 
           70 because the named column became an icon rail. IT HAS NO HEAD BAND
           ANY MORE, and losing that inner div is a fix rather than a
-          simplification: the rail draws no hairline under its top block now —
-          the only seam it owns is its right edge — so a mirrored `border-b`
-          here would paint a line the real chrome does not have and then remove
-          it when the route landed.
+          simplification: the rail draws no hairline under its top block now, so
+          a mirrored `border-b` here would paint a line the real chrome does not
+          have and then remove it when the route landed.
+
+          IT HAS NO RIGHT EDGE EITHER, ANY MORE — the same lesson in the other
+          axis. The charcoal rebrand took the rail's `border-r` off, because the
+          band lightened to #2e2e2e and the ground beside it is #f5f5f5: a
+          hairline drawn where two materials already differ by 40 points of
+          luminance is a rule doing nothing. A mirror that keeps it shifts every
+          route's content column 1px sideways at hydration, which is precisely
+          the jolt this file exists to prevent.
 
           The COLOUR is mirrored instead, and it has to be: this band is
           `ink-950` in BOTH themes (the chrome does not invert — see the note in
@@ -65,7 +72,7 @@ export function ShellSkeleton({
           occupy this space and a shimmering ghost of furniture that never moves
           is noise. Nothing in it changes the column's WIDTH, which is the only
           thing the page beside it can feel. */}
-      <div className="w-[70px] shrink-0 border-r border-chrome-line bg-ink-950" />
+      <div className="w-[70px] shrink-0 bg-ink-950" />
       <div className="flex min-w-0 flex-1 flex-col">
         {/* THE TOP BAR WAS MISSING ENTIRELY, AND IT IS 70px TALL.
             This file's whole argument is that a skeleton whose geometry
@@ -75,16 +82,21 @@ export function ShellSkeleton({
             shimmered at the top of the canvas and then dropped 70px the moment
             the real chrome landed, on every first load of every route.
 
-            AND IT IS NEAR-BLACK, IN BOTH THEMES, because the bar behind it is:
-            a pale band that turns dark the instant the route arrives is the
-            same jump in the other dimension. The colour is the bar's own
-            spelling — `bg-ink-950` with the chrome hairline under it — so the
-            two cannot drift.
+            AND IT IS CHARCOAL, IN BOTH THEMES, because the bar behind it is: a
+            pale band that turns dark the instant the route arrives is the same
+            jump in the other dimension. The colour is the bar's own spelling —
+            `bg-ink-950`, and nothing else — so the two cannot drift.
+
+            NO `border-b`, for the same reason the rail beside it lost its
+            `border-r`: the real bar closes on the ground at #f5f5f5, a step no
+            hairline improves, so the rebrand removed both of the band's
+            internal seams. A skeleton still drawing one drops the whole page
+            1px when the route lands.
 
             Empty, like the rail column, for the same reason: the real bar is
             about to occupy it, and a shimmering placeholder under a wordmark
             that never moves is noise. */}
-        <div className="h-[70px] shrink-0 border-b border-chrome-line bg-ink-950" />
+        <div className="h-[70px] shrink-0 bg-ink-950" />
         {/* `overflow-y-auto`, matching AppShell's own surface — with
             `overflow-hidden` a classic scrollbar appeared only after the swap
             and stole width from the canvas column at the same moment. The wash

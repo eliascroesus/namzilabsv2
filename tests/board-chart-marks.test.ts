@@ -336,8 +336,27 @@ describe("the kit's shape", () => {
      * is really guarding — bars are still zero-anchored, every value still
      * goes through `formatMetricValue`, and the delta still paints up and down
      * identically so it cannot invent a direction.
+     *
+     * MOVED AGAIN FOR THE CHARCOAL/YELLOW REBRAND, and the note above is why
+     * the change was mechanical rather than a redesign. The marks were spelled
+     * `bg-primary` — the role, correctly — and `--primary` stopped being violet
+     * and became #eecf00. Six class names moved from `primary` to `marker` so
+     * the series stay the colour that paragraph already chose for them; the
+     * ramp underneath them is the same violet it always was, now under its own
+     * name.
+     *
+     * Leaving them would have been the silent failure the rebrand's whole gate
+     * exists to catch: `bg-primary` still compiles, so nothing would have
+     * failed, and a dashboard's worth of series bars would have rendered at
+     * roughly 1.1:1 on a white card. "Yellow stays out" above was written as a
+     * ratio rule and survives as a legibility one — a bar carries no ink, so it
+     * never collects the 11.24:1 that licenses yellow to be a surface.
+     *
+     * Still no honesty rule moved. Zero-anchoring, `formatMetricValue` and the
+     * direction-blind delta are all untouched, and the diff is six colour
+     * tokens and the prose around them.
      */
     const hash = createHash("sha256").update(readFileSync(join(process.cwd(), "src/components/charts.tsx"))).digest("hex");
-    expect(hash).toBe("3c7b2ee8f7537842fa8b27122fa42dca250a5b1c2c2f86f66da9f0cc24d36711");
+    expect(hash).toBe("d41fcc138f75697296437cbab96f24b2c733996aba6b208a00a1f45c80de7b93");
   });
 });

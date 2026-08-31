@@ -160,7 +160,7 @@ export function ConnectionRow({
               "everything synced from it"
             ) : (
               <>
-                all <span className="tnum">{formatMetricValue(records, { format: "number" })}</span> records synced from
+                all <span className="tnum">{formatMetricValue(records, { format: "number" })}</span>{" "}records synced from
                 it
               </>
             )}
@@ -169,7 +169,7 @@ export function ConnectionRow({
           show no data.
         </p>
         <p className="mt-1 text-sm text-muted-foreground">
-          <span className="font-semibold text-foreground">This cannot be undone.</span> Connecting the same account
+          <span className="font-semibold text-foreground">This cannot be undone.</span>{" "}Connecting the same account
           again starts from nothing and re-imports only as much history as the provider still offers — which is usually
           far less than you have now.{" "}
           {status !== "disabled" && (
@@ -609,9 +609,12 @@ export function AppDirectory({
           aria-label="Apps view"
           className="flex shrink-0 items-center gap-1 rounded-full bg-foreground/5 p-1"
         >
-          {/* BLACK MARKS THE ACTIVE ONE, which is the sheet's own ratio rule:
-              black does the work (default buttons, the active tab), violet is
-              reserved for selection and identity elsewhere. */}
+          {/* BLACK MARKS THE ACTIVE ONE, which is the kit's own division of
+              labour: black does the work (default buttons, the active tab), the
+              brand's yellow fills the single act a screen exists for, and a
+              two-state view toggle is navigation rather than an act. Violet
+              draws lines and coloured glyphs, so it has nothing to fill here
+              either. */}
           <ViewTab active={view === "discover"} onClick={() => setView("discover")}>
             Discover
           </ViewTab>
@@ -867,9 +870,9 @@ function AppCard({ app, onConnect }: { app: DirectoryApp; onConnect: () => void 
       {/* `mt-auto` is what the stretched card is for: the action sits on the
           card's floor, so a row of cards has one line of buttons. Full width in
           both branches — a 96px pill at the left edge of a 370px card is the
-          shape that read as unfinished. Black, not violet: seven of these are
-          on screen at once, and seven violets would spend the accent on a
-          catalogue. */}
+          shape that read as unfinished. Black, not the brand's yellow: seven of
+          these are on screen at once, and the yellow fill means "the one act
+          here" — seven of them is a catalogue with no act in it at all. */}
       <div className="mt-auto pt-4">
         {app.oauthHref ? (
           <a href={app.oauthHref} className={cn(buttonVariants(), "w-full")}>

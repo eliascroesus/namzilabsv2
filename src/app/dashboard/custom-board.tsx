@@ -987,8 +987,11 @@ function EmptyTile({ chart, canEdit, onPick }: { chart: string; canEdit: boolean
       onClick={onPick}
       /* `h-auto`/`w-full` because `buttonVariants` opens as a one-line pill, and
          the arbitrary radius spelling is what displaces its `rounded-full` —
-         `rounded-surface` loses to it in `cn()`. */
-      className={`${shell} h-auto rounded-[var(--radius-surface)] whitespace-normal hover:border-primary hover:bg-card/60`}
+         `rounded-surface` loses to it in `cn()`.
+         THE HOVER EDGE IS THE MARKER'S, because a border is a line: the brand
+         yellow measures 1.55:1 as a stroke on this card and the dashed rim would
+         read as vanishing under the pointer rather than as answering it. */
+      className={`${shell} h-auto rounded-[var(--radius-surface)] whitespace-normal hover:border-marker hover:bg-card/60`}
     >
       {face}
     </Button>

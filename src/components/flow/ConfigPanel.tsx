@@ -69,9 +69,19 @@ const W = 412;
  */
 const GUTTER = "px-5";
 
-/** The panel's THREE note boxes — every callout is exactly one of these. */
+/**
+ * The panel's THREE note boxes — every callout is exactly one of these.
+ *
+ * `NOTE_BRAND` is drawn in the MARKER, not in the brand: `bg-accent` and
+ * `text-accent-foreground` are the violet tint pair, and its edge is
+ * `marker-100` so all three parts of the box come off one ramp. It kept its
+ * name because it is still the branded callout — the one that says "this is
+ * the product talking" rather than "something is wrong" — but a note is a
+ * tinted surface under coloured ink, which is the one combination yellow
+ * cannot do at any step of its ramp.
+ */
 const NOTE_WARN = "rounded-card border border-warn-soft bg-warn-soft/50 p-3 text-xs text-warn-ink";
-const NOTE_BRAND = "rounded-card border border-brand-100 bg-accent p-3 text-xs text-accent-foreground";
+const NOTE_BRAND = "rounded-card border border-marker-100 bg-accent p-3 text-xs text-accent-foreground";
 const NOTE_NEUTRAL = "rounded-card border border-border bg-muted/50 p-3 text-xs text-muted-foreground";
 
 /**
@@ -99,20 +109,23 @@ const BOX = "rounded-card border border-border bg-card p-3";
  * Three of these existed as dashed GREY rectangles with grey text, which the
  * sheet gets wrong twice over: pills are for buttons and chips, and these are
  * buttons; and grey-on-grey is the spelling for something disabled, which is
- * the opposite of an invitation. Violet is the sheet's colour for the branded
- * action, and the dash survives because it still says "this row does not exist
- * yet" — the one thing the shape was genuinely carrying.
+ * the opposite of an invitation. Violet is what the product DRAWS in, and this
+ * pill is nothing but drawing — a dashed outline around coloured text, with a
+ * wash rather than a fill behind it — so it is the marker's from edge to ink.
+ * The dash survives because it still says "this row does not exist yet" — the
+ * one thing the shape was genuinely carrying.
  *
- * `accent-foreground` (brand-700) rather than `primary` (brand-500): the 500 is
- * 4.42:1 on the off-white page, which is under AA, and the sheet reserves it
- * for FILLS. Text and links take the link violet.
+ * `accent-foreground` (marker-700, 6.79:1) rather than `primary`: `--primary`
+ * is the YELLOW now, and yellow set as text on this page measures 1.55:1 —
+ * not dim, gone. Yellow fills; it never writes.
  */
 const ADD_PILL =
-  "inline-flex items-center gap-1.5 rounded-full border border-dashed border-brand-300 bg-accent/60 px-3 py-1.5 text-xs font-semibold text-accent-foreground transition-colors duration-(--duration-fast) hover:border-brand-400 hover:bg-accent";
+  "inline-flex items-center gap-1.5 rounded-full border border-dashed border-marker-300 bg-accent/60 px-3 py-1.5 text-xs font-semibold text-accent-foreground transition-colors duration-(--duration-fast) hover:border-marker-400 hover:bg-accent";
 
 /**
  * A LINK INSIDE THE PANEL — "Add another field", "Change", "Remove category".
- * Same reasoning as above: the link violet, never the fill violet.
+ * Same reasoning as above: the marker's ink step, because a link is text and
+ * the brand cannot be text.
  */
 const INLINE_LINK = "rounded-control font-semibold text-accent-foreground transition-colors duration-(--duration-fast) hover:underline";
 
@@ -411,8 +424,9 @@ export function ConfigPanel({
                      step is fine, it simply has not been run yet, and the button
                      that runs it is six inches below. So it is a solid tinted
                      card with a chip on it, in the accent that means "the
-                     branded action" everywhere else in the app. */
-                  <div className="rounded-card border border-brand-100 bg-accent px-4 py-8 text-center">
+                     branded action" everywhere else in the app — the marker's
+                     wash, with an edge off the same ramp. */
+                  <div className="rounded-card border border-marker-100 bg-accent px-4 py-8 text-center">
                     <span aria-hidden className="mx-auto flex size-11 items-center justify-center rounded-full bg-card text-accent-foreground shadow-xs">
                       <Play size={18} strokeWidth={2.25} />
                     </span>
@@ -1367,13 +1381,15 @@ function NumberPicker({
               onClick={toggle}
               title="Use a number from an earlier step"
               aria-label="Pick a number from an earlier step"
-              /* The data-picker's own affordance, wearing the violet wash the
-                 field browser opens in. The glyph took `primary` — the FILL
-                 violet — which measures 4.2:1 on that wash; `accent-foreground`
-                 is the ink the sheet pairs with `accent` and measures 6.0:1,
-                 and it is what every other clickable thing in this panel is now
-                 set in. */
-              className="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center justify-center rounded-control border border-brand-100 bg-accent p-1 text-accent-foreground transition-colors duration-(--duration-fast) hover:border-brand-300 hover:bg-brand-100"
+              /* The data-picker's own affordance, wearing the marker wash the
+                 field browser opens in. The glyph took `primary` back when
+                 `--primary` was the violet, and measured 4.2:1 on that wash;
+                 `accent-foreground` is the ink the sheet pairs with `accent`,
+                 measures 6.0:1, and is what every other clickable thing in this
+                 panel is now set in. `--primary` is the yellow today, so the
+                 old spelling would not be a weak glyph on this wash — it would
+                 be no glyph. */
+              className="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center justify-center rounded-control border border-marker-100 bg-accent p-1 text-accent-foreground transition-colors duration-(--duration-fast) hover:border-marker-300 hover:bg-marker-100"
             >
               <Database size={14} strokeWidth={2} />
             </button>
@@ -1896,7 +1912,7 @@ function DedupeOutcome({ d }: { d: { field: string; keep?: string; orderField?: 
   if (d.removed > 0 && d.ordered === 0) {
     return (
       <p className={NOTE_WARN}>
-        Removed {d.removed.toLocaleString("en-US")} record{d.removed === 1 ? "" : "s"}, but <span className="font-medium">{orderName}</span> is empty on all of them — so which one survived was arbitrary. Pick a
+        Removed {d.removed.toLocaleString("en-US")} record{d.removed === 1 ? "" : "s"}, but <span className="font-medium">{orderName}</span>{" "}is empty on all of them — so which one survived was arbitrary. Pick a
         field that orders these records.
       </p>
     );
@@ -2133,11 +2149,11 @@ function DedupeSection({ cfg, fallbackGroups, onChange }: { cfg: Record<string, 
     /* AN OPTIONAL SECTION THAT LOOKS SWITCHED ON WHEN IT IS.
        This was a grey-bordered box with a 14px checkbox in it, identical
        whether the feature was running or not — the whole state of it was a
-       4px tick. Selection is the one job the sheet gives violet, so a section
-       that is ON wears the violet wash and its edge, and a section that is off
-       stays a plain hairline box. Nothing moves; only the colour changes,
-       which is what keeps the panel from jumping as it is toggled. */
-    <div className={cn("space-y-2.5 rounded-card border p-3 transition-colors duration-(--duration-base)", on ? "border-brand-200 bg-accent/50" : "border-border bg-card")}>
+       4px tick. Selection is drawn in the marker, so a section that is ON
+       wears the violet wash and an edge off the same ramp, and a section that
+       is off stays a plain hairline box. Nothing moves; only the colour
+       changes, which is what keeps the panel from jumping as it is toggled. */
+    <div className={cn("space-y-2.5 rounded-card border p-3 transition-colors duration-(--duration-base)", on ? "border-marker-200 bg-accent/50" : "border-border bg-card")}>
       <button
         type="button"
         onClick={() => onChange({ dedupe: !on })}
@@ -2145,8 +2161,17 @@ function DedupeSection({ cfg, fallbackGroups, onChange }: { cfg: Record<string, 
         className={cn("flex w-full items-center gap-2 rounded-control text-xs font-semibold uppercase tracking-wide", on ? "text-accent-foreground" : "text-foreground")}
       >
         {/* `rounded-xs`, not `rounded-control`: an 8px radius on a 16px square
-            is a squircle, and every checkbox in the product is a crisp box. */}
-        <span className={cn("flex size-4 items-center justify-center rounded-xs border transition-colors duration-(--duration-fast)", on ? "border-primary bg-primary text-primary-foreground" : "border-input bg-card")}>
+            is a squircle, and every checkbox in the product is a crisp box.
+
+            A TICKED BOX IS A FILLED OBJECT, so it is the brand's — yellow
+            carrying the near-black tick at 11.24:1 — even though the wash it
+            sits inside is the marker's. The box says "on"; the wash says
+            "this whole section is on". Its edge is spelled `brand-600` rather
+            than `border-primary`, which is the identical colour (`--primary`
+            IS `brand-600`) named as the fill's own ramp: `border-primary` is
+            what `check:ui` fails, because a yellow LINE measures 1.55:1, and
+            this is not a line — it is the boundary of the fill. */}
+        <span className={cn("flex size-4 items-center justify-center rounded-xs border transition-colors duration-(--duration-fast)", on ? "border-brand-600 bg-primary text-primary-foreground" : "border-input bg-card")}>
           {on && <Check size={12} strokeWidth={2.75} />}
         </span>
         Remove duplicates

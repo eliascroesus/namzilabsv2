@@ -65,18 +65,34 @@ const buttonVariants = cva(
          * it inverts with the theme, and the kit gate bans that literal.
          */
         default: "bg-foreground text-background shadow-xs hover:bg-neutral-800 active:bg-neutral-700",
-        /** NEON YELLOW — the hero act, one per screen. Black ink, because the
-         *  yellow is far too bright to carry white and the sheet sets it in
-         *  black every time it appears. */
-        yellow: "bg-accent-yellow text-neutral-900 shadow-xs hover:brightness-95 active:brightness-90",
-        /** VIBRANT VIOLET — the sheet's "Button": the branded action, where a
-         *  screen wants the accent rather than the workhorse. */
-        accent: "bg-primary text-primary-foreground shadow-xs hover:bg-brand-600 active:bg-brand-700",
+        /**
+         * THE BRAND — the act the screen exists for, in yellow under near-black
+         * ink at 11.24:1.
+         *
+         * THERE WAS A `yellow` VARIANT HERE AND IT HAS GONE, which is the whole
+         * rebrand expressed in one deletion. It existed because the primary was
+         * violet and the hero act needed a colour the primary could not give it,
+         * so the kit carried two names for "the loudest button on the screen"
+         * and every call site chose between them by feel. Yellow IS the primary
+         * now, so `yellow` and `accent` resolved to the same object under two
+         * spellings — the exact drift this file's own header argues against, and
+         * the reason `check:ui` bans a second spelling of anything.
+         *
+         * Hover walks DOWN the ramp rather than brightening, and on this hue
+         * that is not a stylistic preference: `brightness-95` on a yellow moves
+         * it toward the white behind it, so the label's contrast FELL at the one
+         * moment the button was under a pointer.
+         */
+        accent: "bg-primary text-primary-foreground shadow-xs hover:bg-brand-700 active:bg-brand-800",
         secondary: "border border-border bg-card text-foreground shadow-xs hover:bg-muted active:bg-neutral-200",
-        /** The sheet's "Pressed" — a violet wash carrying violet ink. */
-        soft: "bg-accent text-accent-foreground hover:bg-brand-100 active:bg-brand-200",
-        /** Its "Deject" — outlined violet, for a secondary act in a violet flow. */
-        outlineAccent: "border border-brand-300 bg-transparent text-accent-foreground hover:bg-accent",
+        /** A MARKER wash carrying marker ink — the tint pair, not the brand's.
+         *  A yellow wash under yellow ink is the one combination the fill/stroke
+         *  split forbids: the ink would have to be near-black, at which point it
+         *  is not a tinted button, it is a pale one. */
+        soft: "bg-accent text-accent-foreground hover:bg-marker-100 active:bg-marker-200",
+        /** Outlined marker, for a secondary act in a branded flow. The border is
+         *  a LINE, so it is the marker's by construction. */
+        outlineAccent: "border border-marker-300 bg-transparent text-accent-foreground hover:bg-accent",
         ghost: "text-muted-foreground hover:bg-muted hover:text-foreground active:bg-neutral-200",
         destructive: "bg-destructive text-destructive-foreground shadow-xs hover:bg-danger-ink active:brightness-95",
         success: "bg-success-soft text-success-ink hover:brightness-[0.97]",

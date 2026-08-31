@@ -150,7 +150,15 @@ export function ReviewPublishModal({
             const m = byId.get(ep.nodeId);
             if (!m) return null;
             return (
-              <div key={ep.nodeId} className={`rounded-card border p-3.5 transition-colors ${m.enabled ? "border-brand-200 bg-accent/60" : "border-border bg-card opacity-80"}`}>
+              /* An enabled row wears the marker's wash and an edge off the same
+                 ramp — a tinted surface is drawing, not filling. The BOX
+                 inside it is the exception and stays on the brand: `accent-*`
+                 sets the CSS `accent-color`, which fills the native checkbox,
+                 and every other checkbox in the product fills with the yellow
+                 too. The browser picks the tick's colour from the fill's
+                 luminance, so a yellow box gets a dark tick without being
+                 asked. */
+              <div key={ep.nodeId} className={`rounded-card border p-3.5 transition-colors ${m.enabled ? "border-marker-200 bg-accent/60" : "border-border bg-card opacity-80"}`}>
                 <label className="flex items-center justify-between gap-2">
                   <span className="flex min-w-0 items-center gap-2">
                     <input type="checkbox" checked={m.enabled} onChange={(e) => set(ep.nodeId, { enabled: e.target.checked })} className="h-4 w-4 accent-brand-600" />

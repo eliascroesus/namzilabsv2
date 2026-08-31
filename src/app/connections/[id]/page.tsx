@@ -108,15 +108,16 @@ export default async function ConnectionPage({
             <>
               <ConnectionStatusPill status={conn.status} />
               {conn.status === "disabled" ? (
-                /* THE ONE YELLOW ON THIS PAGE, and only on this branch. A
-                   disconnected connection is a page with exactly one act on it
-                   — turn it back on — which is the sheet's definition of the
-                   hero. An active connection has no single act (sync, preview,
-                   replay, disconnect all sit at the same level), so it gets no
-                   yellow at all: the scarcity is the meaning. */
+                /* THE BRAND FILLS THE ACT, and only on this branch. A
+                   disconnected connection is a page with exactly one thing to
+                   do — turn it back on — so that button takes the yellow fill
+                   under near-black ink. An active connection has no single act
+                   (sync, preview, replay, disconnect all sit at the same
+                   level), so nothing here is yellow: the fill marks the act,
+                   and where there is no one act there is nothing to mark. */
                 <form action={reconnectAction}>
                   <input type="hidden" name="id" value={conn.id} />
-                  <Button type="submit" variant="yellow">
+                  <Button type="submit" variant="accent">
                     Reconnect
                   </Button>
                 </form>
@@ -253,10 +254,11 @@ export default async function ConnectionPage({
           <section className="mt-8">
             <div className="mb-3 flex items-center justify-between">
               <SectionHeading className="mb-0">Latest records</SectionHeading>
-              {/* THE LINK VIOLET, NOT THE FILL VIOLET. `--primary` is brand-500,
-                  which measures 4.42:1 on the off-white page — under AA, and
-                  the sheet is explicit that the 500 fills while the 700 speaks.
-                  `accent-foreground` IS that 700. */}
+              {/* THE MARKER'S INK STEP, NOT THE MARK ITSELF. `--marker` is
+                  marker-500, which measures 4.41:1 on the off-white page — past
+                  the 3:1 a line owes and short of the 4.5:1 body text owes, and
+                  a link is body text. `accent-foreground` is marker-700 at
+                  6.79:1, which is the step the sheet cut for exactly this. */}
               <Link
                 href={`/connections/${conn.id}?preview=1`}
                 className="rounded-control text-sm font-semibold text-accent-foreground transition-colors hover:underline"
@@ -528,8 +530,8 @@ function SyncControl({
         <div className="flex items-center gap-2.5">
           {/* `accent` / `accent-foreground` — the violet WASH carrying the
               violet INK, which is the one tinted chip the kit already draws
-              (EmptyState's icon disc). The 500 fills and the 700 speaks: a
-              stroked glyph is speaking, so it takes the 700. */}
+              (EmptyState's icon disc). The marker's 500 is the mark and its 700
+              is the ink: a stroked glyph is ink, so it takes the 700. */}
           <span
             aria-hidden
             className="flex size-9 shrink-0 items-center justify-center rounded-control bg-accent text-accent-foreground"

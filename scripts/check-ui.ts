@@ -207,7 +207,23 @@ const RULES: Rule[] = [
   },
   {
     name: "black-as-primary",
-    why: "the product has ONE primary and it is ultramarine; bg-neutral-900 buttons are the old split brand",
+    why: "the workhorse button is the `foreground` ROLE, which inverts; bg-neutral-900 is that black frozen at one exposure",
+    /**
+     * THE RULE SURVIVED THE REBRAND; ITS RATIONALE DID NOT.
+     *
+     * This line used to read "the product has ONE primary and it is
+     * ultramarine", and every word of that is now false. `--primary` is
+     * `#eecf00`, and the button this rule is actually about was never the
+     * primary anyway — the default `Button` variant is `bg-foreground`, the
+     * near-black that carries the ordinary act on every screen.
+     *
+     * What is banned is spelling that near-black as a RAMP STEP at a call
+     * site. `--foreground` answers `neutral-900` in light and `ink-50` in
+     * dark, so a `bg-foreground` button inverts with the theme; `bg-neutral-900`
+     * is pinned to `#1a1a1a`, which is the dark theme's own PAGE colour — a
+     * black button on a black page, invisible, and identical to the correct
+     * one in light mode, which is precisely why nobody would catch it by eye.
+     */
     find: (line) => (line.includes("bg-neutral-900") ? "bg-neutral-900" : null),
     // The landing's exemption is gone too — its buttons were the last
     // black-as-primary in the product and are now `buttonVariants()` like
@@ -215,6 +231,70 @@ const RULES: Rule[] = [
     allow: {
       "src/components/charts.tsx": "if bars ever need a neutral series tone, it is decided there once",
     },
+  },
+  {
+    name: "yellow-as-stroke",
+    why: "#eecf00 is 1.55:1 as a stroke or as text on white and 11.24:1 as a fill under #1a1a1a ink — the primary may only be FILLED; lines and coloured glyphs take --marker",
+    /**
+     * THE RULE THAT MAKES THE REBRAND HOLD — and the reason "yellow fills,
+     * violet draws" is a script rather than a sentence in DESIGN.md.
+     *
+     * `--primary` was violet at 7.19:1 on white, and it was doing two
+     * incompatible jobs without anyone having to notice: 36 sites filled with
+     * it, ~23 stroked or inked with it, and both looked right because a
+     * mid-tone violet is legible either way. Yellow is legible exactly one of
+     * those ways.
+     *
+     * The failure mode is the one this whole file exists for. `text-primary`
+     * and `border-primary` are legal classes pointing at a live token, so they
+     * COMPILE — Tailwind emits the rule, the build passes, and the link renders
+     * at 1.55:1 on white. That is not a dim colour, it is an absent one, and
+     * the only person who will ever catch it is someone looking at that exact
+     * hover state on that exact screen.
+     *
+     * So the split has two tokens and this is what keeps them apart: a filled
+     * object says `bg-primary` + `text-primary-foreground`, and every line and
+     * every coloured glyph says `border-marker`, `ring-marker`, `stroke-marker`,
+     * `fill-marker` or `text-marker-ink`.
+     *
+     * `bg-primary` is deliberately NOT in the alternation — it is the whole
+     * point of the token — and the negative lookahead is load-bearing for the
+     * same reason it is in the type-alias rule above: `\b` matches before a
+     * hyphen, so a bare `\btext-primary\b` would flag every
+     * `text-primary-foreground` in the app, and the rule against yellow ink
+     * would ban yellow's own ink. The optional `/\d+` tail is there to print
+     * the whole token in the report, since `border-primary/25` is the shape
+     * this drift usually arrives in.
+     */
+    find: (line) =>
+      line.match(/\b(?:text|border|ring|stroke|fill|divide|outline)-primary\b(?!-foreground)(?:\/\d+)?/)?.[0] ?? null,
+    // ONE EXEMPTION, AND IT IS A DIFFERENT SURFACE RATHER THAN A DIFFERENT
+    // OPINION. The measurement that forbids a yellow line is a measurement
+    // against a LIGHT ground; on the chrome band the same stroke is 8.77:1,
+    // which is past the 3:1 a non-text mark owes with room to spare. The band
+    // is the only place in the product that ground exists.
+    allow: {
+      "src/components/top-bar.tsx": "the metrics ring's arc, drawn on the #2e2e2e band where the brand strokes at 8.77:1 rather than 1.42:1",
+    },
+  },
+  {
+    name: "retired accent-yellow",
+    why: "--color-accent-yellow was deleted when yellow became the brand; the class still parses and compiles to NOTHING, so the object renders with no fill at all",
+    /**
+     * The sheet's decorative set held a fifth colour — `#faf63c`, a highlighter
+     * neon — for as long as `--primary` was violet and the kit needed a yellow
+     * that was not the brand. Now that yellow IS the brand, two yellows four
+     * counts apart under two names is a pair nobody could have kept in step and
+     * nobody could have told apart on screen, so the token is gone.
+     *
+     * Deleting it without a rule is the wrong punishment here, for the reason
+     * the retired type aliases got one: an unresolved COLOUR utility does not
+     * look broken. `bg-accent-yellow` renders as no background at all, so a
+     * chip that should be the loudest object in its row reads as a plain label
+     * on the card behind it — legible, plausible, and wrong. Anything that
+     * wants the brand asks for `bg-primary` with `text-primary-foreground`.
+     */
+    find: (line) => line.match(/\b(?:bg|text|border|divide|ring|outline|fill|stroke|from|via|to)-accent-yellow\b/)?.[0] ?? null,
   },
   {
     name: "hex literal",

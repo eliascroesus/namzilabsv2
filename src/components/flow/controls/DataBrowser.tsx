@@ -20,7 +20,7 @@ function FieldRow({ field, onDrill, onPick }: { field: DataField; onDrill: () =>
     <button
       type="button"
       onClick={field.container ? onDrill : onPick}
-      className="flex w-full items-center gap-3 rounded-control border border-border bg-muted/40 px-2.5 py-2 text-left transition-colors hover:border-brand-200 hover:bg-accent/60"
+      className="flex w-full items-center gap-3 rounded-control border border-border bg-muted/40 px-2.5 py-2 text-left transition-colors hover:border-marker-200 hover:bg-accent/60"
     >
       <span className="flex min-w-0 max-w-[55%] shrink-0 items-center gap-1.5">
         <span className="truncate text-sm text-foreground">{field.label}</span>
@@ -141,7 +141,11 @@ export function DataBrowser({
     <button
       type="button"
       onClick={() => setShowAll((prev) => new Set(prev).add(k))}
-      className="mt-1 w-full rounded-control px-2.5 py-1.5 text-left text-xs font-medium text-primary transition-colors hover:bg-accent"
+      // A LINK, so it takes the marker's ink step — 6.79:1, where the 4.41:1 of
+      // the object step is short of what 12px text owes. `text-primary` was
+      // this line while the primary was violet; today that spelling is yellow
+      // text on a white flyout at 1.55:1.
+      className="mt-1 w-full rounded-control px-2.5 py-1.5 text-left text-xs font-medium text-marker-ink transition-colors hover:bg-accent"
     >
       Show all {hidden + VISIBLE} fields
     </button>
@@ -172,8 +176,12 @@ export function DataBrowser({
       anchor={trigger({ open, toggle })}
     >
       <>
-        {/* Left-edge resize handle. */}
-        <div onPointerDown={startResize} title="Drag to resize" className="absolute inset-y-0 left-0 z-10 w-1.5 cursor-ew-resize transition-colors hover:bg-brand-200/70" />
+        {/* Left-edge resize handle. Six pixels wide and the full height of the
+            flyout, which makes it a RULE rather than a filled object however it
+            is spelled — so its hover wash is the marker's. At `brand-200` it
+            would be a #fae98a hairline on a white panel, under 1.2:1: a handle
+            that stops answering the pointer. */}
+        <div onPointerDown={startResize} title="Drag to resize" className="absolute inset-y-0 left-0 z-10 w-1.5 cursor-ew-resize transition-colors hover:bg-marker-200/70" />
 
         <div className="space-y-2 border-b border-border p-2.5">
           <div className="flex items-center gap-1.5">

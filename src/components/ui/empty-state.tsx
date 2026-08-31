@@ -32,10 +32,13 @@ export function EmptyState({ icon, title, description, action, className }: Empt
       )}
     >
       {icon && (
-        // THE ONE PIECE OF COLOUR IN AN OTHERWISE EMPTY BOX, and the sheet's
-        // own: the violet tint carrying the violet ink (`accent` /
-        // `accent-foreground` — the 700, since the 500 is a fill colour and
-        // this is a stroked glyph). It was a grey disc on a grey wash, which
+        // THE ONE PIECE OF COLOUR IN AN OTHERWISE EMPTY BOX, and it is the
+        // MARKER's: the violet tint carrying the violet ink (`accent` /
+        // `accent-foreground` — the 700, because a lucide glyph is a drawn LINE
+        // and is read like text, where the 500's 4.41:1 falls short). Not the
+        // brand: yellow is a fill under near-black ink, and a near-black glyph
+        // on a yellow disc is a button, which this is not — there is one of
+        // those in the `action` slot already. It was a grey disc on a grey wash, which
         // on a white card is two neutrals apart and read as a placeholder for
         // the placeholder. A full circle rather than a rounded square, because
         // the sheet is pill-first and this is the one mark in the composition.

@@ -56,7 +56,7 @@ export function LegalPage({
 
         <p className="mt-14 border-t border-border pt-6 text-sm text-muted-foreground">
           See also our{" "}
-          <Link href={also.href} className="font-medium text-primary underline-offset-4 hover:underline">
+          <Link href={also.href} className="font-medium text-marker-ink underline-offset-4 hover:underline">
             {also.label}
           </Link>
           .
@@ -85,11 +85,23 @@ export function LegalSection({ title, children }: { title: string; children: Rea
   );
 }
 
-/** A link inside legal prose — the kit's link recipe, so it can never be blue again. */
+/**
+ * A link inside legal prose — the kit's link recipe, so it can never be blue
+ * again.
+ *
+ * `marker-ink` rather than `primary`, which is the fill/stroke split at its
+ * plainest: a link is TEXT, and the brand's yellow measures 1.55:1 as text on
+ * white. `--marker-ink` is the step that exists to carry words (6.79:1 light,
+ * and it climbs the ramp to marker-300 in dark rather than vanishing), and it is
+ * the same violet the crumb trail and the `link` Button hover to.
+ */
 export function LegalLink({ className, ...props }: React.ComponentProps<"a">) {
   return (
     <a
-      className={cn("rounded-control font-medium text-primary underline underline-offset-4 hover:no-underline", className)}
+      className={cn(
+        "rounded-control font-medium text-marker-ink underline underline-offset-4 hover:no-underline",
+        className,
+      )}
       {...props}
     />
   );

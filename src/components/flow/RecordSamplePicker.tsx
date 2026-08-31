@@ -76,12 +76,22 @@ export function RecordSamplePicker({ records, selectedIndex, onSelect }: { recor
             key={i}
             className={cn(
               "group overflow-hidden rounded-control border transition-colors has-[summary:focus-visible]:ring-4 has-[summary:focus-visible]:ring-ring/40",
-              selected ? "border-brand-300 bg-accent/60" : "border-border bg-muted/40 hover:border-brand-200 hover:bg-muted",
+              /* Selection is the marker's, edge and wash alike: `bg-accent` is
+                 marker-50, so its border comes off the same ramp rather than
+                 off the brand's, which at these steps is a pale gold. */
+              selected ? "border-marker-300 bg-accent/60" : "border-border bg-muted/40 hover:border-marker-200 hover:bg-muted",
             )}
           >
             <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-2.5 py-2 text-xs">
               <span className="flex min-w-0 items-center gap-1.5">
-                {selected && <Star size={14} fill="currentColor" className="shrink-0 text-primary" aria-hidden />}
+                {/* A COLOURED GLYPH IS THE MARKER'S, filled or not. A 14px star
+                    is read against the surface behind it rather than as a
+                    surface carrying ink, so the 11.24:1 the yellow earns under
+                    near-black does not apply to it — as `text-primary` it would
+                    be a 1.55:1 star on a violet wash. It takes the ink step so
+                    it is the same violet as the title beside it, instead of two
+                    violets two rungs apart on one row. */}
+                {selected && <Star size={14} fill="currentColor" className="shrink-0 text-marker-ink" aria-hidden />}
                 <span className={cn("truncate font-medium", selected ? "text-accent-foreground" : "text-foreground")}>{title || `Record ${i + 1}`}</span>
               </span>
               <span className="shrink-0 text-xs text-muted-foreground">

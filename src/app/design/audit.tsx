@@ -161,7 +161,7 @@ const PATTERNS: Array<{ name: string; where: string; weakness: string }> = [
     name: "Settings section",
     where: "app/dashboard/settings/page.tsx:77",
     weakness:
-      "Four near-identical white slabs with no rhythm between them. The avatar palette is three unrelated ideas in one column — solid violet for the owner, pastels for members, a dashed grey circle for invitees — and the one yellow on the page sits on 'Send invite', the least consequential row.",
+      "Four near-identical white slabs with no rhythm between them. The avatar palette is three unrelated ideas in one column — solid violet for the owner, pastels for members, a dashed grey circle for invitees — and the brand's yellow lands on 'Send invite'. That used to be a scarcity violation; it is not one any more, since yellow is no longer rationed. It is still the loudest fill on the page pointing at the smallest act on it.",
   },
   {
     name: "Activity table",

@@ -2,8 +2,8 @@
 name: Namzilabs
 tagline: Six tools disagree; this one answers in a figure you can defend.
 register: quiet chrome, loud numbers
-surfaces: [icon rail, top band, ground, view strip, period track, group column]
-accent: violet (selection) · yellow (the one hero act) · green (which slice)
+surfaces: [band (rail + top bar), ground, view strip, period track, group column]
+accent: yellow FILLS (the brand) · violet DRAWS (the marker) · nothing else
 neutral: Untitled UI grey, faint blue cast
 type: Helvetica Neue / Inter · 12 · 14 · 16 · 18 · 20 · 24 · 30 · 36
 radius: 8 control · 12 card · 16 surface · full pill
@@ -40,8 +40,9 @@ Furniture that shouts is why most operational tools are exhausting by 4pm.
 
 ## 2. The band, and the fact that it does not move
 
-The product's identity is a **single near-black band** — a 70px icon rail down
-the left and a 70px bar across the top — wrapping a page that is not black.
+The product's identity is a **single charcoal band** — `#2E2E2E`, a 70px icon
+rail down the left and a 70px bar across the top — wrapping a page that is not
+charcoal.
 
 **The band never inverts.** `ink-950` in both themes; only the page inside it
 switches. This is what Miro, Notion and Linear all do, and the reason is not
@@ -49,11 +50,35 @@ imitation: a rail that changes colour with the theme is a rail with no identity.
 It is the one part of the app that says *where you are* before you read a word,
 so it has to be the same object at both exposures.
 
-The rail carries no labels. Seven 40px slots, each wrapping a 28px chip: rest is
-a pale square, active is a solid violet fill, search is white. Names live in
-`aria-label` **and** a tooltip — one without the other excludes half the room.
-The 40px slot stays the hit target, so nothing got harder to press when the
-words left.
+**The band has no seam inside it.** The rail's `border-r` and the top bar's
+`border-b` are both gone. That is §5's own rule applied to the chrome — *a rule
+drawn where two different materials already meet is a rule doing nothing* —
+because below the bar and right of the rail is the ground at `#F5F5F5`, and a
+40-point luminance step needs no help finding its own edge. Inside the band
+there is no second material to divide from, so the rail and the bar are one
+continuous shape with the ground's 16px corner cut out of its inner angle.
+`--chrome-line` survives for what is genuinely *within* the band: the ⌘K keycap,
+chip outlines on dark.
+
+The rail carries no labels and no headings. Six 40px slots, each wrapping a 28px
+chip, in one flat uniformly-spaced stack from the mark to the foot. **Rest is
+nothing at all** — a bare white glyph, which on this charcoal measures 12.9:1
+and does not need a plate to be found; hover raises to `ink-900`; **active is a
+filled yellow chip**, and it is the one filled object in the column, which is
+why the other five do not have to compete to be seen.
+
+The stack used to be two groups — Workspace and Build — each opening with a caps
+label whose line was *reserved* at 70px so it could fade in on hover without
+moving anything. That reservation was correct and worth recording: a heading
+that grows from zero on hover pushes every row below it down ~20px while the
+pointer is on one of them, so you aim at Flows and click Activity. The headings
+are gone rather than collapsed, because keeping them meant ~56px of blank
+charcoal in a shut rail to hold two words nobody can see. Five destinations is
+under the count at which a list needs sorting into groups to be read.
+
+Names live in `aria-label` **and** a tooltip — one without the other excludes
+half the room. The 40px slot stays the hit target, so nothing got harder to
+press when the words left.
 
 The top bar holds the workspace on the left, the greeting centred, and the acts
 on the right. On the builder its centre is a portal: the whole editing toolbar
@@ -81,25 +106,52 @@ the problem stops existing instead of needing a patch.
 
 ---
 
-## 4. Colour has a ratio, and each colour has one job
+## 4. Yellow fills. Violet draws.
 
 Written down because "use the brand colours" is not a rule anybody can apply
-twice the same way:
+twice the same way — and because this one is a measurement rather than a taste
+call:
+
+| `#EECF00` | on `#FFFFFF` | on the `#F5F5F5` ground | on the `#2E2E2E` band |
+|---|---|---|---|
+| as a **stroke or text** | **1.55:1** | **1.42:1** | 8.77:1 |
+| as a **fill**, ink `#1A1A1A` | **11.24:1** | — | — |
+
+A yellow line on a light page is invisible and a yellow fill is superb. So each
+colour's job is a SHAPE, not a meaning:
 
 | | job | where |
 |---|---|---|
-| **Near-black** | does the work | the band, default buttons, the toast |
-| **Violet** | SELECTION and identity | active rail row, active period pill, links, focus ring |
-| **Yellow** | the HERO — at most once per screen | New flow, Refresh all |
-| **Green** | which slice of THIS page | the active view tab's rule |
+| **Charcoal** | the band, and only the band | rail + top bar, one unbroken `#2E2E2E` |
+| **Yellow** | **FILLS** | the mark, the active rail chip, primary buttons, the unread badge, step markers, the active period pill, the empty card's cap |
+| **Violet** | **DRAWS** | focus ring, links, hover borders, selection rings, the view strip's rule — plus the workspace avatar, the one place violet is a fill, because identity is not a control |
+| **Near-black** | ink, and the workhorse button | body copy, `bg-foreground` buttons, the toast |
 
-Yellow's scarcity **is** its meaning. A second yellow on a page halves the value
-of the first, which is why a board of twelve metric tiles spends none of it.
+The one place yellow may stroke is a dark surface, where it measures **8.77:1**:
+the top bar's progress arc is yellow for that reason and a link never is.
 
-Violet and green answer two different questions on purpose — the rail and the
-period track say *where you are in the app*, a tab says *which arrangement of
-this page* — and one colour answering both is how a screen stops pointing at
-anything.
+**This rule replaced "yellow is the HERO, at most once per screen", and the
+replacement is not a change of mind — it is a change of what can be checked.**
+The scarcity rule said the value of the yellow *was* its rarity, so a second one
+halved the first. Nothing anywhere could count them. It was enforced by whoever
+happened to be reviewing, which means it was enforced for about as long as
+anyone remembered it, and the chrome ended up spending yellow eight times on one
+screen with no failure of any kind. The fill/stroke split says something a
+script can test, and `scripts/check-ui.ts` tests it: the `yellow-as-stroke` rule
+fails the build the moment `--primary` is spelled as text, a border, a ring, a
+stroke, a fill or a divide. `bg-primary` with `text-primary-foreground` is the
+only shape it will pass.
+
+**The green is gone, and losing it closed a bug this file had already
+confessed.** Green said *which slice of this page* — the active view tab's 2px
+rule, `#00d492`. Its own token comment admitted the measurement: 9.02:1 on the
+dark ground and **1.78:1 on the light one**, where a 2px rule carrying state is
+well under the 3:1 such an indicator owes, so the underline was legible only
+because the weight change beside it was doing the work. Under the new rule an
+underline is a **stroke**, and a stroke is the marker's: **4.41:1** light,
+**6.60:1** dark. The rule now carries the state on its own at both exposures.
+The green had no job left anyway — it was picked to differ from a selection
+violet the rail no longer wears.
 
 State (success / warn / danger) is a separate vocabulary and never borrows from
 these. **Status is quiet when fine:** a healthy tile carries a 6px dot; only one
@@ -141,9 +193,16 @@ on a second spelling. This is not tidiness: the app once ran twelve names over
 nine sizes with three-way ties, every one of them legal, so the same label was
 one size in one file and another size in the next while every check passed.
 
-Weights are 400 / 500 / 600. Never 700. **The active thing is the heavier one** —
-this ran backwards in the view strip for a while, so the five tabs you were not
-on were the boldest words in the row.
+Weights are 400 / 500 / 600. Never 700 — and the rebrand's own source did not
+get an exemption. The Figma export sets the top bar's workspace name, avatar
+initial and greeting at **700**; the kit's ladder is three rungs and `check:ui`
+fails on `font-bold`, so all three shipped at 600. A fourth weight used in one
+file and nowhere else is not a design decision, it is the near-miss §1 of the
+token file opens by arguing against. It is one of five places this build
+deliberately does not follow the export.
+
+**The active thing is the heavier one** — this ran backwards in the view strip
+for a while, so the five tabs you were not on were the boldest words in the row.
 
 ---
 
@@ -151,12 +210,21 @@ on were the boldest words in the row.
 
 - **View strip** — the board's arrangements, Notion's view bar doing Notion's
   job. Real anchors, so a link pasted into Slack opens on the sender's view.
-  Active takes the green rule *and* the weight *and* the ink; the rule alone is
-  1.78:1 on the light ground and cannot carry the state by itself.
+  Active takes the **marker** rule *and* the weight *and* the ink. It still
+  takes all three, but for a different reason than it used to: the green it was
+  drawn in measured 1.78:1 on the light ground and *could not* carry the state
+  alone, so the weight was compensating for a broken rule. The marker is 4.41:1
+  light and 6.60:1 dark — the rule now holds on its own, and the weight and ink
+  are there because a selection should be unmistakable, not because it has to be.
 - **Period track** — six mutually exclusive windows in a segmented pill group.
   The one control that follows the PAGE rather than the band, because a
   near-black pill group on a light page is a second dark object competing with
-  the chrome, and the chrome has to win that fight.
+  the chrome, and the chrome has to win that fight. **The active pill is
+  yellow**, which follows from §4 rather than from the export (which does not
+  draw this control): an active segment is a filled object, and a filled object
+  is the brand. It also keeps the product's two "you are here" marks spelled the
+  same way — the rail's chip went yellow, and a pill that stayed violet one
+  surface over would mean two selections in two colours, pointing at nothing.
 - **Group column** — a tinted lane with a 4px accent bar, a name badge in its own
   hue, and a count. The tint is 6% so a card on it still reads as an object; the
   1px inset ring at 14% is what turns a wash into a panel.

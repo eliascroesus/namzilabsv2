@@ -33,8 +33,13 @@ export function FunnelView({ result }: { result: FunnelResult }) {
               </span>
             </div>
             <div className="h-6 w-full overflow-hidden rounded-control bg-muted">
+              {/* THE MARKER, NOT THE BRAND — the same call every mark in
+                  `charts.tsx` makes. A stage bar carries no ink, so the only
+                  contrast it has is its own edge against the `muted` track, and
+                  yellow measures 1.42:1 there. The brand's 11.24:1 is the ratio
+                  of dark ink ON a yellow fill, which is not the shape a bar is. */}
               <div
-                className={cn("h-full", isBottleneck ? "bg-danger" : "bg-brand-600")}
+                className={cn("h-full", isBottleneck ? "bg-danger" : "bg-marker")}
                 style={{ width: `${Math.max(pct, 2)}%` }}
               />
             </div>

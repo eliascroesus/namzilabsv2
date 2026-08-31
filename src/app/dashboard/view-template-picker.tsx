@@ -84,10 +84,15 @@ function CustomPreview() {
         <span className="h-1.5 w-2/5 rounded-full bg-foreground/25" />
         {/* The bars, at hand-picked heights so the thumbnail is identical on
             every render — `Math.random()` in a component is a hydration
-            mismatch, and a chart that reshuffles is not a picture of anything. */}
+            mismatch, and a chart that reshuffles is not a picture of anything.
+            IN THE MARKER, because that is what the real bars are drawn in: a
+            mark is one measure with no ink on it, so all it has is its edge
+            against the card, and the brand yellow is 1.55:1 there. A preview
+            that used a colour the board does not is the drift this whole file
+            argues against. */}
         <span className="flex flex-1 items-end gap-1">
           {[45, 70, 35, 90, 60, 80].map((h, i) => (
-            <span key={i} className="flex-1 rounded-xs bg-primary/70" style={{ height: `${h}%` }} />
+            <span key={i} className="flex-1 rounded-xs bg-marker/70" style={{ height: `${h}%` }} />
           ))}
         </span>
       </span>
@@ -114,9 +119,9 @@ function CustomPreview() {
  * picture of a calendar. The tinted squares fade the way the real ramp does, so
  * the thumbnail says "heat map" rather than merely "grid".
  *
- * Orange, where the other two are violet and neutral — it is the calendar
- * kind's identity tint, and the board you land on wears the same colour on the
- * chip beside its metric picker.
+ * Orange, where the previews beside it draw their marks in the marker and
+ * everything else in neutrals — it is the calendar kind's identity tint, and the
+ * board you land on wears the same colour on the chip beside its metric picker.
  */
 function CalendarPreview() {
   /* Two leading blanks, then a month of squares whose weight rises and falls —
@@ -186,7 +191,7 @@ function ReportPreview() {
           ) : (
             <span className="flex flex-1 items-end gap-1">
               {[50, 75, 40, 90, 60].map((h, b) => (
-                <span key={b} className="flex-1 rounded-xs bg-primary/70" style={{ height: `${h}%` }} />
+                <span key={b} className="flex-1 rounded-xs bg-marker/70" style={{ height: `${h}%` }} />
               ))}
             </span>
           )}
@@ -331,9 +336,15 @@ export function ViewTemplatePicker({
              `justify-center` centres the spare space, which pushed the Calendar
              card's heading 10px below the other two. Three cards whose titles
              sit on three different lines is the kind of thing that reads as
-             sloppiness without ever being noticed as a bug. */
+             sloppiness without ever being noticed as a bug.
+
+             THE HOVER EDGE IS THE MARKER'S. A border is a line, and the brand
+             yellow measures 1.55:1 as a stroke on white — the card would answer
+             the pointer by appearing to lose its edge rather than to gain one.
+             Violet is what draws in this product, and at 4.41:1 a 1px rim is
+             unmistakably there. */
           const shell =
-            "group/tpl h-full w-full flex-col items-stretch justify-start gap-0 whitespace-normal rounded-[var(--radius-surface)] border border-border bg-card p-0 text-left transition-colors hover:border-primary hover:bg-card";
+            "group/tpl h-full w-full flex-col items-stretch justify-start gap-0 whitespace-normal rounded-[var(--radius-surface)] border border-border bg-card p-0 text-left transition-colors hover:border-marker hover:bg-card";
           const face = (
             <>
               {/* THE THUMBNAIL IS THE CARD NOW, and the sentence under it is

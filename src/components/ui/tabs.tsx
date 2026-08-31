@@ -70,17 +70,22 @@ function TabsList({
 }
 
 /**
- * THE TWO TAB STRIPS, AND WHY THE VIOLET IS SPELLED TWICE.
+ * THE TWO TAB STRIPS, AND WHY THE ACTIVE STATE IS SPELLED IN TWO COLOURS.
  *
- * `default` is the segmented control: a violet pill slides under the active
- * label, which is a FILL, so it takes `--primary` (the vibrant 500) with white
- * on it. `line` is the underlined strip: the mark is a 2px rule that takes the
- * 500 as well — also a fill — but the LABEL beside it is text, and text cannot
- * have the 500. Brand-500 measures 4.42:1 on our off-white, under AA. So the
- * line variant's active label is `accent-foreground`, the 700, at 6.79:1.
+ * `default` is the segmented control: a pill slides under the active label.
+ * That is a FILLED object, so it is the brand — `--primary` carrying near-black
+ * at 11.24:1. `line` is the underlined strip, and everything it draws is the
+ * OTHER half of the split: the mark is a 2px rule and the label beside it is a
+ * word. Neither may be yellow. #eecf00 measures 1.42:1 as a stroke on the app's
+ * ground, which is not dim, it is gone.
  *
- * That is the whole rule the brand sheet cares about: fills take the 500, words
- * take the 700, and a component that renders both has to say both.
+ * So the rule takes `--marker` (4.41:1 light, 6.60:1 dark) and the label takes
+ * `accent-foreground`, the marker's ink step, at 6.79:1 — because 4.41 clears
+ * the 3:1 a rule owes and falls short of the 4.5:1 a word does.
+ *
+ * That is the whole rule the rebrand cares about, in one component: fills are
+ * yellow, lines and words are violet, and a strip that renders both has to say
+ * both.
  *
  * The four class strings below stay as four arguments because Tailwind resolves
  * them by variant count, not by source order: the `line` overrides carry two
@@ -111,17 +116,24 @@ function TabsTrigger({
         // every other control in the product — the exact drift that rule
         // exists to end.
         "relative inline-flex h-full flex-1 items-center justify-center gap-1.5 rounded-control border border-transparent px-3 py-1 text-sm font-medium whitespace-nowrap text-muted-foreground transition-colors duration-(--duration-fast) group-data-[orientation=vertical]/tabs:w-full group-data-[orientation=vertical]/tabs:justify-start hover:text-foreground disabled:pointer-events-none disabled:opacity-50 group-data-[variant=default]/tabs-list:data-[state=active]:shadow-xs group-data-[variant=line]/tabs-list:data-[state=active]:shadow-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
-        // ACTIVE, segmented: the violet pill. White on brand-500 is 4.81:1,
-        // which clears AA for the 14px semibold label it carries.
+        // ACTIVE, segmented: the brand pill. Near-black on #eecf00 is 11.24:1,
+        // comfortably past AA for the 14px semibold label it carries.
         "data-[state=active]:bg-primary data-[state=active]:font-semibold data-[state=active]:text-primary-foreground",
-        // ACTIVE, line: no fill at all, and the label takes the READABLE
-        // violet rather than the pill's.
+        // ACTIVE, line: no fill at all, so the label takes the marker's INK step
+        // rather than the pill's yellow — a word on the page, not an object on
+        // it, and yellow has no step that may carry a word.
         "group-data-[variant=line]/tabs-list:bg-transparent group-data-[variant=line]/tabs-list:data-[state=active]:bg-transparent group-data-[variant=line]/tabs-list:data-[state=active]:text-accent-foreground group-data-[variant=line]/tabs-list:data-[state=active]:border-transparent",
-        // The line variant's mark. `after:bg-primary` where it was
-        // `after:bg-foreground`: a near-black underline says "current" in the
-        // same voice as the body text around it, where the brand colour says
-        // it as the product.
-        "after:absolute after:bg-primary after:opacity-0 after:transition-opacity group-data-[orientation=horizontal]/tabs:after:inset-x-0 group-data-[orientation=horizontal]/tabs:after:bottom-[-5px] group-data-[orientation=horizontal]/tabs:after:h-0.5 group-data-[orientation=vertical]/tabs:after:inset-y-0 group-data-[orientation=vertical]/tabs:after:-right-1 group-data-[orientation=vertical]/tabs:after:w-0.5 group-data-[variant=line]/tabs-list:data-[state=active]:after:opacity-100",
+        // The line variant's mark, and the one class in this file the rebrand
+        // moved. It was `after:bg-primary`, and `after:bg-foreground` before
+        // that — a near-black underline said "current" in the same voice as the
+        // body text around it, where a brand colour says it as the product.
+        //
+        // A 2px rule is a STROKE, so the colour that says it is the marker's:
+        // the yellow that reads at 11.24:1 as a fill draws at 1.42:1 on the
+        // ground, and an indicator carrying state cannot be the one thing on the
+        // strip you cannot see. `--tab-underline` in globals.css is the same
+        // value for the same reason, one layout up.
+        "after:absolute after:bg-marker after:opacity-0 after:transition-opacity group-data-[orientation=horizontal]/tabs:after:inset-x-0 group-data-[orientation=horizontal]/tabs:after:bottom-[-5px] group-data-[orientation=horizontal]/tabs:after:h-0.5 group-data-[orientation=vertical]/tabs:after:inset-y-0 group-data-[orientation=vertical]/tabs:after:-right-1 group-data-[orientation=vertical]/tabs:after:w-0.5 group-data-[variant=line]/tabs-list:data-[state=active]:after:opacity-100",
         className
       )}
       {...props}

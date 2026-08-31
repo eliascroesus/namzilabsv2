@@ -30,9 +30,15 @@ type Org = { id: string; name: string };
  *
  * The list IS the control now. Each workspace is a menu ROW — the panel's own
  * grammar: `rounded-control`, the chip that identifies it, one press to go.
- * Selection is marked the way the sheet marks selection everywhere else, in
- * violet: the 700 for the tick, because the 500 is a FILL colour and measures
- * 4.42:1 on off-white.
+ *
+ * SELECTION HERE IS THE MARKER'S, WHICH IS NOT THE SAME ANSWER THE RAIL GIVES.
+ * A selected rail chip is a filled object and takes the brand; a selected menu
+ * row is a WASH behind ink, and `--accent`/`--accent-foreground` are the
+ * marker's tint pair for exactly that case — a yellow wash under yellow ink is
+ * the one combination the fill/stroke split forbids. So the tick is
+ * `accent-foreground`, the violet's INK step: the 500 measures 4.41:1, which
+ * clears the 3:1 a rule owes and not the 4.5:1 a glyph read as text does, and
+ * the 700 is 6.79:1.
  */
 
 /** The row, shared by the current workspace and the ones you can move to, so

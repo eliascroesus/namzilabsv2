@@ -55,12 +55,21 @@ export const MENU_LABEL = "mb-0.5 px-2 pt-1";
  */
 export function DropGap({ accent, height }: { accent?: string; height?: number }) {
   /**
-   * NO ACCENT MEANS THE UNGROUPED ROW, and it wears the brand rather than a
-   * colour of its own. Passing it grey — the "no colour" group default — was
-   * the obvious thing and looked broken: a dashed grey box with a grey disc in
-   * it reads as a disabled region, not as the one place a card is about to go.
-   * Ungrouped is not a group, so it borrows the affordance every other target
-   * in this product uses.
+   * NO ACCENT MEANS THE UNGROUPED ROW, and it wears the kit's own colours
+   * rather than a colour of its own. Passing it grey — the "no colour" group
+   * default — was the obvious thing and looked broken: a dashed grey box with a
+   * grey disc in it reads as a disabled region, not as the one place a card is
+   * about to go. Ungrouped is not a group, so it borrows the affordance every
+   * other target in this product uses.
+   *
+   * IT IS THE ONE TARGET DRAWN IN TWO COLOURS, and that is the split rather
+   * than an inconsistency. A group's gap paints its border, its wash and its
+   * disc in the single accent it was handed, because that accent is an
+   * arbitrary hue that happens to work as both. The kit's two are not
+   * interchangeable: the dashed rule and the wash are LINES AND TINT, so they
+   * are the marker's (a yellow dash measures 1.55:1 and the box would have no
+   * edge at all), while the `+` disc is a FILLED object carrying near-black ink
+   * at 11.24:1, which is the brand's half.
    */
   const brand = accent == null;
   return (
@@ -71,7 +80,7 @@ export function DropGap({ accent, height }: { accent?: string; height?: number }
       // count was only ever right by luck. This attribute is the handle.
       data-drop-gap
       className={`pointer-events-none flex w-full items-center justify-center rounded-surface border-2 border-dashed ${
-        brand ? "border-primary bg-accent/40" : ""
+        brand ? "border-marker bg-accent/40" : ""
       }`}
       style={{
         // The hole is exactly the size of the card going into it, so nothing

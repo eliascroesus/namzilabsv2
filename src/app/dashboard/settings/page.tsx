@@ -40,8 +40,10 @@ const initials = (email: string) => {
  * discs: it marked nothing, because a mark that is the same on every row is
  * furniture. These are the sheet's three DECORATIVE accents (peri, pink,
  * orange), which say WHICH and never HOW IT IS GOING — exactly what an avatar
- * is for. Yellow is deliberately not in the set: it is the page's hero (Send
- * invite), and a second yellow halves the value of the first.
+ * is for. There is no yellow among them because yellow LEFT the decorative set
+ * when it became the brand: `--color-accent-yellow` was deleted, and anything
+ * that wants it now asks for `--primary` by name. The owner's disc below does
+ * exactly that.
  *
  * Keyed by the email rather than by list position, so a person's colour does
  * not change when somebody above them is removed.
@@ -309,12 +311,14 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 const rankName = rankNameById.get(rankIdByUser.get(m.userId) ?? "");
                 return (
                   <div key={m.id} className={memberRow}>
-                    {/* THE OWNER KEEPS THE SOLID VIOLET — one violet block per
-                        list, marking identity, like the rail's own mark. The
-                        rest wear the decorative set (see AVATAR_TONES): round,
-                        because on this page a CIRCLE is a person and a rounded
-                        SQUARE is a thing (the role marks in the panel below use
-                        the same three colours in the other shape). */}
+                    {/* THE OWNER TAKES THE BRAND FILL — one branded block per
+                        list, marking identity, like the rail's own mark, and a
+                        filled disc under near-black ink is the shape the yellow
+                        is measured in (11.24:1). The rest wear the decorative
+                        set (see AVATAR_TONES): round, because on this page a
+                        CIRCLE is a person and a rounded SQUARE is a thing (the
+                        role marks in the panel below use the same three colours
+                        in the other shape). */}
                     <span
                       className={cn(
                         "flex size-9 items-center justify-center rounded-full text-xs font-semibold",
@@ -391,15 +395,21 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                   aria-label="Teammate's email address"
                   className="min-w-0 flex-1 sm:max-w-sm"
                 />
-                {/* THE PAGE'S ONE YELLOW. Workspace settings is a page of lists
-                    you read and switches you flip; the single ACT it exists for
-                    is putting another person in the workspace, and on this sheet
-                    that is precisely what the neon is for. Nothing else here
-                    takes it — not an avatar, not a chip — because a second
-                    yellow would halve the value of this one, and the two
-                    destructive controls below are deliberately the quietest
-                    things on the page. */}
-                <SubmitButton variant="yellow" pendingLabel="Sending…">
+                {/* THE PAGE'S ACT, IN THE BRAND. Workspace settings is a page of
+                    lists you read and switches you flip; the single ACT it
+                    exists for is putting another person in the workspace, which
+                    is precisely what `accent` is reserved for.
+                    WHAT CHANGED IS THE REASON IT IS SAFE. It used to be a count
+                    — nothing else on this page may take the yellow, because a
+                    second one halves the value of the first — and that rule was
+                    retired because nothing could check it. What holds now is
+                    that this is a FILLED control under near-black ink at
+                    11.24:1, which is the only shape the brand is allowed to take
+                    at all. The owner's disc above is the same fill and does not
+                    compete with it: an avatar is identity and a button is an
+                    act. The destructive controls below are ghosts, which is what
+                    keeps them the quietest things on the page. */}
+                <SubmitButton variant="accent" pendingLabel="Sending…">
                   Send invite
                 </SubmitButton>
               </form>

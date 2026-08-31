@@ -440,8 +440,13 @@ export function RanksPanel({
             onClick={() => setAdding(true)}
             /* `rounded-card` to match the role cards it sits under, and no fill:
                a dashed outline over the tray is what says "a card goes here",
-               where a white one would say a card already does. */
-            className="flex w-full items-center gap-2.5 rounded-card border-2 border-dashed border-border p-3 text-left text-md font-semibold text-muted-foreground transition-colors duration-(--duration-fast) hover:border-primary hover:text-accent-foreground"
+               where a white one would say a card already does.
+               WHICH ALSO SETTLES WHAT IT HOVERS TO. This control is nothing but
+               a line and a word — there is no filled surface anywhere on it, so
+               there is nothing here the brand could paint. The yellow measures
+               1.55:1 as a stroke and the same as text; violet is what draws, so
+               the border and the ink move to it together. */
+            className="flex w-full items-center gap-2.5 rounded-card border-2 border-dashed border-border p-3 text-left text-md font-semibold text-muted-foreground transition-colors duration-(--duration-fast) hover:border-marker hover:text-accent-foreground"
           >
             <span className="flex size-7 items-center justify-center rounded-control border-2 border-dashed border-current opacity-70">
               <Plus size={14} strokeWidth={2.25} />
@@ -584,8 +589,11 @@ function ToggleRow({
         // body text is three neutrals in 28px, which is the flatness this pass
         // is for; `accent` / `accent-foreground` is the kit's own tint pair —
         // the violet wash carrying the violet ink — and the same chip the empty
-        // state and the sync tiles wear. The 500 fills, the 700 speaks, and a
-        // stroked glyph is speaking.
+        // state and the sync tiles wear. It is the MARKER'S pair rather than the
+        // brand's because a wash under a glyph is not a filled object: a yellow
+        // tint under yellow ink is the one combination the split forbids. Inside
+        // the marker the 500 is the object colour and the 700 is the step that
+        // may carry text at 6.79:1 — a stroked glyph at 14px is reading as text.
         <span
           className={cn(
             "flex size-7 shrink-0 items-center justify-center rounded-control bg-accent text-accent-foreground",

@@ -778,11 +778,13 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
               href={qs({ source: "" })}
               className={cn(
                 "block rounded-control px-2.5 py-1.5 text-sm transition-colors hover:bg-accent hover:text-accent-foreground",
-                /* THE ROW IN FORCE WEARS THE WASH, not violet words on nothing.
-                   `text-primary` is brand-500, which is 4.42:1 on this surface
-                   and fails AA at the size these are set in — the sheet's own
-                   rule is that the 500 FILLS and the 700 SPEAKS, and
-                   `accent`/`accent-foreground` is that pair spelled as roles. */
+                /* THE ROW IN FORCE WEARS THE WASH, not coloured words on
+                   nothing. `text-primary` is the brand yellow, which measures
+                   1.55:1 as text on this white panel — it is a fill colour and
+                   cannot be read as ink at all. What speaks is the marker, and
+                   its ramp splits the same way: the 500 draws while the 700
+                   (6.79:1) carries text. `accent`/`accent-foreground` is that
+                   pair spelled as roles. */
                 !boardSource ? "bg-accent font-semibold text-accent-foreground" : "text-foreground",
               )}
             >
@@ -808,24 +810,27 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         </details>
       )}
       {/* Recompute every published metric.
-          THE YELLOW IS SPENT HERE, and that reverses an argument this file used
-          to make at length. It said the neon belongs to "the single act the page
-          exists for", that a dashboard exists to be READ rather than acted on,
-          and that making a maintenance button the loudest thing on a board of
-          numbers inverts the kit's own thesis. That reasoning was sound about a
-          WHITE page, where the yellow was the only saturated thing on screen.
-          The ground is near-black now, and on it the neon is no longer the
-          loudest object — the white tiles are, at 17.49:1 against the page,
-          where the yellow sits at 15.25:1 behind them. The rule the kit actually
-          states is one hero per screen, and this is the one: it is the only
-          control on the board that CHANGES anything rather than narrowing what
-          is shown. The scarcity survives; the surface it was measured against
-          did not.
-          `px-5` is 20px, wider than `size="sm"`'s own 14px, because the hero
-          pill is the one that is meant to be reached for. */}
+          THE YELLOW IS SPENT HERE, and the reason is no longer scarcity. This
+          file used to argue at length about how many yellows a screen may hold
+          — that the colour belongs to "the single act the page exists for", and
+          that a second one halves the value of the first. The kit retired that
+          rule because nothing could check it. What replaced it is the
+          fill/stroke split: yellow may only paint a FILLED object, and this is a
+          filled control carrying near-black ink at 11.24:1, which is the only
+          combination the brand is measured in. That is permission rather than
+          instruction, so the reason it is THIS control and not its neighbours
+          survives the change of rule: it is the one thing in the row that
+          CHANGES anything rather than narrowing what is shown, and the two
+          beside it stay white pills.
+          `variant="accent"` IS that fill — `bg-primary` under
+          `text-primary-foreground`. The `yellow` variant this used to name has
+          been deleted: with a yellow primary the two resolved to the same
+          object under two names.
+          `px-5` is 20px, wider than `size="sm"`'s own 14px, because the button
+          that acts is the one that is meant to be reached for. */}
       <form action={refreshAllFlowsAction} className="shrink-0">
         <SubmitButton
-          variant="yellow"
+          variant="accent"
           size="sm"
           className="px-5"
           pendingLabel="Refreshing…"
@@ -1184,16 +1189,18 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                `--period-line` answer differently under `.dark`, and the tokens'
                own notes in globals.css carry the ratios.
 
-               THE SELECTED PILL IS VIOLET, where it used to be the near-black
-               `--foreground`. Black was right when this track was one of two
-               marks on a white bar and the violet was spent on the view tabs a
-               row below. The tabs are an underline now, which frees the app's
-               selection colour for the thing that is genuinely a SELECTION —
-               one of six mutually exclusive periods — and a near-black chip
-               inside a near-black group in dark theme would have been invisible
-               anyway. `bg-primary`/`text-primary-foreground` rather than a new
-               pair of tokens: the Figma's #7c4dff IS `--primary`, and a second
-               name for it is how a product ends up with two primaries.
+               THE SELECTED PILL IS THE BRAND FILL, where it used to be the
+               near-black `--foreground`. Black was right when this track was one
+               of two marks on a white bar and the app's selection colour was
+               spent on the view tabs a row below. The tabs are an underline now
+               — a rule is a stroke, so it is drawn in the marker — which leaves
+               the FILL free for the thing that is genuinely a SELECTION: one of
+               six mutually exclusive periods, a filled chip carrying near-black
+               ink at 11.24:1. A near-black chip inside a near-black group in
+               dark theme would have been invisible anyway.
+               `bg-primary`/`text-primary-foreground` rather than a new pair of
+               tokens: the brand IS `--primary`, and a second name for it is how
+               a product ends up with two primaries.
 
                THE SCROLLER SURVIVES THE MOVE, and it has to. Six pills is a
                ~520px track that cannot wrap — they are `shrink-0`, correctly,

@@ -14,8 +14,19 @@ function Checkbox({
     <CheckboxPrimitive.Root
       data-slot="checkbox"
       className={cn(
-        // CHECKED IS A FILL, so it takes the vibrant violet — this is the
-        // control the brand sheet's `--primary` is most obviously for.
+        // CHECKED IS A FILL, so it takes the brand — #eecf00 under the
+        // near-black tick at 11.24:1, which is the one shape yellow is allowed
+        // to take and the control `--primary` is most obviously for.
+        //
+        // The checked border goes TRANSPARENT rather than following the fill.
+        // Its only job is to retire the resting `border-input` hairline, and a
+        // transparent border lets the fill paint through it — backgrounds are
+        // clipped to the border box — so the box reads as one solid shape at
+        // exactly the size it already was. Spelling it as a yellow LINE would be
+        // the half of the split that does not work: #eecf00 draws at 1.55:1 on
+        // a white card, so the rim would contribute nothing and would still have
+        // to be kept in step with the fill beside it. What says "checked" is the
+        // tick, not the box's edge against the page.
         //
         // `rounded-sm` (6px) rather than shadcn's 4px: pill-first softens
         // every corner in the kit, and on a 16px box 6px is as round as this
@@ -30,7 +41,7 @@ function Checkbox({
         // `hover:border-neutral-300` is the pointer feedback every other
         // control in the kit has; `transition-colors` because what moves is
         // the border and the fill, not the shadow.
-        "peer size-4 shrink-0 rounded-sm border border-input bg-card shadow-xs transition-colors duration-(--duration-fast) hover:border-neutral-300 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive data-[state=checked]:border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground",
+        "peer size-4 shrink-0 rounded-sm border border-input bg-card shadow-xs transition-colors duration-(--duration-fast) hover:border-neutral-300 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive data-[state=checked]:border-transparent data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground",
         className
       )}
       {...props}

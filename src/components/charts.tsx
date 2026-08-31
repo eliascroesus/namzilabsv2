@@ -11,19 +11,24 @@ import type { ImportCoverage } from "@/connectors/types";
  * carrying four accents. The marks are what people actually look at, and they
  * were the least-decided thing on the page.
  *
- *   VIOLET FILLS THE SERIES. A mark here is one measure, so the brand's own
- *     fill is the series colour: the sparkbars, the goal bar, a breakdown's
- *     first row.
+ *   THE MARKER DRAWS THE SERIES. A mark here is one measure, and the marker's
+ *     violet is the colour the product measures in: the sparkbars, the goal
+ *     bar, a breakdown's first row.
  *   BLACK EMPHASISES. The bucket the series ends on, and a delta that moved.
- *   THE ACCENT FOUR DECORATE, and only where decoration is safe — a
+ *   THE ACCENT THREE DECORATE, and only where decoration is safe — a
  *     breakdown's rows, each of which already carries its own name in the
  *     label beside it, so no hue is ever the thing telling you whose bar it is.
  *   SUCCESS AND WARN STAY STATE. A met goal and an unfinished import MEAN
  *     something. Nothing else in this file is allowed to borrow their colour.
  *
- * YELLOW IS ABSENT, DELIBERATELY. It is the sheet's hero — at most once per
- * screen — and a dashboard is a wall of these marks. Put it in any rotation
- * here and one page ships six of them, which is the same as shipping none.
+ * YELLOW IS ABSENT FROM THE MARKS, and it is now a measurement rather than the
+ * scarcity rule it used to be. The brand works as a FILL because dark ink sits
+ * on it at 11.24:1. A bar carries no ink — all it has is its own edge against
+ * the card, which is 1.55:1 on white, under the 3:1 a graphic that carries
+ * meaning owes. A yellow sparkbar is not a loud mark, it is a mark nobody can
+ * see. Nothing in this file that MEANS something is yellow; the one place the
+ * brand appears at all is a 5% wash behind the sparkbars, which is a surface
+ * and not a mark — see `Sparkbars`.
  *
  * THE HONESTY RULES DID NOT MOVE, and the colour pass was not allowed to bend
  * them: every bar is still zero-anchored, every value a chart prints still goes
@@ -54,10 +59,10 @@ const TRACK = "h-2 overflow-hidden rounded-full";
 /**
  * THE BREAKDOWN'S ROTATION — the sheet's own set, in one fixed order.
  *
- * VIOLET FIRST, because it is the brand's fill and the first row is the one
- * most likely to be read; then the accents strongest to palest, so the pink —
- * which is the faintest of the four on a white card — lands on the fourth bar
- * rather than the first.
+ * THE MARKER FIRST, because it is the colour the rest of this file measures in
+ * and the first row is the one most likely to be read; then the accents
+ * strongest to palest, so the pink — which is the faintest of them on a white
+ * card — lands on the fourth bar rather than the first.
  *
  * DECORATION, NOT ENCODING, and that distinction is the whole licence for it.
  * Every row prints its group's name in the label beside its bar, so hue is
@@ -71,7 +76,7 @@ const TRACK = "h-2 overflow-hidden rounded-full";
  * a custom view's problem only, and a repeat is better there than a fifth
  * colour invented off the sheet.
  */
-const BREAKDOWN_ACCENTS = ["bg-primary", "bg-accent-peri", "bg-accent-orange", "bg-accent-pink"];
+const BREAKDOWN_ACCENTS = ["bg-marker", "bg-accent-peri", "bg-accent-orange", "bg-accent-pink"];
 
 /**
  * A bucketed series as a bare strip of bars.
@@ -102,11 +107,19 @@ export function Sparkbars({
   return (
     // A PLOT AREA WITH A FLOOR, rather than bars growing out of nothing.
     // "Zero-anchored" is a claim this mark makes on every render and had no way
-    // of showing: a violet hairline under the strip is the axis, and the wash
-    // behind it is the field the bars are measured in — which is also what
-    // stops the 6%-minimum stub below reading as a rendering fault instead of
-    // as a quiet bucket. The wash is 5%, so it is a tint in both themes rather
-    // than a panel in one of them.
+    // of showing: the hairline under the strip is the axis, and the wash behind
+    // it is the field the bars are measured in — which is also what stops the
+    // 6%-minimum stub below reading as a rendering fault instead of as a quiet
+    // bucket. The wash is 5%, so it is a tint in both themes rather than a
+    // panel in one of them.
+    //
+    // THE TWO USED TO BE ONE COLOUR AND CANNOT BE, which is the fill/stroke
+    // split drawn inside a single element. The axis is a RULE, so it is the
+    // marker's: a 25% yellow line measures about 1.1:1 on a white card and is
+    // not a faint axis, it is no axis. The field is a SURFACE the marks sit on,
+    // so it takes the brand — at 5% it is a tint rather than a graphic, so it
+    // owes no ratio of its own, and it is the only place in the dashboard's
+    // marks the yellow appears at all.
     //
     // Square bars, still. A rounded cap is a radius measured against the bar's
     // WIDTH, and a twelve-bucket series stretched across a tile is 50px wide
@@ -114,7 +127,7 @@ export function Sparkbars({
     // data at every bucket count, and the colour pass was not a reason to
     // relitigate a decision that was made against the geometry.
     <div
-      className={cn("mt-3 flex items-end gap-1 rounded-t-sm border-b border-primary/25 bg-primary/5", className)}
+      className={cn("mt-3 flex items-end gap-1 rounded-t-sm border-b border-marker/25 bg-marker/5", className)}
       aria-hidden
     >
       {series.map((s) => (
@@ -136,7 +149,7 @@ export function Sparkbars({
             //
             // A one-bucket series keeps the series colour: there is no "latest"
             // to distinguish it from, and a lone black bar would imply one.
-            "bg-primary",
+            "bg-marker",
           )}
           style={{ height: `${Math.max((s.value / max) * 100, 6)}%` }}
         />
@@ -238,9 +251,9 @@ export function TargetBar({ value, target, format }: { value: number; target: nu
           same colour with the light out of it. It follows the fill to success
           when the goal is met, so the whole meter changes state rather than
           just the liquid in it. */}
-      <div className={cn(TRACK, "w-full", met ? "bg-success/15" : "bg-primary/15")}>
+      <div className={cn(TRACK, "w-full", met ? "bg-success/15" : "bg-marker/15")}>
         <div
-          className={cn("h-full rounded-full", met ? "bg-success" : "bg-primary")}
+          className={cn("h-full rounded-full", met ? "bg-success" : "bg-marker")}
           style={{ width: `${Math.max(pct, 2)}%` }}
         />
       </div>

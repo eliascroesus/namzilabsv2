@@ -46,12 +46,17 @@ function AvatarFallback({
     <AvatarPrimitive.Fallback
       data-slot="avatar-fallback"
       className={cn(
-        // Initials on the brand's own wash, not on grey. The fallback is what
+        // Initials on the marker's own wash, not on grey. The fallback is what
         // most avatars in this product actually render — almost nobody uploads
         // a picture to an internal analytics tool — so treating it as the
         // degraded case left the app's people looking like missing images.
-        // `accent` over `accent-foreground` is the violet pair that is safe for
-        // TEXT (6.79:1), which initials are.
+        //
+        // The MARKER's tint pair rather than the brand's, and the initials are
+        // the reason: they are TEXT, `accent` over `accent-foreground` is the
+        // violet pair that is safe for text (6.79:1), and yellow has no such
+        // pair — it carries near-black or it carries nothing, and near-black
+        // initials on a yellow disc read as a button. Identity is also the one
+        // job the rebrand deliberately left violet; see `--chrome-avatar`.
         "flex size-full items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-foreground group-data-[size=sm]/avatar:text-xs",
         className
       )}
@@ -64,6 +69,13 @@ function AvatarBadge({ className, ...props }: React.ComponentProps<"span">) {
   return (
     <span
       data-slot="avatar-badge"
+      // A BADGE IS A FILL, so it is the brand — the unread dot globals.css names
+      // by that word, at 11.24:1 under the near-black glyph it carries.
+      //
+      // `ring-background` is what bounds it, and on this hue that ring stopped
+      // being decoration: #eecf00 is 1.42:1 against the page, so an 8px disc
+      // with no edge is a smudge on the avatar's corner rather than an object
+      // sitting over it. The ring is the edge the fill cannot draw for itself.
       className={cn(
         "absolute right-0 bottom-0 z-10 inline-flex items-center justify-center rounded-full bg-primary text-primary-foreground ring-2 ring-background select-none",
         "group-data-[size=sm]/avatar:size-2 group-data-[size=sm]/avatar:[&>svg]:hidden",

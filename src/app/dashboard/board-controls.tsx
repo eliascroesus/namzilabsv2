@@ -302,22 +302,27 @@ export function ViewTab({
       // "Dashboard" — so both the element type and the copy were load-bearing.
       data-view-tab
       /**
-       * A TAB IS UNDERLINED NOW, AND THE PERIOD KEEPS THE VIOLET.
+       * A TAB IS UNDERLINED, AND THE PERIOD IS FILLED.
        *
        * The two rows still answer two different questions — the period narrows
-       * WHICH NUMBERS, the tabs choose WHICH ARRANGEMENT — so they still have
-       * to be marked differently. What swapped is which one gets the fill.
-       * Violet moved UP to the period pills, where it is the app's selection
-       * colour sitting in a segmented track; the tab takes the green rule,
-       * because a tab is not a selected object, it is a place in a document,
-       * and every product that has this row draws it as a rule.
+       * WHICH NUMBERS, the tabs choose WHICH ARRANGEMENT — so they still have to
+       * be marked differently, and the kit's fill/stroke split is what decides
+       * which mark each one gets. A selected period is an OBJECT, so it is a
+       * filled pill and it carries the brand. A tab is not a selected object; it
+       * is a place in a document, so it is a RULE, which every product that has
+       * this row agrees on — and a rule is a stroke.
        *
-       * The colour is `--tab-underline`, one value in both themes on purpose.
-       * That is affordable ONLY because the underline is never the sole mark:
-       * the active tab is also the one set in `--ground-ink` while its
-       * neighbours sit muted. It measures 9.02:1 on the dark ground and 1.78:1
-       * on the light one — see the token's own note. If this row ever loses the
-       * weight-and-ink change, the rule alone cannot carry the state.
+       * The colour is `--tab-underline`, one value in both themes on purpose,
+       * and the rebrand REPAIRED it rather than merely recolouring it. It was
+       * green #00d492: 9.02:1 on the dark ground but 1.78:1 on the light one,
+       * which the token's own note admitted was well under the 3:1 an indicator
+       * carrying state owes. Strokes are the marker's now, so it measures 4.41:1
+       * light and 6.60:1 dark — see the token's own note. The underline carries
+       * the state on its own at both exposures, and the weight-and-ink change
+       * beside it (the active tab is the one set in `--ground-ink` while its
+       * neighbours sit muted) is reinforcement rather than the thing holding the
+       * rule up. That is a change in what this row DEPENDS on, not in what it
+       * looks like: both marks are still here.
        *
        * `border-b-3` sits on the wrapper rather than on the anchor so the
        * kebab, which is a sibling inside this span, rides the same rule instead
@@ -334,16 +339,18 @@ export function ViewTab({
        * set by the 24px gap and the kebab beside it, not by this padding.
        */
       /**
-       * THE WEIGHT WAS THE WRONG WAY ROUND, and the note above is what makes
-       * that a defect rather than a preference.
+       * THE WEIGHT WAS THE WRONG WAY ROUND, and it was found because the note
+       * above used to lean on it.
        *
-       * It argues the green rule is affordable at 1.78:1 on the light ground
-       * "ONLY because the underline is never the sole mark: the active tab is
-       * also the one set in `--ground-ink` while its neighbours sit muted."
-       * True of the ink. The WEIGHT ran the other way — active at 500, inactive
-       * at 600 — so on the light theme the five tabs you are not on were the
-       * boldest words in the row, and the one you were on was the lightest.
-       * Measured in the browser, not inferred: active w500, neighbours w600.
+       * That note argued the green rule was affordable at 1.78:1 on the light
+       * ground "ONLY because the underline is never the sole mark: the active
+       * tab is also the one set in `--ground-ink` while its neighbours sit
+       * muted." True of the ink. The WEIGHT ran the other way — active at 500,
+       * inactive at 600 — so on the light theme the five tabs you are not on
+       * were the boldest words in the row, and the one you were on was the
+       * lightest. Measured in the browser, not inferred: active w500,
+       * neighbours w600. The rule no longer depends on any of this, but a mark
+       * pointing at the wrong tab is a defect on its own terms.
        *
        * Now the active tab is the heavier of the two, which is the direction
        * every other selected thing in the product runs.
@@ -421,18 +428,18 @@ export function ViewTab({
               variant="ghost"
               size="iconSm"
               /* `editable` is gated on `active`, so this trigger only ever
-                 exists on the tab that is filled violet — hence no conditional
-                 here. The ghost's own grey ink and grey hover wash would both
-                 disappear into that fill, so it takes the fill's foreground and
-                 hovers by lightening the violet rather than by painting a
-                 neutral square on top of it. */
-              /* NOT `primary-foreground`. That is white, and it belongs on a
-                     violet FILL — which this tab has not had since the active
-                     state became an underline on the page itself. White at 75%
-                     over `#f5f5f5` composites to ~`#fcfcfc`: 1.05:1, a kebab
-                     you cannot see in the light theme at all. It read fine in
-                     dark, which is exactly why it survived. The row's own ink
-                     is the right answer and it follows the theme. */
+                 exists on the tab you are currently on — hence no conditional
+                 here.
+                 NOT `primary-foreground`. That ink exists to sit ON the brand's
+                 fill, and this tab has not had a fill of any colour since the
+                 active state became an underline on the page itself. It was
+                 white when this note was written and it is near-black now, and
+                 both are wrong for the same reason: an ink chosen for a surface
+                 that is not underneath it. The white version composited to
+                 ~`#fcfcfc` over `#f5f5f5` — 1.05:1, a kebab you could not see in
+                 the light theme at all, while it read fine in dark, which is
+                 exactly why it survived so long. The ROW'S own ink is the right
+                 answer, because it follows the ground under both exposures. */
                   className="mr-0.5 size-6 text-ground-ink-muted hover:bg-foreground/10 hover:text-ground-ink"
               onClick={() => setMenuOpen((o) => !o)}
               aria-label={`Options for ${name}`}

@@ -91,8 +91,13 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
    * accent edge on the left gave the card two rims of different colours meeting
    * at one corner. So the border NEVER changes: the halo sits outside it, and
    * the card keeps exactly one edge in every state.
+   *
+   * The halo is the MARKER, because a halo is a line. It was `ring-primary/40`
+   * back when the primary was violet; left at that spelling it would now be a
+   * 40%-opacity yellow ring measuring under 1.3:1 against the canvas — the
+   * selection state, invisible.
    */
-  const border = selected ? "border-border ring-[3px] ring-primary/40" : "border-border";
+  const border = selected ? "border-border ring-[3px] ring-marker/40" : "border-border";
   /**
    * The card stays exactly where it is while it is being carried — a ghost
    * follows the cursor and a dashed gap opens at the destination, so nothing
@@ -231,7 +236,11 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
             </span>
           )}
           {refLine && (
-            <span className="mt-0.5 block truncate text-xs text-brand-600" title={refLine}>
+            /* The marker's INK step, not its object step: this is 12px text and
+               owes 4.5:1, which `marker-500` misses at 4.41:1. It read
+               `text-brand-600` while that ramp was the violet; the same
+               spelling today is a #d4b800 gold at 2.0:1. */
+            <span className="mt-0.5 block truncate text-xs text-marker-ink" title={refLine}>
               {refLine}
             </span>
           )}
@@ -259,12 +268,14 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
           subtraction rather than as a literal. A literal sat at 13px (the
           inside of 12px) for a whole radius step after the card grew;
           `calc(var(--radius-surface) - 1px)` cannot fall behind.
-          `bg-accent`/`text-accent-foreground` ARE brand-50/brand-700; the
-          hairline between them has no token at the 100 step, so it stays raw. */}
+          `bg-accent`/`text-accent-foreground` ARE marker-50/marker-700 — the
+          violet tint pair, because a strip is a wash under coloured ink and
+          that is the one thing the yellow cannot be; the hairline between them
+          has no role token at the 100 step, so it names the ramp. */}
       {publishes != null && (
         <div
           className={`flex items-center gap-1.5 rounded-b-[calc(var(--radius-surface)-1px)] border-t px-3.5 py-2 text-xs font-semibold ${
-            publishes ? "border-brand-100 bg-accent text-accent-foreground" : "border-border bg-muted/50 text-muted-foreground"
+            publishes ? "border-marker-100 bg-accent text-accent-foreground" : "border-border bg-muted/50 text-muted-foreground"
           }`}
           title={publishes ? "This step's result becomes a tile when you publish." : "Switched off in Review & publish — this step publishes nothing."}
         >
@@ -284,7 +295,14 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
       {/* One "Add next step" at the end of a plain branch — hidden while a
           dragged card is being dropped onto exactly this spot, because the drop
           placeholder occupies it (flow-canvas: TAIL_SLOT_Y / hideTailAdd) and
-          two dashed cards in one position read as a rendering fault. */}
+          two dashed cards in one position read as a rendering fault.
+
+          HOVER IS THE MARKER, AND IT ARRIVES IN TWO STEPS RATHER THAN ONE.
+          The edge takes `marker` (4.41:1 — a line owes 3:1) and the label takes
+          `marker-ink` (6.79:1 — 14px text owes 4.5:1); the inner square follows
+          the label through `border-current`. Both were `primary` while the
+          primary was violet, and both would now be yellow-on-white at 1.55:1 —
+          a hover state that reads as the button going blank. */}
       {data.isTerminal && t !== "output" && !isPaths && !data.hideTailAdd && (
         <button
           data-add-btn={id}
@@ -293,7 +311,7 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
             (data as NodeData).onAddFrom?.(id, null, anchorFromRect(e.currentTarget.getBoundingClientRect()));
           }}
           title="Add the next step"
-          className="nodrag absolute left-1/2 top-full z-10 mt-8 flex w-[300px] -translate-x-1/2 items-center gap-2.5 rounded-surface border-2 border-dashed border-border bg-card p-3 text-left text-sm font-semibold text-muted-foreground shadow-surface transition-colors duration-(--duration-fast) hover:border-primary hover:text-primary"
+          className="nodrag absolute left-1/2 top-full z-10 mt-8 flex w-[300px] -translate-x-1/2 items-center gap-2.5 rounded-surface border-2 border-dashed border-border bg-card p-3 text-left text-sm font-semibold text-muted-foreground shadow-surface transition-colors duration-(--duration-fast) hover:border-marker hover:text-marker-ink"
         >
           <span className="flex h-8 w-8 items-center justify-center rounded-control border-2 border-dashed border-current opacity-70">
             <Plus size={16} strokeWidth={2} />
@@ -314,7 +332,7 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
                 (data as NodeData).onAddFrom?.(id, h.id, anchorFromRect(e.currentTarget.getBoundingClientRect()));
               }}
               title={`Add a step to “${h.label}”`}
-              className="flex items-center gap-1.5 whitespace-nowrap rounded-full border-2 border-dashed border-border bg-card px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors duration-(--duration-fast) hover:border-primary hover:text-primary"
+              className="flex items-center gap-1.5 whitespace-nowrap rounded-full border-2 border-dashed border-border bg-card px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors duration-(--duration-fast) hover:border-marker hover:text-marker-ink"
             >
               <Plus size={14} strokeWidth={2.25} />
               {h.label}

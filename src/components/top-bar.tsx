@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Bell, ChevronDown, UserPlus } from "lucide-react";
+import { Bell, ChevronDown, Plus, UserPlus } from "lucide-react";
 import type { ReactNode } from "react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -50,9 +50,17 @@ import { cn } from "@/lib/utils";
  * only in `:root` on purpose — so the scoped class never moves the bar's own
  * furniture. It moves only what other files render into it.
  *
- * THE BAR HOLDS ONE YELLOW, AND IT IS THE VERB. Creating a flow is the act this
- * product exists for. Everything else here is a hairline, a grey chip, or the
- * one blue that means "identity".
+ * THE BAR HOLDS TWO YELLOWS NOW, AND THAT IS THE REBRAND IN ONE LINE. It used
+ * to hold exactly one — "New flow", the verb — because the kit's rule was that
+ * yellow is the hero at most once per screen and its scarcity is its meaning.
+ * The rule is now "yellow FILLS, violet DRAWS", so the count stopped mattering
+ * and the SHAPE started: the hero pill and the unread badge are both filled
+ * objects carrying near-black ink, which is the only form yellow may take on a
+ * light chip, and the progress arc is yellow too because on this charcoal band
+ * a yellow stroke measures 8.77:1 rather than the 1.42:1 it would manage on the
+ * page. Everything else here is a hairline, a white chip, or the one violet
+ * that means "identity" — the workspace avatar, and the single place in the
+ * product where the marker is a fill rather than a line.
  */
 
 /** The ring: r=9 in a 24px box, so a 4px stroke sits inside with a pixel spare. */
@@ -156,17 +164,20 @@ export function TopBar({
           same kind of object. */}
       <span
         aria-hidden
-        className="flex size-9 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-chrome-avatar text-md font-semibold text-white"
+        className="flex size-7 shrink-0 items-center justify-center rounded-[var(--radius-control)] bg-chrome-avatar text-sm font-semibold text-neutral-50"
       >
         {initial}
       </span>
-      <span className="flex min-w-0 items-center gap-1.5">
-        {/* `font-semibold`, matching the avatar disc beside it and every other
+      <span className="flex min-w-0 items-center gap-1">
+        {/* `font-semibold`, matching the avatar beside it and every other
             heading in the product. It was `font-bold` — a fourth weight, used
             in three places in this file and nowhere else, sitting 100 units
-            heavier than the initial it shares a baseline with. */}
+            heavier than the initial it shares a baseline with. The export sets
+            this at 700 and it is one of the five places this build deliberately
+            does not follow it: the kit's ladder is 400/500/600 and `check:ui`
+            fails on the fourth rung. */}
         <span className="truncate text-md font-semibold text-white">{workspace}</span>
-        {account && <ChevronDown aria-hidden className="size-3 shrink-0 text-neutral-300" />}
+        {account && <ChevronDown aria-hidden className="size-3 shrink-0 text-white" />}
       </span>
     </>
   );
@@ -179,18 +190,30 @@ export function TopBar({
     //
     // `dark` — see the long note above. It re-inks the PORTAL's contents, not
     // this bar's own.
-    /* THE TWO EDGES ARE THE SAME, and they belong to the header rather than to
-       its children. The left group carried `pl-6` and the right `pr-10`, so the
-       bar was inset 24px on one side and 40px on the other — and on the builder,
-       where the left group stands down entirely, the back arrow sat hard against
-       the rail with no inset at all. One value here makes the two edges equal by
-       construction instead of by agreement.
+    /* THE EDGES ARE 24 AND 40, WHICH THE EXPORT MEASURES AND WHICH IS NOT THE
+       BUG THIS ONCE HAD. They were briefly equal at 24 both sides, and the note
+       here argued for that — but the fault being fixed then was that the left
+       inset lived on the left GROUP, so on the builder, where that group stands
+       down entirely, the back arrow sat hard against the rail with NO inset at
+       all. What mattered was that both edges are owned by the header and neither
+       is zero. That still holds; the two numbers simply differ, because the
+       right edge carries four controls in a row and the left carries one
+       address, and the export gives the busier end more air.
+
+       NO BOTTOM RULE. The export closes the bar with #2d2d2d on #2e2e2e —
+       1.005:1, which is not a hairline, it is the absence of one drawn anyway.
+       Below this bar is the ground at #f5f5f5, so the seam is a 40-point
+       luminance step between two different materials, and DESIGN.md §5 already
+       says what to do about that: "a rule drawn where two different materials
+       already meet is a rule doing nothing". The rail's right edge lost its
+       border for the same reason, and the band is now one unbroken charcoal
+       shape with the ground's 16px corner cut into it.
 
        The prose sits ABOVE the tag deliberately: tests/page-width.test.ts reads
        this bar's height by matching `<header className="…"`, and a comment
        between the two breaks the check that keeps the loading skeleton's band
        the same height as the real one. */
-    <header className="dark flex h-[70px] shrink-0 items-center justify-between gap-4 border-b border-chrome-line bg-ink-950 px-6 py-2.5">
+    <header className="dark flex h-[70px] shrink-0 items-center justify-between gap-4 bg-ink-950 py-2.5 pl-6 pr-10">
       {/* ── WHERE YOU ARE ───────────────────────────────────────────────────
           Workspace, then a slash, then how much of it you are measuring. It
           reads as a path because it IS one: the workspace is the root and the
@@ -223,7 +246,7 @@ export function TopBar({
                 // chevron's own `size-3` on specificity no matter which order
                 // they are written in. Overriding at the same level is the only
                 // spelling that actually lands.
-                className="-mx-2 h-auto min-w-0 gap-6 rounded-[var(--radius-control)] px-2 py-1.5 text-left hover:bg-ink-800 active:bg-ink-800 [&_svg]:size-3"
+                className="-mx-2 h-auto min-w-0 gap-2.5 rounded-[var(--radius-control)] px-2 py-1.5 text-left hover:bg-ink-900 active:bg-ink-800 [&_svg]:size-3"
                 aria-label={`${workspace} — workspace and account`}
               >
                 {identity}
@@ -234,7 +257,7 @@ export function TopBar({
             </DropdownMenuContent>
           </DropdownMenu>
         ) : (
-          <span className="flex min-w-0 items-center gap-6">{identity}</span>
+          <span className="flex min-w-0 items-center gap-2.5">{identity}</span>
         )}
 
         {/* ── HOW MUCH IS MEASURED ────────────────────────────────────────
@@ -304,33 +327,52 @@ export function TopBar({
                         that begins at three reads as a dial rather than as
                         progress. */}
                     <svg aria-hidden viewBox="0 0 24 24" className="absolute inset-0 size-6 -rotate-90">
-                      <circle cx="12" cy="12" r={RING_RADIUS} fill="none" strokeWidth="4" className="stroke-ink-700" />
+                      <circle
+                        cx="12"
+                        cy="12"
+                        r={RING_RADIUS}
+                        fill="none"
+                        strokeWidth="3"
+                        className="stroke-chrome-ring-track"
+                      />
                       {arc > 0 && (
                         <circle
                           cx="12"
                           cy="12"
                           r={RING_RADIUS}
                           fill="none"
-                          strokeWidth="4"
+                          strokeWidth="3"
                           strokeLinecap="round"
                           strokeDasharray={RING_CIRCUMFERENCE}
                           strokeDashoffset={RING_CIRCUMFERENCE - arc}
-                          /* GREEN, AND THICK ENOUGH TO BE THE THING YOU READ.
-                             The numeral that used to sit inside this ring is
-                             gone, so the arc is no longer a decoration beside a
-                             figure — it IS the figure, and it has to carry the
-                             reading on its own. A 2px hairline could not: at
-                             `neutral-600` on an `ink-700` track it measured
-                             1.39:1 and 3/6 read the same as 6/6.
-                             4px of `--chrome-presence` fixes both halves at
-                             once. It is the same green already used for "this
-                             is live and healthy" on the bell, which is exactly
-                             what a filling ring means here, and it sits far
-                             clear of the 3:1 a non-text mark owes. */
-                          className="stroke-chrome-presence"
+                          /* THE ONE PLACE IN THE PRODUCT YELLOW IS A STROKE.
+                             The kit's rule is that yellow fills and violet
+                             draws, because #eecf00 measures 1.42:1 as a line on
+                             the light ground. On THIS surface it measures
+                             8.77:1 — the band is charcoal, and the whole reason
+                             the rule exists does not apply here.
+                             It was `--chrome-presence` green, chosen when the
+                             chrome had no brand colour of its own to spend. It
+                             does now, and a ring that fills as you build the
+                             thing the product is for is exactly what the brand
+                             should be pointing at. */
+                          className="stroke-primary"
                         />
                       )}
                     </svg>
+                    {/* THE NUMERAL IS BACK, and it is the export's own. It was
+                        removed once and the arc thickened to 4px to compensate,
+                        on the argument that the arc had become the figure and
+                        had to carry the reading alone. With the numeral present
+                        that argument is void, so the stroke returns to the
+                        export's 3px and the two halves share the job again:
+                        the ring is what you notice, the digit is what you read.
+                        `text-xs` rather than the export's 10px — the type scale
+                        is closed at 12px and a sixth size for one glyph inside
+                        a 24px circle is not a trade the kit makes. */}
+                    <span className="relative text-xs font-semibold leading-none tabular-nums text-ink-400">
+                      {tracked}
+                    </span>
                   </span>
                   <span className="text-md font-semibold text-white">
                     {tracked}/{METRIC_GOAL}
@@ -424,40 +466,52 @@ export function TopBar({
             buttonVariants({ variant: "secondary", size: "sm" }),
             // The secondary variant is spelled in ROLES, which the scoped
             // `dark` above would answer in dark — a near-black pill on a
-            // near-black bar. Pinned to the constants the Figma measures
-            // instead: white card, the app's own hairline, near-black ink.
-            "border-neutral-200 bg-white text-neutral-900 hover:bg-neutral-100",
+            // near-black bar. Pinned to the chrome's own constants instead,
+            // which are declared only in `:root` and therefore cannot invert:
+            // a white chip, the chrome's hairline, near-black ink. These are
+            // the same three values the bell and the account chip wear, which
+            // is what makes the four controls read as one row.
+            "border-chrome-chip-line bg-chrome-chip text-neutral-900 hover:bg-neutral-100 active:bg-neutral-200",
           )}
           title="Invite someone to this workspace"
         >
           <UserPlus />
           <span className="hidden sm:inline">Invite members</span>
         </Link>
-        {/* THE ONE YELLOW ON THE SCREEN. `yellow` is already spelled in
-            constants — the neon and near-black ink — so it needs no pinning and
-            is the same object at both exposures. No icon: this is the widest
-            word in the group and the colour is doing the pointing. */}
-        <Link href="/dashboard/flows" className={cn(buttonVariants({ variant: "yellow", size: "sm" }))}>
+        {/* THE HERO, AND IT IS NOW SPELLED AS THE PRIMARY RATHER THAN AS A
+            COLOUR. It was `variant="yellow"` — a variant that existed because
+            the primary was violet and the hero needed a name of its own. Yellow
+            IS the primary now, so that variant was two names for one object and
+            has gone; `accent` is `bg-primary` + `text-primary-foreground`.
+            The plus is the export's: a verb reads faster with a mark in front
+            of it, and this is the one control in the bar that makes something. */}
+        <Link href="/dashboard/flows" className={cn(buttonVariants({ variant: "accent", size: "sm" }))}>
+          <Plus />
           <span>New flow</span>
         </Link>
 
-        {/* THE BELL, ON A LIGHT CHIP. A bare glyph floating on the band would be
-            the only unhoused control in the bar; the chip makes it an object
-            sitting ON the chrome, matching the avatar beside it. The badge is
-            BLUE and neither of the two colours it might have been — danger
-            would make an unread message a failure, and brand would give a count
-            the same colour as selection. Its hairline is the near-white the
-            numeral is set in, so the badge reads as lifted OFF the chip rather
-            than punched into it. */}
+        {/* THE BELL, ON A WHITE CHIP WITH AN EDGE. The chip INVERTED with the
+            rebrand: it was a solid grey disc, and the export draws a white one
+            with a hairline — the same material as the two pills to its left, so
+            the four controls read as one row at one elevation rather than as
+            two buttons and two blobs.
+            THE BADGE IS THE BRAND. It was blue, on the argument that a count is
+            neither a failure (danger) nor a selection (violet) and deserved a
+            third colour. The rebrand answered that rather than overruling it:
+            selection is not violet any more, so there is nothing left for a
+            yellow badge to collide with, and a fourth hue in a band already
+            holding charcoal, yellow and violet says less than three do. Its
+            hairline is the near-white behind it, so the badge reads as lifted
+            OFF the chip rather than punched into it. */}
         <Button
           variant="ghost"
           size="iconSm"
           aria-label={unread > 0 ? `Notifications — ${unread} unread` : "Notifications"}
-          className="relative bg-chrome-chip text-neutral-800 hover:bg-neutral-300 hover:text-neutral-900 active:bg-neutral-400"
+          className="relative border border-chrome-chip-line bg-chrome-chip text-neutral-800 hover:bg-neutral-100 hover:text-neutral-900 active:bg-neutral-200"
         >
           <Bell />
           {unread > 0 && (
-            <span className="absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full border border-neutral-50 bg-chrome-badge text-xs font-semibold leading-none text-neutral-50">
+            <span className="absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full border border-neutral-50 bg-chrome-badge text-xs font-semibold leading-none text-chrome-badge-ink">
               {unread > 9 ? "9+" : unread}
             </span>
           )}
@@ -465,9 +519,13 @@ export function TopBar({
 
         {/* THE ACCOUNT, LAST, where Miro, Notion and Figma all keep it — and it
             is the control you reach for least, which is why it sits after the
-            hero rather than before it. Violet initials on the grey chip: violet
-            is the sheet's identity colour, and the 700 is the step that carries
-            text (the 500 is a fill and only 4.42:1). */}
+            hero rather than before it.
+            NEAR-BLACK INITIALS, NOT VIOLET ONES. They were `brand-700`, back
+            when that step was a violet that could carry text. `brand-*` is the
+            YELLOW ramp now, so the same class would have set these initials in
+            #d4b800 — 2.0:1 on a white chip, and the kind of breakage a rename
+            causes silently, because the class still compiles and still looks
+            deliberate. The export sets them in #1a1a1a. */}
         {account && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -475,7 +533,7 @@ export function TopBar({
                 variant="ghost"
                 size="iconSm"
                 aria-label="Account"
-                className="bg-chrome-chip text-xs font-semibold text-brand-700 hover:bg-neutral-300 hover:text-brand-800 active:bg-neutral-400 data-[state=open]:bg-neutral-300"
+                className="border border-chrome-chip-line bg-chrome-chip text-xs font-semibold text-neutral-900 hover:bg-neutral-100 active:bg-neutral-200 data-[state=open]:bg-neutral-100"
               >
                 {/* THE PICTURE IF THERE IS ONE, the initials if not — and the
                     initials are not a placeholder for a missing image, they are

@@ -155,61 +155,127 @@
      technical strings stop wearing the browser's fallback serif-mono mix. */
   --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
 
-  /* --- Brand / accent -----------------------------------------------------
-   * ONE accent, used for every primary action, every selection, every focus
-   * ring. `brand-600` is the button; 500 is hover-on-dark; 50/100 are tints.
+  /* --- Brand: the yellow, and the one rule that governs it ----------------
+   * YELLOW FILLS. VIOLET DRAWS.
    *
-   * IT USED TO BE ULTRAMARINE, AND IT WAS TOO LOUD FOR THE JOB IT HAS.
+   * That sentence replaces the old "yellow is the hero, at most once per
+   * screen", and the reason it replaces it is that the old one was a taste rule
+   * nothing could check, while this one is a measurement:
    *
-   * A saturated pigment blue is a fine accent for a product that leans on its
-   * brand. This one leans on its numbers: the thesis in the header says the
-   * chrome should be quiet and the figure should carry the page, and a rail
-   * painted in the accent was the loudest thing on every screen.
+   *              as a STROKE or TEXT        as a FILL under #1a1a1a ink
+   *   on white         1.55:1                        11.24:1
+   *   on the ground    1.42:1                          —
+   *   on the band      8.77:1                          —
    *
-   * So the chrome went monochrome and the accent got a smaller job — primary
-   * action, link, selection, focus — and a calmer colour to do it in. It still
-   * has to sit in the blue band, because green, amber and red are spoken for by
-   * the state trios and an accent that collides with "this failed" cannot also
-   * mean "press this". brand-600 carries white at 5.99:1, past AA at the
-   * semibold sizes buttons are set in.
+   * A yellow line on a light page is invisible and a yellow fill is superb. So
+   * the brand is spent on FILLED OBJECTS — the mark, the active rail chip, every
+   * primary button, the notification badge, the step markers, the card's cap —
+   * and never on a rule, a ring, a border or a glyph standing on the page. What
+   * draws is the marker ramp below.
+   *
+   * AND THE FILL HAS TO HAVE SOMETHING ON IT. This is the half of the rule that
+   * only shows up in practice, and three separate surfaces found it at once: a
+   * switch track, a progress bar and a chart series are all filled shapes, and
+   * every one of them was WRONG in yellow. The 11.24:1 above is the whole
+   * licence for yellow to be a surface — it is a contrast against the INK it
+   * carries. A fill with nothing written on it never collects that number. The
+   * only ratio its reader gets is fill-against-neighbour, and there the yellow
+   * is 1.07:1 on a switch's off track, 1.42:1 on a muted progress groove and
+   * ~1.1:1 as a series bar on a white card. All three are invisible.
+   *
+   * So the rule is: YELLOW FILLS WHERE SOMETHING SITS ON IT — a label, a
+   * numeral, an icon. A bare coloured area that only has to differ from the
+   * area beside it is a MARK, and marks are the marker's: the switch's on
+   * state (3.31:1 against its track), the progress indicator, every chart
+   * series, the active tab's rule. That line runs cleanly through every case
+   * the sweep met, which the shorter version of the rule did not.
+   *
+   * The one place yellow may stroke is a DARK surface, where it measures 8.77:1:
+   * the top bar's progress arc is yellow for that reason and a link never is.
+   *
+   * `scripts/check-ui.ts` fails the build on `text-primary`, `border-primary`
+   * and `ring-primary` so that this cannot quietly come apart again — which is
+   * exactly what the scarcity rule had no way to do.
+   *
+   * 600 is the brand; 700 is the pressed step (hover walks DOWN the ramp, it
+   * does not brighten — brightening a yellow moves it toward the white behind
+   * it and the label's contrast falls at the moment of the press); 50/100 are
+   * washes for a tinted surface that is not a control.
    */
-  --color-brand-50: #f3eeff;
-  --color-brand-100: #e7dcff;
-  --color-brand-200: #d0bcff;
-  --color-brand-300: #b494ff;
-  --color-brand-400: #9670ff; /* focus ring */
-  --color-brand-500: #7c4dff; /* hover-on-dark */
-  --color-brand-600: #6d3aff; /* primary — 7.19:1 on white */
-  --color-brand-700: #6229f0; /* pressed, accent-foreground */
-  --color-brand-800: #5318d1;
+  --color-brand-50: #fefae6;
+  --color-brand-100: #fdf3bf;
+  --color-brand-200: #fae98a;
+  --color-brand-300: #f7de4d;
+  --color-brand-400: #f2d519;
+  --color-brand-500: #f5d91f; /* hover-on-dark */
+  --color-brand-600: #eecf00; /* THE BRAND — 11.24:1 under #1a1a1a */
+  --color-brand-700: #d4b800; /* pressed */
+  --color-brand-800: #b89f00;
+
+  /* --- Marker: the violet, and everything the yellow cannot do ------------
+   * THE STROKE HALF OF THE SPLIT ABOVE. Focus rings, links, hover borders,
+   * selection rings, the calendar's "today" edge, the active tab's rule — every
+   * place the product needs to DRAW rather than to fill.
+   *
+   * These are the exact values the ramp has always held; only its NAME and its
+   * job changed. It was `brand-*` while violet was the primary, and leaving it
+   * under that name once yellow took the job would be a ramp called "brand"
+   * that is not the brand colour — a lie a future edit is entitled to believe.
+   *
+   * 500 is the object colour (4.41:1 on the ground, past the 3:1 a non-text
+   * mark owes). 700 is the INK step, because 4.41:1 is short of the 4.5:1 body
+   * text owes and a link is body text. 400 is the focus ring.
+   */
+  --color-marker-50: #f3eeff;
+  --color-marker-100: #e7dcff;
+  --color-marker-200: #d0bcff;
+  --color-marker-300: #b494ff;
+  --color-marker-400: #9670ff; /* focus ring */
+  --color-marker-500: #7c4dff; /* the mark itself — 4.41:1 on the ground */
+  --color-marker-600: #6d3aff;
+  --color-marker-700: #6229f0; /* link ink — 6.79:1 */
+  --color-marker-800: #5318d1;
 
   /* --- THE RATIO: WHERE EACH OF THE THREE GOES ----------------------------
-   * The sheets are black, yellow and violet, and the reason they read as a
-   * brand rather than as three colours is that each has ONE job. Written down
-   * because "use the brand colours" is not a rule anybody can apply twice the
-   * same way:
+   * The band is charcoal, the brand is yellow and the marker is violet, and the
+   * reason they read as a brand rather than as three colours is that each has
+   * ONE job. Written down because "use the brand colours" is not a rule anybody
+   * can apply twice the same way:
    *
-   *   BLACK   does the work. Default buttons, the active tab, the toast, any
-   *           dark surface. It is the most common colour in the product after
-   *           the off-white it sits on.
-   *   VIOLET  marks SELECTION and identity. The active nav row, links, the
-   *           focus ring, the branded action. Never a workhorse — a screen
-   *           where three things are violet has told you nothing.
-   *   YELLOW  is the HERO, at most once per screen: the single act the screen
-   *           exists for. Its scarcity IS its meaning; a second yellow on a
-   *           page halves the value of the first.
+   *   CHARCOAL  is the band, and only the band. #2e2e2e wrapping the page in an
+   *             unbroken shape — no seam inside it, because there is no second
+   *             material in there to divide from.
+   *   YELLOW    FILLS. Every filled object the product wants you to press or to
+   *             notice: the mark, the active nav chip, primary buttons, the
+   *             unread badge, step markers, the empty card's cap.
+   *   VIOLET    DRAWS. Every line and every coloured glyph: the focus ring,
+   *             links, hover borders, selection rings, the active tab's rule,
+   *             and the workspace avatar (identity, which is a fill, and the
+   *             one place violet is allowed to be one).
    *
-   * The accent four below are decoration on top of that, never state.
+   * IT USED TO SAY "YELLOW IS THE HERO, AT MOST ONCE PER SCREEN", and the
+   * scarcity was said to be its meaning. That rule died of being uncheckable:
+   * nothing failed when a second yellow arrived, so the count was enforced by
+   * whoever happened to be reviewing. The fill/stroke split says something a
+   * script can test, and check-ui.ts tests it.
+   *
+   * The accent three below are decoration on top of that, never state.
    */
 
   /* --- The sheet's accent set --------------------------------------------
-   * The first brand sheet draws its chips, tabs and pins in a fixed four
-   * beside the black: a highlighter yellow, a signal orange, a soft pink and a
-   * periwinkle. They are NOT states — success/warn/danger own that vocabulary
-   * — they are the kit's decorative range, for the places a surface needs to
-   * be identifiable rather than to mean something.
+   * The brand sheet draws its chips, tabs and pins in a fixed set beside the
+   * black. They are NOT states — success/warn/danger own that vocabulary — they
+   * are the kit's decorative range, for the places a surface needs to be
+   * identifiable rather than to mean something.
+   *
+   * THE YELLOW LEFT THIS SET, because it became the brand. It was `#faf63c`, a
+   * highlighter neon, and it lived here as one decorative colour among four
+   * while `--primary` was violet. Now that yellow IS the primary, a second
+   * yellow under a second name is the drift this file exists to stop: the two
+   * were four counts apart in hue and would have been indistinguishable on
+   * screen and impossible to keep in step. Anything that wants the brand's
+   * yellow asks for `--primary` or `brand-600` by name.
    */
-  --color-accent-yellow: #faf63c;
   --color-accent-orange: #ff6b35;
   --color-accent-pink: #ffa5a5;
   --color-accent-peri: #9b9be8;
@@ -257,16 +323,25 @@
    * A ladder, which is the minimum a dark surface needs to express elevation
    * at all: base, raised, hover, hairline, then three steps of text.
    *
-   * WARM NEAR-BLACK. This was cool graphite (#23262d) — correct contrast, and
-   * a different material from the app it borders. Cut from the same warm ramp
-   * as the paper, the rail stops reading as a separate component bolted to the
-   * left edge and starts reading as the same surface in shadow.
+   * THE LADDER RUNS UPWARDS NOW, AND THAT IS THE WHOLE STORY OF THIS BLOCK.
+   *
+   * The band moved from #0f0f0f to #2e2e2e — a charcoal rather than a
+   * near-black — and every step above was built to go DOWN from the old value.
+   * `ink-900` was #1a1a1a and `ink-800` #2b2b2b: both DARKER than the new base.
+   * Left alone, every rail hover and every active row would have receded into
+   * the band instead of rising out of it, which is not a slightly-wrong colour,
+   * it is elevation pointing the wrong way.
+   *
+   * On a charcoal band, raised means LIGHTER. The three surface steps are
+   * re-cut above the base rather than below it, and the ratios in the comments
+   * are against the band itself, because that is the only surface they are ever
+   * seen on.
    */
-  --color-ink-950: #0f0f0f; /* rail base */
-  --color-ink-900: #1a1a1a; /* rail raised (active item), the toast */
-  --color-ink-800: #2b2b2b; /* rail hover */
-  --color-ink-700: #3d3d3d; /* hairline on dark */
-  --color-ink-400: #a3a3a3; /* muted text on dark — 5.87:1 on the rail */
+  --color-ink-950: #2e2e2e; /* THE BAND — rail and top bar, both themes */
+  --color-ink-900: #3a3a3a; /* rail hover — 1.31:1 on the band */
+  --color-ink-800: #434343; /* rail raised (active row), the toast — 1.45:1 */
+  --color-ink-700: #5e5e5e; /* hairline on dark — 2.10:1 */
+  --color-ink-400: #a1a1a1; /* muted text on dark — 5.26:1 on the band */
   --color-ink-100: #e8e8e8; /* body text on dark */
   --color-ink-50: #fafafa; /* headings on dark */
 
@@ -393,11 +468,17 @@
   --radius-control: var(--radius-md);
   --radius-card: var(--radius-lg);
   --radius-surface: var(--radius-2xl);
-  /* 32px — the frame's own corner, where the canvas is cut into the rail's
-     wash. Bigger than any radius INSIDE the app on purpose: this one is not a
-     component, it is the edge of the application itself, and at surface's 16px
-     it read as a rounded box rather than as the app sitting in its chrome. */
-  --radius-frame: 0rem;
+  /* THE FRAME'S OWN CORNER — where the ground is cut into the band's charcoal.
+     Applied TOP-LEFT ONLY, which is the one corner where the page meets both
+     halves of the band at once: the rail below-left and the top bar above. The
+     other three corners run to the viewport, and rounding them would float the
+     page inside the window like a card, which it is not.
+
+     BACK FROM ZERO. It was 32px while the frame painted a gradient behind a
+     transparent rail, then 0 when the navigation briefly became a white column
+     and there was no wash left to cut into. There is again — the band is
+     charcoal and the ground is #f5f5f5 — and 16px is what the export draws. */
+  --radius-frame: 1rem;
 
   /* --- Chrome band --------------------------------------------------------
    * How far the builder's floating panels stay clear of the canvas's top edge.
@@ -566,8 +647,20 @@
   --popover: #ffffff;
   --popover-foreground: var(--color-neutral-900);
 
-  --primary: var(--color-brand-500); /* VIBRANT VIOLET #7c4dff — white at 4.81:1 */
-  --primary-foreground: #ffffff;
+  /* THE FILL HALF OF THE SPLIT. Yellow, under near-black ink at 11.24:1 — and
+     the ink is a CONSTANT rather than `--foreground`, because the yellow does
+     not invert and neither may the thing written on it. A primary button is the
+     same object in both themes. */
+  --primary: var(--color-brand-600); /* #eecf00 */
+  --primary-foreground: #1a1a1a;
+
+  /* THE STROKE HALF. Every line and every coloured glyph in the product; see
+     the ramp's own note for the measurement that forces the split. `--marker`
+     is the object colour and `--marker-ink` the step that may carry text, and
+     the gap between them is the whole reason there are two: 4.41:1 clears the
+     3:1 a ring or a rule owes and falls short of the 4.5:1 a link does. */
+  --marker: var(--color-marker-500); /* #7c4dff — 4.41:1 on the ground */
+  --marker-ink: var(--color-marker-700); /* #6229f0 — 6.79:1 */
 
   --secondary: var(--color-neutral-100);
   --secondary-foreground: var(--color-neutral-900);
@@ -575,8 +668,12 @@
   --muted: var(--color-neutral-100);
   --muted-foreground: var(--color-neutral-500);
 
-  --accent: var(--color-brand-50);
-  --accent-foreground: var(--color-brand-700); /* 6.79:1 — the link step */
+  /* The MARKER's tint pair, not the brand's. A selected menu row and a link
+     both live here, and both are things violet does — the row is a wash behind
+     ink rather than a filled object, and the link is text. A yellow wash under
+     yellow ink would be the one combination the split forbids. */
+  --accent: var(--color-marker-50);
+  --accent-foreground: var(--color-marker-700); /* 6.79:1 — the link step */
 
   --destructive: var(--color-red-600);
   --destructive-foreground: #ffffff;
@@ -584,14 +681,27 @@
   /* The hairline, cut from the warm ramp so it belongs to the same family as
      the shadow falling around it. It was #e5e4ed — a faintly lavender grey
      chosen to match a cool palette that no longer exists. */
-  --border: var(--color-neutral-200);
+  /* ONE HAIRLINE, AND IT IS THE EXPORT'S.
+     The export draws two — #cfcfcf around the card and #d3d3d3 around every
+     button and chip — which are FOUR COUNTS apart: indistinguishable on any
+     screen, and guaranteed to drift the first time one of them is edited alone.
+     That is the near-miss this file opens by arguing against, so they collapse
+     to the one the export uses most.
+     It is materially harder than the #e8e8e8 that was here (1.50:1 on white
+     against 1.21:1), which is what the export asks for; dividers and table
+     rules harden with it. `--color-neutral-200` deliberately stays #e8e8e8, so
+     the press states built on it do not darken along with the edges. */
+  --border: #d3d3d3;
   /* The SAME hairline as --border, not a step darker. They were #d4d4d4 and
      #e5e5e5, seventeen levels apart in one hue, so a select inside the config
      panel was drawn harder than the panel containing it — almost-but-not-
      quite, which reads as a mistake rather than a hierarchy. shadcn ships
      these two equal for the same reason. */
   --input: var(--border);
-  --ring: var(--color-brand-400);
+  /* THE RING IS A STROKE, so it is the marker's, not the brand's. A yellow
+     focus ring measures 1.55:1 on white — the single most important indicator
+     in the product, invisible. */
+  --ring: var(--color-marker-400);
 
   /* shadcn components that do their own `calc()` off a single base radius. */
   --radius: 0.5rem;
@@ -658,40 +768,57 @@
      too. 2.11:1 on the chrome — under the 3:1 non-text bar, and correctly so:
      it is the seam between two surfaces, not the edge of a control, and nothing
      becomes unusable for a reader who cannot resolve it. */
-  --chrome-line: #48494b;
-  /* The 36px circle under the top bar's bell and avatar. A LIGHT chip on the
-     dark band, so those two read as objects sitting ON the chrome rather than
-     as loose glyphs floating in it. 12.72:1 against the chrome, and it carries
-     the avatar's `brand-700` initials at 4.53:1 — past AA with almost nothing
-     spare, which is why those initials stay at 600 and never go lighter than
-     the 700 step. */
-  --chrome-chip: #d3d3d3;
-  /* The unread-count badge on that bell. BLUE, and neither of the two colours
-     it might have been: `--danger` would make an unread message a failure, and
-     `brand-500` would give a number nobody asked for the same colour as
-     selection. This is the third thing — a count — and it gets its own. 3.67:1
-     on the chrome, past the 3:1 bar for a graphical object, and it carries its
-     own numeral at 4.90:1. */
-  --chrome-badge: #3859ff;
+  --chrome-line: #5e5e5e;
+  /* The 36px chip under the top bar's bell and avatar, and under the rail's
+     "+". It INVERTED: it was a solid #d3d3d3 disc, and the export draws a WHITE
+     one with a #d3d3d3 hairline around it. That is a different object — a light
+     surface with an edge, which is what every other pill in the bar is, rather
+     than a grey blob — and it is what makes the bell, the avatar, "Invite
+     members" and "New flow" read as one row of controls at one elevation.
+     White is 15.4:1 against the band and carries near-black ink at 18.9:1. */
+  --chrome-chip: #ffffff;
+  /* Their hairline. A CONSTANT beside the other chrome roles rather than
+     `--border`, for the reason the whole `--chrome-*` block exists: the top bar
+     carries a scoped `dark` class so the builder's portalled toolbar re-inks
+     for the surface it lands on, and `--border` under that class answers with
+     the DARK theme's #3d3d3d — a near-invisible edge on a white chip. */
+  --chrome-chip-line: #d3d3d3;
+  /* The unread-count badge on that bell. THE BRAND, and it is a fill carrying
+     dark ink, which is the only shape yellow is allowed to take. It was blue
+     (#3859ff) on the argument that a count is neither a failure nor a
+     selection and deserved its own colour; that argument was answered by the
+     rebrand rather than overruled by it. Selection is no longer violet, so
+     there is nothing left for a yellow badge to collide WITH, and a fourth
+     hue in a band that already holds charcoal, yellow and violet was one
+     colour more than the chrome could say anything with. 8.77:1 on the band. */
+  --chrome-badge: var(--color-brand-600);
+  --chrome-badge-ink: #1a1a1a; /* 11.24:1 on the badge */
   /* The presence dot on the RAIL's bell — 8px, no number, so it says "there is
-     something" rather than "there are three". Green because it reports
-     PRESENCE, not urgency, and pointedly not `--success`: that trio means a row
-     succeeded, and a dot that borrows it turns a notification into a result.
-     7.70:1 on the chrome. */
-  --chrome-presence: #00bc7d;
-  /* The workspace avatar in the top bar — the one place the chrome carries a
-     colour that is neither brand nor state, because this is IDENTITY: which
-     workspace you are in. It has to be able to differ per workspace without
-     ever colliding with selection violet or the yellow hero, which is the whole
-     reason it is not drawn from either. White on it measures 4.14:1, under AA
-     at the 16px/600 the initial is set in — see the note in the report. */
-  --chrome-avatar: #437dcf;
-  /* The "+" on the rail's yellow chip. NOT `--foreground`: near-black on the
-     yellow is 15.18:1 and reads as a filled primary button demanding a press,
-     which is too much presence for a control sitting under seven quieter nav
-     rows. Grey is 6.30:1 on that yellow — comfortably past AA — and lets the
-     chip's colour do the pointing instead of its ink. */
+     something" rather than "there are three". It follows the badge above onto
+     the brand for the same reason, and loses the green it had: that green was
+     chosen to avoid `--success` ("a row succeeded") while still reading as
+     health, and a notification is not a health report either. The yellow says
+     only "the product wants you", which is all a dot can honestly mean. */
+  --chrome-presence: var(--color-brand-600);
+  /* The workspace avatar in the top bar — and the ONE place violet is a fill
+     rather than a stroke. It is IDENTITY: which workspace you are in, a fact
+     about your account rather than a control, so it is not competing with the
+     yellow for a press. The export measures #7c4dff, which is `marker-500`
+     exactly — the ramp the product already had, doing the one job the rebrand
+     left it. #f5f5f5 on it measures 4.42:1, at AA for the 14px/600 the initial
+     is set in. */
+  --chrome-avatar: var(--color-marker-500);
+  /* The "+" in the rail's foot. Its chip is WHITE now rather than yellow — the
+     export moved the brand off this control and onto the mark and the active
+     row — so the grey is no longer softening a neon, it is ordinary ink on an
+     ordinary chip: 7.23:1 on white. Kept as a role because the chip is chrome
+     and must not answer the scoped `dark`. */
   --chrome-add-ink: #575757;
+  /* The metrics ring in the top bar. Its TRACK is a dark step (the arc has to
+     have something to be drawn against) and its ARC is the brand — the one
+     place in the product yellow is allowed to be a stroke, because on this band
+     it measures 8.77:1 rather than the 1.42:1 it would manage on the page. */
+  --chrome-ring-track: #4a4a4a;
 
   /* ---- The ground: the page the board sits on ----------------------------
    * WHITE TILES ON A DARK PAGE — the builder's grammar (see the canvas note
@@ -732,19 +859,20 @@
      dark and this ink does not follow it there. Two tokens that happen to agree
      in one theme are not one token. */
   --ground-ink-muted: var(--color-neutral-500);
-  /* The 2px rule under the active tab. GREEN, and deliberately not the
-     selection violet that the rail's active row and the period control's active
-     pill both wear. Those answer "where are you in the app"; a tab answers
-     "which slice of THIS page". Two questions, and one colour answering both is
-     how a screen stops pointing at anything.
-     ONE VALUE FOR BOTH THEMES, per the spec, and it is not free: 9.02:1 on the
-     dark ground, but 1.78:1 on the light one, where a 2px rule is well under
-     the 3:1 an indicator that carries state is meant to hold. It survives only
-     because the underline is never the ONLY thing marking the active tab — that
-     tab is also the one set in `--ground-ink` while its neighbours sit at
-     `neutral-500`. If the tab row ever loses that weight change, this token
-     needs a light answer of its own. */
-  --tab-underline: #00d492;
+  /* The 2px rule under the active tab, and the one token the rebrand REPAIRED
+     rather than merely recoloured.
+     It was green #00d492, and the note that stood here confessed the problem in
+     its own words: 9.02:1 on the dark ground but "1.78:1 on the light one,
+     where a 2px rule is well under the 3:1 an indicator that carries state is
+     meant to hold… If the tab row ever loses that weight change, this token
+     needs a light answer of its own."
+     A rule is a STROKE, and the split now says what a stroke is drawn in. The
+     marker measures 4.41:1 on the light ground and 6.60:1 on the dark one, so
+     the underline carries the state on its own at both exposures and stops
+     depending on the weight change beside it to be legible at all. The green
+     had no job left: it was chosen to differ from a selection violet that the
+     rail no longer wears. */
+  --tab-underline: var(--color-marker-500);
 
   /* ---- The period control: the one control that follows the page ---------
    * Today · Yesterday · Last 7 days · … — a pill group at the right of the
@@ -755,12 +883,17 @@
    * says where you are.
    *
    * THREE TOKENS, NOT FIVE. The active pill is `bg-primary` +
-   * `text-primary-foreground`, which already answer brand-500 and white in BOTH
-   * themes — the Figma's #7C4DFF *is* `--primary`, and giving it a second name
-   * here is how a product ends up with two primaries that drift apart at the
-   * first edit. (The Figma sets that label in #F5F5F5, which measures 4.42:1 on
-   * the violet against white's 4.81:1 — so the role is also the accessible
-   * choice, not merely the tidy one.)
+   * `text-primary-foreground`, which answer in BOTH themes, and giving them a
+   * second name here is how a product ends up with two primaries that drift
+   * apart at the first edit.
+   *
+   * THAT PILL IS YELLOW NOW, and it follows from the split rather than from the
+   * export (which does not draw this control). An active segment is a FILLED
+   * object — the same object as the rail's active chip, one surface over — and
+   * the rule says a filled object is the brand. It also keeps the two "you are
+   * here" marks in the product spelled the same way, which the old arrangement
+   * did by accident and would have lost: the rail's chip went yellow while this
+   * pill stayed violet, and two selections in two colours point at nothing.
    *
    * LIGHT — a white group with the app's own hairline, so it reads as the same
    * material as the white pills beside it in the action row.
@@ -803,11 +936,24 @@
   --popover: var(--color-neutral-800);
   --popover-foreground: var(--color-ink-50);
 
-  /* brand-600 is 7.19:1 on white and only 1.5:1 on this page — it disappears.
-     brand-500 is the ramp's own "hover-on-dark" step and carries white at
-     5.18:1, past AA for the semibold labels these buttons are set in. */
-  --primary: var(--color-brand-500);
-  --primary-foreground: #ffffff;
+  /* THE PRIMARY DOES NOT INVERT, and this is the one role in the block that
+     restates its light value rather than answering differently.
+     The old note here explained why violet had to move a step (brand-600 was
+     7.19:1 on white and 1.5:1 on the dark page — it disappeared). The yellow
+     has the opposite problem, which is to say none: it is a LIGHT fill, so it
+     is 8.20:1 on the dark page and 11.24:1 under its own ink at both exposures.
+     A primary button is deliberately the same object in both themes — the same
+     argument the band makes about itself, applied to the one control the band
+     is there to point at. */
+  --primary: var(--color-brand-600);
+  --primary-foreground: #1a1a1a;
+
+  /* The marker's object step is unchanged (marker-500 is a mid-tone chosen to
+     work on both grounds — 6.60:1 here), but its INK step cannot survive: #6229f0
+     measures 1.55:1 on this page and is not dim, it is gone. Ink goes UP the
+     ramp in dark exactly as it goes down in light. */
+  --marker: var(--color-marker-500);
+  --marker-ink: var(--color-marker-300); /* #b494ff — 7.02:1 on the page */
 
   --secondary: var(--color-neutral-800);
   --secondary-foreground: var(--color-ink-50);
@@ -815,11 +961,11 @@
   --muted: var(--color-neutral-800);
   --muted-foreground: var(--color-neutral-400); /* 6.49:1 on page, 5.66:1 on card */
 
-  /* The light theme's accent is a brand TINT (brand-50). Its dark twin has to
-     be a brand SHADE, or a selected row glows brighter than the primary
+  /* The light theme's accent is a MARKER tint (marker-50). Its dark twin has to
+     be a marker SHADE, or a selected row glows brighter than the primary
      button. 6.71:1 for the ink on it. */
-  --accent: #1e2450;
-  --accent-foreground: var(--color-brand-300);
+  --accent: #241e50;
+  --accent-foreground: var(--color-marker-300);
 
   /* Unchanged: red-600 carries white at 4.53:1, so the destructive button is
      the same object in both themes rather than inverting into a pale pill. */
@@ -828,7 +974,7 @@
 
   --border: var(--color-neutral-700);
   --input: var(--border);
-  --ring: var(--color-brand-400); /* 4.24:1 on a card — past the 3:1 non-text bar */
+  --ring: var(--color-marker-400); /* 4.24:1 on a card — past the 3:1 non-text bar */
 
   /* State, re-solved for dark rather than inverted by eye.
      The light trios put dark ink on a pale wash at 5.2–5.5:1; flipping that
@@ -864,10 +1010,18 @@
    * does not — the six `--chrome-*` roles are absent from this block on
    * purpose, and the note beside them in `:root` is why.
    *
-   * A hair warmer and a step lighter than that band: 1.09:1 apart, which is
+   * THE STEP BETWEEN THEM REVERSED WHEN THE BAND LIGHTENED, and the reversal is
+   * the correct one rather than something to correct. The band was #0f0f0f and
+   * this ground sat a hair above it, so the rail read as very slightly recessed.
+   * The band is #2e2e2e now, which puts it 1.29:1 ABOVE this page — and that is
+   * the same direction the whole ink ladder turned when the band moved (see its
+   * note: on a charcoal band, raised means lighter). The chrome is the surface
+   * in front and the page is behind it, consistently, in both themes.
+   *
+   * The magnitude is what was worth preserving, not the sign: 1.29:1 is still
    * deliberately below the threshold at which two surfaces read as two
-   * MATERIALS. The chrome and the page are one dark substance with the rail
-   * very slightly recessed, rather than two panels that failed to match.
+   * MATERIALS. The chrome and the page are one dark substance at two
+   * exposures, rather than two panels that failed to match.
    */
   --ground: #1b191a;
   /* The page title — 17.49:1. Pure white, not `--foreground`'s ink-50: this is
@@ -901,6 +1055,12 @@
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  /* The stroke half of the split, so `border-marker`, `ring-marker`,
+     `stroke-marker` and `text-marker-ink` COMPILE. Without this pair the rule
+     in the brand block is advice rather than something a component can spell —
+     and a rule you cannot write down in a class list gets ignored. */
+  --color-marker: var(--marker);
+  --color-marker-ink: var(--marker-ink);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
@@ -949,10 +1109,13 @@
      right here in which block each name appears in. */
   --color-chrome-line: var(--chrome-line);
   --color-chrome-chip: var(--chrome-chip);
+  --color-chrome-chip-line: var(--chrome-chip-line);
   --color-chrome-badge: var(--chrome-badge);
+  --color-chrome-badge-ink: var(--chrome-badge-ink);
   --color-chrome-presence: var(--chrome-presence);
   --color-chrome-avatar: var(--chrome-avatar);
   --color-chrome-add-ink: var(--chrome-add-ink);
+  --color-chrome-ring-track: var(--chrome-ring-track);
   --color-ground: var(--ground);
   --color-ground-ink: var(--ground-ink);
   --color-ground-ink-muted: var(--ground-ink-muted);
@@ -1055,7 +1218,7 @@ textarea {
 /* Chosen rather than inherited: the default is a translucent grey block that
    ignores our radii, so a tapped pill flashes as a rectangle. */
 html {
-  -webkit-tap-highlight-color: rgb(43 68 216 / 0.12);
+  -webkit-tap-highlight-color: rgb(124 77 255 / 0.12);
 }
 
 body {

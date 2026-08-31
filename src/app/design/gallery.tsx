@@ -148,9 +148,17 @@ function Family({ name, file, children }: { name: string; file: string; children
   );
 }
 
+/**
+ * ELEVEN, NOT TWELVE — `yellow` was deleted rather than renamed.
+ *
+ * It and `accent` were two names for "the loudest button on the screen", which
+ * was a coherent thing to have while `--primary` was violet and the hero act
+ * needed a colour the primary could not give it. Once yellow BECAME the
+ * primary the two variants resolved to the same object, and a call site chose
+ * between them by feel — the exact drift `cva` and `check:ui` exist to stop.
+ */
 const BUTTON_VARIANTS: NonNullable<ButtonProps["variant"]>[] = [
   "default",
-  "yellow",
   "accent",
   "secondary",
   "soft",
@@ -196,7 +204,7 @@ export function Gallery() {
       <div className="space-y-8">
         {/* ── BUTTON ──────────────────────────────────────────────────── */}
         <Family name="Button" file="button.tsx">
-          <Spec name="variant — 12 values" note="Black is the workhorse; violet marks the branded action; yellow is the hero and appears at most once per screen.">
+          <Spec name="variant — 11 values" note="Black is the workhorse; accent is the brand, a yellow FILL under near-black ink at 11.24:1; soft and outlineAccent are the marker's wash and edge, because a tint and a border are things violet does. There is no count limit — the rule is the shape, not the scarcity.">
             {BUTTON_VARIANTS.map((v) => (
               <Button key={v} variant={v}>
                 {v}
@@ -237,7 +245,7 @@ export function Gallery() {
 
         {/* ── BADGE / STATUSPILL ──────────────────────────────────────── */}
         <Family name="Badge · StatusPill" file="badge.tsx">
-          <Spec name="StatusPill tone — 9 values" note="Five are STATE (pending, success, warn, danger, brand); four are the decorative accent set, which must never be used to mean state.">
+          <Spec name="StatusPill tone — 9 values" note="Five are STATE (pending, success, warn, danger, brand); three are the decorative accent set, which must never be used to mean state; and `yellow` is the brand itself — it draws from --primary now rather than from a decorative token of its own, which is why it is the one pill on this row carrying near-black ink.">
             {PILL_TONES.map((t) => (
               <StatusPill key={t} tone={t}>
                 {t}

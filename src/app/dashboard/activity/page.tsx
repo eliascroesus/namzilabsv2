@@ -211,9 +211,12 @@ export default async function ActivityPage({ searchParams }: { searchParams: Pro
               </span>
             </div>
             {rows.length === 0 ? (
-              // THE LINK VIOLET, not the fill violet: `--primary` is brand-500,
-              // 4.42:1 on the page and under AA, and the sheet is explicit that
-              // the 500 fills while the 700 (`accent-foreground`) speaks.
+              // A LINK IS TEXT, SO IT IS DRAWN AND NOT FILLED: `--primary` is
+              // the brand yellow, which measures 1.55:1 as text and is not on
+              // the page at all. Links belong to the marker, and the marker
+              // splits the same way — the 500 draws, while the 700
+              // (`accent-foreground`) is the step that may carry text, at
+              // 6.79:1.
               <p className="px-4 py-12 text-center text-sm text-muted-foreground">
                 {source ? (
                   <>
@@ -297,16 +300,21 @@ export default async function ActivityPage({ searchParams }: { searchParams: Pro
  * ONE OPTION OF THE SOURCE FILTER, WORN AS A CHIP.
  *
  * It is `ui/chip.tsx`'s recipe — h-8, `rounded-full`, 12px semibold ALL CAPS
- * with `tracking-wide`, violet FILL when selected — and it deliberately is not
- * that component: `Chip` is a `<button>` in a client component, and this filter
- * lives in the URL. Every option here has to be a real `<a>` so the page stays
- * server-rendered, shareable and back-button-correct, which is also why the
- * control it replaced was a hand-rolled `<details>` rather than a `<select>`.
+ * with `tracking-wide`, the brand FILL when selected — and it deliberately is
+ * not that component: `Chip` is a `<button>` in a client component, and this
+ * filter lives in the URL. Every option here has to be a real `<a>` so the page
+ * stays server-rendered, shareable and back-button-correct, which is also why
+ * the control it replaced was a hand-rolled `<details>` rather than a
+ * `<select>`.
  *
- * The FILL is the vibrant violet doing its one job on this sheet — marking
- * SELECTION — and the off state hovers to the violet TINT rather than to
- * `bg-muted`, because `--muted` and the page are the same colour and a hover
- * you cannot see is the same as not having one.
+ * A SELECTED CHIP IS A FILLED OBJECT, which is the half of the split the yellow
+ * owns: `bg-primary` under near-black ink at 11.24:1. Hover walks DOWN the ramp
+ * to `brand-700` rather than up, because brightening a yellow moves it toward
+ * the white behind it and the label's contrast falls at the moment of the
+ * press. The OFF state is not a fill at all, so it hovers to the marker's tint
+ * carrying the marker's ink — and to that rather than to `bg-muted`, because
+ * `--muted` and the page are the same colour and a hover you cannot see is the
+ * same as not having one.
  */
 function FilterChip({
   href,
@@ -327,7 +335,7 @@ function FilterChip({
       className={cn(
         "inline-flex h-8 shrink-0 items-center gap-2 rounded-full px-3.5 text-xs font-semibold uppercase tracking-wide transition-colors duration-(--duration-fast) ease-(--ease-standard)",
         active
-          ? "bg-primary text-primary-foreground hover:bg-brand-600"
+          ? "bg-primary text-primary-foreground hover:bg-brand-700"
           : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
       )}
     >

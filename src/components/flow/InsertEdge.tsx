@@ -37,8 +37,16 @@ export function InsertEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosit
             style={{ position: "absolute", transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`, pointerEvents: "all" }}
             className="group flex h-10 w-10 items-center justify-center"
           >
+            {/* HOVER FILLS, SO HOVER IS THE BRAND. This is the same object as
+                the drop placeholder's plus (drop-slot.tsx) — a small round
+                filled affordance carrying a glyph — and the two are a foot
+                apart on the same canvas, so they cannot be two different
+                colours. The ink moves from white to `primary-foreground` with
+                it: white on #eecf00 measures 1.4:1, where the near-black the
+                brand is built to carry measures 11.24:1. The rim keeps its
+                lighter step, now off the yellow ramp. */}
             <button
-              className="flex h-7 w-7 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-card transition-[transform,background-color,border-color,color] duration-(--duration-fast) hover:scale-110 hover:border-brand-400 hover:bg-brand-500 hover:text-white"
+              className="flex h-7 w-7 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-card transition-[transform,background-color,border-color,color] duration-(--duration-fast) hover:scale-110 hover:border-brand-400 hover:bg-primary hover:text-primary-foreground"
               onClick={(e) => {
                 e.stopPropagation();
                 onInsert(id, anchorFromRect(e.currentTarget.getBoundingClientRect()));

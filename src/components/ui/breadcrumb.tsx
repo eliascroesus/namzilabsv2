@@ -43,9 +43,10 @@ function BreadcrumbLink({
   return (
     <Comp
       data-slot="breadcrumb-link"
-      // A breadcrumb crumb is a LINK, so it hovers to the link colour — the
-      // readable violet, `accent-foreground`, which is what every other anchor
-      // in the product resolves to. It hovered to `foreground`, i.e. it went
+      // A breadcrumb crumb is a LINK, so it hovers to the link colour —
+      // `accent-foreground`, the marker's ink step, which is the violet every
+      // other anchor in the product resolves to and the only step in that ramp
+      // that may carry a word (6.79:1). It hovered to `foreground`, i.e. it went
       // from grey to black and gave no sign it was clickable.
       className={cn(
         "transition-colors duration-(--duration-fast) hover:text-accent-foreground",

@@ -15,7 +15,13 @@ import { Plus } from "lucide-react";
  */
 export function DropSlotNode() {
   return (
-    <div className="pointer-events-none flex h-[86px] w-[300px] items-center justify-center rounded-surface border-2 border-dashed border-primary bg-accent/40">
+    // THE SLOT IS TWO OBJECTS AND THEY TAKE THE TWO COLOURS. The dashed
+    // rectangle is a LINE, so it is the marker's — as `border-primary` it
+    // would be a 1.55:1 yellow dash on the canvas, which is the drop target
+    // drawn and then rubbed out. The plus inside it is a FILLED disc carrying
+    // a glyph, which is what the brand is for, and it is the same object as
+    // the "+" on a hovered edge (InsertEdge) a few hundred pixels away.
+    <div className="pointer-events-none flex h-[86px] w-[300px] items-center justify-center rounded-surface border-2 border-dashed border-marker bg-accent/40">
       <span className="flex size-7 items-center justify-center rounded-full bg-primary text-primary-foreground">
         <Plus size={16} strokeWidth={2.5} />
       </span>

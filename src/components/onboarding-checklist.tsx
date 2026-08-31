@@ -67,6 +67,11 @@ export function OnboardingChecklist({
               <span
                 className={cn(
                   "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-sm font-semibold",
+                  // The step you are on is a FILLED marker, which is the shape
+                  // the brand is for: a yellow disc carrying near-black at
+                  // 11.24:1. The steps behind and ahead of it are outlines, and
+                  // an outline is a line — it takes the hairline, never the
+                  // yellow, which measures 1.55:1 as a stroke on this card.
                   i === next ? "bg-primary text-primary-foreground" : "border border-border text-muted-foreground",
                 )}
               >
@@ -80,8 +85,12 @@ export function OnboardingChecklist({
               {!step.done && (
                 <p className="mt-0.5 text-sm text-muted-foreground">
                   {step.detail}{" "}
+                  {/* A link is TEXT, so it is the marker's ink step and never
+                      the brand: `text-primary` here was 1.55:1 on the card, a
+                      call to action nobody could read. The 700 is 6.79:1,
+                      which is what body copy owes. */}
                   {i === next && (
-                    <Link href={step.href} className="whitespace-nowrap font-medium text-primary hover:underline">
+                    <Link href={step.href} className="whitespace-nowrap font-medium text-marker-ink hover:underline">
                       {step.cta}
                     </Link>
                   )}

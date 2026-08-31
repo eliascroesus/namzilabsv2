@@ -50,17 +50,34 @@ export function Switch({ className, checked, size = "default", disabled, ...prop
         // the probe found `transform: none` and the hit area was still 20px.
         // Insets need no transform at all, so there is nothing to compose.
         size === "sm" && "before:absolute before:inset-x-0 before:-inset-y-0.5 before:content-['']",
-        // ON IS THE SHEET'S VIBRANT VIOLET, and it is reached through the
-        // `primary` ROLE rather than `bg-brand-500`. Two reasons: the role is
-        // what inverts with the theme, and it is the very same fill the primary
-        // Button takes — so "this is on" and "this is the action" are ONE
-        // colour in the product rather than two violets that nearly match.
+        // ON IS THE MARKER, NOT THE BRAND, and this control is the clearest
+        // case for the half of the split people get wrong.
+        //
+        // "Yellow fills" is not the whole rule. Yellow fills WHERE SOMETHING
+        // SITS ON IT — a label, a numeral, an icon — because the 11.24:1 it
+        // carries against near-black ink is the entire reason it may be a
+        // surface at all. A switch track carries nothing. The only ratio a
+        // reader ever gets from it is track-against-track, and #eecf00 to the
+        // #d6d6d6 off state is 1.07:1: the same LUMINANCE at two hues, which
+        // is invisible in greyscale, invisible to a colour-blind reader, and
+        // under the 3:1 WCAG 1.4.11 asks of exactly this — a graphical object
+        // that carries the state of a control.
+        //
+        // The marker is 3.31:1 against the same off track. So an indicator with
+        // nothing written on it takes the marker, which is the same reading
+        // that sends the progress bar, the chart series and the tab's rule
+        // there. It costs the product nothing: "on" and "the primary action"
+        // being one colour was a tidy sentence, not a requirement, and the two
+        // are never adjacent.
+        //
+        // The knob's 16px of travel is still the signal that survives
+        // everything. It is no longer the ONLY one.
         //
         // `neutral-300`, not 200: the off track and the card border beneath it
         // were the same value, so an unchecked switch on a bordered row read as
         // a hairline with a dot on it rather than as a control in its off
         // position. One step down the ramp is all it needs.
-        checked ? "bg-primary" : "bg-neutral-300",
+        checked ? "bg-marker" : "bg-neutral-300",
         disabled && "cursor-not-allowed opacity-50",
         className,
       )}

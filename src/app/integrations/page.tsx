@@ -296,14 +296,14 @@ function ConnectForm({ entry }: { entry: ConnectorCatalogEntry }) {
           <span className="font-semibold text-foreground">Webhook URL</span> on its row, and point any app at it.
         </p>
       )}
-      {/* THE PAGE'S ONE YELLOW, and the sheet's rule for it exactly: the hero is
-          the single act a screen exists for, at most once per screen. Nothing
-          behind this dialog is yellow, and the seven Connect buttons in the
-          catalogue must not be — seven heroes is a menu, and the accent would be
-          spent on a list of choices. Here there is one button and one act, and
-          it is the act the whole page exists for. Black ink, because the yellow
-          is far too bright to carry white. */}
-      <SubmitButton variant="yellow" pendingLabel="Connecting…" className="w-full">
+      {/* THE BRAND FILLS THE ONE ACT THIS DIALOG EXISTS FOR. `accent` is
+          `--primary` under `--primary-foreground`: yellow carrying near-black at
+          11.24:1, which is the only way this hue is allowed to carry a label at
+          all. The seven Connect buttons in the catalogue stay black, and the
+          reason is no longer a quota on how much yellow a screen may hold — it
+          is that the fill marks the act, and seven acts at the same weight is a
+          menu with no hierarchy in it. Here there is one button and one act. */}
+      <SubmitButton variant="accent" pendingLabel="Connecting…" className="w-full">
         Connect {entry.name}
       </SubmitButton>
     </form>
