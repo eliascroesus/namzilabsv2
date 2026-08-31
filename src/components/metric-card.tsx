@@ -108,12 +108,20 @@ export function MetricCard({
         <div className="flex min-w-0 flex-1 flex-col p-4">
           <div className="flex min-h-0 flex-1 flex-col justify-center">
             <div className="flex items-start justify-between gap-3">
-              {/* THE KIT'S MICRO-LABEL VOICE. A metric's name LABELS the figure
-                  under it; setting it at 16px in the foreground colour put a
-                  heading and a 36px numeral in the same breath, both asking to
-                  be read first. Caps and muted is what makes the NUMBER the
-                  loud thing — which is the whole thesis. */}
-              <h3 className="flex min-w-0 items-baseline text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              {/* A CARD TITLE, NOT A MICRO-LABEL.
+                  This was 13px ALL-CAPS semibold muted, on the argument that a
+                  metric's name LABELS the figure under it and that caps-and-
+                  muted is what keeps the NUMBER the loud thing. The second half
+                  of that is right and survives: the name is `font-medium` at
+                  body size against a 36px numeral, which is a two-step gap —
+                  the number is in no danger.
+                  The first half was overcorrecting. Every tile on the board
+                  read as a caption with a graph under it, at a size two steps
+                  below the body text everywhere else in the product, and the
+                  reference sets a card's name at exactly the same 14px/500 as
+                  its body. The micro-label voice is for a STATUS or a column
+                  head — strings you scan — not for a name the customer wrote. */}
+              <h3 className="flex min-w-0 items-baseline text-sm font-medium text-foreground">
                 <span className="truncate">{title}</span>
                 {titleSuffix}
               </h3>

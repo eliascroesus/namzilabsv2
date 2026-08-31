@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { formatDateTime, relativeTime } from "@/lib/format";
-import { Card } from "@/components/ui/card";
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ImportProgress } from "@/components/charts";
 import { Freshness, NotLive } from "@/components/flow-tile";
 import type { ImportCoverage } from "@/connectors/types";
@@ -96,47 +96,64 @@ export function ChartFrame({
     // `padding="compact"` is the 16px this always had as a className override;
     // it is load-bearing arithmetic, not taste (see `tests/board-blocks.test.ts`
     // — at ROW_UNIT_PX 40 the cartesian floor is measured against it).
-    <Card data-tile-card variant="tile" padding="compact" className="flex h-full flex-col overflow-hidden">
-      <div className="flex items-start justify-between gap-2">
-        {/* ONE LINE, ALWAYS. A canvas tile's height is its row span, so a
-            header that wraps steals it from the mark below and pushes a goal
-            bar's own caption out through the bottom edge. `truncate` here is
-            therefore a height guarantee rather than a width preference — and it
-            is safe to keep only because the qualifiers below now yield first on
-            a narrow tile (see `chartLabel` in custom-tile.tsx), which is what
-            leaves the name the whole line it needs. */}
-        <p className="min-w-0 truncate text-xs font-semibold uppercase tracking-wide text-muted-foreground" title={title}>
-          {title}
-        </p>
-        {/* THE CHART LABEL AND THE PERIOD MOVED OFF THE NAME'S LINE.
-            They used to share it, with `truncate` on the name so the markers
-            survived — which is how a tile ended up headed "PICK…". Letting the
-            name wrap instead cost a second line, and a canvas tile has a FIXED
-            height (its row span), so the extra line pushed a goal bar's own
-            "GOAL 20 / 60%" caption out through the bottom edge. Both fixes were
-            wrong in the same place: the header was carrying three facts on one
-            line and something had to give.
-            So the qualifiers sit on the right, beside the freshness marker,
-            where they are already `shrink-0` and cost no height at all — and
-            the name gets the whole line to itself and needs no ellipsis. */}
-        <span className="flex shrink-0 items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          {chartLabel && <span className="whitespace-nowrap">{chartLabel}</span>}
-          {rangeLabel && <span className="whitespace-nowrap">· {rangeLabel}</span>}
+    /**
+     * THE RULED HEAD — the reference's card shape, and the thing this tile did
+     * not have.
+     *
+     * It was a 13px ALL-CAPS muted label sitting inline at the top of a 16px
+     * padded box, with the chart kind and the freshness on the same line. That
+     * is the micro-label voice, and it is the wrong voice for a card's NAME:
+     * every tile on the board read as a caption with a graph under it, at a
+     * size two steps below the body text everywhere else in the product.
+     *
+     * The reference draws every card as two bands — a 16px header closed by a
+     * hairline, then the content — and sets the title at the SAME 14px/500 as
+     * body text. The rule is what makes it a title, which is exactly why the
+     * size does not have to. `CardHeader`/`CardTitle`/`CardDescription` were
+     * built for this and were not being used by the one surface that needed
+     * them most.
+     *
+     * `padding="none"` is the pairing: the header and the body bring their own
+     * 16px, so a `CardHeader` inside a padded Card would draw its rule 16px
+     * short of the card's edge and read as a mistake rather than a band.
+     */
+    <Card data-tile-card variant="tile" padding="none" className="flex h-full flex-col overflow-hidden">
+      <CardHeader className="gap-2">
+        <div className="flex min-w-0 flex-col gap-1">
+          {/* ONE LINE, ALWAYS. A canvas tile's height is its row span, so a
+              header that wraps steals it from the mark below and pushes a goal
+              bar's own caption out through the bottom edge. `truncate` here is
+              therefore a height guarantee rather than a width preference. */}
+          <CardTitle title={title}>{title}</CardTitle>
+          {/* THE QUALIFIERS ARE A DESCRIPTION NOW, NOT A SECOND CAPS LABEL on
+              the title's own line. They used to share that line, with
+              `truncate` on the name so the markers survived — which is how a
+              tile ended up headed "PICK…". The reference puts exactly this
+              material under the title at 13px/400, where it costs the header a
+              line it can afford and costs the NAME nothing. */}
+          {(chartLabel || rangeLabel) && (
+            <CardDescription className="truncate">
+              {chartLabel}
+              {chartLabel && rangeLabel && " · "}
+              {rangeLabel}
+            </CardDescription>
+          )}
+        </div>
+        <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
           {status && <Freshness status={status} />}
           {computedAt && (
-            <span className="text-xs text-muted-foreground" title={formatDateTime(new Date(computedAt))}>
-              {relativeTime(new Date(computedAt))}
-            </span>
+            <span title={formatDateTime(new Date(computedAt))}>{relativeTime(new Date(computedAt))}</span>
           )}
         </span>
-      </div>
+      </CardHeader>
+      <div className="flex min-h-0 flex-1 flex-col p-4">
 
       {/* THE PAYOFF, AND THE COMPARISON SITS UNDER IT RATHER THAN BESIDE IT.
           A delta on the numeral's own baseline competes with the figure for the
           first read, and on a narrow tile it wrapped into it. Under, at label
           size, it reads as what it is: the sentence qualifying the number. */}
       {headline !== undefined && (
-        <div className="mt-1.5">
+        <div>
           <p className={cn("stat-numeral text-display-md leading-none", headline == null && "text-muted-foreground")}>
             {headline ?? "—"}
           </p>
@@ -176,6 +193,7 @@ export function ChartFrame({
         </p>
       )}
       {importing && <ImportProgress importing={importing} />}
+      </div>
     </Card>
   );
 }

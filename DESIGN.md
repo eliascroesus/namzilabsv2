@@ -271,9 +271,13 @@ exemption. Both Figma exports set small numerals and chrome labels at 700;
   is a form with no primary.
 - **Cards have a ruled head.** 16px, closed by a hairline, then the content. That
   rule is what makes a card's name a title without spending a size step or a
-  weight on it — which is why every card title in the product is the same
-  14px/500 as the body text under it. Eleven call sites were drawing their own
-  heading in about six ways before the primitive existed.
+  weight on it — which is why every card title in the product is the same body
+  size as the text under it.
+  **The board's own tiles were the last surface still not using it**, and they
+  were the surface it mattered most on: a chart card headed by a 13px ALL-CAPS
+  muted label reads as a caption with a graph under it, at a size two steps
+  below the body text everywhere else. The micro-label voice is for a STATUS or
+  a column head — strings you scan — never for a name the customer wrote.
 
 ---
 
