@@ -6,7 +6,6 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { Bell, LayoutDashboard, PanelLeftClose, PanelLeftOpen, Plug, Plus, Radio, Search, Settings, Workflow } from "lucide-react";
 import { Fragment, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { viewStrip, type BoardView } from "@/lib/board/types";
 
@@ -347,25 +346,9 @@ export function Sidebar({
    * mean the rail did nothing until you navigated.
    */
   const [pinned, setPinned] = useState(initialPinned);
-  /**
-   * THE REASON UNPINNING LOOKED LIKE IT DID NOTHING.
-   *
-   * The button lives inside the rail, so the pointer is ON the rail when you
-   * press it — and `group-hover/rail:w-65` then holds the panel open. The state
-   * had changed, the cookie was written, and the only way to SEE it was to move
-   * the mouse somewhere else. That is indistinguishable from a control that
-   * does not work.
-   *
-   * So an explicit collapse suppresses hover until the pointer actually leaves.
-   * It is deliberately not a timer: a timeout that guesses when you have moved
-   * away is wrong in both directions, and `pointerleave` is the exact event
-   * that means "you are no longer here".
-   */
-  const [hoverLocked, setHoverLocked] = useState(false);
   const togglePin = () => {
     const next = !pinned;
     setPinned(next);
-    if (!next) setHoverLocked(true);
     // A year, path-wide, Lax: it is a display preference, so it wants to
     // survive a restart and does not want to ride on cross-site requests.
     document.cookie = `rail=${next ? "pinned" : "hover"}; path=/; max-age=31536000; samesite=lax`;
@@ -515,7 +498,7 @@ export function Sidebar({
          * once-in-a-while act, and an instant layout change reads as decisive
          * where a janky one reads as broken.
          */
-        "group/rail relative z-20 h-full shrink-0",
+        "relative z-20 h-full shrink-0",
         // THE FOOTPRINT IS THE WHOLE DIFFERENCE BETWEEN THE TWO MODES.
         // Pinned, the <aside> itself is 260px, so the top bar and the page are
         // laid out beside it and every board reflows into what is left — which
@@ -525,12 +508,6 @@ export function Sidebar({
         // would re-lay-out every tile on the dashboard as the cursor passed.
         pinned ? "w-65" : "w-[56px]",
       )}
-      onPointerLeave={() => setHoverLocked(false)}
-      /* Read by `REVEAL` through `group-data-[pinned=true]/rail:`, so every
-         label, the keycap and the view list open together without any of them
-         taking a prop. A pinned rail is not "permanently hovered" — it is a
-         third state, and the one class that expresses it is here. */
-      data-pinned={pinned}
     >
       {/* THE PANEL — the whole rail, floated out of the layout.
           `inset-y-0 left-0` pins it to the footprint above and `w-[48px]`
@@ -566,32 +543,28 @@ export function Sidebar({
           either side, and the card fill plus the border make it legible against
           both the rail and the page.
           NOT wrapped in `REVEAL`: being always visible is the whole point. */}
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="iconXs"
-            onClick={togglePin}
-            aria-pressed={pinned}
-            aria-label={pinned ? "Collapse the navigation" : "Keep the navigation open"}
-            className="absolute -right-3 top-[22px] z-10 rounded-full border border-border bg-card text-muted-foreground shadow-card hover:bg-accent hover:text-foreground"
-          >
-            {pinned ? <PanelLeftClose /> : <PanelLeftOpen />}
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="right">
-          {pinned ? "Collapse the navigation" : "Keep the navigation open"}
-        </TooltipContent>
-      </Tooltip>
+      {/* `group/rail` IS ON THIS WRAPPER, NOT ON THE <aside>, AND MOVING IT IS
+          THE FIX FOR "THE RAIL FREEZES UNTIL I CLICK SOMEWHERE ELSE".
+          Pressing the toggle FOCUSES it. While the toggle was inside the group,
+          `group-focus-within/rail:w-65` then held the panel open — the state
+          had changed, the cookie was written, and the rail sat there at 260px
+          until focus moved. Measured, not guessed: after a collapse the aside
+          was 56 and the panel was still 260.
+          The toggle is a sibling of this wrapper now, so focusing it says
+          nothing about the rail. Hover and focus-within mean what they were
+          meant to mean: the pointer is over the NAVIGATION, or a nav item has
+          the keyboard. */}
       <div
         className={cn(
-          "absolute inset-y-0 left-0 flex flex-col overflow-hidden border-r border-border bg-background transition-[width] duration-(--duration-base) ease-(--ease-standard)",
-          pinned
-            ? "w-65"
-            : hoverLocked
-              ? "w-[56px]"
-              : "w-[56px] group-hover/rail:w-65 group-focus-within/rail:w-65",
+          "peer group/rail absolute inset-y-0 left-0 flex flex-col overflow-hidden border-r border-border bg-background transition-[width] duration-(--duration-base) ease-(--ease-standard)",
+          pinned ? "w-65" : "w-[56px] hover:w-65 focus-within:w-65",
         )}
+        /* Read by `REVEAL` through `group-data-[pinned=true]/rail:`, so every
+           label, the keycap, the view list and the "New flow" fill open
+           together without any of them taking a prop. It lives on the GROUP,
+           which is this element — a `data-` attribute on the <aside> would be
+           on the wrong side of the `group/rail` that reads it. */
+        data-pinned={pinned}
       >
         {/* THE TOP BLOCK IS THE TOP BAR'S OWN HEIGHT, AND THAT IS THE POINT.
             56px with the bar's hairline landing exactly at its foot means the
@@ -902,6 +875,38 @@ export function Sidebar({
           </Button>
         </div>
       </div>
+      {/* IT FOLLOWS THE PANEL'S EDGE, NOT THE FOOTPRINT'S.
+          `-right-3` on the <aside> looked right while pinned, where the two are
+          the same width — and sat 200px inland the moment the rail opened on
+          HOVER, because that only widens the panel. So it is positioned from
+          the LEFT, on the same conditional the panel's width uses, with the
+          same transition: the button and the edge it straddles now move as one
+          object. `-translate-x-1/2` centres it on the hairline.
+
+          `peer-hover` is what keeps it reachable: the panel is the peer, so
+          hovering the rail slides the button out with it, and hovering the
+          BUTTON does not open the rail — which is the whole reason the group
+          moved off the <aside> (see the panel's note).
+
+          NO TOOLTIP. It carried one, and before that a native `title`; both put
+          a label over the rail every time the pointer crossed the seam, which
+          on a control you meet on the way to everything else is noise. The icon
+          flips between "open" and "close" and `aria-label` says which — a
+          disclosure at a panel's edge is the most conventional control in the
+          genre and does not need explaining twice. */}
+      <Button
+        variant="ghost"
+        size="iconXs"
+        onClick={togglePin}
+        aria-pressed={pinned}
+        aria-label={pinned ? "Collapse the navigation" : "Keep the navigation open"}
+        className={cn(
+          "absolute top-[22px] z-10 -translate-x-1/2 rounded-full border border-border bg-card text-muted-foreground shadow-card transition-[left] duration-(--duration-base) ease-(--ease-standard) hover:bg-accent hover:text-foreground",
+          pinned ? "left-65" : "left-14 peer-hover:left-65 peer-focus-within:left-65",
+        )}
+      >
+        {pinned ? <PanelLeftClose /> : <PanelLeftOpen />}
+      </Button>
     </aside>
   );
 }

@@ -1268,8 +1268,17 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 that changes what you are looking at. */}
             <div className="flex items-center justify-between gap-4">
               {viewStrip}
-              <div className="flex items-center gap-2">
-                <div id="calendar-tools" className="flex items-center gap-2" />
+              {/* `gap-4`, WHICH IS WHAT EVERY OTHER VIEW'S ACTION ROW USES.
+                  This was `gap-2` — half the canvas board's spacing between
+                  "+ Add" and "Refresh all" one view over — so the metric picker
+                  sat visibly tighter against the button than anything else in
+                  the product, on the one row a customer moves between views
+                  looking at.
+                  `empty:hidden` on the slot so a view with no tools does not
+                  leave a zero-width flex item behind, which the parent's gap
+                  would still space around. */}
+              <div className="flex items-center gap-4">
+                <div id="calendar-tools" className="flex items-center gap-2 empty:hidden" />
                 {boardActions}
               </div>
             </div>

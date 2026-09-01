@@ -400,6 +400,34 @@ describe("the rail's pinned mode", () => {
 
   it("keeps the overlay behaviour when it is NOT pinned", () => {
     const code = sidebar.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
-    expect(code).toMatch(/w-\[56px\] group-hover\/rail:w-65 group-focus-within\/rail:w-65/);
+    expect(code).toMatch(/w-\[56px\] hover:w-65 focus-within:w-65/);
+  });
+
+  /**
+   * THE TOGGLE IS OUTSIDE THE GROUP, AND THAT IS A BEHAVIOUR RULE RATHER THAN
+   * A LAYOUT ONE.
+   *
+   * Pressing a button focuses it. While the toggle sat inside `group/rail`,
+   * `group-focus-within` then held the panel open — so collapsing the rail did
+   * nothing visible until focus moved, which is indistinguishable from a
+   * control that does not work. Measured before the fix: after a collapse the
+   * aside was 56 and the panel was still 260.
+   *
+   * The group belongs to the PANEL, the toggle is its sibling, and the toggle
+   * follows the panel's edge through `peer-hover` — which only resolves if the
+   * panel PRECEDES it in the DOM. All three facts are asserted, because any one
+   * of them alone puts the freeze back.
+   */
+  it("does not let the toggle hold the rail open", () => {
+    const code = sidebar.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    // The group is on the panel, not the <aside>.
+    expect(code).toMatch(/"peer group\/rail absolute/);
+    // The <aside>'s OWN class carries no group — a negative match against the
+    // element would always fail, because the panel that DOES carry it is a
+    // descendant. This is the aside's class string, asserted whole.
+    expect(code).toMatch(/"relative z-20 h-full shrink-0"/);
+    // …and the toggle comes after it, or `peer-hover` resolves to nothing.
+    expect(code.indexOf("peer group/rail")).toBeLessThan(code.indexOf('aria-pressed={pinned}'));
+    expect(code).toMatch(/peer-hover:left-65/);
   });
 });
