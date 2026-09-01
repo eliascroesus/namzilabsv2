@@ -649,8 +649,9 @@ export function CustomBoard({
               {...{ [CELL_ATTR]: tile.id }}
               style={vars as React.CSSProperties}
               className={`board-cell group/cell relative transition-opacity duration-(--duration-fast) ${
-                gesture?.id === tile.id ? "opacity-70" : ""
-              }`}
+                canArrange ? "cursor-grab [touch-action:none]" : ""
+              } ${gesture?.id === tile.id ? "opacity-70" : ""}`}
+              onPointerDown={canArrange ? (e) => onPointerDown(e, { id: tile.id, mode: "move" }) : undefined}
               onClick={(e) => {
                 if (!canEdit) return;
                 /**
@@ -733,23 +734,28 @@ export function CustomBoard({
                 * The whole cell used to start the gesture, so the chart itself
                 * was a grab surface: the cursor read "move" over a plot you
                 * were trying to point at, and a stray press on a bar shoved the
-                * board around. The top half holds the title and the number and
-                * nothing worth pointing at — so that is what moves, the way a
-                * window's title bar does. The marks below keep their tooltips.
+                * board around. The answer was a half-height overlay: the top of
+                * a tile "holds the title and the number and nothing worth
+                * pointing at", so that is what moved, the way a window's title
+                * bar does.
                 *
-                * A real element rather than a class on the cell: `cursor` does
-                * not apply to a `pointer-events: none` layer, so the affordance
-                * and the press have to be the same thing. It sits UNDER the
-                * menu (z-10 against the menu's z-20), and a click on it still
-                * bubbles to the cell, which is what opens the settings panel.
+                * THE OVERLAY IS GONE, BECAUSE IT WAS THE THING BLOCKING THE FIX.
+                * That description is true of a NUMBER tile and false of a chart:
+                * on a line tile at four rows the plot starts a third of the way
+                * down, so the top half covered the axes — and because the
+                * overlay is a SIBLING painted above the chart, a press there
+                * never reached the plot at all. `data-plot` and the guard in
+                * `useCanvasDrag` could not see a target they were never given.
+                *
+                * So the press moves to the cell itself and the exclusion becomes
+                * real: anywhere on the card starts a drag EXCEPT inside a plot,
+                * which is exactly the rule that was wanted. The cursor follows
+                * the same rule — `cursor-grab` here, overridden to `cursor-default`
+                * on the plot — so the affordance and the behaviour cannot
+                * disagree, which was the overlay's one genuine argument for
+                * existing.
                 */}
-              {canArrange && (
-                <span
-                  aria-hidden
-                  className="absolute inset-x-0 top-0 z-10 h-1/2 cursor-grab [touch-action:none]"
-                  onPointerDown={(e) => onPointerDown(e, { id: tile.id, mode: "move" })}
-                />
-              )}
+
               {canArrange && (
                 /* The corner grip. It used to be spelled to avoid `.fixed.z-50`
                    and `border-dashed`, because `scripts/board-drag-check.mjs`

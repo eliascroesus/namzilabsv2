@@ -187,14 +187,28 @@ describe("a view holding a hidden row is read-only", () => {
      * happened here, and the note that broke this was one about not coupling
      * tests to appearance.
      *
-     * 200 is measured: it reaches the strip's cursor from its own guard (+134)
-     * and the grip's attribute from the grip's (+81), while the grip's guard
-     * carries no grab cursor at all and the strip's is 387 away from
-     * HANDLE_ATTR. Neither guard can satisfy the other's assertion.
+     * THE DRAG SURFACE CHANGED SHAPE, AND THE ASSERTION FOLLOWS THE GUARD
+     * RATHER THAN THE MARKUP.
+     *
+     * The grab cursor used to live on a half-height overlay introduced with
+     * `{canArrange && (`. That overlay is gone: it was a sibling painted ABOVE
+     * the chart, so a press on a plot never reached the plot and the
+     * "you cannot drag a card by its axes" rule could not be enforced. The
+     * press and the cursor moved onto the cell itself, where the guard is a
+     * ternary rather than a block.
+     *
+     * What is being checked has not changed: the grab cursor and the resize
+     * grip are each within arm's length of a `canArrange` guard, so neither can
+     * be offered to a viewer whose board is frozen. Comments are stripped
+     * first, because the window is a proximity claim about CODE — left in, the
+     * distance from a guard to the thing it guards grows every time somebody
+     * explains it, which is exactly what broke this assertion once before.
      */
     const code = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
-    expect(code).toMatch(/\{canArrange && \([\s\S]{0,200}?cursor-grab/);
+    expect(code).toMatch(/canArrange \?[\s\S]{0,120}?cursor-grab/);
     expect(code).toMatch(/\{canArrange && \([\s\S]{0,200}?HANDLE_ATTR/);
+    // And the press itself is gated on the same answer, not merely the cursor.
+    expect(code).toMatch(/onPointerDown=\{canArrange \?/);
   });
 
   it("is unchanged for a viewer who can see everything", () => {

@@ -239,6 +239,35 @@ export function TileConfigPanel({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
+  /**
+   * AND A PRESS OUTSIDE CLOSES IT, which Escape alone did not cover.
+   *
+   * The panel is a docked rail, not a modal — no scrim, so the board behind it
+   * stays live and pressing a tile there is the obvious way to move on. It
+   * stayed open instead, and you had to find the X or remember Escape, which is
+   * how a settings panel ends up feeling stuck.
+   *
+   * `pointerdown`, NOT `click`. A click fires after the press completes, so a
+   * press that begins outside and drags into the panel (or a tile drag started
+   * on the board) closes on release — long after the intent was obvious. The
+   * capture phase for the same reason a drag uses it: something inside may stop
+   * propagation, and this has to see the press regardless.
+   *
+   * `[data-tile-panel]` is the panel's own marker; `[data-radix-popper-content-wrapper]`
+   * is every menu, select and popover the panel OPENS. Those portal to
+   * document.body, so a press on one is outside this subtree by DOM and very
+   * much inside it by intent — without that half, picking a metric from the
+   * panel's own dropdown closed the panel underneath it.
+   */
+  useEffect(() => {
+    const onDown = (e: PointerEvent) => {
+      const t = e.target as Element | null;
+      if (!t?.closest("[data-tile-panel], [data-radix-popper-content-wrapper]")) onClose();
+    };
+    window.addEventListener("pointerdown", onDown, true);
+    return () => window.removeEventListener("pointerdown", onDown, true);
+  }, [onClose]);
+
   /** One key at a time — an empty value clears rather than stores. */
   const set = <K extends keyof TileConfig>(key: K, value: TileConfig[K] | undefined) =>
     value === undefined ? onConfig({}, [key]) : onConfig({ [key]: value } as TileConfig);

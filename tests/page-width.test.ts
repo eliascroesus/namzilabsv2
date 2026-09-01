@@ -299,15 +299,23 @@ describe("the calendar's day square", () => {
      * produced by hand (158/92 = 1.72), so it preserves the shape rather than
      * choosing a new one.
      *
-     * BOTH BOUNDS ARE LOAD-BEARING AND THE CEILING SHIPPED BROKEN WITHOUT ONE.
-     * A month is six rows; at 16/9 uncapped, a 2500px window makes each cell
-     * ~190px and the grid ~1200px, so the one view whose whole job is to be seen
-     * AT ONCE stopped fitting on the screen it had been widened onto. 132px
-     * keeps six rows plus the header and the footnote inside a 900px viewport.
-     * The floor is the opposite end: a phone's ~40px column would give a 22px
-     * cell holding a date and a percentage.
+     * BOTH BOUNDS ARE LOAD-BEARING, AND THE CEILING HAS BEEN WRONG IN BOTH
+     * DIRECTIONS ONCE EACH.
+     *
+     * Uncapped, a 2500px window made each cell ~190px and the grid ~1200px, so
+     * the one view whose whole job is to be seen AT ONCE stopped fitting on the
+     * screen it had been widened onto. Capped at 132 with a 16/9 ratio it hit
+     * the ceiling three-quarters of the way across that same screen, and every
+     * cell went on getting wider while its height stood still — a month
+     * flattened into letterbox slots.
+     *
+     * 2/1 up to 176 is the shape that survives both: it keeps growing where
+     * there is room, and six rows plus the header and the footnote still clear
+     * a 1080px window, which is what a screen that wide actually is. The floor
+     * is the opposite end — a phone's ~40px column would give a 20px cell
+     * holding a date and a percentage.
      */
-    expect(cell).toMatch(/export const DAY_CELL_H = "aspect-\[16\/9\] max-h-\[132px\] min-h-\[84px\]";/);
+    expect(cell).toMatch(/export const DAY_CELL_H = "aspect-\[2\/1\] max-h-\[176px\] min-h-\[92px\]";/);
     expect(read("src/components/calendar/calendar-board.tsx")).toContain('from "./day-cell"');
   });
 

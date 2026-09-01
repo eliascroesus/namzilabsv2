@@ -6,6 +6,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { Bell, LayoutDashboard, PanelLeftClose, PanelLeftOpen, Plug, Plus, Radio, Search, Settings, Workflow } from "lucide-react";
 import { Fragment, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { viewStrip, type BoardView } from "@/lib/board/types";
 
@@ -398,7 +399,7 @@ export function Sidebar({
    */
   const ViewList = () => (
     <div
-      className="grid grid-rows-[0fr] transition-[grid-template-rows] duration-(--duration-base) ease-(--ease-standard) group-hover/rail:grid-rows-[1fr] group-focus-within/rail:grid-rows-[1fr]"
+      className="grid grid-rows-[0fr] transition-[grid-template-rows] duration-(--duration-base) ease-(--ease-standard) group-hover/rail:grid-rows-[1fr] group-focus-within/rail:grid-rows-[1fr] group-data-[pinned=true]/rail:grid-rows-[1fr]"
     >
       <div className="overflow-hidden">
         {shown.map((v) => {
@@ -484,7 +485,21 @@ export function Sidebar({
     // because a toast and a dialog outrank all chrome.
     <aside
       className={cn(
-        "group/rail relative z-20 h-full shrink-0 transition-[width] duration-(--duration-base) ease-(--ease-standard)",
+        /**
+         * NO TRANSITION ON THE FOOTPRINT, AND THAT IS THE FIX FOR THE LAG.
+         *
+         * This animated its own width for 180ms, and the width of this element
+         * is what the top bar and the entire board are laid out against — so
+         * every frame of that animation was a full reflow of every tile,
+         * every chart and every axis on the page. On a full dashboard it drops
+         * frames badly enough to feel like the click did not register.
+         *
+         * The PANEL inside still animates (it overlays and costs nothing), so
+         * the rail still opens smoothly on hover. Pinning is a deliberate,
+         * once-in-a-while act, and an instant layout change reads as decisive
+         * where a janky one reads as broken.
+         */
+        "group/rail relative z-20 h-full shrink-0",
         // THE FOOTPRINT IS THE WHOLE DIFFERENCE BETWEEN THE TWO MODES.
         // Pinned, the <aside> itself is 260px, so the top bar and the page are
         // laid out beside it and every board reflows into what is left — which
@@ -581,17 +596,31 @@ export function Sidebar({
               with the acts.
               `ml-auto` pushes it to the panel's right edge, where a disclosure
               belongs; at 56px it is clipped along with everything else. */}
-          <Button
-            variant="ghost"
-            size="iconSm"
-            onClick={togglePin}
-            aria-pressed={pinned}
-            aria-label={pinned ? "Unpin the navigation" : "Keep the navigation open"}
-            title={pinned ? "Unpin the navigation" : "Keep the navigation open"}
-            className={cn("ml-auto shrink-0 text-muted-foreground hover:bg-accent hover:text-foreground", REVEAL)}
-          >
-            {pinned ? <PanelLeftClose /> : <PanelLeftOpen />}
-          </Button>
+          {/* THE APP'S TOOLTIP, NOT `title`. The native one is what made this
+              control feel broken: the browser decides when to show it (about a
+              second), where to put it (wherever it likes — often over its own
+              chrome, nowhere near the button) and how it looks. `TooltipProvider`
+              runs at `delayDuration={0}`, so the label appears on arrival, in
+              the product's own surface, anchored to the thing it names.
+              `title` is now absent rather than duplicated: leaving both means
+              the OS tooltip fades in on top of ours a second later. */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="iconSm"
+                onClick={togglePin}
+                aria-pressed={pinned}
+                aria-label={pinned ? "Unpin the navigation" : "Keep the navigation open"}
+                className={cn("ml-auto shrink-0 text-muted-foreground hover:bg-accent hover:text-foreground", REVEAL)}
+              >
+                {pinned ? <PanelLeftClose /> : <PanelLeftOpen />}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              {pinned ? "Unpin the navigation" : "Keep the navigation open"}
+            </TooltipContent>
+          </Tooltip>
         </div>
 
         {/* `aria-label` because a strip of icons is only "the navigation" to
@@ -764,6 +793,10 @@ export function Sidebar({
               "transition-colors duration-(--duration-fast) ease-(--ease-standard)",
               "group-hover/rail:-mx-1 group-hover/rail:w-[calc(100%+0.5rem)] group-hover/rail:justify-center group-hover/rail:rounded-control group-hover/rail:bg-primary group-hover/rail:px-1",
               "group-focus-within/rail:-mx-1 group-focus-within/rail:w-[calc(100%+0.5rem)] group-focus-within/rail:justify-center group-focus-within/rail:rounded-control group-focus-within/rail:bg-primary group-focus-within/rail:px-1",
+              // PINNED IS THE THIRD STATE, and every reveal in this file has to
+              // name it. A rail held open by choice that still showed a bare
+              // "+" chip and a collapsed view list was open in width only.
+              "group-data-[pinned=true]/rail:-mx-1 group-data-[pinned=true]/rail:w-[calc(100%+0.5rem)] group-data-[pinned=true]/rail:justify-center group-data-[pinned=true]/rail:rounded-control group-data-[pinned=true]/rail:bg-primary group-data-[pinned=true]/rail:px-1",
             )}
           >
             <span
@@ -779,7 +812,7 @@ export function Sidebar({
                    transparent: leaving a 40px invisible column in place would
                    push the label off the button's centre, which is the one
                    thing this control has to get right once it is a button. */
-                "group-hover/rail:hidden group-focus-within/rail:hidden",
+                "group-hover/rail:hidden group-focus-within/rail:hidden group-data-[pinned=true]/rail:hidden",
               )}
             >
               <Plus className="size-4" />

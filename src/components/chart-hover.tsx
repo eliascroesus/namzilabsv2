@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
 /**
  * ONE TOOLTIP, ONE MECHANISM, NO CHART-SPECIFIC CLIENT CODE.
@@ -48,45 +48,84 @@ export function ChartHover({ children }: { children: ReactNode }) {
   const [tip, setTip] = useState<{ text: string; x: number; y: number } | null>(null);
   const [cross, setCross] = useState<Cross | null>(null);
 
-  const clear = () => {
+  /**
+   * ONE READ PER FRAME, NOT ONE PER EVENT — and this is the whole reason the
+   * board felt slow.
+   *
+   * A pointer emits moves far faster than the screen refreshes: on a trackpad
+   * flick across four charts that is a few hundred events, and the handler was
+   * doing two `getBoundingClientRect()` calls (each one a forced layout, on a
+   * page with a live CSS grid) plus two `setState`s on every single one. React
+   * then rendered the tooltip that many times. The visible symptoms were
+   * exactly the ones reported: the readout lagging behind the cursor and
+   * eventually not updating at all, and the main thread being busy enough that
+   * a link in the rail took a beat to respond to a hover.
+   *
+   * The event now only STORES the pointer — no DOM reads, no state — and a
+   * single rAF does the measuring and the one state update. Moves that arrive
+   * between frames coalesce into the last one, which is the only one that was
+   * ever going to be on screen.
+   */
+  const pending = useRef<{ x: number; y: number; el: Element } | null>(null);
+  const frame = useRef(0);
+
+  const clear = useCallback(() => {
+    pending.current = null;
+    if (frame.current) cancelAnimationFrame(frame.current);
+    frame.current = 0;
     setTip(null);
     setCross(null);
-  };
+  }, []);
+
+  // A rAF outliving its component would call setState on an unmounted tree.
+  useEffect(() => () => void (frame.current && cancelAnimationFrame(frame.current)), []);
+
+  const flush = useCallback(() => {
+    frame.current = 0;
+    const p = pending.current;
+    const box = wrap.current?.getBoundingClientRect();
+    if (!p || !box) return;
+    setTip({ text: p.el.getAttribute("data-tip") ?? "", x: p.x - box.left, y: p.y - box.top });
+
+    /**
+     * Only marks that publish a point get a crosshair — bars do not, and that
+     * is deliberate rather than unfinished: a bar IS its own highlight, and a
+     * rule through one adds a second edge to a shape that already has four.
+     *
+     * `ownerSVGElement` rather than `closest("svg")`: a direct property read on
+     * an element we already hold, which cannot be fooled by a chart that nests
+     * one svg inside another.
+     */
+    const dx = p.el.getAttribute("data-x");
+    const svg = (p.el as SVGElement).ownerSVGElement;
+    if (dx == null || !svg) return setCross(null);
+    const sr = svg.getBoundingClientRect();
+    const dy = p.el.getAttribute("data-y");
+    setCross({
+      left: sr.left - box.left + (Number(dx) / 100) * sr.width,
+      top: sr.top - box.top,
+      height: sr.height,
+      dotY: dy == null ? null : (Number(dy) / 100) * sr.height,
+    });
+  }, []);
+
+  const onMove = useCallback(
+    (e: React.PointerEvent) => {
+      // Coarse pointers have no hover — a tap would leave the tooltip stuck.
+      if (e.pointerType === "touch") return;
+      const el = (e.target as Element).closest("[data-tip]");
+      if (!el) return clear();
+      pending.current = { x: e.clientX, y: e.clientY, el };
+      if (!frame.current) frame.current = requestAnimationFrame(flush);
+    },
+    [clear, flush],
+  );
 
   return (
     <div
       ref={wrap}
       className="relative flex min-h-0 flex-1 flex-col"
-      onPointerMove={(e) => {
-        // Coarse pointers have no hover — a tap would leave the tooltip stuck.
-        if (e.pointerType === "touch") return;
-        const el = (e.target as Element).closest("[data-tip]");
-        const box = wrap.current?.getBoundingClientRect();
-        if (!el || !box) return clear();
-        setTip({ text: el.getAttribute("data-tip") ?? "", x: e.clientX - box.left, y: e.clientY - box.top });
-
-        /**
-         * Only marks that publish a point get a crosshair — bars do not, and
-         * that is deliberate rather than unfinished: a bar IS its own
-         * highlight, and a rule through one adds a second edge to a shape that
-         * already has four.
-         *
-         * `ownerSVGElement` rather than `closest("svg")`: it is a direct
-         * property read on the element we already have, and it cannot be fooled
-         * by a chart that nests one svg inside another.
-         */
-        const dx = el.getAttribute("data-x");
-        const svg = (el as SVGElement).ownerSVGElement;
-        if (dx == null || !svg) return setCross(null);
-        const sr = svg.getBoundingClientRect();
-        const dy = el.getAttribute("data-y");
-        setCross({
-          left: sr.left - box.left + (Number(dx) / 100) * sr.width,
-          top: sr.top - box.top,
-          height: sr.height,
-          dotY: dy == null ? null : (Number(dy) / 100) * sr.height,
-        });
-      }}
+      onPointerMove={onMove}
       onPointerLeave={clear}
     >
       {children}

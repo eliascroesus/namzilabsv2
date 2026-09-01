@@ -11,9 +11,14 @@
  * is exactly the letterbox slot the flat value was meant to prevent. A fixed
  * height cannot be right at both widths; a RATIO is right at every width.
  *
- * 16/9 is within a hair of what the capped page produced by hand (158/92 =
- * 1.72), so the shape nobody complained about is the shape this preserves —
- * it just keeps it as the calendar gets wider instead of flattening.
+ * 2/1 RATHER THAN 16/9, AND THE CEILING IS 176 RATHER THAN 132. The first cap
+ * was cut to keep six rows inside a 900px viewport, which it does — and on a
+ * 2500px display it hit that ceiling three-quarters of the way across the
+ * screen, so every cell went on getting WIDER while its height stood still and
+ * the month flattened into a set of letterbox slots. A squarer ratio and a
+ * taller ceiling let the cell keep growing with the grid; six rows at 176 plus
+ * the header and the footnote still clear a 1080px window, which is what a
+ * screen that wide actually is.
  *
  * A FLOOR AND A CEILING, AND THE CEILING IS THE ONE THAT WAS MISSING.
  *
@@ -52,4 +57,4 @@
  * module with no directive. Adding `"use client"` here re-breaks the skeleton
  * silently; tests/page-width.test.ts pins that it stays absent.
  */
-export const DAY_CELL_H = "aspect-[16/9] max-h-[132px] min-h-[84px]";
+export const DAY_CELL_H = "aspect-[2/1] max-h-[176px] min-h-[92px]";

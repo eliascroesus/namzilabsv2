@@ -76,7 +76,7 @@ function AxisFrame({
           the largest press target on the card — so reading a chart meant
           picking the card up. `useCanvasDrag` refuses to start a gesture that
           began inside this box; see the guard in canvas-drag.ts. */}
-      <div data-plot className="relative min-w-0">
+      <div data-plot className="relative min-w-0 cursor-default">
         {children}
       </div>
       <span aria-hidden />

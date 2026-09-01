@@ -350,6 +350,9 @@ export function CalendarBoard({
    * showing.
    */
   const tools = (
+    /* `gap-2` IS THE BOARD'S OWN ACTION-ROW GAP — the same 8px between "Add"
+       and "Refresh all" one view over. It read as wider here only because the
+       control on the left of it was a different size; see the trigger below. */
     <div className="flex min-w-0 items-center gap-2">
           {/* The builder's own combobox, not a native select: this is the same
               act as picking a field inside a step, and it searches once a
@@ -366,15 +369,19 @@ export function CalendarBoard({
               picker was removed from every view.)
               THE CHIP IS INSIDE IT, as `leading`. Beside the control it was a
               second object on the row; inside it, it is this control's mark.
-              Orange still carries the view kind — it is what the template
-              picker's Calendar card wears, so the board you land on is the card
-              you pressed. */}
+              AND IT IS NO LONGER ORANGE. It was `bg-accent-orange` so the board
+              you land on matched the colour of the template card you pressed to
+              make it — a real thread, and the wrong place to pull it: this was
+              the only saturated object in the whole action row, sitting beside
+              a green button, on a page whose entire palette is one green and a
+              grey ramp. The template picker keeps its colour; a control in the
+              chrome does not get to be the exception. */}
           <Select
             triggerClassName="h-8 gap-2 rounded-control border-border bg-card px-3 text-sm font-medium shadow-xs"
             leading={
               <span
                 aria-hidden
-                className="flex size-5 shrink-0 items-center justify-center rounded-full bg-accent-orange text-neutral-950"
+                className="flex size-5 shrink-0 items-center justify-center rounded-full bg-accent text-muted-foreground"
               >
                 <CalendarDays className="size-3.5" />
               </span>
