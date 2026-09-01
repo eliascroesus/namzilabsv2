@@ -901,7 +901,13 @@ export function Sidebar({
         aria-pressed={pinned}
         aria-label={pinned ? "Collapse the navigation" : "Keep the navigation open"}
         className={cn(
-          "absolute top-[22px] z-10 -translate-x-1/2 rounded-full border border-border bg-card text-muted-foreground shadow-card transition-[left] duration-(--duration-base) ease-(--ease-standard) hover:bg-accent hover:text-foreground",
+          /* `top-12` PUTS IT ON THE CORNER. The top bar is 60px and this button
+             is 24px, so 48 centres it on y=60 — the exact point where the bar's
+             `border-b` meets the rail's `border-r`. It sat at 22px, which is
+             the middle of the rail's own head block and reads as an object
+             floating beside the mark rather than as the joint between two
+             surfaces. A disclosure at an edge belongs where the edges meet. */
+          "absolute top-12 z-10 -translate-x-1/2 rounded-full border border-border bg-card text-muted-foreground shadow-card transition-[left] duration-(--duration-base) ease-(--ease-standard) hover:bg-accent hover:text-foreground",
           pinned ? "left-65" : "left-14 peer-hover:left-65 peer-focus-within:left-65",
         )}
       >

@@ -107,13 +107,16 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<FNode>) {
    * each other look like the canvas is glowing rather than like one step is
    * chosen.
    *
-   * A selection needs to be unmistakable, not loud. The border it already draws
-   * simply becomes the brand and gains a 1px ring in the same colour, so the
-   * edge doubles in weight and changes hue while the card's footprint stays
-   * exactly where it was. That is the same thing the board's tiles do and the
+   * A selection needs to be unmistakable, not loud. It went to a 1px brand
+   * border plus a 1px ring in the same colour — half the halo's weight, and
+   * still two pixels of edge where every other card in the product draws one.
+   * The ring is gone now too: the border simply CHANGES HUE. #00d492 against
+   * #2b2d2f at the same weight is a large enough change to find at a glance,
+   * and it is the only version of this that leaves the card exactly the object
+   * it was when it was not selected. That is the same thing the board's tiles do and the
    * same thing the rail's active row does: come forward, do not inflate.
    */
-  const border = selected ? "border-marker ring-1 ring-marker" : "border-border";
+  const border = selected ? "border-marker" : "border-border";
   /**
    * The card stays exactly where it is while it is being carried — a ghost
    * follows the cursor and a dashed gap opens at the destination, so nothing

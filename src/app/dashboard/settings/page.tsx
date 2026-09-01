@@ -19,7 +19,6 @@ import { PageContainer, PageHeader, SectionHeading } from "@/components/ui/page"
 import { CopyField } from "@/components/copy-field";
 import { inviteMemberAction, revokeInviteAction } from "./actions";
 import { MemberRankSelect, RanksPanel } from "./RanksPanel";
-import { ThemeChoice } from "@/components/theme";
 
 export const dynamic = "force-dynamic";
 
@@ -511,23 +510,6 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             </SettingsSection>
           )}
 
-          {/* APPEARANCE — the one section on this page that is not about the
-              WORKSPACE.
-              Everything above it is shared state: who is a member, what a rank
-              may do, which apps are connected. This is a preference held per
-              PERSON and per DEVICE (see theme.tsx), so it is last and it says
-              so in its own description — a customer who reads "Roles" and then
-              "Appearance" should not have to wonder whether they are about to
-              change what their colleagues see.
-              It is NOT gated on a rank for the same reason. Every other section
-              here is behind `can(...)`; a theme is not a permission. */}
-          <SettingsSection
-            label="Appearance"
-            description="How Namzilabs looks on this device. Your choice is remembered here and does not change what anyone else sees."
-            bodyClassName="p-4"
-          >
-            <ThemeChoice />
-          </SettingsSection>
         </div>
       </PageContainer>
     </AppShell>

@@ -399,6 +399,51 @@ export async function setGroupPositionsAction(items: Array<{ id: string; pos: st
 }
 
 /**
+ * THE ORDER OF THE VIEWS THEMSELVES.
+ *
+ * The same shape as `setGroupPositionsAction` below-but-above, and for the same
+ * reasons: fractional keys so a move writes only the row that moved, an UPDATE
+ * per row rather than an upsert so an id this workspace does not own cannot be
+ * CREATED by a reorder, and the org filter on every statement making that
+ * impossible rather than merely unlikely.
+ *
+ * IT REORDERS TWO SURFACES AT ONCE, AND THAT IS FREE RATHER THAN CLEVER. The
+ * tab strip and the rail's nested list under Dashboard both render
+ * `viewStrip(views)`, which sorts on `pos` — so there is one order, stored in
+ * one column, and nothing here has to know the rail exists.
+ *
+ * `isDefault` IS NOT SPECIAL HERE. The default board sorts first today because
+ * its key was minted first, not because anything enforces it; a customer who
+ * drags it into the middle has said where they want it, and a writer that
+ * quietly refused would be the surprising one.
+ */
+export async function setViewPositionsAction(items: Array<{ id: string; pos: string }>): Promise<Result> {
+  const ctx = await requireOrg();
+  if (await blocked(ctx)) return fail(RANK_BLOCKS);
+  const parsed = z
+    .array(z.object({ id: idSchema, pos: posSchema }))
+    .min(1)
+    .max(boardViewCap())
+    .safeParse(items);
+  if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "That move won't save.");
+
+  const db = getDb();
+  try {
+    await Promise.all(
+      parsed.data.map((i) =>
+        db
+          .update(dashboardViews)
+          .set({ pos: i.pos })
+          .where(and(eq(dashboardViews.id, i.id), eq(dashboardViews.orgId, ctx.orgId))),
+      ),
+    );
+    return { ok: true };
+  } catch (e) {
+    return oops(e);
+  }
+}
+
+/**
  * HOW A COLUMN ORDERS THE METRICS INSIDE IT.
  *
  * A view over the manual order, never a rewrite of it: `pos` is untouched here,

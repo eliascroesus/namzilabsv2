@@ -509,7 +509,12 @@ export function FlowToolbar({
           <button
             onClick={onFitView}
             title="Fit the whole flow on screen"
-            className="tnum size-8 rounded-control text-xs font-medium text-foreground transition-colors hover:bg-accent"
+            /* `h-8 px-1.5`, NOT `size-8`. A square box around "100%" leaves the
+               digits touching both edges — and at 3 characters it is the widest
+               thing in the column, so the island itself was sized by a label
+               with no padding. Height still matches the buttons either side;
+               only the width is allowed to follow the text. */
+            className="tnum h-8 rounded-control px-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent"
           >
             {zoomPct}%
           </button>

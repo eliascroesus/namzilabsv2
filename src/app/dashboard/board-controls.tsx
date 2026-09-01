@@ -1,18 +1,19 @@
 "use client";
 
-import { createContext, useContext, useState, useTransition, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Copy as CopyIcon, MoreHorizontal, PenLine, Trash2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover } from "@/components/flow/controls/Popover";
-import { deleteViewAction, duplicateViewAction, renameViewAction } from "./board-actions";
+import { deleteViewAction, duplicateViewAction, renameViewAction, setViewPositionsAction } from "./board-actions";
 import { MENU_ROW } from "./board-tile-menu";
 import { BOARD_GRID } from "@/components/ui/page";
 import { cn } from "@/lib/utils";
 import { COLUMN_W, LANE_GAP } from "./board-shape";
 import { canvasCells, type GridBox } from "@/lib/board/grid";
+import { keyBetween } from "@/lib/board/order";
 
 /**
  * THE BOARD'S FILTERS, ANSWERING IMMEDIATELY.
@@ -169,6 +170,149 @@ export function SourceLink({ href, className, children }: { href: string; classN
  * server re-renders, instead of a second of nothing under a tab that has not
  * moved yet.
  */
+/**
+ * THE STRIP THAT OWNS THE ORDER — and it owns it because nothing else could.
+ *
+ * The tabs are rendered on the server (they are real anchors, so a link pasted
+ * into Slack opens on the sender's view), and a server component cannot follow
+ * a pointer. So the LIST becomes a client component and the tabs stay what they
+ * were: this holds the order, and each tab is still an `<a href>`.
+ *
+ * IT REORDERS THE RAIL TOO, AND THAT IS FREE. The strip and the rail's nested
+ * list under Dashboard both render `viewStrip(views)`, which sorts on `pos`.
+ * There is one order in one column; neither surface knows about the other.
+ *
+ * THE MOVE IS OPTIMISTIC AND THE WRITE IS ONE ROW. The local array reorders as
+ * you drag, so the tabs move under the cursor rather than after the round trip,
+ * and only the dragged view's `pos` is rewritten — `keyBetween` mints a key
+ * between its two new neighbours, which is the whole reason positions are
+ * fractional strings rather than integers.
+ *
+ * A VIEW WITH NO `id` CANNOT BE DRAGGED, and that is a real constraint rather
+ * than an oversight: the default board has no row until it is adopted (renamed
+ * or reordered into existence elsewhere), so there is nothing to write a `pos`
+ * onto. It stays where it is and everything else moves around it.
+ */
+export type StripView = { key: string; id: string | null; name: string; href: string; pos: string };
+
+export function ViewStrip({
+  views,
+  activeView,
+  canEdit,
+  defaultHref,
+  children,
+}: {
+  views: StripView[];
+  activeView: string | null;
+  canEdit: boolean;
+  defaultHref: string;
+  /** The "+" that adds a view — it rides the same row but is not reorderable. */
+  children?: ReactNode;
+}) {
+  const router = useRouter();
+  const [order, setOrder] = useState(views);
+  // The server is the source of truth: a rename, an add or a delete arrives as
+  // new props and replaces whatever the last drag left here.
+  useEffect(() => setOrder(views), [views]);
+
+  const strip = useRef<HTMLDivElement>(null);
+  const drag = useRef<{ key: string; startX: number; moved: boolean } | null>(null);
+
+  const commit = (next: StripView[]) => {
+    const i = next.findIndex((v) => v.key === drag.current?.key);
+    const moved = next[i];
+    if (!moved?.id) return;
+    /**
+     * Only the moved row is written. Its neighbours keep the keys they had, so
+     * a reorder is one UPDATE however long the strip is — and two people
+     * dragging different views at once do not overwrite each other.
+     */
+    const pos = keyBetween(next[i - 1]?.pos ?? null, next[i + 1]?.pos ?? null);
+    void setViewPositionsAction([{ id: moved.id, pos }]).then((r) => {
+      // A refusal (a rank block, a key that could not be minted) puts the
+      // server's order back rather than leaving the strip lying about itself.
+      if (!r.ok) setOrder(views);
+      router.refresh();
+    });
+  };
+
+  return (
+    <div ref={strip} className="-mx-1 flex flex-wrap items-center gap-6 px-1 py-1">
+      {order.map((v) => (
+        <div
+          key={v.key}
+          data-view-tab={v.key}
+          className={cn(
+            "flex items-center",
+            canEdit && v.id ? "cursor-grab [touch-action:none]" : "",
+            drag.current?.key === v.key && drag.current.moved ? "opacity-50" : "",
+          )}
+          onPointerDown={(e) => {
+            if (!canEdit || !v.id || e.button !== 0) return;
+            // The kebab and the rename field are their own controls; a press on
+            // one is not the start of a drag.
+            if ((e.target as HTMLElement).closest("button, input")) return;
+            drag.current = { key: v.key, startX: e.clientX, moved: false };
+          }}
+          onPointerMove={(e) => {
+            const d = drag.current;
+            if (!d) return;
+            // A threshold, so a click still navigates. Below it this is a press
+            // on a link; above it the link is cancelled and this is a move.
+            if (!d.moved && Math.abs(e.clientX - d.startX) < 4) return;
+            if (!d.moved) {
+              d.moved = true;
+              (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+            }
+            const tabs = [...(strip.current?.querySelectorAll("[data-view-tab]") ?? [])];
+            const over = tabs.find((t) => {
+              const r = t.getBoundingClientRect();
+              return e.clientX >= r.left && e.clientX <= r.right;
+            });
+            const toKey = over?.getAttribute("data-view-tab");
+            if (!toKey || toKey === d.key) return;
+            setOrder((cur) => {
+              const from = cur.findIndex((x) => x.key === d.key);
+              const to = cur.findIndex((x) => x.key === toKey);
+              if (from < 0 || to < 0 || from === to) return cur;
+              const next = cur.slice();
+              next.splice(to, 0, next.splice(from, 1)[0]);
+              return next;
+            });
+          }}
+          onPointerUp={() => {
+            const d = drag.current;
+            if (d?.moved) setOrder((cur) => (commit(cur), cur));
+            drag.current = null;
+          }}
+          onPointerCancel={() => {
+            drag.current = null;
+            setOrder(views);
+          }}
+          // A drag that ends on a tab must not also follow its link.
+          onClickCapture={(e) => {
+            if (drag.current?.moved) {
+              e.preventDefault();
+              e.stopPropagation();
+            }
+          }}
+        >
+          <ViewTab
+            href={v.href}
+            viewId={v.id}
+            activeView={activeView}
+            canEdit={canEdit}
+            defaultHref={defaultHref}
+          >
+            {v.name}
+          </ViewTab>
+        </div>
+      ))}
+      {children}
+    </div>
+  );
+}
+
 export function ViewTab({
   href,
   viewId,

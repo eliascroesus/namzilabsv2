@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { createTestDb } from "./helpers/testdb";
 import { dashboardGroups, dashboardTilePlacements, dashboardViews, rankAssignments, workspaceRanks } from "@/db/schema";
-import { compareKeys } from "@/lib/board/order";
+import { compareKeys, keyBetween } from "@/lib/board/order";
 import type { DB } from "@/db/types";
 
 /**
@@ -35,6 +35,7 @@ const {
   setGroupPositionsAction,
   setGroupSortAction,
   setCalendarMetricAction,
+  setViewPositionsAction,
 } = await import("@/app/dashboard/board-actions");
 
 const A = "org_a";
@@ -339,5 +340,69 @@ describe("pointing a calendar at a metric", () => {
     await pick("v2", "flow:f1:n1");
     await pick("v3", "flow:f1:n1");
     expect(await keys()).toEqual([]);
+  });
+});
+
+/**
+ * THE ORDER OF THE VIEWS, AND THE TWO SURFACES IT DRIVES.
+ *
+ * A reorder writes exactly one row: `keyBetween` mints a key between the moved
+ * view's two NEW neighbours, so the others keep the keys they had and two
+ * people dragging different views cannot overwrite each other. That is the
+ * whole reason `pos` is a fractional string rather than an integer.
+ *
+ * The tab strip and the rail's nested list under Dashboard both render
+ * `viewStrip(views)`, which sorts on this column — so ordering the strip orders
+ * the rail, and neither surface knows the other exists.
+ */
+describe("ordering the views", () => {
+  const seed = () =>
+    db.insert(dashboardViews).values([
+      { id: "v1", orgId: A, name: "A", pos: "a1", kind: "custom" },
+      { id: "v2", orgId: A, name: "B", pos: "a2", kind: "custom" },
+      { id: "v3", orgId: A, name: "C", pos: "a3", kind: "custom" },
+      { id: "x1", orgId: B, name: "Other", pos: "a1", kind: "custom" },
+    ]);
+  const order = async (org = A) =>
+    (await db.select().from(dashboardViews))
+      .filter((v) => v.orgId === org)
+      .sort((a, b) => (a.pos < b.pos ? -1 : a.pos > b.pos ? 1 : 0))
+      .map((v) => v.name);
+
+  it("moves one view and leaves its neighbours' keys alone", async () => {
+    await seed();
+    const before = (await db.select().from(dashboardViews)).filter((v) => v.id === "v2")[0].pos;
+    // `keyBetween` rather than a literal: `posSchema` is lowercase-only and
+    // rejects a trailing zero, so a hand-typed key is how this test would pass
+    // while the action refused the real thing.
+    expect(await setViewPositionsAction([{ id: "v1", pos: keyBetween("a3", null) }])).toEqual({ ok: true });
+    expect(await order()).toEqual(["B", "C", "A"]);
+    expect((await db.select().from(dashboardViews)).filter((v) => v.id === "v2")[0].pos).toBe(before);
+  });
+
+  it("cannot touch another workspace's view", async () => {
+    await seed();
+    // An UPDATE per row with an org filter, so an id this workspace does not own
+    // is not merely unlikely to be written — it cannot be.
+    await setViewPositionsAction([{ id: "x1", pos: keyBetween("a3", null) }]);
+    expect((await db.select().from(dashboardViews)).find((v) => v.id === "x1")!.pos).toBe("a1");
+  });
+
+  it("refuses a rank that cannot arrange the board", async () => {
+    await seed();
+    await assignEmptyRank();
+    const r = await setViewPositionsAction([{ id: "v1", pos: keyBetween("a3", null) }]);
+    expect(r.ok).toBe(false);
+    expect(await order()).toEqual(["A", "B", "C"]);
+  });
+
+  it("rejects a malformed key without writing anything", async () => {
+    await seed();
+    // Uppercase is outside `posSchema`, and a key ending in the first digit is
+    // the one shape `keyBetween` can never mint — both mean somebody hand-built
+    // this, and neither may reach the table.
+    expect((await setViewPositionsAction([{ id: "v1", pos: "Zz" }])).ok).toBe(false);
+    expect((await setViewPositionsAction([{ id: "v1", pos: "a0" }])).ok).toBe(false);
+    expect(await order()).toEqual(["A", "B", "C"]);
   });
 });

@@ -15,7 +15,7 @@ import { FreshnessPoller } from "@/components/freshness-poller";
 import { FunnelView } from "@/components/funnel-view";
 import { FlowTile, tileValueForRange, type FlowResultRow } from "@/components/flow-tile";
 import { OnboardingChecklist } from "@/components/onboarding-checklist";
-import { BoardControls, RangeLink, TileArea, ViewTab, ViewTitle } from "./board-controls";
+import { BoardControls, RangeLink, TileArea, ViewStrip, ViewTitle } from "./board-controls";
 import { BoardLayout } from "./board-layout";
 import { CustomBoard, type CanvasTile } from "./custom-board";
 import type { CustomTileSource } from "@/components/custom-tile";
@@ -628,24 +628,31 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                  the row, not a control appended to it.
 
                  `p-1` (4px) all round, pulled back by `-mx-1`, so the focus
-                 ring on the first tab has room without the row indenting. */
-              <div className="-mx-1 flex flex-wrap items-center gap-6 px-1 py-1">
-                {viewTabs.map((v) => (
-                  <ViewTab
-                    key={v.id ?? "default"}
-                    href={qs({ view: v.id ?? "" })}
-                    viewId={v.id}
-                    activeView={activeView}
-                    canEdit={access.can("create_flows")}
-                    defaultHref={qs({ view: "" })}
-                  >
-                    {v.name}
-                  </ViewTab>
-                ))}
+                 ring on the first tab has room without the row indenting.
+
+                 THE LIST IS A CLIENT COMPONENT NOW, and only because the order
+                 is DRAGGABLE. The tabs are unchanged — still real anchors from
+                 server-computed hrefs, so a link pasted into Slack still opens
+                 on the sender's view. `ViewStrip` holds the order and the
+                 pointer, which a server component cannot, and writes one row's
+                 `pos` on drop. The rail's nested list follows for free: both
+                 sort on `pos`. */
+              <ViewStrip
+                views={viewTabs.map((v) => ({
+                  key: v.id ?? "default",
+                  id: v.id,
+                  name: v.name,
+                  href: qs({ view: v.id ?? "" }),
+                  pos: v.pos,
+                }))}
+                activeView={activeView}
+                canEdit={access.can("create_flows")}
+                defaultHref={qs({ view: "" })}
+              >
                 {access.can("create_flows") && (
                   <AddViewButton rangeKey={rangeKey} source={boardSource} calendarOptions={calendarOptions} />
                 )}
-              </div>
+              </ViewStrip>
   );
 
 

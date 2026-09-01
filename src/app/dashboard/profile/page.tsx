@@ -3,6 +3,7 @@ import { requireOrg } from "@/lib/auth";
 import { getProfile } from "@/lib/profile";
 import { AppShell } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
+import { ThemeChoice } from "@/components/theme";
 import { PageContainer, PageHeader, SectionHeading } from "@/components/ui/page";
 import { AvatarForm, DisplayNameForm } from "./ProfileForms";
 
@@ -34,10 +35,20 @@ export default async function ProfilePage() {
 
   return (
     <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email}>
-      <PageContainer>
+      {/* `narrow`, THE SAME MEASURE SETTINGS USES, and this is what makes the
+          page look centred rather than shoved left. It ran at the 1152px
+          default with every card capped at `max-w-2xl` inside it — so the cards
+          were 672px of content sitting in a 1152px column, hard against its
+          left edge, with 480px of nothing to their right. The column was
+          centred; the cards were not in it.
+          Two settings pages that are both stacks of small forms should be one
+          measure, and `narrow` is what PageContainer calls that. The per-card
+          caps come off with it: a section uses the column's full width, exactly
+          as Settings' sections do. */}
+      <PageContainer width="narrow">
         <PageHeader title="Profile" />
 
-        <Card variant="surface" className="mt-6 max-w-2xl">
+        <Card variant="surface" className="mt-6">
           <SectionHeading>Your picture</SectionHeading>
           <div className="mt-4 flex flex-wrap items-center gap-5">
             {/* THE PICTURE AT THE SIZE IT IS JUDGED AT, not at the size it is
@@ -72,14 +83,14 @@ export default async function ProfilePage() {
           </div>
         </Card>
 
-        <Card variant="surface" className="mt-4 max-w-2xl">
+        <Card variant="surface" className="mt-4">
           <SectionHeading>Your name</SectionHeading>
           <div className="mt-4">
             <DisplayNameForm initial={profile.displayName} />
           </div>
         </Card>
 
-        <Card variant="surface" className="mt-4 max-w-2xl">
+        <Card variant="surface" className="mt-4">
           <SectionHeading>Sign-in</SectionHeading>
           {/* NOT EDITABLE, AND IT SAYS SO. The email is WorkOS's fact — it is
               how you sign in — and a field that looks editable but is not is
@@ -89,6 +100,25 @@ export default async function ProfilePage() {
           <p className="mt-1 text-sm text-muted-foreground">
             You sign in with this address. It comes from your account and can&rsquo;t be changed here.
           </p>
+        </Card>
+
+        {/* APPEARANCE BELONGS HERE, NOT IN WORKSPACE SETTINGS.
+            It sat under Roles, which is a page about the WORKSPACE — who is a
+            member, what a rank may do, which apps are connected. All of that is
+            shared state that changes what colleagues see. A theme is the
+            opposite on both counts: it is yours, and it is this device's. Under
+            "Your picture" and "Your name" it needs no disclaimer about who else
+            is affected; under "Roles" it needed one and still read as a
+            workspace-wide switch. */}
+        <Card variant="surface" className="mt-4">
+          <SectionHeading>Appearance</SectionHeading>
+          <p className="mt-1.5 text-sm text-muted-foreground">
+            How Namzilabs looks on this device. Your choice is remembered here and does not change what anyone else
+            sees.
+          </p>
+          <div className="mt-4">
+            <ThemeChoice />
+          </div>
         </Card>
       </PageContainer>
     </AppShell>
