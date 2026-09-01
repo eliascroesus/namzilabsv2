@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { createTestDb } from "./helpers/testdb";
@@ -404,5 +406,36 @@ describe("ordering the views", () => {
     expect((await setViewPositionsAction([{ id: "v1", pos: "Zz" }])).ok).toBe(false);
     expect((await setViewPositionsAction([{ id: "v1", pos: "a0" }])).ok).toBe(false);
     expect(await order()).toEqual(["A", "B", "C"]);
+  });
+});
+
+/**
+ * THE ONE LINE WITHOUT WHICH DRAGGING A TAB DOES NOTHING.
+ *
+ * An `<a href>` is natively draggable in every browser. Press one and move, and
+ * the browser starts an HTML5 drag of the URL — and that drag CAPTURES the
+ * pointer, so the `pointermove` handler `ViewStrip` reorders from never fires.
+ * The reorder shipped unreachable for exactly this reason, and nothing failed:
+ * it compiled, the tab still navigated, and the only symptom was a ghost URL
+ * chip following the cursor.
+ *
+ * A source assertion rather than a render test, because what is being guarded
+ * is a DEFAULT of the platform. There is no state to drive and nothing to
+ * observe — the attribute is either written down or the feature is gone.
+ */
+describe("a view tab", () => {
+  const controls = readFileSync(join(__dirname, "..", "src/app/dashboard/board-controls.tsx"), "utf8");
+
+  it("opts out of the browser's own link drag, so the strip can own the gesture", () => {
+    const code = controls.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    expect(code).toMatch(/<a\b[\s\S]{0,200}?draggable=\{false\}/);
+    // …and the wrapper refuses a drag that starts on the label's text instead.
+    expect(code).toMatch(/onDragStart=\{\(e\) => e\.preventDefault\(\)\}/);
+  });
+
+  it("is still a real anchor, which is the whole reason it is not a button", () => {
+    // Middle-click, copy-link and a URL pasted into Slack all depend on this.
+    const code = controls.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    expect(code).toMatch(/<a\b[\s\S]{0,80}?href=\{href\}/);
   });
 });

@@ -1,5 +1,5 @@
 import { BoardLayout } from "@/app/dashboard/board-layout";
-import { BoardControls, TileArea, ViewTab, ViewTitle } from "@/app/dashboard/board-controls";
+import { BoardControls, TileArea, ViewStrip, ViewTitle } from "@/app/dashboard/board-controls";
 import { PageContainer, PageHeader } from "@/components/ui/page";
 import { FlowTile } from "@/components/flow-tile";
 import { FlowNameField } from "@/components/flow/FlowToolbar";
@@ -99,26 +99,27 @@ export default function BoardLab() {
                 /* THE REAL TABS, not a drawing of them — the whole point of
                    this page. Enough of them to show the strip wrapping rather
                    than scrolling, with the active one wearing its kebab. */
-                <div className="-mx-1 flex flex-wrap items-center gap-1 px-1 py-1">
-                  {/* The DEFAULT view first, named as the real strip names it —
-                      it has no row, so nothing else can put it there. */}
-                  <ViewTab href="#" viewId={null} activeView={null} canEdit defaultHref="#">
-                    Dashboard
-                  </ViewTab>
-                  {[
-                    { id: "v2", name: "Pipeline health" },
-                    { id: "v3", name: "Revenue" },
-                    { id: "v4", name: "Team" },
-                    { id: "v5", name: "Weekly review" },
-                  ].map((v) => (
-                    <ViewTab key={v.id} href="#" viewId={v.id} activeView={null} canEdit defaultHref="#">
-                      {v.name}
-                    </ViewTab>
-                  ))}
-                  <ViewTab href="#" viewId="v6" activeView="v6" canEdit defaultHref="#">
-                    Ops
-                  </ViewTab>
-                </div>
+                /* `ViewStrip`, NOT a row of `ViewTab`s — the strip is the
+                   component the product renders, and it owns the drag. Drawing
+                   the tabs by hand here meant the one behaviour worth checking
+                   on this page (can you reorder them?) was the one thing the
+                   page could not show. */
+                <ViewStrip
+                  views={[
+                    /* The DEFAULT view first, named as the real strip names it.
+                       `id: null` — it has no row until it is adopted, which is
+                       also why it is the one tab here that will not drag. */
+                    { key: "default", id: null, name: "Dashboard", href: "#", pos: "a1" },
+                    { key: "v2", id: "v2", name: "Pipeline health", href: "#", pos: "a2" },
+                    { key: "v3", id: "v3", name: "Revenue", href: "#", pos: "a3" },
+                    { key: "v4", id: "v4", name: "Team", href: "#", pos: "a4" },
+                    { key: "v5", id: "v5", name: "Weekly review", href: "#", pos: "a5" },
+                    { key: "v6", id: "v6", name: "Ops", href: "#", pos: "a6" },
+                  ]}
+                  activeView="v6"
+                  canEdit
+                  defaultHref="#"
+                />
               }
             />
           </TileArea>

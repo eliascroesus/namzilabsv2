@@ -244,9 +244,13 @@ export function ViewStrip({
           data-view-tab={v.key}
           className={cn(
             "flex items-center",
-            canEdit && v.id ? "cursor-grab [touch-action:none]" : "",
+            canEdit && v.id ? "cursor-grab select-none [touch-action:none]" : "",
             drag.current?.key === v.key && drag.current.moved ? "opacity-50" : "",
           )}
+          // The label's own text can still be selected and dragged. `select-none`
+          // while the strip is arrangeable stops a press turning into a
+          // selection the browser then wants to drag instead.
+          onDragStart={(e) => e.preventDefault()}
           onPointerDown={(e) => {
             if (!canEdit || !v.id || e.button !== 0) return;
             // The kebab and the rename field are their own controls; a press on
@@ -529,6 +533,26 @@ export function ViewTab({
         <a
           href={href}
           aria-current={active ? "page" : undefined}
+          /**
+           * `draggable={false}` IS WHAT MAKES THE TAB REORDERABLE AT ALL.
+           *
+           * An `<a href>` is natively draggable in every browser: press one and
+           * move, and the browser starts an HTML5 drag of the URL — the little
+           * ghost chip showing the link. That drag then CAPTURES the pointer,
+           * so the `pointermove` handler `ViewStrip` reorders from never fires
+           * again. The reorder was not subtly wrong, it was never reached.
+           *
+           * Turning it off costs nothing real: dragging a tab into the address
+           * bar is not a thing anybody does with a view, and the tab is still a
+           * true anchor for every other purpose — middle-click, copy link,
+           * open in a new tab, and a link pasted into Slack that opens on the
+           * sender's view.
+           *
+           * Pinned by tests/board-actions.test.ts, because the failure mode is
+           * that a reorder silently stops working while everything still
+           * compiles and the tab still navigates.
+           */
+          draggable={false}
           onClick={(e) => {
             if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
             e.preventDefault();
