@@ -47,14 +47,14 @@ import { cn } from "@/lib/utils";
  * furniture while it re-inked the portal's. All nine of those tokens are
  * retired; this file speaks the same roles as every other file now.
  *
- * ONE GREEN, IN THREE SHAPES. The kit ran "yellow FILLS, violet DRAWS" because
+ * ONE BLUE, IN THREE SHAPES. The kit ran "yellow FILLS, violet DRAWS" because
  * #eecf00 is 1.55:1 as a line on white — it could not be both. On this ground
- * the green is 9.20:1 as a stroke and 8.08:1 as a fill, so the bar spends it as
+ * the blue is 9.20:1 as a stroke and 8.08:1 as a fill, so the bar spends it as
  * a FILL on the hero pill and the unread badge, as a STROKE on the setup ring's
  * arc, and as INK on nothing here at all. The workspace avatar is neutral: it
  * was the one place the marker was allowed to be a fill, because identity is
  * not a control — and with the brand doing every other job on this bar, a
- * coloured avatar would be the fourth green competing with three that are
+ * coloured avatar would be a fourth brand-coloured object competing with three that are
  * actually pressable.
  */
 
@@ -307,7 +307,7 @@ export function TopBar({
                 THE RING IT TAKES IS THE PRODUCT'S OWN. This carried
                 `focus-ring-light` — a sanctioned white twin — because `--ring`
                 was violet and invisible against a charcoal band. `--ring` is
-                the brand green at 9.20:1 on this exact surface now, so the twin
+                the brand blue at 9.20:1 on this exact surface now, so the twin
                 is retired and the global rule in globals.css already selects
                 `[tabindex]`: the outline lands without this element spelling
                 one. */}

@@ -885,7 +885,7 @@ function AddChartMenu({
       align="right"
       width={288}
       anchor={
-        <Button variant="secondary" size="sm" onClick={() => setOpen(!open)} disabled={busy} aria-haspopup="menu" aria-expanded={open}>
+        <Button variant="white" size="sm" onClick={() => setOpen(!open)} disabled={busy} aria-haspopup="menu" aria-expanded={open}>
           <Plus />
           Add
         </Button>

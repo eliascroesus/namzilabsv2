@@ -136,12 +136,27 @@ describe("the workspace chip carries its own fill", () => {
   });
 
   it("names a background, so its ink has something to sit on", () => {
-    expect(chip, "WorkspaceChip sets an ink with no fill — invisible on a light sidebar").toMatch(/\bbg-[a-z]/);
+    /**
+     * EITHER MECHANISM COUNTS, because the property is what matters: a fill
+     * exists. This asserted a `bg-*` CLASS while the chip was one flat
+     * neutral; the chip is per-workspace coloured again, so the fill is a
+     * `color-mix()` in the style attribute — which no utility can express and
+     * which is set in the same object literal as the ink solved against it.
+     * Insisting on the class here would fail a version of this component that
+     * is strictly harder to break than the one the rule was written for.
+     */
+    expect(chip, "WorkspaceChip sets an ink with no fill — invisible on a light sidebar").toMatch(
+      /\bbg-[a-z]|background:\s*groupBadge\(/,
+    );
   });
 
   it("takes its ink from a role, not from a literal white", () => {
     // `text-white` is only correct on a fill that is guaranteed dark in BOTH
-    // themes. `text-background` inverts with the theme; the literal does not.
+    // themes. A role inverts with the theme; the literal does not — and
+    // `groupInk()` mixes toward `--group-ink-end`, which is the role that
+    // inverts. This is the exact bug that shipped: the coloured fills were
+    // removed, the hard-coded white ink stayed, and every chip went
+    // white-on-white in the light theme.
     expect(chip).not.toMatch(/\btext-white\b/);
   });
 

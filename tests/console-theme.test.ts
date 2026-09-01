@@ -91,4 +91,51 @@ describe("the console's supplied constants", () => {
     expect(gaps.length).toBeGreaterThanOrEqual(2);
     for (const g of gaps) expect(g, "a rail column that is not 8px apart").toBe("2");
   });
+
+  it("keeps the period control's groove — only its corners were asked to move", () => {
+    /**
+     * A REGRESSION TEST FOR OVER-REACH, not for a value.
+     *
+     * The brief was "all buttons and timeline buttons have 999 radius". The
+     * pass that implemented it also deleted the track's border, its fill and
+     * its enclosure, leaving six bare labels on the page — a redesign nobody
+     * asked for, delivered under a radius change. This asserts the three
+     * properties that were silently dropped, so the next tidy-up of this
+     * control has to be deliberate about losing them.
+     */
+    const track = page.match(/PERIOD_TRACK =\s*\n?\s*"([^"]+)"/)?.[1] ?? "";
+    expect(track, "the groove lost its border").toMatch(/\bborder-border\b/);
+    expect(track, "the groove lost its fill").toMatch(/\bbg-control\b/);
+    expect(track, "the groove lost its enclosure").toMatch(/\boverflow-hidden\b/);
+    // And the part that WAS asked for: both the track and its segments are
+    // capsules, which is what makes a lit segment sit inside the groove
+    // instead of rattling around in a rectangle.
+    expect(track).toMatch(/\brounded-full\b/);
+  });
+
+  it("fills the Add button with literal white", () => {
+    // Specified as a colour rather than a role, and #FFFFFF is not any token:
+    // `--foreground` — the nearest role, and how `default` gets a light button
+    // on the console — is #E8E6E7, four counts off.
+    expect(button).toMatch(/white:\s*"[^"]*\bbg-white\b/);
+    expect(read("src/app/dashboard/custom-board.tsx")).toMatch(/variant="white"[\s\S]{0,200}?>\s*<Plus \/>\s*Add\b/);
+  });
+
+  it("gives a workspace chip its fill and its ink from the same key", () => {
+    /**
+     * THE BUG THIS EXISTS FOR ALREADY SHIPPED ONCE. The chip used to sit on a
+     * hue derived from the workspace name and drew its initials in a
+     * hard-coded `text-white`. When the colours were removed the FILL left and
+     * the INK stayed, so every chip was white-on-white in the light theme —
+     * present in the DOM, announced to a screen reader, invisible.
+     *
+     * So the assertion is structural rather than chromatic: both halves are
+     * set together, from one `key`, in the style attribute — and neither is a
+     * class that a call site could drop half of.
+     */
+    const chip = sidebar.match(/export function WorkspaceChip[\s\S]*?\n}/)?.[0] ?? "";
+    expect(chip).toMatch(/const key = workspaceHue\(/);
+    expect(chip).toMatch(/style=\{\{\s*background: groupBadge\(key\),\s*color: groupInk\(key\)\s*\}\}/);
+    expect(chip, "an ink class can outlive the fill it was solved against").not.toMatch(/text-white|text-background/);
+  });
 });

@@ -277,15 +277,18 @@ exemption. Both Figma exports set small numerals and chrome labels at 700;
   replaced it managed 4.41:1, and this is 9.20:1. The white label is what the
   other two could not afford — with the rule legible on its own, the label is
   free to say SELECTED rather than LINKED, which is what a coloured word says.
-- **Period row** — six mutually exclusive windows as free-standing 32px pills
-  with no track around them. It was a bordered `--control` groove with square
-  segments filling it edge to edge, which is the classic segmented control and
-  is not what the sheet draws: the six labels sit directly on the page and the
-  selected one is a filled capsule in the brand. That suits what the control
-  IS — six links setting one query parameter — and it takes a third bordered
-  object off a header that already carries a title and two buttons. The height
-  moved from the track to the segment, because with nothing to fill, a pill has
-  to carry its own 32.
+- **Period track** — six mutually exclusive windows in a 32px bordered
+  `--control` groove, segments filling it edge to edge. Track and segments are
+  both capsules; `overflow-hidden` plus `h-full` is what makes them agree, so
+  the first and last segment's outer corners land on the track's own and the
+  lit segment reads as a pill inside a pill.
+
+  *This entry is a correction.* One pass read "all buttons and timeline buttons
+  have 999 radius" as licence to restyle the control and deleted the border,
+  the fill and the enclosure, leaving six bare labels on the page. Nobody asked
+  for that; a radius is a radius. The groove is the design this product has and
+  `tests/console-theme.test.ts` now asserts its three properties, so losing
+  them again has to be deliberate.
 - **Group column** — a tinted lane with a 4px accent bar, a name badge in its own
   hue, and a count. The tint is 6% so a card on it still reads as an object; the
   1px inset ring at 14% is what turns a wash into a panel.

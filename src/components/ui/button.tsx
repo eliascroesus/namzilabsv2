@@ -105,6 +105,26 @@ const buttonVariants = cva(
         /** The recessed twin of `default` — a control sitting ON a card, where
          *  the card's own colour would give the button no edge to be found by. */
         secondary: "border border-border bg-control text-foreground shadow-xs hover:bg-accent active:bg-accent",
+        /**
+         * WHITE, AND LITERALLY #FFFFFF — the one variant that does not go
+         * through a role.
+         *
+         * Every other fill in this file names a token, because a token is what
+         * lets the two themes disagree correctly. This one is a fixed value on
+         * purpose: it was specified as a colour ("the background of the add
+         * button is WHITE #ffffff"), and `--foreground` — the nearest role, and
+         * what `default` uses to get a light button on the console — is
+         * #E8E6E7. Four counts off white is exactly the near-miss the kit
+         * argues against everywhere else, so the honest thing is to say white
+         * and mean it rather than to approximate it through a role.
+         *
+         * It carries `--color-neutral-950` ink at 17.5:1 and keeps the border,
+         * which is doing real work in the LIGHT theme: white on a #F7F8F9 page
+         * is a 1.03:1 step, so without the hairline the button has no edge at
+         * all. On the console the border is invisible against the fill and
+         * costs nothing.
+         */
+        white: "border border-border bg-white text-neutral-950 shadow-xs hover:bg-neutral-100 active:bg-neutral-200",
         /** THE REFERENCE'S OWN BADGE-AS-BUTTON: a 10% brand wash inside a 20%
          *  brand ring, carrying brand ink. On a light page this shape was
          *  impossible in the brand — a yellow wash under yellow ink needs

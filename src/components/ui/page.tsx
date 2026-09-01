@@ -140,33 +140,35 @@ export const BOARD_GRID = "grid gap-6 sm:grid-cols-2 xl:grid-cols-3";
  * has just come DOWN to 24px; the row read as a control with a caption rather
  * than a page with a filter.
  *
- * THERE IS NO GROOVE ANY MORE — the track lost its border and its fill, and
- * the segments became free-standing pills.
+ * THE GROOVE STAYS. ONLY THE CORNERS MOVED, and that is the whole change —
+ * recorded because the previous pass got it wrong in a way worth not repeating.
  *
- * It was a bordered `bg-control` rectangle with square `rounded-none` segments
- * inside it, which is the classic segmented control and is what the previous
- * reference drew. The sheet this interface is now drawn from does not draw one:
- * "Today · Yesterday · Last 7 days · Last 30 days · Last 90 days · All time"
- * sit as bare labels directly on the page, and the selected one is a filled
- * capsule in the brand. Nothing encloses them.
+ * The brief was "all buttons and timeline buttons have 999 radius". That pass
+ * read it as licence to restyle the control: it deleted the border, the fill
+ * and the enclosure, and left six bare labels with the selected one floating on
+ * the page. Nobody asked for that. A radius is a radius — the bordered
+ * `bg-control` track is the design this product already had, and it is back.
  *
- * That is a better fit for what the control IS, which is why it survives being
- * restyled twice. These are six links that set one query parameter; the box
- * around them was drawing a container for a thing that was never contained, and
- * on a header that already carries a title and two buttons it was a third
- * bordered object competing for the same line.
+ * So: the track is a capsule and every segment inside it is a capsule, which is
+ * the one thing that WAS asked for. `overflow-hidden` plus `h-full` is what
+ * makes them agree — a segment fills the track's full 32px, so the first and
+ * last segment's outer corners land exactly on the track's own, and the lit
+ * segment reads as a pill inside a pill rather than as a capsule rattling
+ * around inside a rectangle.
  *
- * `h-8` STAYS ON THE SEGMENT rather than on the row. With no track to fill, a
- * pill has to carry its own height, and it has to be 32 — the same number the
- * buttons, the inputs and the selects in the header all take, which is the
- * whole reason that ladder was cut. `gap-1` is what replaces the shared edges
- * the groove used to provide.
+ * `bg-control` + `border-border`, and the three `--period-*` tokens stay
+ * retired. They existed because this was "the one control that follows the PAGE
+ * rather than the band" — a near-black pill group on a light page would have
+ * been a second dark object competing with the chrome, so it needed its own
+ * surface that inverted separately. There is one surface; a control is
+ * `--control`.
  */
-export const PERIOD_TRACK = "inline-flex items-center gap-1";
+export const PERIOD_TRACK =
+  "inline-flex h-8 items-center overflow-hidden rounded-full border border-border bg-control";
 
-/** One control in that row — a period link, a month arrow, "This month". */
+/** One control inside that groove — a period link, a month arrow, "This month". */
 export const PERIOD_PILL =
-  "inline-flex h-8 shrink-0 items-center rounded-full px-3 text-sm font-medium transition-colors duration-(--duration-fast)";
+  "inline-flex h-full shrink-0 items-center rounded-full px-3 text-sm font-medium transition-colors duration-(--duration-fast)";
 
 /**
  * Title row: optional back link, one h1 recipe, optional lede, actions on

@@ -71,7 +71,7 @@ export function OrgSwitcher({
     return (
       <div className="space-y-0.5">
         <p className={cn(ROW, "font-semibold text-foreground")}>
-          <WorkspaceChip name={currentName} className="size-6" />
+          <WorkspaceChip id={currentId} name={currentName} className="size-6" />
           <span className="min-w-0 flex-1 truncate">{currentName}</span>
           <Check className="size-4 shrink-0 text-accent-foreground" aria-hidden />
         </p>
@@ -88,7 +88,7 @@ export function OrgSwitcher({
           // a pressable row that reloads the page into itself is the kind of
           // dead affordance that makes a menu feel unfinished.
           <p key={o.id} className={cn(ROW, "font-semibold text-foreground")} aria-current="true">
-            <WorkspaceChip name={o.name} className="size-6" />
+            <WorkspaceChip id={o.id} name={o.name} className="size-6" />
             <span className="min-w-0 flex-1 truncate">{o.name}</span>
             <Check className="size-4 shrink-0 text-accent-foreground" aria-hidden />
           </p>
@@ -109,7 +109,7 @@ export function OrgSwitcher({
               size="sm"
               className={cn(ROW, "justify-start font-normal text-foreground hover:bg-accent hover:text-accent-foreground")}
             >
-              <WorkspaceChip name={o.name} className="size-6" />
+              <WorkspaceChip id={o.id} name={o.name} className="size-6" />
               <span className="min-w-0 flex-1 truncate">{o.name}</span>
             </Button>
           </form>

@@ -258,8 +258,8 @@ Measured across a rendered page, the app was running EIGHT control heights
 a near-miss, and it reads as a rendering fault rather than as a size choice. So
 `sm` resolves to `default`'s 32, fields follow the button (they are stacked in
 every form, which is where the mismatch is unmissable), chips match, and the
-and the period pills are 32 themselves — there is no track around them any
-more, so each one carries the height that the groove used to.
+and the period track is 32 with its segments filling it edge to edge, so the
+whole control stands at the height of the buttons either side of it.
 
 **16px inside every card, including the metric tile.** It ran `p-5`; one tile
 padded four pixels wider than every other card on the same board is the

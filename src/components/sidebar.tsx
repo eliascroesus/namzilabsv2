@@ -8,6 +8,7 @@ import { Fragment, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { viewStrip, type BoardView } from "@/lib/board/types";
+import { GROUP_COLOR_KEYS, groupBadge, groupInk } from "@/components/flow/node-accent";
 
 /**
  * THE ICON RAIL — 48px at rest, 240px under the pointer.
@@ -27,7 +28,7 @@ import { viewStrip, type BoardView } from "@/lib/board/types";
  * there is one hairline down the right edge doing the entire job. The glyphs sit
  * directly on the ground at 12.9:1 with no chip, because a chip is a surface
  * step and there is nothing here to step away from. The focus ring is the
- * product's own — green at 9.20:1 on this exact colour, which is the ring the
+ * product's own — cyan at 9.20:1 on this exact colour, which is the ring the
  * light page provably could not carry.
  *
  * The rail's top block is still exactly the top bar's height, and that is still
@@ -69,7 +70,7 @@ import { viewStrip, type BoardView } from "@/lib/board/types";
  * on this ground there is no surface to lift it off. The SLOT is the hit area:
  * 32px tall, and as WIDE as the column is at the moment you press it, so an open
  * rail lets you click the name as well as the picture. Colour is spent in
- * exactly one place — the row you are standing on carries a green glyph on a
+ * exactly one place — the row you are standing on carries a cyan glyph on a
  * raised chip and the other four are plain.
  *
  * WHAT THE 48px COULD NOT HOLD, AND WHERE EACH THING WENT. Every one of these
@@ -139,22 +140,57 @@ const NAV: Array<{ label: string; href: string; icon: typeof LayoutDashboard; se
  * The rail's top block is the PRODUCT's mark now and the workspace moved to
  * the top bar, so the only callers left are the account panel's switcher rows
  * in `org-switcher.tsx` — which is exactly the reason not to move it: this
- * component is pinned by `tests/vendored-primitives.test.ts` at this path,
- * against a bug worth remembering. It drew its initials in `text-white`
- * because it once sat on a saturated hue derived from the workspace name; when
- * those coloured chips were removed the FILL left and the INK stayed, so the
- * letters were white-on-white at every call site in the light theme — still in
- * the DOM, still announced, invisible. `bg-foreground text-background` carries
- * its own fill and inverts with the theme instead of betting on the surface
- * behind it.
+ * component is pinned by `tests/vendored-primitives.test.ts` at this path.
+ *
+ * THE COLOUR IS BACK, AND THE BUG THAT KILLED IT LAST TIME IS THE REASON THIS
+ * VERSION SETS BOTH HALVES IN ONE PLACE.
+ *
+ * It used to sit on a saturated hue derived from the workspace name and drew
+ * its initials in a hard-coded `text-white`. When those chips were removed the
+ * FILL left and the INK stayed, so the letters were white-on-white at every
+ * call site in the light theme — still in the DOM, still announced, invisible.
+ * The lesson is not "do not colour it": it is that a fill and the ink solved
+ * against that fill are ONE decision and must not be separable. So both come
+ * out of the same `key` below, and neither is a class anything can override.
+ *
+ * THE PALETTE IS THE ONE THE BOARD ALREADY OWNS. `GROUP_ACCENT` is twelve hues
+ * solved to 3.05:1 on white, with `groupBadge` (16% over the card) and
+ * `groupInk` (60% into the theme's far end) already carrying a name legibly on
+ * every one of them at both exposures. Minting a second workspace palette would
+ * be two sets of nearly-identical hues in one product, which is the exact
+ * near-miss the kit exists to prevent — and this one is theme-aware for free.
+ *
+ * `grey` is skipped: it is the palette's "no colour chosen" default, and a
+ * workspace landing on it would look like the neutral chip this replaces rather
+ * than like a workspace whose colour happens to be grey.
  */
-export function WorkspaceChip({ name, className }: { name: string; className?: string }) {
+
+/**
+ * A STABLE HUE FOR A WORKSPACE. FNV-1a, and the choice of hash matters: this
+ * renders on the server and again on the client, so anything with per-process
+ * state or a random seed would hydrate to a different colour than it painted.
+ * Keyed on the org's ID where the caller has one, so renaming a workspace does
+ * not recolour it.
+ */
+function workspaceHue(seed: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < seed.length; i++) {
+    h ^= seed.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  const hues = GROUP_COLOR_KEYS.filter((k) => k !== "grey");
+  return hues[h % hues.length];
+}
+
+export function WorkspaceChip({ id, name, className }: { id?: string; name: string; className?: string }) {
+  const key = workspaceHue(id ?? name);
   return (
     <span
-      className={cn(
-        "flex size-8 shrink-0 items-center justify-center rounded-control bg-foreground text-xs font-semibold text-background",
-        className,
-      )}
+      className={cn("flex size-8 shrink-0 items-center justify-center rounded-control text-xs font-semibold", className)}
+      /* Inline, and together. See the note above: the fill and the ink it is
+         solved against are one decision, and a class either half could be
+         overridden by is how this went white-on-white last time. */
+      style={{ background: groupBadge(key), color: groupInk(key) }}
       aria-hidden
     >
       {name.slice(0, 2).toUpperCase()}
@@ -171,18 +207,18 @@ export function WorkspaceChip({ name, className }: { name: string; className?: s
  * because a 210px bar lighting under the pointer is a shape nothing else in this
  * column draws.
  *
- * ACTIVE IS THE GREEN GLYPH, WITH A RAISED CHIP UNDER IT, AND THE CHIP IS THE
+ * ACTIVE IS THE BRAND GLYPH, WITH A RAISED CHIP UNDER IT, AND THE CHIP IS THE
  * ONE PLACE THIS RAIL OVERRULES ITS REFERENCE.
  *
- * The reference draws the active row as a green glyph and nothing else — no
+ * The reference draws the active row as a coloured glyph and nothing else — no
  * fill, no rule, no chip. That is colour carrying state on its own, which is the
- * failure WCAG 1.4.1 is about: it is invisible to a red-green colour-blind
+ * failure WCAG 1.4.1 is about: it is invisible to a colour-blind
  * reader, who then has no way at all to tell which of six identical grey icons
  * is the page they are on. `aria-current="page"` covers the semantic half and
  * covers nothing for someone who can see the screen perfectly well and simply
  * cannot separate those two hues.
  *
- * So the green stays — it is what the reference draws and it is 9.20:1 here —
+ * So the colour stays — it is what the reference draws and it is 9.20:1 here —
  * and a `neutral-700` chip goes under it, which is the same raised step the
  * hover already uses. Two signals, one of them not a colour, and the row still
  * looks like the reference's.
@@ -282,7 +318,7 @@ const ICON_COL = "flex size-8 shrink-0 items-center justify-center";
  * `focus-ring-light` IS GONE, and it went with the thing it was for. globals.css
  * draws one ring for the whole product in `--ring`; while that ring was violet
  * and this rail was the one dark surface in a light app, it was invisible here
- * and needed a sanctioned white twin. The ring is green on a ground that is now
+ * and needed a sanctioned white twin. The ring is cyan on a ground that is now
  * the SAME colour everywhere, so the product's own ring is the correct one and a
  * second spelling would be a second answer.
  *
@@ -585,9 +621,9 @@ export function Sidebar({
 
             It is a LINK HOME, which is what a mark in this position is
             everywhere else, and it is a RINGED DISC rather than a filled tile:
-            the reference draws its mark as a 2px green ring around a glyph on
+            the reference draws its mark as a 2px brand ring around a glyph on
             the bare ground, which is the one place in this rail that a stroke
-            says "brand" without also saying "press me". A filled green square
+            says "brand" without also saying "press me". A filled brand square
             here would be the second filled object in a column whose only filled
             object is the "+" in the foot.
 
@@ -753,25 +789,25 @@ export function Sidebar({
             system's. There is one theme, so the control has nothing to say. */}
         <div className={cn("mt-auto flex shrink-0 flex-col gap-2 pb-4", GUTTER)}>
           {/* THE "+" IS THE COLUMN'S ONE FILLED OBJECT, AND THAT IS WHY IT CAN
-              BE THE ONLY GREEN FILL IN THE RAIL.
+              BE THE ONLY BRAND FILL IN THE RAIL.
               It has been a yellow slab, then a white chip with a hairline, and
               the argument each time was about how much brand a column could
               carry. That argument resolves cleanly here: the mark at the top is
-              a green RING, the active row is a green GLYPH on a neutral chip,
+              a brand RING, the active row is a brand GLYPH on a neutral chip,
               and this is the single FILL. Three appearances of one colour in
               three different shapes, each doing a different job — identity,
               location, action — rather than three fills competing to be the
               thing you press.
 
               THE INK IS THE GROUND. `--primary-foreground` is #1b191a at 8.08:1
-              on the fill, which is a constant rather than a role: the green does
+              on the fill, which is a constant rather than a role: the blue does
               not invert and neither may what is written on it.
 
               24px, ON THE `ICON_COL` AXIS. The chip is the same size as every
               other picture in the column, so the rail's single vertical line
               runs unbroken from the mark to the bell. */}
           {/* IT BECOMES A BUTTON WHEN THERE IS ROOM TO BE ONE.
-              Collapsed, the green is a 24px chip inside the icon column,
+              Collapsed, the brand is a 24px chip inside the icon column,
               because a 48px rail has space for a mark and nothing else.
               Expanded, the fill moves OUT of the chip and onto the row itself,
               so "New flow" reads as the same full-width primary the top bar
@@ -779,8 +815,8 @@ export function Sidebar({
               — which is what it looked like, and it is the one control in the
               foot that is a verb.
               The fill swaps rather than stacks: the chip is removed at the same
-              moment the row fills, so there is never a green square sitting on
-              a green bar. `-mx-1 px-1` lets the filled row breathe to the
+              moment the row fills, so there is never a brand square sitting on
+              a brand bar. `-mx-1 px-1` lets the filled row breathe to the
               gutter's edge without moving the chip, which is the whole point of
               the icon column — every glyph in the rail stays on one vertical
               line in both states. */}
@@ -789,19 +825,19 @@ export function Sidebar({
             className={cn(
               SLOT,
               "transition-colors duration-(--duration-fast) ease-(--ease-standard)",
-              "group-hover/rail:-mx-1 group-hover/rail:w-[calc(100%+0.5rem)] group-hover/rail:justify-center group-hover/rail:rounded-control group-hover/rail:bg-primary group-hover/rail:px-1",
-              "group-focus-within/rail:-mx-1 group-focus-within/rail:w-[calc(100%+0.5rem)] group-focus-within/rail:justify-center group-focus-within/rail:rounded-control group-focus-within/rail:bg-primary group-focus-within/rail:px-1",
+              "group-hover/rail:-mx-1 group-hover/rail:w-[calc(100%+0.5rem)] group-hover/rail:justify-center group-hover/rail:rounded-full group-hover/rail:bg-primary group-hover/rail:px-1",
+              "group-focus-within/rail:-mx-1 group-focus-within/rail:w-[calc(100%+0.5rem)] group-focus-within/rail:justify-center group-focus-within/rail:rounded-full group-focus-within/rail:bg-primary group-focus-within/rail:px-1",
               // PINNED IS THE THIRD STATE, and every reveal in this file has to
               // name it. A rail held open by choice that still showed a bare
               // "+" chip and a collapsed view list was open in width only.
-              "group-data-[pinned=true]/rail:-mx-1 group-data-[pinned=true]/rail:w-[calc(100%+0.5rem)] group-data-[pinned=true]/rail:justify-center group-data-[pinned=true]/rail:rounded-control group-data-[pinned=true]/rail:bg-primary group-data-[pinned=true]/rail:px-1",
+              "group-data-[pinned=true]/rail:-mx-1 group-data-[pinned=true]/rail:w-[calc(100%+0.5rem)] group-data-[pinned=true]/rail:justify-center group-data-[pinned=true]/rail:rounded-full group-data-[pinned=true]/rail:bg-primary group-data-[pinned=true]/rail:px-1",
             )}
           >
             <span
               aria-hidden
               className={cn(
                 "flex size-8 shrink-0 items-center justify-center [&_svg]:size-[18px]",
-                "rounded-control bg-primary text-primary-foreground transition-colors duration-(--duration-fast) ease-(--ease-standard) group-hover:bg-brand-500",
+                "rounded-full bg-primary text-primary-foreground transition-colors duration-(--duration-fast) ease-(--ease-standard) group-hover:bg-brand-500",
                 /* THE "+" LEAVES WHEN THE WORDS ARRIVE. Collapsed, the glyph IS
                    the control — it is the only thing a 48px rail can say.
                    Expanded, the row reads "New flow" in full, and a plus beside
@@ -831,15 +867,17 @@ export function Sidebar({
               standing the search field had for a commit, and comment-marked for
               the same reason. The 8px dot is drawn because the export draws it;
               it says PRESENCE ("there is something") rather than a count, and it
-              is `--primary` now, and the old argument against that has expired:
-              it used to have a token of its own specifically so it would not
-              borrow `--success`, because the success trio means a row SUCCEEDED
-              and a dot wearing it turns a notification into a result. Success
-              and the brand are the same green now (see the state block in
-              globals.css), so there is nothing left to keep apart — what stops
-              this reading as "everything is fine" is that a bare dot is not a
-              status pill, which is the quiet-when-fine rule the rest of the
-              product already runs on.
+              is `--primary` now, and being `--primary` is what makes it right
+              rather than merely convenient. It used to have a token of its own
+              specifically so it would not borrow `--success`, because the
+              success trio means a row SUCCEEDED and a dot wearing it turns a
+              notification into a result. For one re-theme that distinction was
+              moot, because success and the brand WERE the same green; they are
+              not any more (the brand is cyan, success kept the green), so the
+              separation this note argues for is real again and `--primary` is
+              on the correct side of it. What stops the dot reading as a status
+              is that a bare dot is not a status pill, which is the
+              quiet-when-fine rule the rest of the product already runs on.
 
               When notifications land, the dot takes a prop and the button takes
               a handler. Until then this note is the honest record that the dot
