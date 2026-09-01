@@ -70,7 +70,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FieldError, FieldHint, FieldLabel } from "@/components/ui/field";
-import { Input, NativeSelect, Textarea } from "@/components/ui/input";
+import { GrowingTextarea, Input, NativeSelect, Textarea } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Modal, ModalTitle } from "@/components/ui/modal";
 import { SectionHeading } from "@/components/ui/page";
@@ -307,7 +307,7 @@ export function Gallery() {
         </Family>
 
         {/* ── INPUT FAMILY ────────────────────────────────────────────── */}
-        <Family name="Input · Textarea · NativeSelect" file="input.tsx">
+        <Family name="Input · Textarea · GrowingTextarea · NativeSelect" file="input.tsx">
           <Spec name="Input" note="Textarea is deliberately rounded-card rather than the pill every other control takes — a multi-line box read wrong as a capsule.">
             <div className="grid w-full max-w-2xl gap-3 sm:grid-cols-2">
               <Input placeholder="Ordinary field" aria-label="Ordinary field" />
@@ -323,6 +323,17 @@ export function Gallery() {
           </Spec>
           <Spec name="Textarea">
             <Textarea rows={3} className="max-w-md" placeholder="Write a message" aria-label="Message" />
+          </Spec>
+          <Spec
+            name="GrowingTextarea"
+            note="One row until the text needs two. It exists because card titles TRUNCATE: the renamer is the one place the whole name is legible, so it wraps instead of scrolling the tail out of view. Enter commits — a title has no use for a newline. Client-only: it measures itself."
+          >
+            <GrowingTextarea
+              data-kit-growing
+              className="max-w-md"
+              defaultValue="Speed to lead (Armaan) for the west coast growth team — the full name, over as many rows as it takes"
+              aria-label="Growing field"
+            />
           </Spec>
           <Spec name="NativeSelect" note="The platform control, kept for short one-of lists where a portalled Select would be ceremony.">
             <NativeSelect className="max-w-xs" aria-label="Range" defaultValue="30d">

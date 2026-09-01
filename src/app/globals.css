@@ -933,23 +933,30 @@ html {
   -webkit-tap-highlight-color: rgb(0 212 146 / 0.12);
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-sans);
-  /* Type rendering is part of the kit: without these, the same 13px label is
-     visibly heavier on macOS than the design was drawn at. */
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-rendering: optimizeLegibility;
-  /* THE TRACKING IS OFF NOW, and that is a consequence of the typeface change
-     rather than a change of taste. The -0.008em here was cut for Inter, which
-     wants a touch of negative tracking at UI sizes — Linear runs -0.011em at
-     15px. SF Pro Text does not: it ships optical sizing that has already
-     tightened the small sizes, and pulling it in further is what makes a Mac
-     render the interface a half-step denser than the design. Inter still gets
-     its correction, from the fallback stack rather than from here. */
-  letter-spacing: normal;
+/* IN `@layer base` for the same reason the heading rule below is: an
+   unlayered rule keyed on an element outranks every Tailwind utility, and
+   these three set `background`, `color` and `font-family` — all of which
+   have utilities. <body> carries no classes today, so nothing was broken by
+   it; layering it is what keeps that true when something does. */
+@layer base {
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    /* Type rendering is part of the kit: without these, the same 13px label is
+       visibly heavier on macOS than the design was drawn at. */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    /* THE TRACKING IS OFF NOW, and that is a consequence of the typeface change
+       rather than a change of taste. The -0.008em here was cut for Inter, which
+       wants a touch of negative tracking at UI sizes — Linear runs -0.011em at
+       15px. SF Pro Text does not: it ships optical sizing that has already
+       tightened the small sizes, and pulling it in further is what makes a Mac
+       render the interface a half-step denser than the design. Inter still gets
+       its correction, from the fallback stack rather than from here. */
+    letter-spacing: normal;
+  }
 }
 
 /**
@@ -992,14 +999,38 @@ select:-webkit-autofill {
  * is capped at a few lines by the spec and is the wrong tool for a paragraph.
  *
  * Applied by ELEMENT rather than by class so no heading can be added later
- * without it. `:where()` keeps specificity at zero, so any component that
- * genuinely needs a different wrap still wins without `!important`.
+ * without it. A component that genuinely needs a different wrap still wins
+ * without `!important` — but because of the LAYER, not the `:where()`. The
+ * sentence that used to stand here credited the zero specificity, and that
+ * belief is what shipped the bug documented below: specificity is never
+ * consulted across layers, so the zero bought nothing at all.
  */
-:where(h1, h2, h3, h4, legend) {
-  text-wrap: balance;
-}
-:where(p, li, dd, figcaption) {
-  text-wrap: pretty;
+/**
+ * IN `@layer base`, AND THE LAYER IS THE WHOLE POINT.
+ *
+ * These were unlayered, and unlayered CSS beats anything in a layer no matter
+ * how specific — so `text-wrap: balance` on a heading outranked every Tailwind
+ * utility, which all live in `@layer utilities`.
+ *
+ * `text-wrap` is a shorthand for `text-wrap-mode`, and `white-space` is a
+ * shorthand for the same longhand. So `balance` was quietly setting
+ * `text-wrap-mode: wrap` OVER the `white-space: nowrap` that `truncate` emits,
+ * and `truncate` on an h1–h4 did not truncate: the ellipsis and the
+ * `overflow: hidden` applied, the nowrap did not, and a long card title wrapped
+ * to three lines inside a box that then clipped it.
+ *
+ * Every card title in the product is an h3, so this had never worked anywhere —
+ * measured in a browser, where `white-space` computed to `normal` on an element
+ * whose class list said `truncate`. Base styles are meant to LOSE to utilities;
+ * this is what says so.
+ */
+@layer base {
+  :where(h1, h2, h3, h4, legend) {
+    text-wrap: balance;
+  }
+  :where(p, li, dd, figcaption) {
+    text-wrap: pretty;
+  }
 }
 
 /* A SCROLLER THAT DOES NOT SHOUT.

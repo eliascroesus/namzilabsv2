@@ -34,7 +34,7 @@ import { Button } from "@/components/ui/button";
 import { Popover } from "@/components/flow/controls/Popover";
 import { Toast } from "@/components/ui/toast";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Input } from "@/components/ui/input";
+import { GrowingTextarea } from "@/components/ui/input";
 import { SectionHeading } from "@/components/ui/page";
 import { CHARTS, asChartId, blockKindOf, blockTileKey, minSize, type BlockId, type ChartId } from "@/lib/board/charts";
 import { UNSET_TILE_KEY, type BoardTileRow, type CustomTileOption } from "@/lib/board/types";
@@ -1145,18 +1145,28 @@ function TileMenu({
           </p>
           {editing ? (
             <div className="px-1 py-1">
-              <Input
+              {/* MULTI-LINE ON PURPOSE, and the counterpart to the card title's
+                  `truncate`. The card shows "Speed to lead (Armaan) for the…";
+                  this is the one place the rest of it exists, so it wraps to
+                  however many rows the name needs instead of hiding the tail
+                  behind a scroll position. `preventDefault` on Enter because a
+                  textarea's default there is a newline, and GrowingTextarea's
+                  contract is that Return saves. */}
+              <GrowingTextarea
                 autoFocus
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 onBlur={commit}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") commit();
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    commit();
+                  }
                   if (e.key === "Escape") setEditing(false);
                 }}
                 aria-label={`Rename ${title}`}
                 placeholder="Follow the metric's name"
-                className="h-8 text-sm"
+                className="text-sm"
               />
             </div>
           ) : (

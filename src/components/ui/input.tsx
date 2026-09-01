@@ -147,6 +147,68 @@ export function Textarea({ className, autoComplete, ...props }: React.ComponentP
 }
 
 /**
+ * THE FIELD THAT GROWS TO FIT WHAT IT HOLDS — one row until it needs two.
+ *
+ * This exists because a card's title TRUNCATES: a long name is cut to one line
+ * with an ellipsis, which is right for reading a board and wrong for editing
+ * one. A single-line `<input>` repeats the crime — you open the renamer on a
+ * name you could not read and get a box you still cannot read it in, now with
+ * the end scrolled off instead of elided. So the editor is the one place the
+ * whole string is shown, and `<textarea>` is the only element that can wrap.
+ *
+ * Height is measured rather than guessed: `rows={1}` plus a reset to `auto`
+ * before every read, because `scrollHeight` on an element that is already tall
+ * enough reports the CURRENT height, so growing works and shrinking does not —
+ * deleting a line would leave the box stretched.
+ *
+ * ENTER COMMITS, it does not insert a newline. A card title is one line of
+ * text that happens to need two lines of room; a rename field where Return
+ * types a line break instead of saving is a rename field that eats names.
+ * Shift+Enter is not an escape hatch here for the same reason — there is
+ * nothing a newline in a title would mean.
+ */
+export function GrowingTextarea({ className, value, onInput, ...props }: React.ComponentProps<"textarea">) {
+  const ref = React.useRef<HTMLTextAreaElement>(null);
+  const fit = React.useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    // `scrollHeight` counts padding but NOT border, and the field is
+    // `border-box` — so `height = scrollHeight` lands two pixels short and
+    // clips the descenders off the last row. `offsetHeight - clientHeight` is
+    // that border, measured rather than assumed to be the 1px the recipe
+    // currently sets. Caught by comparing the two after a fill: 52 against 50.
+    el.style.height = `${el.scrollHeight + el.offsetHeight - el.clientHeight}px`;
+  }, []);
+  // Layout, not effect: the box is measured and resized before the browser
+  // paints, so opening the editor never shows one row that jumps to three.
+  React.useLayoutEffect(fit, [fit, value]);
+  return (
+    <textarea
+      ref={ref}
+      rows={1}
+      value={value}
+      onInput={(e) => {
+        fit();
+        onInput?.(e);
+      }}
+      /**
+       * `max-h-32` is a floor under the absurd, not a design limit: six rows.
+       * Without it a pasted paragraph grows the field without end, and this
+       * field's first home is a 248px-wide tile menu, so "without end" means a
+       * menu taller than the viewport. `overflow-y-auto` rather than `hidden`
+       * so the text past the cap is still reachable — below the cap the box is
+       * always exactly as tall as its content, so no scrollbar can appear.
+       */
+      className={cn(FIELD_BASE, "max-h-32 resize-none overflow-y-auto rounded-card px-3 py-1.5 leading-5", className)}
+      autoComplete="off"
+      spellCheck={false}
+      {...props}
+    />
+  );
+}
+
+/**
  * The native <select>, dressed as an Input. Native on purpose: the OS picker
  * is better than anything we would hand-roll for plain option lists — the
  * builder's searchable combobox is a different component for a different job.

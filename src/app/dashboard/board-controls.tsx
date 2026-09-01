@@ -211,15 +211,40 @@ export function ViewStrip({
 }) {
   const router = useRouter();
   const [order, setOrder] = useState(views);
-  // The server is the source of truth: a rename, an add or a delete arrives as
-  // new props and replaces whatever the last drag left here.
-  useEffect(() => setOrder(views), [views]);
+
+  /**
+   * THE SIGNATURE, NOT THE ARRAY — and this is one of the two bugs that made a
+   * reorder look like it snapped back.
+   *
+   * `views` is built by the parent with `.map()`, so it is a NEW array on every
+   * render. `useEffect(…, [views])` therefore fired constantly and reset the
+   * local order to the server's — including on the very renders a drag caused,
+   * so the tabs jumped home the moment you let go. Keyed on the ids and
+   * positions instead, the effect fires when the server's ANSWER changes, which
+   * is what it was always meant to mean.
+   */
+  const signature = views.map((v) => `${v.key}:${v.pos}`).join("|");
+  useEffect(() => setOrder(views), [signature]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /**
+   * A MIRROR OF `order`, because the commit happens in a pointer handler and
+   * state is not readable there. Reading it through `setOrder`'s updater — the
+   * shape this had — puts a side effect inside a function React may call twice,
+   * and it reads `drag.current` AFTER the handler has already nulled it. That
+   * was the other bug: the write never fired at all, and nothing reported it
+   * because a no-op looks exactly like a successful reorder that the refresh
+   * then undoes.
+   */
+  const live = useRef(order);
+  live.current = order;
 
   const strip = useRef<HTMLDivElement>(null);
   const drag = useRef<{ key: string; startX: number; moved: boolean } | null>(null);
+  const [dragging, setDragging] = useState<string | null>(null);
 
-  const commit = (next: StripView[]) => {
-    const i = next.findIndex((v) => v.key === drag.current?.key);
+  const commit = (key: string) => {
+    const next = live.current;
+    const i = next.findIndex((v) => v.key === key);
     const moved = next[i];
     if (!moved?.id) return;
     /**
@@ -232,6 +257,9 @@ export function ViewStrip({
       // A refusal (a rank block, a key that could not be minted) puts the
       // server's order back rather than leaving the strip lying about itself.
       if (!r.ok) setOrder(views);
+      // The rail's nested list is server-rendered from the same `pos` column,
+      // so this is what reorders it — without the refresh the strip and the
+      // rail disagree until the next navigation.
       router.refresh();
     });
   };
@@ -245,7 +273,12 @@ export function ViewStrip({
           className={cn(
             "flex items-center",
             canEdit && v.id ? "cursor-grab select-none [touch-action:none]" : "",
-            drag.current?.key === v.key && drag.current.moved ? "opacity-50" : "",
+            // THE DRAGGED TAB KEEPS ITS INK. It went to `opacity-50`, which on
+            // an active tab means its white label and its green rule both fade
+            // to grey — so the thing you are holding is the one thing you can
+            // no longer read. A raised chip says "picked up" without touching
+            // the type, which is the same vocabulary a hovered row uses.
+            dragging === v.key ? "rounded-control bg-accent" : "",
           )}
           // The label's own text can still be selected and dragged. `select-none`
           // while the strip is arrangeable stops a press turning into a
@@ -266,6 +299,7 @@ export function ViewStrip({
             if (!d.moved && Math.abs(e.clientX - d.startX) < 4) return;
             if (!d.moved) {
               d.moved = true;
+              setDragging(d.key);
               (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
             }
             const tabs = [...(strip.current?.querySelectorAll("[data-view-tab]") ?? [])];
@@ -286,11 +320,15 @@ export function ViewStrip({
           }}
           onPointerUp={() => {
             const d = drag.current;
-            if (d?.moved) setOrder((cur) => (commit(cur), cur));
+            // The key is read BEFORE the gesture is torn down. Reading it after
+            // is what made every commit a no-op.
+            if (d?.moved) commit(d.key);
             drag.current = null;
+            setDragging(null);
           }}
           onPointerCancel={() => {
             drag.current = null;
+            setDragging(null);
             setOrder(views);
           }}
           // A drag that ends on a tab must not also follow its link.

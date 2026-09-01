@@ -119,7 +119,13 @@ export function ChartFrame({
      */
     <Card data-tile-card variant="tile" padding="none" className="flex h-full flex-col overflow-hidden">
       <CardHeader className="gap-2">
-        <div className="flex min-w-0 flex-col gap-1">
+        {/* `flex-1` IS WHAT MAKES `truncate` FIRE. Without a basis this column
+            sizes to its CONTENT inside the header's `justify-between` row, so
+            there is no width for an ellipsis to trigger against and a long name
+            simply wraps. `min-w-0` alone is not enough — it permits shrinking,
+            it does not cause it. Same fix, same reason, as the metric tile's
+            own h3: "Speed To Lead (Armaan)" was the name that showed both. */}
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
           {/* ONE LINE, ALWAYS. A canvas tile's height is its row span, so a
               header that wraps steals it from the mark below and pushes a goal
               bar's own caption out through the bottom edge. `truncate` here is
