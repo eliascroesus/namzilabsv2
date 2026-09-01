@@ -7,7 +7,7 @@ and `/design` ever disagree, the tokens win and the other two are bugs.
 
 Benchmarked against Linear, Stripe, Notion, Vercel, Miro and Zapier, and drawn
 from a VoltAgent-style observability console: **one surface separated entirely
-by hairlines**, one neutral ramp, one green in three shapes, a 14px UI base, and
+by hairlines**, one neutral ramp, one blue in three shapes, a 14px UI base, and
 a state for everything — hover, focus, empty, loading, error.
 
 **The thesis: quiet chrome, loud numbers.** This is a reconciliation product —
@@ -21,8 +21,8 @@ exhausting by 4pm.
 ## 1. Principles
 
 1. **One surface. The hairline is the structure.** The rail, the top bar and the
-   page are all `#0F1011`; every separation in the product is a 1px `#2B2D2F`
-   rule. A card is `#1A1B1E` — a **1.11:1** step, which exists in the numbers
+   page are all `#1B191A`; every separation in the product is a 1px `#3D393B`
+   rule. A card is `#272426` — a **1.14:1** step, which exists in the numbers
    and not in the eye — so a card without its border is not a flatter card, it
    is an invisible one.
 2. **Roles, not ramps.** Components say `bg-card`, `border-border`,
@@ -59,12 +59,12 @@ An absent line and a superb box. The brand could only safely do one of the two
 jobs, so a second colour had to hold the other, and `check:ui` needed a rule to
 stop them swapping places.
 
-### The rule now: one green, in three shapes
+### The rule now: one blue, in three shapes
 
-| `#00D492` / `#00BC7D` | on the ground `#0F1011` | on a card `#1A1B1E` |
+| `#00CDF5` / `#00C0E8` | on the ground `#1B191A` | on a card `#272426` |
 |---|---|---|
-| `#00D492` as a **stroke or text** | **9.83:1** | **8.88:1** |
-| `#00BC7D` as a **fill**, ink `#0F1011` | **7.70:1** | **7.70:1** |
+| `#00CDF5` as a **stroke or text** | **9.20:1** | **8.49:1** |
+| `#00C0E8` as a **fill**, ink `#1B191A` | **8.08:1** | **8.08:1** |
 
 Both clear their bar with room, so the split has nothing left to prevent.
 `--primary` fills and `--marker` draws as **two steps of one ramp**. What
@@ -78,29 +78,29 @@ replaces the split is a rule about SHAPE, visible all at once in the rail:
 
 | role | value | job |
 |---|---|---|
-| `--primary` | `brand-600` `#00bc7d` | every FILLED object: primary buttons, the active chip, the unread badge, the rail's `+` |
-| `--primary-foreground` | `#0f1011` | the ink ON that fill — a CONSTANT, not `--foreground`: the green does not invert and neither may what is written on it |
-| `--marker` | `brand-500` `#00d492` | every LINE, RING and coloured GLYPH: the focus ring, the tab rule, the active nav glyph, the setup ring's arc, links |
-| `--brand-soft` | `rgb(0 188 125 / .10)` | the brand as a WASH — soft pills, selected banners |
-| `--brand-soft-line` | `rgb(0 188 125 / .20)` | the ring around that wash; a 10% wash on `#1a1b1e` has no edge without it |
+| `--primary` | `brand-600` `#00c0e8` | every FILLED object: primary buttons, the active chip, the unread badge, the rail's `+` |
+| `--primary-foreground` | `#1b191a` | the ink ON that fill — a CONSTANT, not `--foreground`: the blue does not invert and neither may what is written on it |
+| `--marker` | `brand-500` `#00cdf5` | every LINE, RING and coloured GLYPH: the focus ring, the tab rule, the active nav glyph, the setup ring's arc, links |
+| `--brand-soft` | `rgb(0 192 232 / .10)` | the brand as a WASH — soft pills, selected banners |
+| `--brand-soft-line` | `rgb(0 188 125 / .20)` | the ring around that wash; a 10% wash on `#272426` has no edge without it |
 
 `--marker-ink` is **retired**. The violet needed a second step because 4.41:1
-clears the 3:1 a rule owes and falls short of the 4.5:1 a link does. The green
-is 9.83:1 and clears both.
+clears the 3:1 a rule owes and falls short of the 4.5:1 a link does. The blue
+is 9.20:1 and clears both.
 
 ### The neutral ramp — five surfaces, four inks, and a gap between them
 
 | token | value | job | on the ground |
 |---|---|---|---|
-| `neutral-950` | `#0f1011` | **the ground** — rail, top bar, page | — |
-| `neutral-900` | `#141518` | **a control** — inputs, selects, the period track | 1.10:1 |
-| `neutral-800` | `#1a1b1e` | **a card** — and popovers | 1.11:1 |
-| `neutral-700` | `#222325` | **raised** — hover, menu rows, the toast | 1.25:1 |
-| `neutral-600` | `#2b2d2f` | **the hairline** | 1.38:1 |
-| `neutral-500` | `#3a3d40` | the heavier rule: switch track, checkbox, table divider | 2.40:1 |
-| `neutral-400` | `#7d8593` | the dimmest **ink** | 5.12:1 |
-| `neutral-300` | `#9ca3af` | descriptions, captions | 7.51:1 |
-| `neutral-200` | `#dcdcdc` | body, card titles — `--foreground` | 12.90:1 |
+| `neutral-950` | `#1b191a` | **the ground** — rail, top bar, page | — |
+| `neutral-900` | `#211F20` | **a control** — inputs, selects, the period track | 1.10:1 |
+| `neutral-800` | `#272426` | **a card** — and popovers | 1.14:1 |
+| `neutral-700` | `#332F31` | **raised** — hover, menu rows, the toast | 1.25:1 |
+| `neutral-600` | `#3d393b` | **the hairline** | 1.38:1 |
+| `neutral-500` | `#4d494b` | the heavier rule: switch track, checkbox, table divider | 2.40:1 |
+| `neutral-400` | `#948d93` | the dimmest **ink** | 5.41:1 |
+| `neutral-300` | `#b0a9ae` | descriptions, captions | 7.51:1 |
+| `neutral-200` | `#e8e6e7` | body, card titles — `--foreground` | 12.90:1 |
 | `neutral-50` | `#fafafa` | reserved; `#ffffff` is the page title |
 
 **500 is the last step a LINE may be drawn in and 400 the first that TEXT may be
@@ -109,13 +109,13 @@ that reads as 12px copy are not the same value, and the product had been
 pretending they were.
 
 **`neutral-400` is NOT the reference's `#6a7282`.** That value measures
-**3.56:1** on the `#1a1b1e` card the reference sets its own empty-state copy on,
+**3.56:1** on the `#272426` card the reference sets its own empty-state copy on,
 against the 4.5:1 body text owes. Raised four steps in the same hue. This is the
 one place the kit overrules its source on a measurement, and §11 of DESIGN.md is
 where the principle lives.
 
-The reference ships **seven** greys for text — `#ffffff`, `#dcdcdc`, `#e5e7eb`,
-`#a1a1a1`, `#9ca3af`, `#99a1af`, `#6a7282` — three of which sit within three
+The reference ships **seven** greys for text — `#ffffff`, `#e8e6e7`, `#e5e7eb`,
+`#a1a1a1`, `#b0a9ae`, `#99a1af`, `#6a7282` — three of which sit within three
 counts of each other. That is the "twelve names over nine sizes" failure the
 type scale was closed to prevent, arriving in the colour layer. Four values, one
 per job.
@@ -141,23 +141,30 @@ are a build failure rather than a review comment (§11, `retired token`):
 ### State trios, and the collision
 
 `--success` / `--warn` / `--danger`, each with a `-soft` wash and an `-ink`, and
-each wash carrying a **20% ring of its own colour** — a 10% wash on `#1a1b1e` is
+each wash carrying a **20% ring of its own colour** — a 10% wash on `#272426` is
 quieter than the same wash was on white and reads as tinted text with no edge
 otherwise.
 
-**Green is the brand and green is success.** The old rule — "state never borrows
-from the brand" — cannot survive that, and patching it would mean a success
-green four counts from `#00d492`: indistinguishable, guaranteed to drift.
+**State is a separate vocabulary again.** While the brand was green it could not
+be: a success green four counts from the brand green is indistinguishable and
+guaranteed to drift, so the kit conceded the collision and ran "green means
+good-or-brand". The brand is cyan now, so the concession is not only unnecessary
+but wrong — a DONE badge and a New-flow button in one colour would put the
+loudest state and the loudest act in one vocabulary.
 
-> **Green means good-or-brand. Warn and danger are the only separate state hues.**
-> **Status is quiet when fine:** a healthy thing carries a 6px dot; only a thing
-> that needs something wears a full pill.
+Success keeps the ramp the brand vacated (`#00d492` dark, `#00734b` light), which
+was already solved for this interface: 9.02:1 on the ground, 7.93:1 on a card,
+5.91:1 on white.
 
-`TargetBar` is the component that paid for this: it drew "met" in `--success` and
-"in progress" in `--marker`, which are the same green today, so it rendered both
-states identically. It draws the unmet meter in **greyscale** now and lets colour
-ARRIVE when the goal lands — which is the honest reading anyway, since a bar at
-40% is not good, it is 40%.
+> **Success is green, the brand is blue. Warn and danger are the other two state
+> hues.** **Status is quiet when fine:** a healthy thing carries a 6px dot; only
+> a thing that needs something wears a full pill.
+
+`TargetBar` is the component that paid for the collision: it drew "met" in
+`--success` and "in progress" in `--marker`, which became the same green. They
+are different colours again, but the fix outlived the bug — it draws the unmet
+meter in **greyscale** and lets colour ARRIVE when the goal lands, which is the
+honest reading regardless of palette: a bar at 40% is not good, it is 40%.
 
 ## 3. Typography
 
@@ -207,14 +214,17 @@ not write.
 card and a tile were three different objects on one screen with nothing saying
 which was which.
 
-**Everything pressable is 8px** (`--radius-control`). This replaces "everything
-pressable is a full pill", which needed an exception it could never justify: a
-control that WRAPS cannot be a pill, because a full radius on a two-line box
-renders as a circle around the words. **A badge is 4px. An avatar and a status
-dot are the only full radii left.** `--radius-frame` is **0** — the notch it cut
+**Everything you press is a full pill** — and it is spelled on `buttonVariants`,
+NOT on `--radius-control`. That token was `9999px` for one commit once and 51
+files inherited it, so every text field, menu row and small panel went
+capsule-shaped; it stays at **8px** and holds the fields. The exception the pill
+needs is real: a control that WRAPS cannot be a pill, because a full radius on a
+two-line box renders as a circle around the words. Such a call site passes
+`rounded-control` and wins, because `cn()` knows the kit's radius names. **A
+badge is 4px.** `--radius-frame` is **0** — the notch it cut
 opened onto a colour that no longer differs from the page.
 
-**Shadows barely exist here.** Black at 10% over `#0f1011` moves about one count.
+**Shadows barely exist here.** Black at 10% over `#1b191a` moves about one count.
 The ladder keeps its rungs so vendored components compile, but only two are
 chosen on purpose — `shadow-card` in the page flow, `shadow-pop` for anything
 floating — and the floating rungs carry a **white inset ring**, because on a dark
@@ -248,8 +258,8 @@ Measured across a rendered page, the app was running EIGHT control heights
 a near-miss, and it reads as a rendering fault rather than as a size choice. So
 `sm` resolves to `default`'s 32, fields follow the button (they are stacked in
 every form, which is where the mismatch is unmissable), chips match, and the
-segmented track is 32 OUTSIDE with 28px pills and a 2px inset — so the outer
-control stands at the height of the buttons either side of it.
+and the period pills are 32 themselves — there is no track around them any
+more, so each one carries the height that the groove used to.
 
 **16px inside every card, including the metric tile.** It ran `p-5`; one tile
 padded four pixels wider than every other card on the same board is the
@@ -361,14 +371,14 @@ A bar is not a filled object in §2's sense — it is a **shape read by its edge
 against the card it sits on**, with no ink of its own to carry the contrast. That
 argument forced the series onto the marker when the brand was yellow (1.55:1
 against the marker's 4.41:1); it is satisfied either way now, since both steps of
-the green ramp clear 8:1 on a card. The series stays `--marker` because a series
+the blue ramp clear 8:1 on a card. The series stays `--marker` because a series
 is a MARK, and the fill step is reserved for things you press.
 
-**`TargetBar` is the exception, and it is the success/brand collision landing.**
-It drew "met" in `--success` and "in progress" in `--marker`, which are the same
-green today — so it rendered both states identically and stopped reporting the
-only thing it exists to report. The unmet meter is **greyscale** now and colour
-ARRIVES when the goal lands. A bar at 40% is not good, it is 40%.
+**`TargetBar` drew two states in one colour**, back when success WAS the brand:
+"met" in `--success` and "in progress" in `--marker` rendered identically, so it
+stopped reporting the only thing it exists to report. The two are different
+colours again, but the fix stands on its own: the unmet meter is **greyscale**
+and colour ARRIVES when the goal lands. A bar at 40% is not good, it is 40%.
 
 **A number alone is half a fact.** Where a comparison exists, tiles show a
 `Delta` beside the value — but only a real one: "Today" reads against the
@@ -466,7 +476,7 @@ compiles, matches nothing, and this rule stops the dead spelling accumulating.
 the build on `text-primary`, `border-primary`, `ring-primary` and their kin,
 because those classes point at a live token — they COMPILE, the build passes,
 and the link renders at 1.55:1 on white. It was the best rule in the file and
-its measurement is gone: the green is 9.83:1 as a stroke on every surface in the
+its measurement is gone: the blue is 9.20:1 as a stroke on every surface in the
 product. `black-as-primary` banned `bg-neutral-900` as a near-black frozen at
 one exposure; there is one exposure, and that value is now the CONTROL surface
 every select legitimately names. `retired accent-yellow` is folded into

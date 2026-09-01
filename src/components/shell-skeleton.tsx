@@ -63,7 +63,7 @@ export function ShellSkeleton({
           luminance is a rule doing nothing.
 
           THE BORDER IS BACK, AND IT IS NOW LOAD-BEARING RATHER THAN DECORATIVE.
-          The rail and the page are the same #0f1011, so `border-r` is the only
+          The rail and the page are the same #1b191a, so `border-r` is the only
           thing that says where the column ends. Mirroring it is not tidiness:
           the rule occupies a pixel of the 48px footprint, and a skeleton
           without it shifts every route's content column 1px sideways at
@@ -105,7 +105,7 @@ export function ShellSkeleton({
             is a mirror too: without it the skeleton is a white sheet where the
             app's working surface will be — and it is `bg-background`, the role
             AppFrame paints for every route, not the builder's `canvas-bg`.
-            Those two are no longer even close: the page is #0f1011 and the
+            Those two are no longer even close: the page is #1b191a and the
             canvas is frozen at #1b191a for this pass, so a skeleton borrowing
             the builder's spelling would flash six counts off the real page. */}
         <div className="flex-1 overflow-y-auto bg-background">

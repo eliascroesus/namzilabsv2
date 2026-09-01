@@ -65,7 +65,7 @@ export const metadata = { title: "Namzilabs — UI kit" };
  * indigo hexes — a kit page confidently lying about the kit.
  */
 /**
- * THE BRAND RAMP IS ONE GREEN, AND IT NO LONGER NEEDS A SECOND COLOUR BESIDE
+ * THE BRAND RAMP IS ONE BLUE, AND IT NO LONGER NEEDS A SECOND COLOUR BESIDE
  * IT.
  *
  * This table used to be printed next to a violet one, because the two were the
@@ -74,7 +74,7 @@ export const metadata = { title: "Namzilabs — UI kit" };
  * a stroke on white and 11.24:1 as a fill. The brand could only ever safely do
  * one of the two jobs.
  *
- * On #0f1011 the green is 9.83:1 as a stroke and 7.70:1 as a fill under
+ * On #1b191a the blue is 9.20:1 as a stroke and 8.08:1 as a fill under
  * near-black ink. Both clear their bar, so 500 DRAWS and 600 FILLS as two steps
  * of one ramp rather than as two colours covering for each other.
  *
@@ -84,14 +84,14 @@ export const metadata = { title: "Namzilabs — UI kit" };
  * lighter.
  */
 const BRAND: Array<{ step: string; cls: string; hex: string }> = [
-  { step: "50", cls: "bg-brand-50", hex: "#e6fbf3" },
-  { step: "100", cls: "bg-brand-100", hex: "#b8f4de" },
-  { step: "200", cls: "bg-brand-200", hex: "#7aeac4" },
-  { step: "300", cls: "bg-brand-300", hex: "#3ce0aa" },
-  { step: "400", cls: "bg-brand-400", hex: "#19d99c" },
-  { step: "500", cls: "bg-brand-500", hex: "#00d492" },
-  { step: "600", cls: "bg-brand-600", hex: "#00bc7d" },
-  { step: "700", cls: "bg-brand-700", hex: "#00a46d" },
+  { step: "50", cls: "bg-brand-50", hex: "#e0f7fd" },
+  { step: "100", cls: "bg-brand-100", hex: "#b5ecfa" },
+  { step: "200", cls: "bg-brand-200", hex: "#7fdff6" },
+  { step: "300", cls: "bg-brand-300", hex: "#45d2f2" },
+  { step: "400", cls: "bg-brand-400", hex: "#1ac9ed" },
+  { step: "500", cls: "bg-brand-500", hex: "#00cdf5" },
+  { step: "600", cls: "bg-brand-600", hex: "#00c0e8" },
+  { step: "700", cls: "bg-brand-700", hex: "#00a6c9" },
 ];
 /**
  * THE SURFACE HALF of the neutral ramp — the five steps the interface is built
@@ -100,7 +100,7 @@ const BRAND: Array<{ step: string; cls: string; hex: string }> = [
  *
  * 950 is the GROUND, and the rail, the top bar and the page are all of it: one
  * colour, with a 1px 600 hairline doing every separation in the product. 800 is
- * a CARD, which is a 1.11:1 step off the ground — a step you can measure and
+ * a CARD, which is a 1.14:1 step off the ground — a step you can measure and
  * not one you can see, which is why a card without its border is an invisible
  * card rather than a flat one. 900 is a CONTROL, one step DOWN from a card, so
  * a select reads as a recessed slot rather than a raised chip. 700 is RAISED —
@@ -108,26 +108,26 @@ const BRAND: Array<{ step: string; cls: string; hex: string }> = [
  * switch track owes.
  */
 const SURFACE: Array<{ step: string; cls: string; hex: string }> = [
-  { step: "950", cls: "bg-neutral-950", hex: "#0f1011" },
-  { step: "900", cls: "bg-neutral-900", hex: "#141518" },
-  { step: "800", cls: "bg-neutral-800", hex: "#1a1b1e" },
-  { step: "700", cls: "bg-neutral-700", hex: "#222325" },
-  { step: "600", cls: "bg-neutral-600", hex: "#2b2d2f" },
-  { step: "500", cls: "bg-neutral-500", hex: "#3a3d40" },
+  { step: "950", cls: "bg-neutral-950", hex: "#1b191a" },
+  { step: "900", cls: "bg-neutral-900", hex: "#211f20" },
+  { step: "800", cls: "bg-neutral-800", hex: "#272426" },
+  { step: "700", cls: "bg-neutral-700", hex: "#332f31" },
+  { step: "600", cls: "bg-neutral-600", hex: "#3d393b" },
+  { step: "500", cls: "bg-neutral-500", hex: "#4d494b" },
 ];
 /**
  * THE INK HALF — four values, and the count is the point.
  *
  * The reference this interface is drawn from ships SEVEN greys for text:
- * #ffffff, #dcdcdc, #e5e7eb, #a1a1a1, #9ca3af, #99a1af and #6a7282. Three of
+ * #ffffff, #e8e6e7, #e5e7eb, #a1a1a1, #b0a9ae, #99a1af and #6a7282. Three of
  * those are within three counts of each other. That is the same failure the
  * type scale was closed to prevent — twelve names over nine sizes — arriving in
  * the colour layer, and it collapses here to one value per job.
  *
  * 400 IS NOT THE REFERENCE'S #6a7282, and this is the one measurement in the
- * kit that overrules the source outright: that value is 3.56:1 on the #1a1b1e
+ * kit that overrules the source outright: that value is 3.56:1 on the #272426
  * card the reference sets its own empty-state copy on, against the 4.5:1 body
- * text owes. Raised four steps in the same hue to 4.63:1.
+ * text owes. Raised four steps in the same hue to 4.75:1.
  *
  * There is a deliberate GAP between this half and the surface half above. 500
  * is the last step a LINE may be drawn in and 400 the first that TEXT may be
@@ -135,10 +135,10 @@ const SURFACE: Array<{ step: string; cls: string; hex: string }> = [
  * copy are not the same value, and the product had been pretending they were.
  */
 const INK: Array<{ step: string; cls: string; hex: string }> = [
-  { step: "400", cls: "bg-neutral-400", hex: "#7d8593" },
-  { step: "300", cls: "bg-neutral-300", hex: "#9ca3af" },
-  { step: "200", cls: "bg-neutral-200", hex: "#dcdcdc" },
-  { step: "100", cls: "bg-neutral-100", hex: "#ebebeb" },
+  { step: "400", cls: "bg-neutral-400", hex: "#948d93" },
+  { step: "300", cls: "bg-neutral-300", hex: "#b0a9ae" },
+  { step: "200", cls: "bg-neutral-200", hex: "#e8e6e7" },
+  { step: "100", cls: "bg-neutral-100", hex: "#eceaeb" },
   { step: "50", cls: "bg-neutral-50", hex: "#fafafa" },
 ];
 /**
@@ -155,15 +155,15 @@ const DIRECTION: Array<{ rule: string; why: string }> = [
   },
   {
     rule: "One surface, and a hairline",
-    why: "The rail, the top bar and the page are ALL #0F1011, and every separation in the product is a 1px #2B2D2F rule. This is the reverse of the band that wrapped a light page, and the reversal is the whole re-theme: with one material there is no 40-point luminance step to find its own edge, so the hairline stops being trim and becomes the structure. A card is #1A1B1E — a 1.11:1 step — so a card without its border is not a flatter card, it is an invisible one.",
+    why: "The rail, the top bar and the page are ALL #1B191A, and every separation in the product is a 1px #3D393B rule. This is the reverse of the band that wrapped a light page, and the reversal is the whole re-theme: with one material there is no 40-point luminance step to find its own edge, so the hairline stops being trim and becomes the structure. A card is #272426 — a 1.14:1 step — so a card without its border is not a flatter card, it is an invisible one.",
   },
   {
     rule: "Content floats on the ground",
-    why: "Nothing sits flat on the page but a heading or a caption. Everything with content in it is an island with an EDGE, and the edge is the whole of it: a card is a 1.11:1 step off the page, so the border is not trim on a surface you can already see, it is the only thing making the surface visible at all.",
+    why: "Nothing sits flat on the page but a heading or a caption. Everything with content in it is an island with an EDGE, and the edge is the whole of it: a card is a 1.14:1 step off the page, so the border is not trim on a surface you can already see, it is the only thing making the surface visible at all.",
   },
   {
-    rule: "One green, in three shapes",
-    why: "The fill/stroke split existed because #EECF00 is 1.55:1 as a stroke on white and 11.24:1 as a fill — an absent line and a superb box, so the brand could only safely do one of the two jobs and a second colour had to hold the other. On #0F1011 the green is 9.83:1 drawn and 7.70:1 filled, so the split has nothing left to prevent and yellow-as-stroke retires with it. What replaces it is a rule about SHAPE, all three visible at once in the rail: a RING is identity (the mark), a GLYPH is location (the active row), a FILL is action (the +, every primary button). Green is also success now — warn and danger are the only separate state hues — and what stops that becoming a wall of green is that status is quiet when fine.",
+    rule: "One blue, in three shapes",
+    why: "The fill/stroke split existed because #EECF00 is 1.55:1 as a stroke on white and 11.24:1 as a fill — an absent line and a superb box, so the brand could only safely do one of the two jobs and a second colour had to hold the other. On #1B191A the blue is 9.20:1 drawn and 8.08:1 filled, so the split has nothing left to prevent and yellow-as-stroke retires with it. What replaces it is a rule about SHAPE, all three visible at once in the rail: a RING is identity (the mark), a GLYPH is location (the active row), a FILL is action (the +, every primary button). Success is NOT the brand: it kept the green the brand vacated, because a DONE badge and a New-flow button being one colour would put the loudest state and the loudest act in one vocabulary. Warn and danger are the other two state hues, and what stops any of them becoming wallpaper is that status is quiet when fine.",
   },
   {
     rule: "Ten contains, eight presses",
@@ -331,7 +331,7 @@ export default function DesignPage() {
               the one thing the brand could not be — #eecf00 measures 1.55:1 on
               a light sheet, so a caps label in it was unreadable on the one
               page whose entire job is to be read, and `--marker-ink` existed to
-              carry exactly this case. The green is 9.83:1 here. */}
+              carry exactly this case. The blue is 9.20:1 here. */}
           <p className="text-xs font-semibold uppercase tracking-widest text-marker">Brand kit</p>
           {/* THE TOGGLE IS GONE, along with the theme it toggled. It belonged on
               this page more than anywhere else while half the kit was role
@@ -376,7 +376,7 @@ export default function DesignPage() {
 
         <Section
           title="Brand sheet"
-          note="The supplied sheets, rendered from the shipping components rather than drawn. Kept as the historical record of a language this kit no longer speaks: deep black doing the work, a yellow carrying the act, a violet drawing every line, and everything shaped as a full pill. What survived the re-theme is the argument rather than the palette — the workhorse is quiet and colour arrives only where it means something, which is now one green in three shapes on a single near-black surface."
+          note="The supplied sheets, rendered from the shipping components rather than drawn. Kept as the historical record of a language this kit no longer speaks: deep black doing the work, a yellow carrying the act, a violet drawing every line, and everything shaped as a full pill. What survived the re-theme is the argument rather than the palette — the workhorse is quiet and colour arrives only where it means something, which is now one blue in three shapes on a single near-black surface."
         >
           <BrandSheet />
         </Section>
@@ -714,7 +714,7 @@ export default function DesignPage() {
 
         <Section
           title="Rail"
-          note="A 48px icon column in the SAME #0F1011 as the page beside it, separated by one hairline. These tiles are a swatch — the real markup lives in src/components/sidebar.tsx and nowhere else, and it has moved on from what is drawn here: the active row is a green GLYPH on a raised chip rather than a filled brand square, because the fill is spent once in this column and it is spent on the + in the foot, which is the one verb."
+          note="A 48px icon column in the SAME #1B191A as the page beside it, separated by one hairline. These tiles are a swatch — the real markup lives in src/components/sidebar.tsx and nowhere else, and it has moved on from what is drawn here: the active row is a brand GLYPH on a raised chip rather than a filled brand square, because the fill is spent once in this column and it is spent on the + in the foot, which is the one verb."
         >
           <div className="flex items-stretch gap-4">
             {/* `bg-background`, the band's own token, rather than `bg-rail`: that
@@ -751,7 +751,7 @@ export default function DesignPage() {
               </p>
               <p>
                 REST IS NOTHING AT ALL. Every chip but one is a bare white glyph — on this charcoal a 16px white mark
-                measures 12.9:1, so it does not need a plate to be found, and seven pale squares down a 70px column were
+                measures 14.08:1, so it does not need a plate to be found, and seven pale squares down a 70px column were
                 the loudest thing in the chrome. Hover raises to <code className="font-mono text-foreground">ink-900</code>{" "}
                 and ACTIVE is the brand, filled, at 8.77:1 on the band — one yellow chip in the column, which is why the
                 other six do not have to compete to be seen.
@@ -762,7 +762,7 @@ export default function DesignPage() {
 
         <Section
           title="Frame"
-          note="THE NOTCH IS GONE AND --radius-frame IS 0. It cut 16px out of the page's top-left so the band's charcoal showed through — the one corner where the page met both halves of the band at once. A radius reveals whatever is BEHIND the element it is cut into, and the thing behind the page is now the same #0F1011 as the page: cutting a corner out of it to reveal it draws nothing, at the cost of a curved notch the top bar's hairline then has to stop short of. What frames the application now is the pair of rules, not a shape."
+          note="THE NOTCH IS GONE AND --radius-frame IS 0. It cut 16px out of the page's top-left so the band's charcoal showed through — the one corner where the page met both halves of the band at once. A radius reveals whatever is BEHIND the element it is cut into, and the thing behind the page is now the same #1B191A as the page: cutting a corner out of it to reveal it draws nothing, at the cost of a curved notch the top bar's hairline then has to stop short of. What frames the application now is the pair of rules, not a shape."
         >
           <div className="flex h-40 overflow-hidden rounded-card bg-background">
             <div className="w-[100px] shrink-0" />
@@ -778,7 +778,7 @@ export default function DesignPage() {
 
         <Section
           title="Marks"
-          note="What a dashboard tile is made of. The series is the MARKER — a series is a mark, and the fill step is reserved for things you press — the last bucket takes the ink (a positional fact, not a verdict), and a breakdown walks the marker plus the accent three. TargetBar is the exception and it is the success/brand collision landing: it drew met in --success and in-progress in --marker, which are the same green today, so it rendered both states identically and stopped reporting the only thing it exists to report. The unmet meter is greyscale now and colour ARRIVES when the goal lands, which is the honest reading anyway — a bar at 40% is not good, it is 40%. Every value goes through formatMetricValue, so the tooltip and the headline say the same quantity the same way. A delta is never green or red: up is good for Booked Leads and bad for Speed to Lead, and nothing on a tile knows which — so it is coloured by WHETHER it moved, and the arrow alone carries direction."
+          note="What a dashboard tile is made of. The series is the MARKER — a series is a mark, and the fill step is reserved for things you press — the last bucket takes the ink (a positional fact, not a verdict), and a breakdown walks the marker plus the accent three. TargetBar drew met in --success and in-progress in --marker, which were the same green while success WAS the brand — so it rendered both states identically and stopped reporting the only thing it exists to report. That collision is gone (the brand is cyan, success is green), but the fix outlived it on its own merits: the unmet meter is greyscale and colour ARRIVES when the goal lands, which is the honest reading anyway — a bar at 40% is not good, it is 40%. Every value goes through formatMetricValue, so the tooltip and the headline say the same quantity the same way. A delta is never green or red: up is good for Booked Leads and bad for Speed to Lead, and nothing on a tile knows which — so it is coloured by WHETHER it moved, and the arrow alone carries direction."
         >
           <div className="grid gap-4 rounded-card bg-canvas-bg p-4 sm:grid-cols-2">
             <div className="rounded-surface border border-border bg-card p-5 shadow-card">

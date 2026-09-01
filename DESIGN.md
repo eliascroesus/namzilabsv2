@@ -4,10 +4,10 @@ tagline: Six tools disagree; this one answers in a figure you can defend.
 register: quiet chrome, loud numbers
 surfaces: [ground (rail + top bar + page), card, control, raised, floating]
 themes: dark (the console) + light · per device · defaults to the OS
-accent: one green · 500 draws on dark, 900 on light · 600 fills on both
-neutral: one ramp, cut for #0F1011 — five surfaces below, four inks above
+accent: one blue (#00C0E8) · 500 draws on dark, 900 on light · 600 fills on both
+neutral: one ramp, cut for #1B191A — five surfaces below, four inks above
 type: SF Pro (system) / Inter · 11 · 13 · 15 · 17 · 18 · 20 · 26 · 36 · 48
-radius: 4 badge · 8 control · 10 everything that contains something · full avatar
+radius: 4 badge · 8 field · 10 everything that contains something · full button, chip and avatar
 status: chrome, furniture and primitives SETTLED · metric card and chart card IN PROGRESS
 ---
 
@@ -41,10 +41,10 @@ Furniture that shouts is why most operational tools are exhausting by 4pm.
 
 ## 2. One surface, and the hairline that is now structural
 
-The product's identity is **a single near-black surface** — `#0F1011` — carrying
+The product's identity is **a single near-black surface** — `#1B191A` — carrying
 a 56px icon rail down the left, a 60px bar across the top, and the page inside
 them. All three are the same colour. **Every separation in the product is a 1px
-`#2B2D2F` rule and nothing else.**
+`#3D393B` rule and nothing else.**
 
 This is the reverse of what shipped before, and the reversal is the whole
 re-theme. The product used to be a `#2E2E2E` **band** wrapping a `#F5F5F5` page,
@@ -58,18 +58,18 @@ inverts completely the moment the two materials become one:
   which is why `ShellSkeleton` mirrors both — a ghost without them jumps the
   content 1px sideways and 1px down at hydration.
 - **The notch is gone.** `--radius-frame` cut 16px out of the page's top-left so
-  the band's charcoal showed through. Cutting a corner out of `#0F1011` to reveal
-  `#0F1011` draws nothing, so the class went and the token is 0.
+  the band's charcoal showed through. Cutting a corner out of `#1B191A` to reveal
+  `#1B191A` draws nothing, so the class went and the token is 0.
 - **The rail's glyphs sit on nothing.** They wore a chip because a bare icon on
-  near-black was a smudge; at 12.9:1 on this ground a chip is a surface step
+  near-black was a smudge; at 14.08:1 on this ground a chip is a surface step
   away from a surface that is already there.
 - **There is one focus ring.** `focus-ring-light` was a sanctioned white twin,
   because the product's violet ring was invisible on the one dark surface in a
-  light app. Every surface is that surface now, and the ring is green at 9.83:1
+  light app. Every surface is that surface now, and the ring is blue at 9.20:1
   on all of them.
 
-**Cards step UP, not down.** `--card` is `#1A1B1E` on a `#0F1011` page: a
-**1.11:1** step, which exists in the numbers and not in the eye. A card without
+**Cards step UP, not down.** `--card` is `#272426` on a `#1B191A` page: a
+**1.14:1** step, which exists in the numbers and not in the eye. A card without
 its border is not a flatter card, it is an invisible one. That is the single
 most important consequence in this file, and it is why `border border-border` is
 in the base of the Card primitive rather than in any of its variants.
@@ -91,12 +91,12 @@ deliberate gap between the halves.
 
 | | | |
 |---|---|---|
-| `neutral-950` | `#0F1011` | **the ground** — rail, top bar and page |
-| `neutral-900` | `#141518` | **a control** — selects, inputs, the period track |
-| `neutral-800` | `#1A1B1E` | **a card** — and popovers |
-| `neutral-700` | `#222325` | **raised** — hover, a menu row, the toast |
-| `neutral-600` | `#2B2D2F` | **the hairline** |
-| `neutral-500` | `#3A3D40` | the heavier rule a switch track or checkbox owes |
+| `neutral-950` | `#1B191A` | **the ground** — rail, top bar and page |
+| `neutral-900` | `#211F20` | **a control** — selects, inputs, the period track |
+| `neutral-800` | `#272426` | **a card** — and popovers |
+| `neutral-700` | `#332F31` | **raised** — hover, a menu row, the toast |
+| `neutral-600` | `#3D393B` | **the hairline** |
+| `neutral-500` | `#4D494B` | the heavier rule a switch track or checkbox owes |
 
 **A control recesses; a hover raises.** That is the one thing to hold on to. A
 select on a card is a slot cut into it, which is what makes a row of fields read
@@ -110,7 +110,7 @@ itself. Muted recesses, accent raises, and they may never collapse again.
 
 ---
 
-## 4. One green, in three shapes
+## 4. One blue, in three shapes
 
 The kit ran **"yellow FILLS, violet DRAWS"** for one reason, and it is worth
 recording because the reason is now gone rather than forgotten. `#EECF00`
@@ -120,13 +120,13 @@ and a superb box — so the brand could only ever safely do one of the two jobs,
 second colour had to hold the other, and `check-ui.ts` needed a rule to stop
 them swapping places.
 
-On `#0F1011`:
+On `#1B191A`:
 
-| | as a **stroke / text** | as a **fill**, ink `#0F1011` |
+| | as a **stroke / text** | as a **fill**, ink `#1B191A` |
 |---|---|---|
-| `#00D492` on the ground | **9.83:1** | — |
-| `#00D492` on a card | **8.88:1** | — |
-| `#00BC7D` | — | **7.70:1** |
+| `#00CDF5` on the ground | **9.20:1** | — |
+| `#00CDF5` on a card | **8.49:1** | — |
+| `#00C0E8` | — | **8.08:1** |
 
 Both columns clear their bar with room, so the split has nothing left to
 prevent. `--primary` fills and `--marker` draws, and they are **two steps of one
@@ -150,26 +150,39 @@ page the brand had to *darken* under the pointer, because brightening a yellow
 moves it toward the white behind it and the label's contrast fell at the moment
 of the press. On near-black, raised means lighter.
 
-### The collision, stated plainly
+### The collision that used to be here, and why it is gone
 
-**Green is the brand and green is success.** The old rule — "state is a separate
-vocabulary and never borrows from these" — cannot survive that, and patching it
-would mean a success green four counts from `#00D492`: indistinguishable on
-screen, guaranteed to drift, and exactly the near-miss the kit exists to stop.
+This section used to argue the opposite of what it argues now, and the reversal
+is instructive rather than embarrassing.
 
-So it is replaced: **green means good-or-brand; warn and danger are the only
-separate state hues.** What stops the console becoming a wall of green is the
-half of the old rule that was doing the real work anyway — **status is quiet
-when fine.** A healthy thing carries a 6px dot; only a thing that needs
-something wears a full pill. A board where every card shows a green badge is
-furniture reporting no news, and it buries the one card that matters.
+While the brand was green, **success and the brand were the same colour** and
+the kit conceded it: a success green four counts from the brand green would have
+been indistinguishable on screen and guaranteed to drift, so the rule became
+"green means good-or-brand" and state gave up its own vocabulary.
 
-One component paid for this and is worth knowing about: `TargetBar` drew "goal
-met" in `--success` and "in progress" in `--marker`, which was a real
-distinction while the marker was violet and is two identical greens today. It
-now draws the unmet meter in **greyscale** and lets colour *arrive* when the
-goal lands — which is also the honest reading of "green means good", since a bar
-at 40% is not good, it is 40%.
+That concession was conditional on a hue, and the hue changed. **The brand is
+cyan; success keeps the green the brand vacated.** Restoring the split is not a
+reversal of the reasoning but the same reasoning under new facts — and the new
+facts make the collision actively wrong, because a DONE badge and a New-flow
+button sharing one colour puts the loudest *state* and the loudest *act* in one
+vocabulary. Warn and danger are the other two state hues.
+
+The green is not a fresh cut. It is `#00D492` / `#00734B`, the exact ramp the
+brand vacated, which was solved for this interface and still measures: **9.02:1**
+on the ground, **7.93:1** on a card, **5.91:1** on white.
+
+What survives untouched is the half of the rule that was doing the real work —
+**status is quiet when fine.** A healthy thing carries a 6px dot; only a thing
+that needs something wears a full pill. A board where every card shows a green
+badge is furniture reporting no news, and it buries the one card that matters.
+
+`TargetBar` is the component that paid for the collision: it drew "goal met" in
+`--success` and "in progress" in `--marker`, which was a real distinction while
+the marker was violet and became two identical greens. Those two are different
+colours again — but the fix outlived the bug on its own merits. It draws the
+unmet meter in **greyscale** and lets colour *arrive* when the goal lands, which
+is the honest reading regardless of palette: a bar at 40% is not good, it is
+40%.
 
 ---
 
@@ -180,15 +193,28 @@ selects, the period track, tables. The kit ran three container radii — 8, 10 a
 16 — so a panel, a card and a tile were three different objects on one screen
 and nothing said which was which. The reference draws exactly one.
 
-**Everything pressable is 8px.** This replaces "everything pressable is a full
-pill", and the pill is not missed: a capsule is now the shape of nothing else in
-the product, and the rule needed an exception it could never justify — a control
-that WRAPS cannot be a pill, because a full radius on a two-line box renders as
-a circle around the words. There is no exception now.
+**Everything you press is a full pill; everything you type in is 8px.** This
+has now moved twice, and what decides it is the SHEET rather than a principle:
+the previous reference drew its buttons, badges and selects all as rounded
+rectangles, and a capsule among them read as borrowed. The current one pills
+every pressable thing — "New flow", "Refresh all", "Invite members", the lit
+period chip, the notification bell — while leaving cards and fields square-ish.
 
-**A badge is 4px.** **An avatar and a status dot are the only full radii left.**
+The pill lives on `buttonVariants`, **not** on `--radius-control`. That token was
+`9999px` for one commit once and fifty-one files inherited it, so every text
+field, menu row and small panel went capsule-shaped. The token stays at 8px and
+holds the fields; the button carries its own shape.
 
-**Hairlines carry structure; shadows barely exist.** On `#0F1011` a black shadow
+The one exception the pill needs is real and still handled: a control that WRAPS
+cannot be a pill, because a full radius on a two-line box is half its height and
+renders as a circle around the words. Such a call site passes `rounded-control`
+and now genuinely wins, because `cn()` was taught the kit's radius names — the
+last time buttons were pills, that override was silently dropped and the page
+title rendered inside a grey circle.
+
+**A badge is 4px.** **A card is 10px.**
+
+**Hairlines carry structure; shadows barely exist.** On `#1B191A` a black shadow
 at 10% moves about one count. The elevation ladder keeps its rungs so vendored
 components compile, but only two are ever chosen on purpose — `card` for
 anything in the page flow and `pop` for anything floating over it — and the
@@ -248,17 +274,18 @@ exemption. Both Figma exports set small numerals and chrome labels at 700;
   active tab takes a 2px green rule **and** goes white while the others stay
   muted. It has held three colours and only this one carries the state alone:
   the green it started as measured 1.78:1 on the light ground, the violet that
-  replaced it managed 4.41:1, and this is 9.83:1. The white label is what the
+  replaced it managed 4.41:1, and this is 9.20:1. The white label is what the
   other two could not afford — with the rule legible on its own, the label is
   free to say SELECTED rather than LINKED, which is what a coloured word says.
-- **Period track** — six mutually exclusive windows in a segmented group, 32px
-  outside with the segments filling it edge to edge. It held 28px pills inside a
-  2px inset, which is the classic segmented shape and the wrong one beside a
-  button: the group measured a button's height and every option in it measured
-  less, so the thing you actually press was the shorter object in the row. It used to be the one control that
-  followed the PAGE rather than the band, with three tokens of its own, because
-  a near-black pill group on a light page was a second dark object competing
-  with the chrome. There is one surface; a control is `--control`.
+- **Period row** — six mutually exclusive windows as free-standing 32px pills
+  with no track around them. It was a bordered `--control` groove with square
+  segments filling it edge to edge, which is the classic segmented control and
+  is not what the sheet draws: the six labels sit directly on the page and the
+  selected one is a filled capsule in the brand. That suits what the control
+  IS — six links setting one query parameter — and it takes a third bordered
+  object off a header that already carries a title and two buttons. The height
+  moved from the track to the segment, because with nothing to fill, a pill has
+  to carry its own 32.
 - **Group column** — a tinted lane with a 4px accent bar, a name badge in its own
   hue, and a count. The tint is 6% so a card on it still reads as an object; the
   1px inset ring at 14% is what turns a wash into a panel.
@@ -299,8 +326,8 @@ exemption. Both Figma exports set small numerals and chrome labels at 700;
 - **Every interactive element has five states.** No exceptions, including icon
   buttons, tabs and nav.
 - **Colour never carries state alone.** The reference draws its active nav row as
-  a green glyph and nothing else, which is invisible to a red-green colour-blind
-  reader looking at six otherwise identical icons. Ours takes the green *and* a
+  a brand-coloured glyph and nothing else, which is invisible to a colour-blind
+  reader looking at six otherwise identical icons. Ours takes the colour *and* a
   raised chip. This is the same class of correction as §9's contrast floor, and
   it is the second place the kit deliberately overrules its own source.
 - **Nothing destructive fires on first click.**
@@ -329,9 +356,9 @@ character:
   answer.
 - **Heat is magnitude, never judgement.**
 - **The kit measures its own source.** The reference's dimmest ink is `#6A7282`,
-  and it sets its empty-state copy in it: **3.56:1** on its own `#1A1B1E` card,
-  against the 4.5:1 body text owes. Ours is `#7D8593` — four steps up, same hue,
-  4.63:1. Copying a value because it came from the comp is how a design system
+  and it sets its empty-state copy in it: **3.56:1** on its own `#272426` card,
+  against the 4.5:1 body text owes. Ours is `#948D93` — four steps up, same hue,
+  4.75:1. Copying a value because it came from the comp is how a design system
   inherits somebody else's bug.
 
 ---
@@ -349,7 +376,7 @@ own controls, and how a mark fills a tall tile.
 
 **The builder's canvas.** Out of scope for this pass by instruction. One visible
 consequence: `--canvas-bg` keeps its previous value `#1B191A` rather than moving
-to `#0F1011`, so the canvas sits six counts off the chrome around it. That is a
+to `#1B191A`, so the canvas sits six counts off the chrome around it. That is a
 known seam, not an oversight. The builder's *chrome* — its toolbar, config panel
 and modals — follows the primitives and so inherits the new control ladder
 without having been redesigned.

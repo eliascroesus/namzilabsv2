@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
  *
  * On the old #f5f5f5 ground a card was a WHITE box: the fill did the work and
  * the hairline only tidied its edge, so a card that lost its border was a
- * slightly softer card. Here `--card` is #1a1b1e on a #0f1011 page, which is a
+ * slightly softer card. Here `--card` is #272426 on a #1b191a page, which is a
  * step of 1.11:1 — a difference that exists in the numbers and not in the eye.
  * A card without its border is not a flatter card, it is an invisible one.
  *

@@ -49,7 +49,7 @@ import { cn } from "@/lib/utils";
  *
  * ONE GREEN, IN THREE SHAPES. The kit ran "yellow FILLS, violet DRAWS" because
  * #eecf00 is 1.55:1 as a line on white — it could not be both. On this ground
- * the green is 9.83:1 as a stroke and 7.70:1 as a fill, so the bar spends it as
+ * the green is 9.20:1 as a stroke and 8.08:1 as a fill, so the bar spends it as
  * a FILL on the hero pill and the unread badge, as a STROKE on the setup ring's
  * arc, and as INK on nothing here at all. The workspace avatar is neutral: it
  * was the one place the marker was allowed to be a fill, because identity is
@@ -198,7 +198,7 @@ export function TopBar({
        UP. It was removed, correctly, when the bar was charcoal: below it was
        the ground at #f5f5f5, so the seam was a 40-point luminance step between
        two different materials, and a rule drawn where two different materials
-       already meet is a rule doing nothing. Below it now is #0f1011 — the same
+       already meet is a rule doing nothing. Below it now is #1b191a — the same
        colour as the bar itself — so without `border-b` there is no seam at all
        and the chrome bleeds into the page. This is the inversion at the centre
        of the re-theme, in one class.
@@ -307,7 +307,7 @@ export function TopBar({
                 THE RING IT TAKES IS THE PRODUCT'S OWN. This carried
                 `focus-ring-light` — a sanctioned white twin — because `--ring`
                 was violet and invisible against a charcoal band. `--ring` is
-                the brand green at 9.83:1 on this exact surface now, so the twin
+                the brand green at 9.20:1 on this exact surface now, so the twin
                 is retired and the global rule in globals.css already selects
                 `[tabindex]`: the outline lands without this element spelling
                 one. */}
@@ -350,7 +350,7 @@ export function TopBar({
                              surface in the product where the brand could be
                              drawn rather than filled was this one.
                              There is no exemption left to take: `--marker` is
-                             #00d492 at 9.83:1 on this ground and on every other
+                             #00cdf5 at 9.20:1 on this ground and on every other
                              surface in the app, and it is what every line in
                              the product is drawn in. A ring that fills as you
                              build the thing the product is for is still exactly

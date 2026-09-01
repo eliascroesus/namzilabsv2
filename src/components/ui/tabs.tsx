@@ -120,14 +120,14 @@ function TabsTrigger({
         // every other control in the product — the exact drift that rule
         // exists to end.
         "relative inline-flex h-full flex-1 items-center justify-center gap-1.5 rounded-control border border-transparent px-2.5 py-1 text-sm font-medium whitespace-nowrap text-muted-foreground transition-colors duration-(--duration-fast) group-data-[orientation=vertical]/tabs:w-full group-data-[orientation=vertical]/tabs:justify-start hover:text-foreground disabled:pointer-events-none disabled:opacity-50 group-data-[variant=default]/tabs-list:data-[state=active]:shadow-xs group-data-[variant=line]/tabs-list:data-[state=active]:shadow-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
-        // ACTIVE, segmented: the brand fill. #0f1011 on #00bc7d is 7.70:1,
+        // ACTIVE, segmented: the brand fill. #1b191a on #00c0e8 is 8.08:1,
         // comfortably past AA for the label it carries.
         "data-[state=active]:bg-primary data-[state=active]:font-medium data-[state=active]:text-primary-foreground",
         // ACTIVE, line: no fill, and the label goes WHITE rather than green.
         //
         // It was the marker's ink step, because a 2px violet rule at 4.41:1
         // could not carry the state on its own and the coloured word was
-        // helping it. The rule is green at 9.83:1 now and carries it alone, so
+        // helping it. The rule is green at 9.20:1 now and carries it alone, so
         // the label is free to do what the reference does — step up the ink ramp
         // to white while the four beside it stay muted. That reads as SELECTED
         // rather than as LINKED, which is what a coloured word says.
@@ -142,7 +142,7 @@ function TabsTrigger({
         // 11.24:1 as a fill and 1.42:1 as a line on the ground, so an indicator
         // carrying state was the one thing on the strip you could not see; the
         // violet that fixed it managed 4.41:1. `--marker` is the green now at
-        // 9.83:1, which is the first value this rule has held that is legible
+        // 9.20:1, which is the first value this rule has held that is legible
         // without the weight change beside it doing half the work.
         "after:absolute after:bg-marker after:opacity-0 after:transition-opacity group-data-[orientation=horizontal]/tabs:after:inset-x-0 group-data-[orientation=horizontal]/tabs:after:bottom-[-5px] group-data-[orientation=horizontal]/tabs:after:h-0.5 group-data-[orientation=vertical]/tabs:after:inset-y-0 group-data-[orientation=vertical]/tabs:after:-right-1 group-data-[orientation=vertical]/tabs:after:w-0.5 group-data-[variant=line]/tabs-list:data-[state=active]:after:opacity-100",
         className

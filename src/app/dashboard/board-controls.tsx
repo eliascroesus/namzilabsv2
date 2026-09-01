@@ -498,12 +498,14 @@ export function ViewTab({
        * is a place in a document, so it is a RULE, which every product that has
        * this row agrees on — and a rule is a stroke.
        *
-       * The colour is `--marker`, one value in both themes on purpose,
-       * and the rebrand REPAIRED it rather than merely recolouring it. It was
-       * green #00d492: 9.02:1 on the dark ground but 1.78:1 on the light one,
-       * which the token's own note admitted was well under the 3:1 an indicator
-       * carrying state owes. Strokes are the marker's now, so it measures 4.41:1
-       * light and 6.60:1 dark — see the token's own note. The underline carries
+       * The colour is `--marker`, which is deliberately TWO RUNGS of one ramp
+       * rather than one value: a stroke that reads on near-black is invisible
+       * on white, and this row needs the same rule at both exposures. It is
+       * `brand-500` dark and `brand-900` light, so the underline measures
+       * 9.20:1 on the console and 6.77:1 on the light page — see the token's
+       * own note. Both clear the 3:1 an indicator carrying state owes, which a
+       * single value never did: the old one-value marker was 1.78:1 on the
+       * light ground, and that is the bug the split exists to fix. The underline carries
        * the state on its own at both exposures, and the weight-and-ink change
        * beside it (the active tab is the one set in `--ground-ink` while its
        * neighbours sit muted) is reinforcement rather than the thing holding the

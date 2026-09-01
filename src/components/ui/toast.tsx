@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
  * THE TOAST — promoted from the flow canvas, where it was the only one in
  * the app while settings errors were a red paragraph on a five-second timer.
  *
- * THE LADDER'S RAISED RUNG. `neutral-700` is #222325 — one step above a card,
+ * THE LADDER'S RAISED RUNG. `neutral-700` is #332f31 — one step above a card,
  * which is the same step the rail's hover, a menu row and a table row all take.
  * A floating surface should be the raised thing, not a different material.
  *

@@ -27,7 +27,7 @@ import { viewStrip, type BoardView } from "@/lib/board/types";
  * there is one hairline down the right edge doing the entire job. The glyphs sit
  * directly on the ground at 12.9:1 with no chip, because a chip is a surface
  * step and there is nothing here to step away from. The focus ring is the
- * product's own — green at 9.83:1 on this exact colour, which is the ring the
+ * product's own — green at 9.20:1 on this exact colour, which is the ring the
  * light page provably could not carry.
  *
  * The rail's top block is still exactly the top bar's height, and that is still
@@ -182,7 +182,7 @@ export function WorkspaceChip({ name, className }: { name: string; className?: s
  * covers nothing for someone who can see the screen perfectly well and simply
  * cannot separate those two hues.
  *
- * So the green stays — it is what the reference draws and it is 9.83:1 here —
+ * So the green stays — it is what the reference draws and it is 9.20:1 here —
  * and a `neutral-700` chip goes under it, which is the same raised step the
  * hover already uses. Two signals, one of them not a colour, and the row still
  * looks like the reference's.
@@ -515,7 +515,7 @@ export function Sidebar({
           the only thing that ever differs.
 
           THE HAIRLINE TRAVELS WITH IT, and in a one-surface product it is doing
-          considerably more work than it used to. The rail is the same #0f1011
+          considerably more work than it used to. The rail is the same #1b191a
           as the page beside it, so `border-r` is the ONLY thing that says where
           one ends and the other starts — leaving the rule behind at 48px while
           the panel opened past it would not read as a rail overhanging a page,
@@ -528,7 +528,7 @@ export function Sidebar({
           NO SHADOW, on purpose, and the reason changed with the surface. It
           used to be "this is the BAND, and a band that lifts off the page stops
           being the frame around it". There is no band; the reason now is that a
-          black shadow on #0f1011 is a change of about one count (see the
+          black shadow on #1b191a is a change of about one count (see the
           elevation ladder) and would buy nothing but a class. The hairline is
           the separation. */}
       {/* THE TOGGLE SITS ON THE <aside>, NOT IN THE PANEL, AND THAT IS WHY IT
@@ -660,7 +660,7 @@ export function Sidebar({
           */}
         <nav
           aria-label="Primary"
-          className={cn("quiet-scroll flex min-h-0 flex-1 flex-col gap-0.5 overflow-x-hidden overflow-y-auto pt-3 pb-4", GUTTER)}
+          className={cn("quiet-scroll flex min-h-0 flex-1 flex-col gap-2 overflow-x-hidden overflow-y-auto pt-3 pb-4", GUTTER)}
         >
               {/* THE SEARCH CONTROL OPENS THE COLUMN, which is where all
                   three references (Miro, Figma, Make) put it: the fastest way
@@ -751,7 +751,7 @@ export function Sidebar({
             actually shipped, and dropping it while two themes existed would
             have left the light one reachable only by changing the operating
             system's. There is one theme, so the control has nothing to say. */}
-        <div className={cn("mt-auto flex shrink-0 flex-col gap-0.5 pb-4", GUTTER)}>
+        <div className={cn("mt-auto flex shrink-0 flex-col gap-2 pb-4", GUTTER)}>
           {/* THE "+" IS THE COLUMN'S ONE FILLED OBJECT, AND THAT IS WHY IT CAN
               BE THE ONLY GREEN FILL IN THE RAIL.
               It has been a yellow slab, then a white chip with a hairline, and
@@ -763,7 +763,7 @@ export function Sidebar({
               location, action — rather than three fills competing to be the
               thing you press.
 
-              THE INK IS THE GROUND. `--primary-foreground` is #0f1011 at 7.70:1
+              THE INK IS THE GROUND. `--primary-foreground` is #1b191a at 8.08:1
               on the fill, which is a constant rather than a role: the green does
               not invert and neither may what is written on it.
 

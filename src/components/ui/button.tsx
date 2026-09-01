@@ -44,17 +44,24 @@ const buttonVariants = cva(
   // `transition-colors`, not `transition-all`: `all` animates the outline too,
   // so the focus ring grew into place a beat after the key was pressed.
     //
-  // `rounded-control`, NOT `rounded-full`, AND THE KIT'S SHAPE RULE INVERTED
-  // WITH IT. "Everything pressable is a full pill" was the rule, and it came
-  // from a brand sheet that pilled its buttons and chips. The reference this
-  // interface is now drawn from has no capsule anywhere except an avatar and a
-  // status dot: its buttons are 8px, its badges 4px, its selects and cards
-  // 10px. A pill among them reads as a control borrowed from another product,
-  // and it was also the shape that forced the one exception the old rule
-  // needed — a control that WRAPS cannot be a pill, because a full radius on a
-  // two-line box renders as a circle around the words. There is no exception
-  // now; every pressable thing is a rounded rectangle.
-  "inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-control font-medium transition-colors duration-(--duration-fast) ease-(--ease-standard) disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0",
+  // `rounded-full`, AND THE SHAPE RULE HAS INVERTED BACK. This has now moved
+  // twice, so it is worth being exact about what decides it: the SHEET does.
+  // The 8px rectangle came from a reference whose buttons, badges and selects
+  // were all rounded rectangles, and a pill among them read as borrowed. The
+  // sheet this interface is drawn from now pills every pressable thing —
+  // "New flow", "Refresh all", "Invite members", the lit period chip, the
+  // notification bell — while leaving cards at 10px and fields at 8px. So the
+  // pill comes back HERE, on the button, and not on `--radius-control`: that
+  // token was 9999px for one commit once and 51 files inherited it, which is
+  // how every text field, menu row and small panel went capsule-shaped.
+  //
+  // THE ONE EXCEPTION THE PILL NEEDS IS STILL REAL: a control that WRAPS
+  // cannot be a pill, because a full radius on a two-line box is half its
+  // height and renders as a circle around the words. Such a call site passes
+  // `rounded-control` and now genuinely wins, because `cn()` was taught the
+  // kit's radius names (see lib/utils.ts) — the last time this was a pill, that
+  // override was silently dropped and the page title rendered inside a circle.
+  "inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-full font-medium transition-colors duration-(--duration-fast) ease-(--ease-standard) disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0",
   {
     variants: {
       variant: {

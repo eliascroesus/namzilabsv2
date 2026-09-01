@@ -218,7 +218,7 @@ const RULES: Rule[] = [
    *
    * There is one theme. Nothing inverts, so nothing can be frozen against an
    * exposure that does not exist, and `neutral-900` is no longer a near-black
-   * pretending to be a role — it is #141518, the CONTROL surface, which the
+   * pretending to be a role — it is #211f20, the CONTROL surface, which the
    * period track and every select in the product legitimately name.
    *
    * Keeping the rule would have meant banning the spelling of a surface the kit
@@ -237,8 +237,8 @@ const RULES: Rule[] = [
    * someone looking at that exact hover state on that exact screen. A script
    * was the only thing that could.
    *
-   * The measurement it was built on is gone. `--primary` is #00bc7d and
-   * `--marker` is #00d492, both green, and on #0f1011 the stroke step is 9.83:1
+   * The measurement it was built on is gone. `--primary` is #00c0e8 and
+   * `--marker` is #00cdf5, both cyan, and on #1b191a the stroke step is 9.20:1
    * — past what a line owes AND past what body text owes. The split it enforced
    * has nothing left to keep apart, and the exemption it carried (top-bar.tsx's
    * ring arc, "the one surface where the brand strokes at 8.77:1") is now every
@@ -291,7 +291,7 @@ const RULES: Rule[] = [
      *   --chrome-*  (nine of them)                    ->  border / card / primary / muted-foreground
      *   --period-bg / -line / -ink                    ->  control / border / muted-foreground
      *   --tab-underline                               ->  marker
-     *   --marker-ink                                  ->  marker  (9.83:1 — it needs no ink step)
+     *   --marker-ink                                  ->  marker  (9.20:1 — it needs no ink step)
      *   --marker-<n>  (the violet ramp)               ->  brand-<n>
      *   --ink-<n>     (the dark-surface ramp)         ->  neutral-<n>
      *   --rail / --sidebar / --sidebar-accent         ->  background / neutral-700

@@ -43,7 +43,7 @@ export function Chip({ className, active, count, children, ...props }: ChipProps
         // in caps is the product shouting a word it did not write.
         "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-control px-3 text-sm font-medium transition-colors duration-(--duration-fast) ease-(--ease-standard)",
         active
-          ? // THE FILL IS THE BRAND: #00bc7d under #0f1011 ink at 7.70:1. Hover
+          ? // THE FILL IS THE BRAND: #00c0e8 under #1b191a ink at 8.08:1. Hover
             // walks UP the ramp on the same ladder the primary Button uses, so a
             // selected chip and a primary button never answer the pointer
             // differently. Up rather than down is the surface's doing — on a

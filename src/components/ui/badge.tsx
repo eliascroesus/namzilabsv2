@@ -34,7 +34,7 @@ const pillVariants = cva(/**
        *
        * THE INK IS THE GROUND, NOT WHITE. These three are saturated fills, and
        * on a light app they carried white or near-black by eye. Re-cut for this
-       * surface they are all light enough that #0f1011 is the only ink that
+       * surface they are all light enough that #1b191a is the only ink that
        * clears AA on them: white on the orange measures 2.3:1.
        *
        * `yellow` IS THE ODD ONE OUT and keeps its name on purpose. It pointed
@@ -51,7 +51,7 @@ const pillVariants = cva(/**
       /**
        * THE STATE TRIOS, EACH INSIDE ITS OWN RING.
        *
-       * A 10% wash on #1a1b1e is a very quiet object — quieter than the same
+       * A 10% wash on #272426 is a very quiet object — quieter than the same
        * wash was on white — so each one takes a 20% ring of its own colour,
        * which is exactly what the reference does with its green badge. Without
        * it a status pill in a table row reads as tinted text with no edge.

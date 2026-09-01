@@ -132,8 +132,8 @@ export function AppFrame({
    *
    * A radius reveals whatever is BEHIND the element it is cut into, and that is
    * exactly why it cannot survive here: the thing behind this column is now the
-   * SAME COLOUR as this column. Cutting a corner out of #0f1011 to reveal
-   * #0f1011 draws nothing at all, at the cost of a rounded gap that the top
+   * SAME COLOUR as this column. Cutting a corner out of #1b191a to reveal
+   * #1b191a draws nothing at all, at the cost of a rounded gap that the top
    * bar's hairline then has to end short of. The class is dropped rather than
    * pointed at a zero token, so nothing is computing a radius nobody can see.
    *
