@@ -11,14 +11,27 @@
  * is exactly the letterbox slot the flat value was meant to prevent. A fixed
  * height cannot be right at both widths; a RATIO is right at every width.
  *
- * 2/1 RATHER THAN 16/9, AND THE CEILING IS 176 RATHER THAN 132. The first cap
- * was cut to keep six rows inside a 900px viewport, which it does — and on a
- * 2500px display it hit that ceiling three-quarters of the way across the
- * screen, so every cell went on getting WIDER while its height stood still and
- * the month flattened into a set of letterbox slots. A squarer ratio and a
- * taller ceiling let the cell keep growing with the grid; six rows at 176 plus
- * the header and the footnote still clear a 1080px window, which is what a
- * screen that wide actually is.
+ * A CLAMP, NOT AN ASPECT RATIO — and dropping `aspect-ratio` is a bug fix
+ * rather than a change of shape.
+ *
+ * `aspect-[2/1] min-h-[92px]` looks like "height follows width, with a floor".
+ * It is not what CSS does. When the floor wins, the ratio runs BACKWARDS and
+ * derives the WIDTH from it: each cell demanded 2 × 92 = 184px, seven of those
+ * plus gaps overflowed the card, and the month grew a horizontal scrollbar with
+ * Saturday cut off. It only appeared once the rail could be pinned, because
+ * that is the first time the page was narrow enough for the floor to win — the
+ * ratio had been the binding constraint until then, which is exactly how a
+ * latent layout bug waits for a feature.
+ *
+ * `clamp()` cannot do that. Height is a length that reads the VIEWPORT, so
+ * nothing about it can feed back into the column's width: the grid decides how
+ * wide a day is, full stop, and the cell simply is that wide.
+ *
+ * 8.5vw between a 92px floor and a 176px ceiling. The floor is a phone, where
+ * the ratio alone would give a 20px cell holding a date and a percentage. The
+ * ceiling keeps six rows plus the header and the footnote inside a 1080px
+ * window. Between them the day grows with the screen, which is the behaviour a
+ * ratio was reached for in the first place.
  *
  * A FLOOR AND A CEILING, AND THE CEILING IS THE ONE THAT WAS MISSING.
  *
@@ -57,4 +70,4 @@
  * module with no directive. Adding `"use client"` here re-breaks the skeleton
  * silently; tests/page-width.test.ts pins that it stays absent.
  */
-export const DAY_CELL_H = "aspect-[2/1] max-h-[176px] min-h-[92px]";
+export const DAY_CELL_H = "h-[clamp(5.75rem,8.5vw,11rem)]";

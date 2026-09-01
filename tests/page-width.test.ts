@@ -299,8 +299,8 @@ describe("the calendar's day square", () => {
      * produced by hand (158/92 = 1.72), so it preserves the shape rather than
      * choosing a new one.
      *
-     * BOTH BOUNDS ARE LOAD-BEARING, AND THE CEILING HAS BEEN WRONG IN BOTH
-     * DIRECTIONS ONCE EACH.
+     * BOTH BOUNDS ARE LOAD-BEARING, AND THE MECHANISM CARRYING THEM HAS BEEN
+     * WRONG TWICE.
      *
      * Uncapped, a 2500px window made each cell ~190px and the grid ~1200px, so
      * the one view whose whole job is to be seen AT ONCE stopped fitting on the
@@ -315,7 +315,21 @@ describe("the calendar's day square", () => {
      * is the opposite end — a phone's ~40px column would give a 20px cell
      * holding a date and a percentage.
      */
-    expect(cell).toMatch(/export const DAY_CELL_H = "aspect-\[2\/1\] max-h-\[176px\] min-h-\[92px\]";/);
+    expect(cell).toMatch(/export const DAY_CELL_H = "h-\[clamp\(5\.75rem,8\.5vw,11rem\)\]";/);
+    /**
+     * NO `aspect-ratio`, AND THAT IS THE ASSERTION THAT MATTERS.
+     *
+     * `aspect-[2/1] min-h-[92px]` reads as "height follows width, with a floor"
+     * and is not what CSS does: when the floor wins, the ratio runs BACKWARDS
+     * and derives the WIDTH from it. Each cell demanded 184px, seven of them
+     * overflowed the card, and the month grew a horizontal scrollbar with
+     * Saturday cut off — which only showed up once the rail could be pinned,
+     * because that was the first time the page was narrow enough for the floor
+     * to win.
+     */
+    // CODE, NOT PROSE — the note above the constant explains at length what it
+    // stopped doing, and a rule that reads its own gravestone fails forever.
+    expect(cell.replace(/\/\*[\s\S]*?\*\//g, "")).not.toMatch(/aspect-/);
     expect(read("src/components/calendar/calendar-board.tsx")).toContain('from "./day-cell"');
   });
 

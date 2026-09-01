@@ -347,9 +347,25 @@ export function Sidebar({
    * mean the rail did nothing until you navigated.
    */
   const [pinned, setPinned] = useState(initialPinned);
+  /**
+   * THE REASON UNPINNING LOOKED LIKE IT DID NOTHING.
+   *
+   * The button lives inside the rail, so the pointer is ON the rail when you
+   * press it — and `group-hover/rail:w-65` then holds the panel open. The state
+   * had changed, the cookie was written, and the only way to SEE it was to move
+   * the mouse somewhere else. That is indistinguishable from a control that
+   * does not work.
+   *
+   * So an explicit collapse suppresses hover until the pointer actually leaves.
+   * It is deliberately not a timer: a timeout that guesses when you have moved
+   * away is wrong in both directions, and `pointerleave` is the exact event
+   * that means "you are no longer here".
+   */
+  const [hoverLocked, setHoverLocked] = useState(false);
   const togglePin = () => {
     const next = !pinned;
     setPinned(next);
+    if (!next) setHoverLocked(true);
     // A year, path-wide, Lax: it is a display preference, so it wants to
     // survive a restart and does not want to ride on cross-site requests.
     document.cookie = `rail=${next ? "pinned" : "hover"}; path=/; max-age=31536000; samesite=lax`;
@@ -509,6 +525,7 @@ export function Sidebar({
         // would re-lay-out every tile on the dashboard as the cursor passed.
         pinned ? "w-65" : "w-[56px]",
       )}
+      onPointerLeave={() => setHoverLocked(false)}
       /* Read by `REVEAL` through `group-data-[pinned=true]/rail:`, so every
          label, the keycap and the view list open together without any of them
          taking a prop. A pinned rail is not "permanently hovered" — it is a
@@ -537,10 +554,43 @@ export function Sidebar({
           black shadow on #0f1011 is a change of about one count (see the
           elevation ladder) and would buy nothing but a class. The hairline is
           the separation. */}
+      {/* THE TOGGLE SITS ON THE <aside>, NOT IN THE PANEL, AND THAT IS WHY IT
+          IS ALWAYS VISIBLE.
+          Inside the panel it was subject to `overflow-hidden`, so at 56px it
+          was clipped away and only appeared once you were already hovering —
+          a control for opening the rail that you could only reach by opening
+          the rail. Calendly's is pinned to the rail's edge and always there;
+          this is the same object.
+          `z-10` puts it over the panel it overlaps, `-right-3` straddles the
+          hairline so it reads as belonging to the boundary rather than to
+          either side, and the card fill plus the border make it legible against
+          both the rail and the page.
+          NOT wrapped in `REVEAL`: being always visible is the whole point. */}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="iconXs"
+            onClick={togglePin}
+            aria-pressed={pinned}
+            aria-label={pinned ? "Collapse the navigation" : "Keep the navigation open"}
+            className="absolute -right-3 top-[22px] z-10 rounded-full border border-border bg-card text-muted-foreground shadow-card hover:bg-accent hover:text-foreground"
+          >
+            {pinned ? <PanelLeftClose /> : <PanelLeftOpen />}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="right">
+          {pinned ? "Collapse the navigation" : "Keep the navigation open"}
+        </TooltipContent>
+      </Tooltip>
       <div
         className={cn(
           "absolute inset-y-0 left-0 flex flex-col overflow-hidden border-r border-border bg-background transition-[width] duration-(--duration-base) ease-(--ease-standard)",
-          pinned ? "w-65" : "w-[56px] group-hover/rail:w-65 group-focus-within/rail:w-65",
+          pinned
+            ? "w-65"
+            : hoverLocked
+              ? "w-[56px]"
+              : "w-[56px] group-hover/rail:w-65 group-focus-within/rail:w-65",
         )}
       >
         {/* THE TOP BLOCK IS THE TOP BAR'S OWN HEIGHT, AND THAT IS THE POINT.
@@ -596,31 +646,6 @@ export function Sidebar({
               with the acts.
               `ml-auto` pushes it to the panel's right edge, where a disclosure
               belongs; at 56px it is clipped along with everything else. */}
-          {/* THE APP'S TOOLTIP, NOT `title`. The native one is what made this
-              control feel broken: the browser decides when to show it (about a
-              second), where to put it (wherever it likes — often over its own
-              chrome, nowhere near the button) and how it looks. `TooltipProvider`
-              runs at `delayDuration={0}`, so the label appears on arrival, in
-              the product's own surface, anchored to the thing it names.
-              `title` is now absent rather than duplicated: leaving both means
-              the OS tooltip fades in on top of ours a second later. */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="iconSm"
-                onClick={togglePin}
-                aria-pressed={pinned}
-                aria-label={pinned ? "Unpin the navigation" : "Keep the navigation open"}
-                className={cn("ml-auto shrink-0 text-muted-foreground hover:bg-accent hover:text-foreground", REVEAL)}
-              >
-                {pinned ? <PanelLeftClose /> : <PanelLeftOpen />}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="right">
-              {pinned ? "Unpin the navigation" : "Keep the navigation open"}
-            </TooltipContent>
-          </Tooltip>
         </div>
 
         {/* `aria-label` because a strip of icons is only "the navigation" to
