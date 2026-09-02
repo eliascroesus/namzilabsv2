@@ -769,21 +769,31 @@ describe("Close if the Event Log ran oldest-first", () => {
  * the codebase could notice: `externalId` is written at connect time and read
  * nowhere, and Close had no `verifyWebhookSubscription`.
  *
- * The half that matters most is what this must NOT do. `POST /webhook/` issues a
- * new `signature_key`, so a re-creating implementation would leave the
- * connection holding the old key against a new subscription, failing every
- * delivery again, silently, for the same reason as before. Calendly may
- * re-create: it has no re-activate verb, so that is its only self-heal, and the
- * new key rides back on `VerifyWebhookResult.signingSecret` for reconcile to
- * persist. Close stays re-activate-only by choice — the verb exists here, and
- * re-activating in place keeps the key this connection already holds.
+ * The half that matters most is what this must NOT do to a subscription that
+ * still EXISTS. `POST /webhook/` issues a new `signature_key`, so re-creating a
+ * merely-paused subscription would leave the connection holding the old key
+ * against a new one, failing every delivery again, silently, for the same
+ * reason as before. So a found-but-paused subscription is re-activated in
+ * place (`PUT .../{id}/`), which keeps the key this connection already holds.
+ *
+ * A subscription that is MISSING ENTIRELY has no old key to protect — there is
+ * no id to re-activate — so C2 makes that case self-heal the way Calendly's
+ * only self-heal already does: `registerWebhook` creates one and its new key
+ * rides back on `VerifyWebhookResult.signingSecret` for reconcile to persist,
+ * guarded by the same `recentlyRejecting` check that protects re-activation.
  */
 describe("Close webhook-subscription health", () => {
   const webhookUrl = "https://app.example/api/webhooks/c1";
   const args = { connectionId: "c1", webhookUrl, credentials: { apiKey: "k" } };
 
-  /** Records every request so the mutating ones can be counted, not just observed. */
-  function mockWebhookApi(hooks: Array<Record<string, unknown>>) {
+  /**
+   * Records every request so the mutating ones can be counted, not just
+   * observed. `created` is the POST response used ONLY when no hook matches
+   * our URL and a fresh subscription is registered — a plain object rather
+   * than a per-test default, because the whole point of that path is that the
+   * signing key comes back NEW.
+   */
+  function mockWebhookApi(hooks: Array<Record<string, unknown>>, created?: { id: string; signature_key: string }) {
     const reqs: Array<{ url: string; method: string; body: unknown }> = [];
     vi.stubGlobal(
       "fetch",
@@ -797,6 +807,7 @@ describe("Close webhook-subscription health", () => {
           if (hook) hook.status = (JSON.parse(String(init?.body)) as { status: string }).status;
           return jsonRes({ data: hook });
         }
+        if (method === "POST") return jsonRes(created ?? { id: "whsub_new", signature_key: "new_signing_key" });
         return jsonRes({ data: hooks });
       }),
     );
@@ -886,13 +897,33 @@ describe("Close webhook-subscription health", () => {
     expect(reqs.filter((r) => r.method === "PUT")).toHaveLength(1);
   });
 
-  it("reports a missing subscription rather than creating one behind a stale key", async () => {
-    const reqs = mockWebhookApi([{ id: "whsub_other", url: "https://app.example/api/webhooks/OTHER", status: "active" }]);
+  /**
+   * C2: a MISSING subscription now self-heals exactly as Calendly's already
+   * does — there is no id to re-activate, and (unlike the paused case) no old
+   * key on our side to protect either, since Close has nothing at our URL at
+   * all. `registerWebhook` mints a fresh subscription and its new
+   * `signature_key` rides back on the result for reconcile to persist.
+   */
+  it("no matching subscription and a clean endpoint → creates one and returns its new signing key", async () => {
+    const reqs = mockWebhookApi(
+      [{ id: "whsub_other", url: "https://app.example/api/webhooks/OTHER", status: "active" }],
+      { id: "whsub_new", signature_key: "new_signing_key" },
+    );
     const res = await closeConnector.verifyWebhookSubscription!(args);
+    expect(res).toEqual({ healthy: true, reregistered: true, signingSecret: "new_signing_key", externalId: "whsub_new" });
+    expect(reqs.map((r) => r.method)).toEqual(["GET", "POST"]);
+    expect(reqs[1].url).toContain("/webhook/");
+    expect((reqs[1].body as Record<string, unknown>).url).toBe(webhookUrl);
+  });
+
+  /** Same guard as the paused-subscription case: don't manufacture a subscription toward an endpoint we know is refusing deliveries right now. */
+  it("missing + recently-rejecting endpoint → left unhealthy, no subscription created", async () => {
+    const reqs = mockWebhookApi([{ id: "whsub_other", url: "https://app.example/api/webhooks/OTHER", status: "active" }]);
+    const res = await closeConnector.verifyWebhookSubscription!({ ...args, recentlyRejecting: true });
     expect(res.healthy).toBe(false);
     expect(res.reregistered).toBe(false);
-    expect(res.detail).toContain("reconnect");
-    expect(reqs.map((r) => r.method)).toEqual(["GET"]);
+    expect(res.detail).toContain("refused a delivery");
+    expect(reqs.some((r) => r.method === "POST")).toBe(false);
   });
 
   it("reports failure without throwing, so a health check never blocks the sweep", async () => {

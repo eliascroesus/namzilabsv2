@@ -41,6 +41,7 @@ afterEach(async () => {
   vi.unstubAllGlobals();
   await close();
   registerConnector((await import("@/connectors/calendly")).calendlyConnector);
+  registerConnector((await import("@/connectors/close")).closeConnector);
 });
 
 const jsonRes = (data: unknown, status = 200) =>
@@ -233,5 +234,35 @@ describe("connect-time degrade (webhookOptional)", () => {
     expect(row.status).toBe("active");
     expect(row.signingSecretEncrypted).toBeNull();
     expect(row.lastError).toBeNull();
+  });
+});
+
+describe("connect-time failure (non-optional autoWebhook)", () => {
+  it("a failed registration leaves the connection ACTIVE with lastError, never a terminal error status", async () => {
+    const { createConnection } = await import("@/lib/connections");
+    // Close is the other autoWebhook catalog entry, and unlike Calendly it is
+    // NOT webhookOptional — so this exercises the `else` branch of the same
+    // catch. C2: `error` has no automatic way out (the sweep only selects
+    // `active` via `dueConnectionsForSweep`, `recordSuccess` only runs inside
+    // the sweep, and `reconnectConnection` only accepts `disabled`), so a
+    // connect-time registration failure must not park the connection there.
+    const failing: Connector = {
+      source: "close",
+      authType: "apiKey",
+      verifySignature: () => true,
+      normalize: () => [],
+      poll: async () => ({ records: [], nextCursor: null }),
+      registerWebhook: async () => {
+        throw new Error("401 invalid API key");
+      },
+    };
+    registerConnector(failing);
+
+    const conn = await createConnection({ orgId: "org_test", source: "close", name: "Close", authType: "apiKey", credentials: { apiKey: "k" } });
+
+    expect(conn.status).toBe("active");
+    const [row] = await db.select().from(connections).where(eq(connections.id, conn.id));
+    expect(row.status).toBe("active");
+    expect(row.lastError).toBe("webhook registration failed: 401 invalid API key");
   });
 });

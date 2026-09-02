@@ -798,17 +798,25 @@ export const closeConnector: Connector = {
    * makes the *next* delivery verifiable and there is no next delivery. Fixing
    * the signature without this is fixing a lock on a door nobody is knocking at.
    *
-   * RE-ACTIVATE, NEVER RE-CREATE — and this is the sharp edge. `POST /webhook/`
-   * mints a NEW `signature_key`, and for most of this connector's life
-   * `VerifyWebhookResult` had no field to carry a secret back, so a
-   * re-creating implementation would have left the connection holding the OLD
-   * key against a NEW subscription with every delivery failing silently.
-   * That field now EXISTS (`signingSecret`, added for Calendly, which has no
-   * re-activate verb and can only self-heal by re-creating) and reconcile
-   * persists it — but Close stays re-activate-only BY CHOICE: re-activation
-   * preserves the existing key, which is strictly better wherever the
-   * provider offers the verb. Calendly can re-create freely because its
-   * secret is one we mint; Close's is one we are given.
+   * RE-ACTIVATE, NEVER RE-CREATE a subscription that still EXISTS — and this is
+   * the sharp edge. `POST /webhook/` mints a NEW `signature_key`, and for most
+   * of this connector's life `VerifyWebhookResult` had no field to carry a
+   * secret back, so a re-creating implementation would have left the
+   * connection holding the OLD key against a NEW subscription with every
+   * delivery failing silently. That field now EXISTS (`signingSecret`, added
+   * for Calendly, which has no re-activate verb and can only self-heal by
+   * re-creating) and reconcile persists it — but a FOUND, merely-paused
+   * subscription stays re-activate-only BY CHOICE: re-activation preserves the
+   * existing key, which is strictly better wherever the provider offers the
+   * verb. Calendly can re-create freely because its secret is one we mint;
+   * Close's is one we are given.
+   *
+   * A MISSING subscription is the exception, because there is nothing to
+   * re-activate and — unlike the paused case — no old key on our side to
+   * protect either: Close has nothing at all at our URL, so C2 self-heals it
+   * exactly the way Calendly's only self-heal already works. `registerWebhook`
+   * creates one and its new key rides back the same way a re-created
+   * Calendly subscription's does, for reconcile to persist.
    *
    * The re-activation verb is `PUT /api/v1/webhook/{id}/` with a `status` field,
    * which Close's update documentation demonstrates directly — its own cURL
@@ -832,18 +840,22 @@ export const closeConnector: Connector = {
    * branched on. A number is unambiguous without documentation. A vocabulary is
    * not — and inventing one is the same mistake as assuming a key encoding.
    *
-   * RE-ACTIVATION IS GUARDED, because switching deliveries back on toward an
-   * endpoint we know refuses them does not repair anything — it restarts the
-   * three-day failure period that caused the pause. `recentlyRejecting` is the
-   * caller's reading of `delivery_log`: direct evidence that requests arriving
-   * now are being refused. When it is set, the subscription is left paused and
-   * the reason is reported. See `REJECTION_MEMORY_MS` for why the window leans
-   * long and what it does and does not accomplish.
+   * RE-ACTIVATION (AND RE-CREATION) IS GUARDED, because switching deliveries
+   * back on toward an endpoint we know refuses them does not repair anything —
+   * it restarts the three-day failure period that caused the pause, whether
+   * the subscription being turned on is the one that was already there or a
+   * brand new one. `recentlyRejecting` is the caller's reading of
+   * `delivery_log`: direct evidence that requests arriving now are being
+   * refused. When it is set, a found subscription is left paused and a missing
+   * one is left uncreated, with the reason reported either way. See
+   * `REJECTION_MEMORY_MS` for why the window leans long and what it does and
+   * does not accomplish.
    *
    * Reading is unconditional, mutating is not: the PUT is issued only when a
    * subscription exists, reports a non-active status, AND nothing is being
-   * refused — so a healthy connection costs one GET per sweep and writes
-   * nothing.
+   * refused; the POST is issued only when NO subscription exists at all AND
+   * nothing is being refused — so a healthy connection costs one GET per sweep
+   * and writes nothing.
    */
   async verifyWebhookSubscription(args: VerifyWebhookArgs): Promise<VerifyWebhookResult> {
     const key = apiKey_(args.credentials);
@@ -853,11 +865,23 @@ export const closeConnector: Connector = {
       });
       const hook = (data.data ?? []).find((h) => str(h["url"]) === args.webhookUrl);
       if (!hook) {
-        return {
-          healthy: false,
-          reregistered: false,
-          detail: "no Close webhook subscription points at this URL; reconnect to create one (a new subscription issues a new signing key, which only connect-time can store)",
-        };
+        if (args.recentlyRejecting) {
+          return {
+            healthy: false,
+            reregistered: false,
+            detail: "no Close webhook subscription points at this URL, and this endpoint refused a delivery within the last day, so re-subscribing is deferred rather than recreated into the same failure",
+          };
+        }
+        // Nothing to re-activate — Close has no subscription at our URL at
+        // all, so there is no old key to protect either. Self-heal exactly as
+        // Calendly already does: create one and hand the new key back for
+        // reconcile to persist.
+        const created = await this.registerWebhook!({
+          connectionId: args.connectionId,
+          webhookUrl: args.webhookUrl,
+          credentials: args.credentials ?? {},
+        });
+        return { healthy: true, reregistered: true, signingSecret: created.signingSecret, externalId: created.externalId };
       }
       const status = str(hook["status"]) ?? "unknown";
       const diagnosis = closeDiagnosis(hook);

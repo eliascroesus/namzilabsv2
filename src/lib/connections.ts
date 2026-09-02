@@ -97,9 +97,19 @@ export async function createConnection(input: CreateConnectionInput): Promise<Co
         // health check re-attempts registration when the plan allows it.
         console.warn(`[connect] optional webhook registration failed for ${created.id}: ${msg(err)}`);
       } else {
+        // NOT a terminal `status: "error"` — that has no automatic way out.
+        // The sweep only ever selects `active` rows (`dueConnectionsForSweep`
+        // in reconcile.ts), `recordSuccess` only runs inside that sweep, and
+        // `reconnectConnection` only accepts `disabled`. An `error` row here
+        // would need a human to notice and manually intervene, forever. The
+        // connection stays `active` — the poll path this connector also has
+        // is unaffected — and `lastError` reports the failure exactly like any
+        // other post-connect problem; the sweep's health check retries
+        // registration on its own (Close self-heals a missing subscription;
+        // see `close.ts` `verifyWebhookSubscription`).
         await db
           .update(connections)
-          .set({ status: "error", lastError: `webhook registration failed: ${msg(err)}`, updatedAt: new Date() })
+          .set({ lastError: `webhook registration failed: ${msg(err)}`, updatedAt: new Date() })
           .where(eq(connections.id, created.id));
       }
     }
