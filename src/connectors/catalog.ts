@@ -569,7 +569,9 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
       },
     ],
     webhookSetup:
-      "In Instantly, add a webhook pointing to the URL below. Optionally set an HMAC secret and paste it here to verify signatures.",
+      "In Instantly, add a webhook pointing to the URL below. Copy the signing secret shown on this page into " +
+      "Instantly's webhook HMAC field so deliveries verify. Instantly syncs by polling, so a delivery only " +
+      "triggers an immediate refresh — it isn't how records themselves arrive.",
   },
   {
     source: "whop",
@@ -591,9 +593,13 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
     credentialFields: [
       { key: "apiKey", label: "API key", placeholder: "Whop → Developer → API keys" },
       { key: "companyId", label: "Company ID", placeholder: "biz_..." },
+      { key: "webhookSecret", label: "Webhook signing secret (optional)", placeholder: "ws_… or whsec_…" },
     ],
     webhookSetup:
-      "In Whop, add a webhook pointing at the URL below and paste its signing secret here. Payments and memberships also arrive by polling, so webhooks are optional — they only make updates instant.",
+      "In Whop, add a webhook pointing at the URL below. Already have a signing secret from Whop? Paste it into " +
+      "the Webhook signing secret field when you connect. Leave that blank and Namzilabs mints one instead — " +
+      "copy it from the field below into Whop. Payments and memberships also arrive by polling, so webhooks are " +
+      "optional — they only make updates instant.",
   },
   {
     source: "gsheets",

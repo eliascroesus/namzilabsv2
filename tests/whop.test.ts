@@ -1,9 +1,12 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
-import { createHmac } from "node:crypto";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { createHmac, randomBytes } from "node:crypto";
 import { whopConnector } from "@/connectors/whop";
 import { catalogEntry, syncGuarantee } from "@/connectors/catalog";
 import { pollOperation } from "@/lib/provider-gateway/operations";
 import { getConnector } from "@/connectors/registry";
+import { decryptCredentials } from "@/lib/credentials";
+import { createTestDb } from "./helpers/testdb";
+import type { DB } from "@/db/types";
 
 /**
  * Whop — payments and memberships. Every behaviour pinned here was read off
@@ -16,6 +19,20 @@ afterEach(() => vi.unstubAllGlobals());
 
 const CONN = "conn_1";
 const CREDS = { apiKey: "key_live_x", companyId: "biz_abc" };
+
+// C21 — `createConnection` touches the database directly and, for a
+// poll-capable source like Whop, dispatches a first sync through Inngest.
+// Same three mocks as org-caps.test.ts / connections.test.ts; `db` is
+// assigned inside the "pasted webhook secret" describe's own beforeEach so
+// the rest of this file's tests (pure connector unit tests) pay nothing for
+// PGlite.
+let db: DB;
+let close: () => Promise<void>;
+vi.mock("server-only", () => ({}));
+vi.mock("@/db/client", () => ({ getDb: () => db, getReadDb: () => db }));
+vi.mock("@/inngest/client", () => ({ inngest: { send: async () => {} } }));
+
+const { createConnection, getSigningSecret } = await import("@/lib/connections");
 
 function jsonResponse(data: unknown, status = 200) {
   return {
@@ -346,8 +363,86 @@ describe("Whop is wired into the product", () => {
     expect(entry.rateLimits?.[op]?.requestsPerMinute).toBe(600);
   });
 
-  it("asks for both credentials it cannot work without", () => {
+  it("asks for both credentials it cannot work without, plus an optional webhook secret", () => {
     const keys = (catalogEntry("whop")!.credentialFields ?? []).map((f) => f.key);
-    expect(keys).toEqual(["apiKey", "companyId"]);
+    // Sabotage: drop "webhookSecret" from the catalog entry and the connect
+    // form (which submits every non-empty `cred_<key>` generically) has
+    // nowhere to put a pasted secret — see C21.
+    expect(keys).toEqual(["apiKey", "companyId", "webhookSecret"]);
+  });
+});
+
+describe("C21 — a pasted webhook secret becomes the connection's signing secret", () => {
+  beforeEach(async () => {
+    ({ db, close } = await createTestDb());
+    process.env.ENCRYPTION_KEY = randomBytes(32).toString("base64");
+  });
+  afterEach(async () => {
+    await close();
+  });
+
+  const ORG = "org_whop_secret";
+  const PASTED = "whsec_cGFzdGVkLXNlY3JldA=="; // a secret shaped like Whop's own, not ours
+
+  it("a connection created with a pasted secret verifies a Standard-Webhooks signature made with it", async () => {
+    const conn = await createConnection({
+      orgId: ORG,
+      source: "whop",
+      name: "Whop",
+      authType: "apiKey",
+      credentials: { apiKey: "key_live_x", companyId: "biz_abc", webhookSecret: PASTED },
+    });
+
+    // Sabotage: keep minting a fresh secret regardless of what was pasted —
+    // getSigningSecret would return something the customer never put into
+    // Whop, so no real delivery could ever verify.
+    const stored = getSigningSecret(conn);
+    expect(stored).toBe(PASTED);
+
+    const body = JSON.stringify({ data: { id: "pay_1" } });
+    const id = "msg_1";
+    const ts = String(Math.floor(Date.now() / 1000));
+    const sig = `v1,${sign(PASTED, id, ts, body)}`;
+    expect(
+      whopConnector.verifySignature({
+        rawBody: body,
+        headers: { "webhook-id": id, "webhook-timestamp": ts, "webhook-signature": sig },
+        secret: stored,
+      }),
+    ).toBe(true);
+  });
+
+  it("never stores the pasted secret in credentials_encrypted", async () => {
+    const conn = await createConnection({
+      orgId: ORG,
+      source: "whop",
+      name: "Whop",
+      authType: "apiKey",
+      credentials: { apiKey: "key_live_x", companyId: "biz_abc", webhookSecret: PASTED },
+    });
+
+    // Sabotage: encrypt input.credentials as-is (skip the strip) and this key
+    // sits right next to the API key it was never supposed to be stored with.
+    const stored = decryptCredentials(conn);
+    expect(stored).not.toHaveProperty("webhookSecret");
+    expect(stored.apiKey).toBe("key_live_x");
+    expect(stored.companyId).toBe("biz_abc");
+  });
+
+  it("leaves a non-instant source's stray webhookSecret exactly where it was", async () => {
+    // gsheets is not `instant` — only an instant source's webhook route ever
+    // reads a signing secret, so the strip must not touch this key here.
+    const conn = await createConnection({
+      orgId: ORG,
+      source: "gsheets",
+      name: "Sheet",
+      authType: "oauth2",
+      credentials: { accessToken: "tok", webhookSecret: "leftover" },
+    });
+
+    const stored = decryptCredentials(conn);
+    expect(stored.webhookSecret).toBe("leftover");
+    // And nothing tried to press it into service as a signing secret either.
+    expect(getSigningSecret(conn)).toBeNull();
   });
 });

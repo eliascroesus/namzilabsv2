@@ -5,6 +5,7 @@ import { AppShell } from "@/components/app-shell";
 import { getConnection, getSigningSecret, previewLatest, webhookUrlFor } from "@/lib/connections";
 import { CopyField } from "@/components/copy-field";
 import { catalogEntry, eventTypeLabel, isStreamScoped, syncGuarantee } from "@/connectors/catalog";
+import { getConnector } from "@/connectors/registry";
 import {
   disconnectAction,
   importHistoryAction,
@@ -249,8 +250,15 @@ export default async function ConnectionPage({
             Gated on SCOPE, not flowFields presence: Close carries a readFilter-only
             flowField and is still connection-scoped — the old presence check
             silently removed this section, its one connect-time "is data flowing"
-            answer, the day that field appeared. */}
-        {!isStreamScoped(conn.source) && (
+            answer, the day that field appeared.
+
+            ALSO gated on the connector actually implementing `testFetchLatest` —
+            scope alone doesn't say so. Whop is connection-scoped (poll-only, no
+            preview wired up yet) and used to show this section and then fail
+            every click with the webhook-only message, which was doubly wrong:
+            Whop isn't webhook-only, and the real reason was simply "not built
+            yet" (C22). */}
+        {!isStreamScoped(conn.source) && getConnector(conn.source)?.testFetchLatest && (
           <section className="mt-8">
             <div className="mb-3 flex items-center justify-between">
               <SectionHeading className="mb-0">Latest records</SectionHeading>

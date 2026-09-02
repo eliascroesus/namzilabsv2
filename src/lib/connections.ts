@@ -50,11 +50,14 @@ export type CreateConnectionInput = {
  * Create an org-scoped connection with encrypted credentials. If the connector
  * supports auto-registering its provider webhook, do so and store the returned
  * signing secret; otherwise mint an inbound signing secret for instant sources
- * so the user can configure the provider manually.
+ * — or, when the user already pasted one from the provider (Whop's optional
+ * `webhookSecret` credential), use that instead — so the user can configure
+ * the provider manually.
  */
 export async function createConnection(input: CreateConnectionInput): Promise<Connection> {
   const db = getDb();
   const key = getEncryptionKey();
+  const entry = catalogEntry(input.source);
   // The cap lives HERE, in the single writer, so every caller — the connect
   // form, the Google OAuth callback, and whatever comes next — is covered
   // without each having to remember. Disabled rows count on purpose: they
@@ -65,6 +68,25 @@ export async function createConnection(input: CreateConnectionInput): Promise<Co
     .where(eq(connections.orgId, input.orgId));
   const cap = connectionCap();
   if (Number(existing) >= cap) throw new CapError("connections", cap);
+
+  /**
+   * C21 — a pasted webhook signing secret (Whop's optional `webhookSecret`
+   * credential field) is inbound-VERIFICATION material, not something a
+   * connector reads to call the provider. It must never sit inside
+   * `credentials_encrypted` next to the API key, so it is pulled out before
+   * that blob is built and handed to the `instant` branch below instead of a
+   * minted secret. Gated on `entry?.instant`: only an instant source's
+   * webhook route ever checks a signing secret at all, so a stray
+   * `webhookSecret` on any other kind of source is left exactly where it
+   * was — untouched, unused, still whatever the caller passed in.
+   */
+  const rawCredentials = input.credentials ?? {};
+  const pastedWebhookSecret = typeof rawCredentials.webhookSecret === "string" ? rawCredentials.webhookSecret : "";
+  const stripWebhookSecret = Boolean(entry?.instant) && pastedWebhookSecret !== "";
+  const credentialsToStore = stripWebhookSecret
+    ? Object.fromEntries(Object.entries(rawCredentials).filter(([k]) => k !== "webhookSecret"))
+    : rawCredentials;
+
   const [created] = await db
     .insert(connections)
     .values({
@@ -73,12 +95,11 @@ export async function createConnection(input: CreateConnectionInput): Promise<Co
       name: input.name,
       status: "active",
       authType: input.authType ?? "apiKey",
-      credentialsEncrypted: encrypt(JSON.stringify(input.credentials ?? {}), key),
+      credentialsEncrypted: encrypt(JSON.stringify(credentialsToStore), key),
       config: input.config ?? {},
     })
     .returning();
 
-  const entry = catalogEntry(input.source);
   const connector = getConnector(input.source);
   const webhookUrl = webhookUrlFor(created.id);
 
@@ -122,7 +143,10 @@ export async function createConnection(input: CreateConnectionInput): Promise<Co
       }
     }
   } else if (entry?.instant) {
-    signingSecret = randomSecret();
+    // A pasted secret came from the provider itself, so it can verify real
+    // deliveries right away; a minted one only ever could once the user
+    // copies it back into the provider's own webhook config.
+    signingSecret = stripWebhookSecret ? pastedWebhookSecret : randomSecret();
   }
 
   const patch: Partial<Connection> = {};
@@ -335,6 +359,14 @@ export async function previewLatest(orgId: string, id: string, n = 3): Promise<C
   if (!conn) throw new Error("connection not found");
   const connector = getConnector(conn.source);
   if (!connector?.testFetchLatest) {
+    // C22: "webhook-only" is only true of a source with no poll backstop at
+    // all. A poll-capable source that simply has no `testFetchLatest` yet
+    // (Whop) is a different, temporary gap — its data syncs fine — and
+    // telling that user to "send a test event instead" sends them chasing a
+    // webhook that was never how their data got there.
+    if (connector?.poll) {
+      throw new Error("Preview isn't available for this source yet — it syncs by polling, so records appear after the first sync.");
+    }
     throw new Error("Preview isn't available for this source (it's webhook-only — send a test event instead).");
   }
   // C17: Check if paused before attempting any fetch

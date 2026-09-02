@@ -51,6 +51,22 @@ async function seedClose(orgId = ORG): Promise<{ id: string; orgId: string; sour
   return { id: row.id, orgId, source: "close" };
 }
 
+/** Whop: poll-capable, but the connector has no testFetchLatest yet (C22). */
+async function seedWhop(orgId = ORG): Promise<{ id: string; orgId: string; source: string }> {
+  const [row] = await db
+    .insert(connections)
+    .values({
+      orgId,
+      source: "whop",
+      name: "Whop",
+      status: "active",
+      authType: "apiKey",
+      credentialsEncrypted: encrypt(JSON.stringify({ apiKey: "k", companyId: "biz_1" }), getEncryptionKey()),
+    })
+    .returning({ id: connections.id });
+  return { id: row.id, orgId, source: "whop" };
+}
+
 beforeEach(async () => {
   ({ db, close } = await createTestDb());
   process.env.ENCRYPTION_KEY = randomBytes(32).toString("base64");
@@ -102,5 +118,25 @@ describe("previewLatest enforces the provider budget", () => {
     const [row] = await db.select().from(usageLedger).where(eq(usageLedger.connectionId, conn.id));
     expect(row.calls).toBe(1);
     expect(row.operation).toBe(pollOperation("close")); // "*" — Close has one account-wide bucket
+  });
+});
+
+/**
+ * C22 — Whop shows "Latest records" (it's connection-scoped, not
+ * stream-scoped) and then failed every click with "webhook-only — send a
+ * test event instead". That was wrong on top of unhelpful: Whop polls every
+ * sweep and has no webhook-only mode at all. The real reason is that nobody
+ * has wired up `testFetchLatest` for it yet, which is a different, temporary
+ * gap the message must say plainly.
+ */
+describe("previewLatest's unavailable-preview message distinguishes polling from webhook-only", () => {
+  it("says Whop syncs by polling, not that it's webhook-only", async () => {
+    const conn = await seedWhop();
+    // Sabotage: keep the old universal message here and this fails — Whop
+    // has a poll() that runs every sweep, so "it's webhook-only" is false,
+    // and "send a test event instead" describes nothing this source does.
+    await expect(previewLatest(ORG, conn.id, 3)).rejects.toThrow(
+      /syncs by polling, so records appear after the first sync/i,
+    );
   });
 });

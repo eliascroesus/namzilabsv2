@@ -62,7 +62,8 @@ const MEMBERSHIP_OVERLAP_MS = 7 * 86_400_000;
 const PAYMENT_OVERLAP_MS = 5 * 60_000;
 
 /**
- * How far back the FIRST sweep of a new connection reaches.
+ * How far back the FIRST sweep of a new connection reaches — and, for this
+ * connector, the only reach there is, period.
  *
  * Not a nicety — without it the first request carries no date bound at all
  * and pages forward from the company's oldest record, 50 rows at a time.
@@ -73,8 +74,14 @@ const PAYMENT_OVERLAP_MS = 5 * 60_000;
  * page the walk has already passed would never be re-read. Bounding the
  * first sweep keeps the walk short enough that the mark below is honest.
  *
- * Deeper history stays reachable by a full re-sync from the connection page;
- * the catalog's `historyNote` says so on screen.
+ * A full re-sync does NOT reach any deeper than this. It clears the cursor
+ * (resync.ts) and polls again from scratch, and a null/unusable mark falls
+ * back to exactly this constant in `since` below — `windowFloor`, the one
+ * mechanism that could ask for MORE, is never set for a connection-scoped
+ * source like this one (see the note on it further down, beside `since`).
+ * So 90 days is this connector's ceiling, not a floor a re-sync can push
+ * past, which is exactly why the catalog's `historyNote` states it as a
+ * plain fact rather than a starting point.
  */
 const FIRST_SYNC_DAYS = 90;
 
