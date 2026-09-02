@@ -36,8 +36,10 @@
  *
  * Env knobs: INSTANTLY_SKIP_TARGET (records the skip detector compares, default
  * 60), INSTANTLY_CAMPAIGN (pin a campaign instead of walking the list for one
- * with data), INSTANTLY_GAP_MS (spacing between requests, default 3200ms — the
- * live API enforces 20/min, exactly what the catalog declares).
+ * with data), INSTANTLY_GAP_MS (spacing between requests, default 3200ms — well
+ * inside the one shared 6,000/min workspace-wide bucket the catalog now
+ * declares; the pacing is politeness toward a script sharing that bucket with
+ * live traffic, not a limit this key is close to).
  */
 
 const API = "https://api.instantly.ai/api/v2";

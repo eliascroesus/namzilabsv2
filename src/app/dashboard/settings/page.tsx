@@ -130,11 +130,11 @@ function SettingsSection({
  *
  * RANKS: org-local ACL — named permission/metric bundles assigned per member
  * (src/lib/permissions.ts is the model). The editor renders for anyone who
- * may MANAGE ranks — WorkOS admins, and unranked members, because a
- * self-serve workspace has no admin slug until WorkOS roles are configured
- * and the owner would otherwise be locked out of the feature's own editor.
- * That render gate is UX, not security: every rank action re-checks
- * canManageRanks on the server before touching a row.
+ * may MANAGE ranks — WorkOS admins, and the workspace OWNER regardless of
+ * rank, because a self-serve workspace has no admin slug until WorkOS roles
+ * are configured and the owner would otherwise be locked out of the
+ * feature's own editor. That render gate is UX, not security: every rank
+ * action re-checks canManageRanks on the server before touching a row.
  *
  * THE ORDER IS THE STORY A WORKSPACE ADMIN IS ACTUALLY TELLING: who is here,
  * how another person gets here, who is on the way, and what any of them are

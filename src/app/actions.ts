@@ -74,8 +74,10 @@ export async function createOrganizationAction(formData: FormData): Promise<void
   // has an `admin` slug only when roles are configured in its dashboard — so
   // authority has to be our database's fact, the way Slack/Notion/Linear do
   // it, with the IdP only authenticating. Best-effort, never fatal: a
-  // workspace with no owner row still works (canManageRanks falls back to
-  // unranked members) and the settings page backfills on its next visit.
+  // workspace with no owner row still has full PRODUCT access for everyone
+  // (the unranked default), but nobody can MANAGE ranks — canManageRanks
+  // returns false with no owner row and no explicit grant — until the
+  // settings page's backfill claims an owner on its next visit.
   try {
     await getDb().insert(workspaceOwners).values({ orgId: org.id, userId: auth.user.id, source: "created" }).onConflictDoNothing();
   } catch (e) {

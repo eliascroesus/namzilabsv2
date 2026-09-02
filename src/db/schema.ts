@@ -624,7 +624,7 @@ export const deliveryLog = pgTable(
     orgId: text("org_id").notNull(),
     connectionId: uuid("connection_id").notNull(),
     rawEventId: uuid("raw_event_id"),
-    status: text("status").notNull(), // success | retry | failed
+    status: text("status").notNull(), // success | failed | rejected
     attempt: integer("attempt").notNull().default(1),
     error: text("error"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -1142,7 +1142,7 @@ export const dashboardTilePlacements = pgTable(
  * Republish the flow and the same tile lights up again.
  *
  * `x`/`y`/`w`/`h` ARE GRID UNITS, NOT PIXELS — twelve columns across, and a
- * row unit of forty pixels (`GRID_COLS` / `ROW_UNIT_PX` in src/lib/board/grid.ts,
+ * row pitch of forty-eight pixels (`GRID_COLS` / `ROW_UNIT_PX` in src/lib/board/grid.ts,
  * which is the only place that arithmetic lives). Storing units rather than
  * pixels is what lets one saved layout render at twelve columns, six and one
  * without a second stored layout to keep in step.

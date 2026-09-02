@@ -118,9 +118,4 @@ export function CardDescription({ className, ...props }: React.ComponentProps<"p
   return <p className={cn("text-xs font-normal text-muted-foreground", className)} {...props} />;
 }
 
-/** The band below the rule. Same 16px, so the two are one object. */
-export function CardBody({ className, ...props }: React.ComponentProps<"div">) {
-  return <div className={cn("p-4", className)} {...props} />;
-}
-
 export { cardVariants };

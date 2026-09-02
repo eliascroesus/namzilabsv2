@@ -25,7 +25,7 @@ import { Card } from "@/components/ui/card";
  *
  * `ChartFrame` deliberately does NOT: its `padding="compact"` is measured
  * arithmetic on the canvas board (see tests/board-blocks.test.ts, where the
- * cartesian floor is computed against it at ROW_UNIT_PX 40), and a tile there
+ * cartesian floor is computed against it at ROW_UNIT_PX 48), and a tile there
  * can be four grid rows tall. It shares this file's VOICE — the same micro
  * label, the same headline recipe — without sharing its geometry.
  *

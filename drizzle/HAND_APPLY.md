@@ -1114,3 +1114,43 @@ WHERE table_schema='public' AND table_name='dashboard_views' AND column_name='is
 
 > Like 0024–0028 this migration carries no drizzle snapshot and its journal entry
 > uses a synthetic `when` stamp continuing that sequence.
+
+## 0030 — `user_profiles`
+
+One tiny table, nothing altered. It holds a person's display name and a URL to
+their picture — `avatar_url` is a short string pointing at blob storage, never
+image bytes, so this stays a table read on every page render rather than one
+that carries pixels.
+
+Additive and safe to paste before the deploy: nothing reads this table until
+the profile page ships, and every reader treats a missing row as "no profile
+set" — which is the state of every user the instant this runs. There is no
+backfill, deliberately: a row appears the first time somebody changes
+something, so the sign-in path itself never writes.
+
+```sql
+CREATE TABLE IF NOT EXISTS "user_profiles" (
+  "user_id" text PRIMARY KEY NOT NULL,
+  "display_name" text,
+  "avatar_url" text,
+  "updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+```
+
+Verify (expect 4):
+
+```sql
+SELECT count(*) AS should_be_4
+FROM information_schema.columns
+WHERE table_schema = 'public'
+  AND table_name = 'user_profiles'
+  AND column_name IN ('user_id', 'display_name', 'avatar_url', 'updated_at');
+```
+
+`scripts/schema-audit.sql` was regenerated alongside this: 23 tables, 228
+columns.
+
+> **Numbering note.** 0016 is still reserved by the unmerged
+> `batch5/retention-purge` branch. Like 0024–0029 this migration carries no
+> drizzle snapshot and its journal entry uses a synthetic `when` stamp
+> continuing that sequence.

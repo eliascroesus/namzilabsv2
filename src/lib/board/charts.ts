@@ -16,10 +16,13 @@
  * stored choice quietly turning into a different drawing when the data changes
  * underneath it. Both are here.
  *
- * ONLY FIVE CHARTS EXIST, AND THAT IS DELIBERATE. `charts.tsx` has four marks;
- * pie, line, area and table have no renderer at all. Offering them and drawing
- * bars is precisely the lie above, so they are absent until their marks are
- * written rather than present and dishonest.
+ * EVERY CHART LISTED HERE HAS A REAL RENDERER, AND THAT IS DELIBERATE.
+ * `custom-tile.tsx` draws all ten of them — number, line, area, bar, category,
+ * pie, progress, funnel, pipeline and table — so nothing this file offers can
+ * be picked and then silently draw bars instead. (Three further ids, `heading`,
+ * `text` and `divider`, are BLOCKS rather than charts — furniture `chartsFor`
+ * never returns; see below.) Offering a chart and drawing something else is
+ * precisely the lie above; a chart is added here only once its own mark exists.
  *
  * No `"use client"` — the same rule `grid.ts` and `board-shape.ts` carry. The
  * server computes availability for the picker and the client filters with it,
@@ -355,7 +358,7 @@ export function defaultSize(chart: ChartId): { w: number; h: number } {
  * where the axis frame gets zero height and `overflow-hidden` silently eats
  * the entire plot: the tile kept its border and its number and lost its chart.
  *
- * Measured rather than guessed. At `ROW_UNIT_PX` 40 and `p-4`, a cartesian
+ * Measured rather than guessed. At `ROW_UNIT_PX` 48 and `p-4`, a cartesian
  * tile needs h=5 before five ticks and the x-labels both fit; a scorecard needs
  * 4, which is also what a tile on the groups board is, and nothing that calls
  * itself a metric card should be smaller than one.

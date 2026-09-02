@@ -22,7 +22,6 @@ on:
           - close
           - calendly
           - instantly
-          - sendblue
       # CL11/CL13 are the only checks here that cost wall-clock time, and they
       # cost it on purpose: the only way to find out how long a Calendly
       # continuation lives is to hold one and retry it later.
@@ -128,10 +127,10 @@ jobs:
           # Rename the input once this is on `main`, then drop the old line.
           CALENDLY_TOKEN_WAIT: ${{ inputs.calendly_token_wait }}
           CALENDLY_CONTINUATION_WAIT: ${{ inputs.calendly_token_wait }}
-          # Time this step must NOT consume, because the steps after it need it.
+          # Time this step must NOT consume, because the step after it needs it.
           # Instantly paces itself at 3.2s between requests and walks two page
-          # sizes, so it is the expensive one; Sendblue is a handful of GETs.
-          # Zero when Calendly runs alone, because then nothing follows it.
+          # sizes, so it is the expensive one. Zero when Calendly runs alone,
+          # because then nothing follows it.
           VERIFY_RESERVE_SECONDS: ${{ inputs.providers == 'all' && '900' || '0' }}
         run: |
           set -uo pipefail
@@ -173,27 +172,6 @@ jobs:
           else
             code=$?
             echo "FAIL|Instantly|Script exited $code — a 401 means the key is invalid or v1-era; otherwise see checks I0-I7 above." >> "$RESULTS"
-            exit 1
-          fi
-
-      - name: Sendblue — base URL, messages list, webhook list
-        if: ${{ inputs.providers == 'all' || inputs.providers == 'sendblue' }}
-        continue-on-error: true
-        env:
-          SENDBLUE_API_KEY_ID: ${{ secrets.SENDBLUE_API_KEY_ID }}
-          SENDBLUE_API_SECRET: ${{ secrets.SENDBLUE_API_SECRET }}
-        run: |
-          set -uo pipefail
-          if [ -z "${SENDBLUE_API_KEY_ID:-}" ] || [ -z "${SENDBLUE_API_SECRET:-}" ]; then
-            echo "SKIP|Sendblue|Secrets SENDBLUE_API_KEY_ID and/or SENDBLUE_API_SECRET are not set." >> "$RESULTS"
-            echo "::warning::Skipping Sendblue — add both SENDBLUE_API_KEY_ID and SENDBLUE_API_SECRET to run it."
-            exit 0
-          fi
-          if pnpm tsx scripts/verify-sendblue.ts; then
-            echo "PASS|Sendblue|Host, messages list and webhook list all confirmed." >> "$RESULTS"
-          else
-            code=$?
-            echo "FAIL|Sendblue|Script exited $code — see checks S1-S5 above (wrong host and wrong auth headers are named explicitly)." >> "$RESULTS"
             exit 1
           fi
 
@@ -261,7 +239,7 @@ jobs:
           # reads exactly like a clean sweep. Name the absentees explicitly.
           echo "" >> "$GITHUB_STEP_SUMMARY"
           missing=""
-          for p in close calendly instantly sendblue; do
+          for p in close calendly instantly; do
             if ! grep -qi "|$p|" "$RESULTS" 2>/dev/null && ! grep -qiE "^[A-Z]+\|$p\|" "$RESULTS" 2>/dev/null; then
               missing="$missing $p"
             fi
@@ -271,5 +249,5 @@ jobs:
             echo ">" >> "$GITHUB_STEP_SUMMARY"
             echo "> These were not selected, so nothing above says anything about them." >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "> All four providers were covered by this run." >> "$GITHUB_STEP_SUMMARY"
+            echo "> All three providers were covered by this run." >> "$GITHUB_STEP_SUMMARY"
           fi

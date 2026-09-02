@@ -77,9 +77,9 @@ export type CustomTileOption = { key: string; title: string; charts: string[] };
 /**
  * ONE CHART ON A CUSTOM VIEW, as the board reads it.
  *
- * `x`/`y`/`w`/`h` are GRID UNITS — twelve columns, forty-pixel rows. See
- * `src/lib/board/grid.ts`, which owns that arithmetic and is the only place it
- * lives.
+ * `x`/`y`/`w`/`h` are GRID UNITS — twelve columns, rows on a forty-eight-pixel
+ * pitch. See `src/lib/board/grid.ts`, which owns that arithmetic and is the
+ * only place it lives.
  *
  * `tileKey` is the same `flow:<flowId>:<outputNodeId>` / `metric:<metricId>`
  * string a placement carries, and deliberately the same name — but unlike a

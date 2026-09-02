@@ -138,29 +138,6 @@ export function RangeLink({
 }
 
 /**
- * A link inside the source menu. Same transition, and it closes the `<details>`
- * it was chosen from — the menu is a disclosure, and one left hanging open over
- * a board that is already reloading reads as a click that missed.
- */
-export function SourceLink({ href, className, children }: { href: string; className?: string; children: ReactNode }) {
-  const { go } = useBoard();
-  return (
-    <a
-      href={href}
-      onClick={(e) => {
-        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
-        e.preventDefault();
-        (e.currentTarget.closest("details") as HTMLDetailsElement | null)?.removeAttribute("open");
-        go(href);
-      }}
-      className={className}
-    >
-      {children}
-    </a>
-  );
-}
-
-/**
  * ONE TAB IN THE VIEW STRIP.
  *
  * A real `<a href>` for the same reasons the range pills are: the view lives in

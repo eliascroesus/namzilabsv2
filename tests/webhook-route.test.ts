@@ -244,6 +244,28 @@ describe("a stream-scoped webhook rings the bell without delivering anything", (
     expect(res.status).toBe(401);
     expect(sent).toHaveLength(0);
   });
+
+  /**
+   * THE regression this batch adds. Cadence promotion already runs before the
+   * send, so the row is never at risk — what an un-guarded send breaks is the
+   * RESPONSE: `inngest.send` throwing propagates straight out of the handler,
+   * and the provider sees a 500 for a delivery that needed nothing stored.
+   * REVERT THE GUARD AND THIS FAILS: `post()` rejects instead of resolving.
+   */
+  it("still 202s and still promotes cadence when inngest.send throws", async () => {
+    const id = await seed({ source: "calendly", secret: "cal_secret" });
+    const far = new Date(Date.now() + 6 * 3_600_000);
+    await db.update(connections).set({ nextSweepAt: far, consecutiveNoOpSweeps: 40 }).where(eq(connections.id, id));
+    sendShouldFail = true;
+    const body = { event: "invitee.created" };
+
+    const res = await post(id, body, sign("cal_secret", body));
+
+    expect(res.status).toBe(202);
+    const [after] = await db.select().from(connections).where(eq(connections.id, id));
+    expect(after.nextSweepAt?.getTime()).toBeLessThan(far.getTime());
+    expect(after.consecutiveNoOpSweeps).toBe(0);
+  });
 });
 
 /**
@@ -293,5 +315,19 @@ describe("an Inngest enqueue failure does not orphan the raw row", () => {
     // Fast-ack stays fast-ack: a queue outage is not a license to do the slow
     // work synchronously inside the request.
     expect(await db.select().from(events)).toHaveLength(0);
+  });
+
+  it("promotes cadence too, exactly as the success path does", async () => {
+    const id = await seed({ source: "webhook", secret: null });
+    const far = new Date(Date.now() + 6 * 3_600_000);
+    await db.update(connections).set({ nextSweepAt: far, consecutiveNoOpSweeps: 40 }).where(eq(connections.id, id));
+    sendShouldFail = true;
+
+    const res = await post(id, { hello: "world" });
+
+    expect(res.status).toBe(202);
+    const [after] = await db.select().from(connections).where(eq(connections.id, id));
+    expect(after.nextSweepAt?.getTime()).toBeLessThan(far.getTime());
+    expect(after.consecutiveNoOpSweeps).toBe(0);
   });
 });

@@ -160,10 +160,19 @@ export async function POST(req: Request, ctx: { params: Promise<{ connectionId: 
     // work rides the sync queue, which QUEUES per connection and always
     // runs, under the connection lease. An incremental sync from the stored
     // cursors is exactly one page per stream when little changed.
-    await inngest.send({
-      name: "sync/connection.requested",
-      data: { connectionId: conn.id, mode: "incremental" },
-    });
+    try {
+      await inngest.send({
+        name: "sync/connection.requested",
+        data: { connectionId: conn.id, mode: "incremental" },
+      });
+    } catch (err) {
+      // An Inngest outage must not turn a doorbell into a 500: nothing here
+      // was ever going to be stored, and the cadence promotion above already
+      // landed, so the ten-minute sweep still picks the connection up even
+      // when this signal never sends.
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn(`[webhook] inngest.send failed for connection ${conn.id} doorbell: ${message}`);
+    }
     return NextResponse.json({ ok: true, swept: "connection" }, { status: 202 });
   }
 
@@ -207,6 +216,10 @@ export async function POST(req: Request, ctx: { params: Promise<{ connectionId: 
     const message = err instanceof Error ? err.message : String(err);
     console.warn(`[webhook] inngest.send failed for raw event ${raw.id} (connection ${conn.id}): ${message}`);
     await deadLetterRawEvent(db, raw.id, 0, `enqueue failed: ${message}`);
+    // H.2, exactly as the success path below: inbound data proves this
+    // connection is live even though the queue could not be reached, so idle
+    // backoff must still reset rather than wait for a future sweep to notice.
+    await promoteToBaseCadence(db, conn.id).catch(() => {});
     return NextResponse.json({ ok: true, rawEventId: raw.id, queued: false }, { status: 202 });
   }
 
