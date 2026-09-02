@@ -205,7 +205,14 @@ function escaped(v: SQL): SQL {
   return sql`replace(replace(replace(${v}, '\\', '\\\\'), '%', '\\%'), '_', '\\_')`;
 }
 
-/** `splitList`: comma-separated, each element trimmed — including the empty string. */
+/**
+ * `splitList`'s SQL twin: comma-separated, each element trimmed, blank
+ * elements DROPPED — mirroring the JS fix. A blank element ('' from an
+ * unfilled box, or a stray comma) would otherwise equal a missing/empty
+ * field's coalesced '', so `f = any(list)` "matched" a field the row never
+ * had. A wholly blank value now compiles to an empty list, which matches
+ * nothing for is_one_of and everything for `not (... = any(...))`.
+ */
 function listSql(rule: CompiledRule): SQL {
   if (rule.valueKind === "field" && rule.valueField) {
     // ROWS of text, not one array row: `x = ANY (subquery)` compares x against
@@ -213,11 +220,14 @@ function listSql(rule: CompiledRule): SQL {
     // value is `text = text[]` — an error the first time it runs. The old
     // array_agg form had never been executed until the parity suite covered
     // field-valued is_one_of.
-    return sql`(select btrim(x) from unnest(string_to_array(coalesce(${fieldSql(rule.valueField)}, ''), ',')) as x)`;
+    return sql`(select btrim(x) from unnest(string_to_array(coalesce(${fieldSql(rule.valueField)}, ''), ',')) as x where btrim(x) <> '')`;
   }
   // Built as an explicit array literal rather than a bound array param, so the
   // element type is unambiguous on every driver.
-  const parts = String(rule.value ?? "").split(",").map((s) => s.trim());
+  const parts = String(rule.value ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s !== "");
   const elems = parts.map((p) => sql`${p}`);
   return sql`array[${sql.join(elems, sql`, `)}]::text[]`;
 }

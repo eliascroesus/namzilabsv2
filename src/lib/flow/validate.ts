@@ -285,6 +285,16 @@ export function validateGraph(graph: FlowGraph): ValidationIssue[] {
     issues.push({ message: "Turn on at least one result in Review & publish." });
   }
 
+  // Deleting a step used to leave its metric pointing at nothing: `hasMetric`
+  // above only asks whether SOME metric is enabled, never whether its nodeId
+  // still resolves — so a flow with an orphaned metric validated clean and
+  // then had nothing to materialize.
+  for (const m of graph.metrics) {
+    if (m.enabled && !byId.has(m.nodeId)) {
+      issues.push({ message: "A result in Review & publish points at a step that no longer exists." });
+    }
+  }
+
   return issues;
 }
 

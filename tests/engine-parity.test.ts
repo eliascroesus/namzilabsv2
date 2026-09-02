@@ -177,6 +177,29 @@ describe("E.4 — golden parity: compiled SQL ≡ JS engine, operator by operato
     expect(fixed.js).toEqual(fixed.compiled);
   });
 
+  /**
+   * C7: an empty value list ("" — an unfilled "is one of" box) used to match
+   * every record whose field is missing, in BOTH engines: `splitList("")` was
+   * `[""]` in JS, and the SQL twin built an equivalent one-blank-element list
+   * — a missing/empty field stringifies to `''` on both sides, so `'' = ''`
+   * "matched". An empty list must match nothing for is_one_of and everything
+   * for is_not_one_of, and the two engines must still agree.
+   */
+  it("is_one_of/is_not_one_of with a blank list matches nothing (not the missing fields) on both engines", async () => {
+    const blank: CompiledRule = { field: "name", op: "is_one_of", value: "" };
+    const blankResult = await bothMatch(blank);
+    // Sabotage: revert splitList (JS) or listSql (SQL) alone and the
+    // "missing-keys" / "empty-string" fixtures reappear on that side only —
+    // this fails whichever side regresses.
+    expect(blankResult.js).toEqual([]);
+    expect(blankResult.compiled).toEqual([]);
+
+    const blankNot: CompiledRule = { field: "name", op: "is_not_one_of", value: "" };
+    const blankNotResult = await bothMatch(blankNot);
+    expect(blankNotResult.js).toEqual(FIXTURES.map((f) => f.label).sort());
+    expect(blankNotResult.js).toEqual(blankNotResult.compiled);
+  });
+
   it("an unknown operator matches nothing on both sides (no silent pass-through)", async () => {
     const { js, compiled } = await bothMatch({ field: "name", op: "no_such_op", value: "x" });
     expect(js).toEqual([]);
@@ -324,5 +347,51 @@ describe("legacy (pre-normalization) rows diverge until the reprocess replay", (
     ).length > 0;
     expect(evalRule(eventToRecord(row), rule)).toBe(true);
     expect(sqlKeeps).toBe(true); // agree again
+  });
+});
+
+/**
+ * C7, the FIELD-sourced branch of `listSql` (operators.ts:210-217) — a
+ * separate code path from the literal-list branch above, and separately
+ * fixed. Isolated in its own org/connection so it cannot perturb the FIXTURES
+ * matrix above.
+ *
+ * A single space is not an empty STRING (`v !== ""`), so the both-blank guard
+ * (which only fires when both sides' raw text are exactly "") does not
+ * suppress this case — the bug has to be caught in `splitList`/`listSql`
+ * themselves: trimmed, a lone space IS a blank entry, and a record whose own
+ * field is missing must not match through it.
+ */
+describe("C7 — a field-sourced is_one_of list blank only after trimming matches nothing", () => {
+  const C7_ORG = "org_parity_c7";
+
+  it("agrees on both engines: a missing field does not match a list built from a single space", async () => {
+    const conn = await seedConnection(db, { orgId: C7_ORG, source: "gsheets" });
+    await upsertEvents(
+      db,
+      { orgId: C7_ORG, connectionId: conn, source: "gsheets", generation: 1 },
+      [
+        {
+          eventId: "c7:blank-after-trim",
+          eventType: "row_added",
+          subject: null,
+          occurredAt: new Date("2026-03-01T10:00:00Z"),
+          // "name" is absent entirely; "stage" is one space — non-empty raw
+          // text that trims to nothing.
+          properties: { stage: " " },
+        },
+      ],
+    );
+    const [row] = await db.select().from(events).where(eq(events.eventId, "c7:blank-after-trim"));
+    const rec = eventToRecord(row);
+
+    const rule: CompiledRule = { field: "name", op: "is_one_of", value: "", valueKind: "field", valueField: "stage" };
+    // Sabotage: revert the field-sourced branch of listSql (or splitList) and
+    // this reads true on one or both engines — the space becomes a blank
+    // ENTRY that a missing "name" matches.
+    expect(evalRule(rec, rule)).toBe(false);
+    const sqlKeeps =
+      (await db.select({ id: events.id }).from(events).where(and(eq(events.eventId, "c7:blank-after-trim"), compileRule(rule)))).length > 0;
+    expect(sqlKeeps).toBe(false);
   });
 });

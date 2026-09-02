@@ -741,6 +741,80 @@ describe("semantics that used to differ from what a person would assume", () => 
     expect(FILTER_OP_LABELS.contains).toMatch(/any case/);
     expect(FILTER_OP_LABELS.is_one_of).toMatch(/comma-separated/);
   });
+
+  /**
+   * C3: a grouped shape with no precomputed `total` makes `headlineValue` sum
+   * the groups — right for count/sum (each record lands in exactly one
+   * group), wrong for count_distinct, where the same subject counted under
+   * two groups is the same subject, not two.
+   */
+  it("a Group step's count-distinct headline is the true distinct count, not the sum of the groups", async () => {
+    await ev({ eventType: "deal", subject: "S1", properties: { rep: "Ana" } });
+    await ev({ eventType: "deal", subject: "S1", properties: { rep: "Ben" } });
+    await ev({ eventType: "deal", subject: "S2", properties: { rep: "Ana" } });
+
+    const g = parseGraph({
+      nodes: [
+        { id: "a", type: "app", data: { config: { connectionId: CONN } } },
+        { id: "g", type: "group", data: { config: { mode: "field", field: "properties.rep", aggregation: "count_distinct", distinctField: "subject" } } },
+      ],
+      edges: [{ id: "e", source: "a", target: "g" }],
+    });
+    const { headlineValue } = await import("@/lib/flow/engine");
+    const exec = (await runFlow({ db, orgId: ORG }, g)).nodes.get("g")! as { shape: Parameters<typeof headlineValue>[0] };
+    // S1 shows up under both Ana and Ben; the true distinct count is 2 (S1, S2).
+    // Sabotage: drop `total` from execGroup and this reads 3 (2 + 1, one group
+    // per rep, S1 counted twice).
+    expect(headlineValue(exec.shape)).toBe(2);
+  });
+
+  /** Same fix, the other call site: a Calculate in breakdown mode. */
+  it("a Calculate breakdown's count-distinct headline is the true distinct count too", async () => {
+    await ev({ eventType: "deal", subject: "S1", properties: { rep: "Ana" } });
+    await ev({ eventType: "deal", subject: "S1", properties: { rep: "Ben" } });
+    await ev({ eventType: "deal", subject: "S2", properties: { rep: "Ana" } });
+
+    const g = parseGraph({
+      nodes: [
+        { id: "a", type: "app", data: { config: { connectionId: CONN } } },
+        {
+          id: "c",
+          type: "calculate",
+          data: { config: { mode: "breakdown", breakdownMode: "field", breakdownField: "properties.rep", aggregation: "count_distinct", distinctField: "subject" } },
+        },
+      ],
+      edges: [{ id: "e", source: "a", target: "c" }],
+    });
+    const { headlineValue } = await import("@/lib/flow/engine");
+    const exec = (await runFlow({ db, orgId: ORG }, g)).nodes.get("c")! as { shape: Parameters<typeof headlineValue>[0] };
+    // Sabotage: drop `total` from the breakdown branch of execCalculate and
+    // this reads 3 instead of 2, the same double-count as the Group step.
+    expect(headlineValue(exec.shape)).toBe(2);
+  });
+
+  /**
+   * C7: an unfilled "is one of" value box used to match every record whose
+   * field is missing — `splitList("")` was `[""]`, and a missing field also
+   * stringifies to `""`. An empty list must exclude everything.
+   */
+  it("is_one_of with a blank value list matches nothing, not the records missing that field", async () => {
+    await ev({ eventType: "deal", subject: "a" }); // no properties.stage at all
+    await ev({ eventType: "deal", subject: "b", properties: { stage: "Won" } });
+
+    const g = G(
+      [
+        N("a", "app", { connectionId: CONN }),
+        N("f", "filter", { combinator: "and", rules: [{ field: "properties.stage", op: "is_one_of", value: "" }] }),
+        N("agg", "aggregate", { aggregation: "count" }),
+        N("out", "output", {}),
+      ],
+      [E("a", "f"), E("f", "agg"), E("agg", "out")],
+    );
+    const res = await runFlow({ db, orgId: ORG }, g);
+    // Sabotage: revert splitList's blank-drop and this reads 1 — the record
+    // with no "stage" field "matches" the empty list.
+    expect(res.nodes.get("f")!.recordsOut).toBe(0);
+  });
 });
 
 /**

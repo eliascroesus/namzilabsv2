@@ -254,6 +254,35 @@ describe("graph validation", () => {
     });
     expect(validateGraph(g).some((i) => /metric to publish/.test(i.message))).toBe(false);
   });
+
+  /**
+   * C8: deleting a step used to leave its Review & publish metric silently
+   * pointing at nothing — validateGraph never checked that an enabled
+   * metric's nodeId was still a node in the graph, so a flow with a real
+   * dangling metric published clean and then had nothing to materialize.
+   */
+  it("flags an enabled metric whose node no longer exists", () => {
+    const g = parseGraph({
+      nodes: [N("a", "app", { connectionId: CONN }), N("c", "calculate", { mode: "number", aggregation: "count" })],
+      edges: [E("a", "c")],
+      metrics: [{ nodeId: "gone", enabled: true, name: "Total" }],
+    });
+    // Sabotage: drop the nodeId-existence check and this list comes back
+    // empty — the flow validates clean with a metric pointing at nothing.
+    expect(validateGraph(g).some((i) => i.message === "A result in Review & publish points at a step that no longer exists.")).toBe(true);
+  });
+
+  it("does not flag a disabled metric whose node no longer exists", () => {
+    const g = parseGraph({
+      nodes: [N("a", "app", { connectionId: CONN }), N("c", "calculate", { mode: "number", aggregation: "count" })],
+      edges: [E("a", "c")],
+      metrics: [
+        { nodeId: "c", enabled: true, name: "Total" },
+        { nodeId: "gone", enabled: false, name: "Retired" },
+      ],
+    });
+    expect(validateGraph(g).some((i) => /no longer exists/.test(i.message))).toBe(false);
+  });
 });
 
 /**

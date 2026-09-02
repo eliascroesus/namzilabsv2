@@ -263,6 +263,67 @@ describe("a range selects records; it does not re-run the flow against a truncat
   });
 
   /**
+   * C5: `undated` must count RECORDS, not node visits. A compare node reaches
+   * the very same record through two different node ids in one range — the
+   * Get data step directly (handle a) and that same step's Filter output
+   * (handle b) — and the old counter incremented once per node visited, so
+   * one undated record read as two.
+   */
+  it("counts one undated record once, even when a compare node reaches it through two node ids", async () => {
+    await ev({ eventType: "meeting_booked", at: START_OF_TODAY + HOUR, key: "L1", props: { starts_at: null } });
+    await ev({
+      eventType: "meeting_booked",
+      at: START_OF_TODAY + HOUR,
+      key: "L2",
+      props: { starts_at: new Date(START_OF_TODAY + 5 * HOUR).toISOString() },
+    });
+
+    const graph = {
+      nodes: [
+        N("m", "app", { connectionId: CONN, source: "close", eventType: "meeting_booked" }),
+        N("f", "filter", { rules: [], combinator: "and" }),
+        N("rate", "calculate", { mode: "compare", op: "percentage" }),
+      ],
+      edges: [E("m", "f"), E("m", "rate", "a"), E("f", "rate", "b")],
+    };
+
+    const by = await slots(graph, "rate", SPEC({ timeField: "properties.starts_at" }));
+    // Sabotage: revert the Set and this reads 2 — L1 counted once as "m"'s
+    // own record and again as "f"'s copy of the same record.
+    expect(by.today.undated).toBe(1);
+  });
+
+  /**
+   * C6: `records` behind a compare node is meaningless — its two operands are
+   * usually different populations (leads vs. calls), and the old code summed
+   * the dataset sizes behind BOTH the a and b handles into one number that no
+   * single population produced.
+   */
+  it("a percentage of two Filters reports no records — its operands are not one population", async () => {
+    await ev({ eventType: "lead_created", at: START_OF_TODAY + HOUR, key: "L1" });
+    await ev({ eventType: "lead_created", at: START_OF_TODAY + HOUR, key: "L2" });
+    await ev({ eventType: "call_logged", at: START_OF_TODAY + HOUR, key: "L1" });
+
+    const graph = {
+      nodes: [
+        N("leadsApp", "app", { connectionId: CONN, source: "close", eventType: "lead_created" }),
+        N("callsApp", "app", { connectionId: CONN, source: "close", eventType: "call_logged" }),
+        N("leadsF", "filter", { rules: [], combinator: "and" }),
+        N("callsF", "filter", { rules: [], combinator: "and" }),
+        N("rate", "calculate", { mode: "compare", op: "percentage" }),
+      ],
+      edges: [E("leadsApp", "leadsF"), E("callsApp", "callsF"), E("callsF", "rate", "a"), E("leadsF", "rate", "b")],
+    };
+
+    const by = await slots(graph, "rate");
+    expect(by.today.value).toBe(50);
+    // Sabotage: stop skipping the a/b handles and this reports 3 — the one
+    // call's filter output plus the two leads' filter output, under a
+    // percentage neither population alone produced.
+    expect(by.today.records).toBeUndefined();
+  });
+
+  /**
    * "All time" is returned untouched, and that is not an optimisation.
    * Its upper bound is NOW, while Calendly and Calendar date records by when
    * they WILL happen — so filtering it would drop every future booking out of

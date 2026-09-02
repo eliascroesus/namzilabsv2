@@ -1256,10 +1256,15 @@ function execGroup(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
   const cfg = GroupConfigSchema.parse(node.data.config ?? {});
   const input = requireDataset(inputs, "Group");
   const groups = cfg.mode === "field" ? groupByField(input.records, cfg) : groupByCategories(input.records, cfg);
+  // The headline over every record, not the sum of the groups — see the note
+  // above `aggregate()`'s own grouped branch. Summing agrees with this for
+  // count/sum (the groups partition the records), but count_distinct double
+  // counts any subject that falls in more than one group.
+  const total = computeAgg(input.records, cfg.aggregation, [cfg.valueField], cfg.distinctField);
   return {
     status: "ok",
     nodeType: "group",
-    shape: { kind: "grouped", groups },
+    shape: { kind: "grouped", groups, total },
     recordsIn: input.records.length,
     recordsOut: groups.length,
     sample: input.records.slice(0, 3),
@@ -1434,7 +1439,10 @@ function execCalculate(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
       fallbackLabel: cfg.fallbackLabel,
     };
     const groups = cfg.breakdownMode === "field" ? groupByField(input.records, gcfg) : groupByCategories(input.records, gcfg);
-    return { status: "ok", nodeType: "calculate", shape: { kind: "grouped", groups }, recordsIn: input.records.length, recordsOut: groups.length, sample: input.records.slice(0, 3), outputSchema: [] };
+    // Same fix as execGroup, same reason: the groups' own sum double counts a
+    // count_distinct subject that lands in more than one group.
+    const total = computeAgg(input.records, gcfg.aggregation, [gcfg.valueField], gcfg.distinctField);
+    return { status: "ok", nodeType: "calculate", shape: { kind: "grouped", groups, total }, recordsIn: input.records.length, recordsOut: groups.length, sample: input.records.slice(0, 3), outputSchema: [] };
   }
 
   // number
@@ -1852,7 +1860,14 @@ export function tileByRange(
 
   const out: Record<string, RangeSlot> = {};
   for (const range of ranges) {
-    let undated = 0;
+    // A SET OF RECORD IDS, not a count of `keep()` calls. `keep()` runs once
+    // per dataset NODE a range's traversal visits, and the same underlying
+    // record can be visible through more than one node in one traversal — a
+    // compare node reads a Get data step directly on one handle and that same
+    // step's Filter output on the other, so the one record undated on both
+    // sides was counted twice. Deduping by id reports what it actually is:
+    // how many distinct records had no date, not how many node-visits saw one.
+    const undatedIds = new Set<string>();
     /**
      * WHETHER THIS WINDOW GETS A VOTE ON WHEN THE TILE NEXT CHANGES.
      *
@@ -1884,7 +1899,7 @@ export function tileByRange(
       return records.filter((r) => {
         const t = dateOf(r, field);
         if (t == null) {
-          undated++;
+          undatedIds.add(r.id);
           return false;
         }
         if (tracks) trackCrossing(t);
@@ -1993,6 +2008,11 @@ export function tileByRange(
       if (ex.shape.kind === "dataset") return ex.shape.records.length;
       let n = 0;
       for (const e of incomingBy.get(nodeId) ?? []) {
+        // The a/b handles are a compare's two OPERANDS, not one population —
+        // summing them behind a percentage was "17 records" that no single
+        // side of the comparison produced. See the comment above this
+        // function: anything that cannot answer honestly answers 0.
+        if (e.targetHandle === "a" || e.targetHandle === "b") continue;
         const src = memo.get(e.source);
         const shape = src && e.sourceHandle && src.outputs?.[e.sourceHandle] ? src.outputs[e.sourceHandle] : src?.shape;
         if (shape?.kind === "dataset") n += shape.records.length;
@@ -2019,7 +2039,7 @@ export function tileByRange(
         ...(tile.series && unit ? { unit } : {}),
         groups: tile.groups,
         ...(records > 0 ? { records } : {}),
-        ...(undated > 0 ? { undated } : {}),
+        ...(undatedIds.size > 0 ? { undated: undatedIds.size } : {}),
       };
     } catch (e) {
       /**
@@ -2566,8 +2586,19 @@ function num(v: unknown): number | null {
 function round(n: number): number {
   return Math.round(n * 1e6) / 1e6;
 }
+/**
+ * Blank entries are dropped, not just trimmed — an unfilled value box ("") or
+ * a stray comma ("a,,b") must not leave a "" element that a missing/empty
+ * FIELD then "matches", since a missing field also stringifies to "". An
+ * empty list is the result for a wholly blank value, which is exactly right:
+ * `is_one_of` then matches nothing, `is_not_one_of` matches everything.
+ * Mirrored in `listSql` so the compiled predicate stays parity-exact.
+ */
 function splitList(v: string): string[] {
-  return v.split(",").map((s) => s.trim());
+  return v
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s !== "");
 }
 /**
  * A moment, or nothing.
