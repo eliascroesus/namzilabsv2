@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { createTestDb } from "./helpers/testdb";
-import { dashboardGroups, dashboardTilePlacements, dashboardViews, rankAssignments, workspaceRanks } from "@/db/schema";
+import { dashboardGroups, dashboardTilePlacements, dashboardViews, metrics, rankAssignments, workspaceRanks } from "@/db/schema";
 import { compareKeys, keyBetween } from "@/lib/board/order";
 import type { DB } from "@/db/types";
 
@@ -61,6 +61,37 @@ const placementsOf = (orgId: string) =>
 async function assignEmptyRank() {
   await db.insert(workspaceRanks).values({ id: "rank_viewer", orgId: A, name: "Viewer", allMetrics: true });
   await db.insert(rankAssignments).values({ orgId: A, userId: "user_1", rankId: "rank_viewer" });
+}
+
+/**
+ * A real `metrics` row, so a `metric:<id>` key names something that actually
+ * exists — `metrics.id` is a uuid column, so a hand-typed `"metric:m1"` can
+ * never be a legal row id, only ever a stand-in for one.
+ */
+async function metricRow(orgId: string): Promise<string> {
+  const [row] = await db
+    .insert(metrics)
+    .values({ orgId, name: "M", kind: "aggregate", definition: {} })
+    .returning({ id: metrics.id });
+  return row.id;
+}
+
+/**
+ * A rank that CAN arrange the board (`create_flows`) but sees only the named
+ * flow/metric visibility keys — the shape C20 closes a hole in. Before the
+ * fix, every write below took a tile key from the browser and never once
+ * asked `canSeeMetric` about it.
+ */
+async function assignBuilderRank(metricKeys: string[]) {
+  await db.insert(workspaceRanks).values({
+    id: "rank_builder",
+    orgId: A,
+    name: "Builder",
+    permissions: ["create_flows"],
+    allMetrics: false,
+    metricKeys,
+  });
+  await db.insert(rankAssignments).values({ orgId: A, userId: "user_1", rankId: "rank_builder" });
 }
 
 describe("creating a group", () => {
@@ -152,9 +183,10 @@ describe("placing tiles", () => {
   it("upserts in one statement and moves rather than duplicating", async () => {
     const g = await createGroupAction("G");
     if (!g.ok) throw new Error("setup");
+    const m1 = await metricRow(A);
     await setTilePlacementsAction([
       { tileKey: "flow:f1:n1", groupId: g.group.id, pos: "i" },
-      { tileKey: "metric:m1", groupId: null, pos: "r" },
+      { tileKey: `metric:${m1}`, groupId: null, pos: "r" },
     ]);
     expect(await placementsOf(A)).toHaveLength(2);
 
@@ -168,7 +200,8 @@ describe("placing tiles", () => {
 
   it("rejects a position key that would order differently in Postgres than in JS", async () => {
     // Uppercase is the collation hazard; a trailing minimum digit is the
-    // two-strings-one-position hazard. Both are refused at the door.
+    // two-strings-one-position hazard. Both are refused at the door, before the
+    // tile key is ever looked up — so a fake metric id here is fine.
     expect(await setTilePlacementsAction([{ tileKey: "metric:m1", groupId: null, pos: "aA" }])).toMatchObject({ ok: false });
     expect(await setTilePlacementsAction([{ tileKey: "metric:m1", groupId: null, pos: "a0" }])).toMatchObject({ ok: false });
     expect(await placementsOf(A)).toHaveLength(0);
@@ -181,13 +214,66 @@ describe("placing tiles", () => {
 
   it("stops at the placement cap", async () => {
     vi.stubEnv("MAX_BOARD_PLACEMENTS_PER_ORG", "2");
+    const a = await metricRow(A);
+    const b = await metricRow(A);
+    const c = await metricRow(A);
     expect(
       (await setTilePlacementsAction([
-        { tileKey: "metric:a", groupId: null, pos: "i" },
-        { tileKey: "metric:b", groupId: null, pos: "r" },
+        { tileKey: `metric:${a}`, groupId: null, pos: "i" },
+        { tileKey: `metric:${b}`, groupId: null, pos: "r" },
       ])).ok,
     ).toBe(true);
-    expect(await setTilePlacementsAction([{ tileKey: "metric:c", groupId: null, pos: "z" }])).toMatchObject({ ok: false });
+    expect(await setTilePlacementsAction([{ tileKey: `metric:${c}`, groupId: null, pos: "z" }])).toMatchObject({ ok: false });
+  });
+});
+
+/**
+ * C20, THE METRIC HALF: a `metric:<id>` key is only ever checked against the
+ * key's own SHAPE (`tileKeySchema`'s regex), never against the org's actual
+ * `metrics` table — so a made-up id, a deleted one, or another workspace's
+ * saved fine and sat there matching nothing forever, and a hand-typed
+ * non-uuid string reached `inArray(metrics.id, …)` and threw a raw Postgres
+ * error straight into the toast.
+ */
+describe("every metric a tile names must actually exist", () => {
+  it("refuses an id missing from this org, one from another org, and one that isn't a uuid — none of them a raw database error", async () => {
+    const theirs = await metricRow(B);
+    for (const key of [`metric:${crypto.randomUUID()}`, `metric:${theirs}`, "metric:not-a-uuid"]) {
+      expect(await setTilePlacementsAction([{ tileKey: key, groupId: null, pos: "i" }])).toEqual({
+        ok: false,
+        error: "That isn't a metric we know.",
+      });
+    }
+    expect(await placementsOf(A)).toHaveLength(0);
+  });
+
+  it("accepts the org's own metric", async () => {
+    const mine = await metricRow(A);
+    expect(await setTilePlacementsAction([{ tileKey: `metric:${mine}`, groupId: null, pos: "i" }])).toEqual({ ok: true });
+    expect(await placementsOf(A)).toHaveLength(1);
+  });
+});
+
+/**
+ * C20, THE FLOW HALF: a `flow:<flowId>:<nodeId>` key was never checked
+ * against `canSeeMetric` here at all, so a rank scoped to a handful of
+ * metrics could still file a placement for any flow in the workspace —
+ * readable the moment a teammate with fuller access opened the same board.
+ */
+describe("what a restricted rank may place", () => {
+  it("refuses a flow tile outside the rank's metricKeys, with the message that also covers a deleted one", async () => {
+    await assignBuilderRank(["flow:f1"]);
+    expect(await setTilePlacementsAction([{ tileKey: "flow:f2:n1", groupId: null, pos: "i" }])).toEqual({
+      ok: false,
+      error: "That isn't a metric we know.",
+    });
+    expect(await placementsOf(A)).toHaveLength(0);
+  });
+
+  it("allows a flow tile the rank's metricKeys does name", async () => {
+    await assignBuilderRank(["flow:f1"]);
+    expect(await setTilePlacementsAction([{ tileKey: "flow:f1:n1", groupId: null, pos: "i" }])).toEqual({ ok: true });
+    expect(await placementsOf(A)).toHaveLength(1);
   });
 });
 
@@ -200,10 +286,13 @@ describe("deleting a group", () => {
      */
     const g = await createGroupAction("Doomed");
     if (!g.ok) throw new Error("setup");
+    const already = `metric:${await metricRow(A)}`;
+    const first = `metric:${await metricRow(A)}`;
+    const second = `metric:${await metricRow(A)}`;
     await setTilePlacementsAction([
-      { tileKey: "metric:already", groupId: null, pos: "i" },
-      { tileKey: "metric:first", groupId: g.group.id, pos: "a" },
-      { tileKey: "metric:second", groupId: g.group.id, pos: "m" },
+      { tileKey: already, groupId: null, pos: "i" },
+      { tileKey: first, groupId: g.group.id, pos: "a" },
+      { tileKey: second, groupId: g.group.id, pos: "m" },
     ]);
 
     const r = await deleteGroupAction(g.group.id);
@@ -211,11 +300,11 @@ describe("deleting a group", () => {
     if (!r.ok) return;
     // The server says what keys it wrote, so the client cannot compute a
     // second, differing answer.
-    expect(r.moved.map((m) => m.tileKey)).toEqual(["metric:first", "metric:second"]);
+    expect(r.moved.map((m) => m.tileKey)).toEqual([first, second]);
 
     const rows = (await placementsOf(A)).sort((a, b) => compareKeys(a.pos, b.pos));
     expect(rows.every((p) => p.groupId === null)).toBe(true);
-    expect(rows.map((p) => p.tileKey)).toEqual(["metric:already", "metric:first", "metric:second"]);
+    expect(rows.map((p) => p.tileKey)).toEqual([already, first, second]);
     expect(await groupsOf(A)).toHaveLength(0);
   });
 
@@ -269,9 +358,11 @@ describe("how a column sorts itself", () => {
      */
     const g = await createGroupAction("G");
     if (!g.ok) throw new Error("setup");
+    const c = await metricRow(A);
+    const a = await metricRow(A);
     await setTilePlacementsAction([
-      { tileKey: "metric:c", groupId: g.group.id, pos: "a" },
-      { tileKey: "metric:a", groupId: g.group.id, pos: "m" },
+      { tileKey: `metric:${c}`, groupId: g.group.id, pos: "a" },
+      { tileKey: `metric:${a}`, groupId: g.group.id, pos: "m" },
     ]);
     const before = await placementsOf(A);
 
@@ -342,6 +433,25 @@ describe("pointing a calendar at a metric", () => {
     await pick("v2", "flow:f1:n1");
     await pick("v3", "flow:f1:n1");
     expect(await keys()).toEqual([]);
+  });
+
+  /**
+   * C20: the shape check (`/^flow:…$/`) never asked whether THIS caller may
+   * see the flow named — a rank scoped to a few metrics could point the
+   * shared calendar at any flow in the workspace.
+   */
+  it("refuses a flow the caller's rank cannot see", async () => {
+    await view("v1");
+    await assignBuilderRank(["flow:f1"]);
+    expect(await pick("v1", "flow:f2:n1")).toEqual({ ok: false, error: "That isn't a metric we know." });
+    expect(await keys()).toEqual([]);
+  });
+
+  it("allows a flow the caller's rank can see", async () => {
+    await view("v1");
+    await assignBuilderRank(["flow:f1"]);
+    expect(await pick("v1", "flow:f1:n1")).toEqual({ ok: true });
+    expect(await keys()).toEqual(["flow:f1:n1"]);
   });
 });
 

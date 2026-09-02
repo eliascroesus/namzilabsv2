@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { createTestDb } from "./helpers/testdb";
-import { dashboardTiles, dashboardViews, flowResults, flows, rankAssignments, workspaceRanks } from "@/db/schema";
+import { dashboardTiles, dashboardViews, flowResults, flows, metrics, rankAssignments, workspaceRanks } from "@/db/schema";
+import { UNSET_TILE_KEY } from "@/lib/board/types";
 import type { DB } from "@/db/types";
 
 /**
@@ -49,6 +50,35 @@ const tilesOf = (viewId: string) => db.select().from(dashboardTiles).where(eq(da
 async function assignEmptyRank() {
   await db.insert(workspaceRanks).values({ id: "rank_viewer", orgId: A, name: "Viewer", allMetrics: true });
   await db.insert(rankAssignments).values({ orgId: A, userId: "user_1", rankId: "rank_viewer" });
+}
+
+/**
+ * A real `metrics` row, so a `metric:<id>` key names something that actually
+ * exists — `metrics.id` is a uuid column, so a hand-typed `"metric:m9"` can
+ * never be a legal row id, only ever a stand-in for one.
+ */
+async function metricRow(orgId: string): Promise<string> {
+  const [row] = await db
+    .insert(metrics)
+    .values({ orgId, name: "M", kind: "aggregate", definition: {} })
+    .returning({ id: metrics.id });
+  return row.id;
+}
+
+/**
+ * A rank that CAN arrange the board (`create_flows`) but sees only the named
+ * flow/metric visibility keys — the shape C20 closes a hole in.
+ */
+async function assignBuilderRank(metricKeys: string[]) {
+  await db.insert(workspaceRanks).values({
+    id: "rank_builder",
+    orgId: A,
+    name: "Builder",
+    permissions: ["create_flows"],
+    allMetrics: false,
+    metricKeys,
+  });
+  await db.insert(rankAssignments).values({ orgId: A, userId: "user_1", rankId: "rank_builder" });
 }
 
 describe("adding a chart", () => {
@@ -226,9 +256,10 @@ describe("changing what a chart is", () => {
 
   it("repoints at another metric without touching the drawing", async () => {
     const id = await seed();
-    expect((await setCustomTileAction(id, { tileKey: "metric:m9" })).ok).toBe(true);
+    const m9 = await metricRow(A);
+    expect((await setCustomTileAction(id, { tileKey: `metric:${m9}` })).ok).toBe(true);
     const r = await row(id);
-    expect(r.tileKey).toBe("metric:m9");
+    expect(r.tileKey).toBe(`metric:${m9}`);
     expect(r.chart).toBe("number");
   });
 
@@ -361,6 +392,49 @@ describe("changing what a chart is", () => {
     // Reports success for the zero rows it was allowed to touch; what matters
     // is that the row did not move.
     expect((await row(id)).chart).toBe("number");
+  });
+});
+
+/**
+ * C20: both actions accepted a `flow:`/`metric:` key by REGEX ONLY, never
+ * asking whether this caller's rank may see the flow, or whether a `metric:`
+ * id names a row that exists at all. `assignBuilderRank` grants
+ * `create_flows` — so the actions are not blocked outright — while
+ * restricting visibility to a named handful, which is exactly the caller
+ * these two holes let through.
+ */
+describe("what a restricted rank may point a chart at", () => {
+  it("refuses adding a chart for a flow outside the rank's metricKeys, and allows one inside it", async () => {
+    await assignBuilderRank(["flow:f1"]);
+    const hidden = await addCustomTileAction("va", "flow:f2:o1", "number");
+    expect(hidden).toEqual({ ok: false, error: "That isn't a metric we know." });
+    expect(await tilesOf("va")).toHaveLength(0);
+
+    const visible = await addCustomTileAction("va", "flow:f1:o1", "number");
+    expect(visible.ok).toBe(true);
+    expect(await tilesOf("va")).toHaveLength(1);
+  });
+
+  it("refuses repointing an existing chart at a hidden flow or at an unknown metric", async () => {
+    const a = await addCustomTileAction("va", "flow:f1:o1", "number");
+    if (!a.ok) throw new Error("setup failed");
+    await assignBuilderRank(["flow:f1"]);
+
+    const hiddenFlow = await setCustomTileAction(a.tile.id, { tileKey: "flow:f2:o1" });
+    expect(hiddenFlow).toEqual({ ok: false, error: "That isn't a metric we know." });
+
+    const unknownMetric = await setCustomTileAction(a.tile.id, { tileKey: `metric:${crypto.randomUUID()}` });
+    expect(unknownMetric).toEqual({ ok: false, error: "That isn't a metric we know." });
+
+    expect((await tilesOf("va")).find((t) => t.id === a.tile.id)?.tileKey).toBe("flow:f1:o1");
+  });
+
+  it("still lets a block sentinel and the unset sentinel through a restricted rank", async () => {
+    // Neither joins to a metric at all — `visibilityKeyOf` reads both as
+    // outside the permission system entirely, not as "hidden".
+    await assignBuilderRank(["flow:f1"]);
+    expect((await addCustomTileAction("va", "block:heading", "heading")).ok).toBe(true);
+    expect((await addCustomTileAction("va", UNSET_TILE_KEY, "number")).ok).toBe(true);
   });
 });
 

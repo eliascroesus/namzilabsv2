@@ -173,6 +173,26 @@ export const tileKeyOfFlow = (flowId: string, outputNodeId: string) => `flow:${f
 export const tileKeyOfMetric = (metricId: string) => `metric:${metricId}`;
 
 /**
+ * THE BRIDGE ITSELF — a placement key, narrowed to the coarser key
+ * `canSeeMetric` actually gates on.
+ *
+ * A flow tile's permission is per FLOW, not per output node, so
+ * `flow:<flowId>:<outputNodeId>` narrows to `flow:<flowId>`. A classic
+ * metric's permission is per metric, which is already the whole key, so it
+ * passes through unchanged. `block:*` and `UNSET_TILE_KEY` name no metric at
+ * all — a heading and an empty slot are not hidden, they simply are not the
+ * kind of thing this question is about — so both, and anything else this
+ * function does not recognise, answer `null`: SKIP, rather than a visibility
+ * check that could only ever refuse them.
+ */
+export function visibilityKeyOf(tileKey: string): string | null {
+  const flow = /^flow:([^:]+):.+$/.exec(tileKey);
+  if (flow) return `flow:${flow[1]}`;
+  if (/^metric:.+$/.test(tileKey)) return tileKey;
+  return null;
+}
+
+/**
  * WHAT A CANVAS ROW IS, once the permission filters have already run.
  *
  * A row whose metric this viewer may not see and a row whose metric no longer

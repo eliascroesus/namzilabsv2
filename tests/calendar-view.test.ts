@@ -229,8 +229,15 @@ describe("choosing the metric", () => {
   });
 
   it("gates the write on the same permission every other board write takes", () => {
-    const fn = actions.slice(actions.indexOf("export async function setCalendarMetricAction"));
-    expect(fn).toMatch(/if \(await blocked\(ctx\)\) return fail\(RANK_BLOCKS\)/);
+    // Bounded to just this function: `arranger` replaced the plain boolean
+    // gate here (C20) so the write can also check the tile key's VISIBILITY,
+    // not only whether the caller may arrange the board at all.
+    const fn = actions.slice(
+      actions.indexOf("export async function setCalendarMetricAction"),
+      actions.indexOf("export async function renameViewAction"),
+    );
+    expect(fn).toMatch(/const access = await arranger\(ctx\);/);
+    expect(fn).toMatch(/if \(!access\) return fail\(RANK_BLOCKS\)/);
     // And the page does not hand the action to a viewer who may not use it.
     expect(page).toMatch(/access\.can\("create_flows"\) && activeView \? setCalendarMetricAction\.bind/);
   });
@@ -323,6 +330,21 @@ describe("the states a calendar view can be in", () => {
     expect(fn).toMatch(/\^flow:\[\\w-\]\+:\[\\w-\]\+\$/);
     // And a calendar with no key takes the plain insert rather than the CTE.
     expect(fn).toMatch(/if \(tileKey\) \{/);
+  });
+
+  it("does not honor a well-formed key naming a flow the caller's rank cannot see", () => {
+    // C20: the shape check alone accepted ANY well-formed flow key, which is
+    // the same hole `setCalendarMetricAction` and the custom-tile actions
+    // had — a rank scoped to a few metrics could still seed the board's very
+    // first calendar placement with a flow it may not see. A malformed or
+    // disallowed key both fall back to `null` here rather than refusing the
+    // whole view: creating the view is still fine, only the smuggled
+    // placement is not honored.
+    const fn = actions.slice(
+      actions.indexOf("export async function addViewAction"),
+      actions.indexOf("export async function setCalendarMetricAction"),
+    );
+    expect(fn).toMatch(/tileKeysAllowed\(/);
   });
 
   it("has no source filter — and neither does any other view now", () => {

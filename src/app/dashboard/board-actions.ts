@@ -6,9 +6,9 @@ import { z } from "zod";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { getDb } from "@/db/client";
-import { dashboardGroups, dashboardTilePlacements, dashboardTiles, dashboardViews, flowResults } from "@/db/schema";
+import { dashboardGroups, dashboardTilePlacements, dashboardTiles, dashboardViews, flowResults, metrics } from "@/db/schema";
 import { requireOrg, type OrgContext } from "@/lib/auth";
-import { effectiveAccess } from "@/lib/permissions";
+import { effectiveAccess, type Access } from "@/lib/permissions";
 import { boardGroupCap, boardPlacementCap, boardTileCap, boardViewCap } from "@/lib/limits";
 import { compareKeys, keyBetween, keysBetween } from "@/lib/board/order";
 import { adoptDefaultView } from "@/lib/board/store";
@@ -16,9 +16,10 @@ import { compact, GRID_COLS } from "@/lib/board/grid";
 import { asPreset } from "@/lib/board/presets";
 import { BLOCK_IDS, CHART_IDS, asChartId, blockKindOf, defaultSize, minSize } from "@/lib/board/charts";
 import { parseTileConfig, TILE_CONFIG_KEYS } from "@/lib/board/tile-config";
-import { asViewKind, UNSET_TILE_KEY, type BoardTileRow } from "@/lib/board/types";
+import { asViewKind, UNSET_TILE_KEY, visibilityKeyOf, type BoardTileRow } from "@/lib/board/types";
 import { GROUP_ACCENT } from "@/components/flow/node-accent";
 import type { BoardGroup } from "@/lib/board/types";
+import type { DB } from "@/db/types";
 
 /**
  * EVERY WAY THE BOARD CAN BE REARRANGED, AND THE ONE GATE THEY ALL PASS.
@@ -71,18 +72,86 @@ function newViewCte(id: string, orgId: string, name: string, pos: string, kind: 
 }
 
 /**
- * The gate: arranging the shared dashboard is editing the workspace's furniture,
- * so it takes the same permission as building the metrics on it. A member
- * without it still SEES the arrangement — reading is not editing — which is why
- * this is on the mutations only.
+ * THE GATE, AND THE ACCESS IT WAS RESOLVED FROM.
  *
- * Deliberately NOT `canSeeMetric`: a placement names a tile key, and a member
- * who cannot see that tile never receives it in the first place. The question
- * that matters here is whether they may rearrange at all.
+ * Arranging the shared dashboard is editing the workspace's furniture, so it
+ * takes the same permission as building the metrics on it. A member without
+ * it still SEES the arrangement — reading is not editing — which is why this
+ * is on the mutations only.
+ *
+ * Returning the resolved `Access` rather than a boolean is what lets a write
+ * that NAMES a tile key ask a second, narrower question afterwards —
+ * `tileKeysAllowed`, below — without resolving the rank a second time. The
+ * gate itself stays exactly what it was: "may this caller rearrange the
+ * board at all", never `canSeeMetric`, because a member who cannot see a
+ * tile is caught by the second question, not this one.
+ */
+async function arranger(ctx: Pick<OrgContext, "orgId" | "userId" | "role">): Promise<Access | null> {
+  const access = await effectiveAccess(getDb(), ctx);
+  return access.can("create_flows") ? access : null;
+}
+
+/**
+ * The boolean shape every action C20 did not touch still uses. Kept as a thin
+ * wrapper over `arranger` rather than duplicating `effectiveAccess`'s call, so
+ * the two gates can never disagree about who may arrange the board.
  */
 async function blocked(ctx: Pick<OrgContext, "orgId" | "userId" | "role">): Promise<boolean> {
-  const access = await effectiveAccess(getDb(), ctx);
-  return !access.can("create_flows");
+  return (await arranger(ctx)) == null;
+}
+
+const UNKNOWN_METRIC = "That isn't a metric we know.";
+
+/**
+ * A TILE KEY IS TWO CLAIMS, AND THIS CHECKS BOTH: that the caller's rank may
+ * SEE the flow it names, and that the metric it names actually EXISTS.
+ *
+ * Neither half was asked before C20. A rank scoped to a handful of metrics
+ * could still file a placement, a chart or a calendar's metric against any
+ * flow in the workspace — readable the moment a teammate with fuller access
+ * opened the same board. Separately, a `metric:<id>` key was checked against
+ * its own SHAPE and never against the `metrics` table, so a made-up id or
+ * another workspace's saved fine and sat there matching nothing, and a
+ * hand-typed non-uuid string reached `inArray(metrics.id, …)` and threw a raw
+ * Postgres error into the caller's face.
+ *
+ * FLOW KEYS GET VISIBILITY ONLY, NEVER EXISTENCE — a placement is allowed to
+ * outlive its tile by design (that is how republishing a flow restores a
+ * board), so a flow key naming a node that no longer exists is not this
+ * function's business.
+ *
+ * METRIC KEYS GET EXISTENCE ONLY: refused if the id is not even a uuid
+ * (BEFORE the query, since Postgres throws rather than returning no rows for
+ * a malformed uuid literal), then refused if it does not name a row in THIS
+ * org's `metrics`.
+ *
+ * ONE MESSAGE FOR EVERY REFUSAL, deliberately — the same rule
+ * `setCalendarMetricAction` already followed for a malformed key: a hidden
+ * flow, a deleted one and a typo in the URL all read the same to a caller who
+ * must not learn from the WORDING which case they hit.
+ */
+async function tileKeysAllowed(db: DB, orgId: string, access: Access, keys: string[]): Promise<string | null> {
+  const metricIds: string[] = [];
+  for (const key of keys) {
+    const vis = visibilityKeyOf(key);
+    if (vis == null) continue; // block:*, the unset sentinel, anything unrecognised — not this question's business
+    if (vis.startsWith("flow:")) {
+      if (!access.canSeeMetric(vis)) return UNKNOWN_METRIC;
+      continue;
+    }
+    metricIds.push(vis.slice("metric:".length));
+  }
+  if (metricIds.length === 0) return null;
+
+  const ids = [...new Set(metricIds)];
+  if (ids.some((id) => !z.string().uuid().safeParse(id).success)) return UNKNOWN_METRIC;
+
+  const rows = await db
+    .select({ id: metrics.id })
+    .from(metrics)
+    .where(and(eq(metrics.orgId, orgId), inArray(metrics.id, ids)));
+  const found = new Set(rows.map((r) => r.id));
+  return ids.every((id) => found.has(id)) ? null : UNKNOWN_METRIC;
 }
 
 type Result<T = Record<never, never>> = ({ ok: true } & T) | { ok: false; error: string };
@@ -287,7 +356,8 @@ export async function setTilePlacementsAction(
   viewId: string | null = null,
 ): Promise<Result> {
   const ctx = await requireOrg();
-  if (await blocked(ctx)) return fail(RANK_BLOCKS);
+  const access = await arranger(ctx);
+  if (!access) return fail(RANK_BLOCKS);
 
   const cap = boardPlacementCap();
   const parsed = z
@@ -311,6 +381,11 @@ export async function setTilePlacementsAction(
 
   const db = getDb();
   try {
+    // C20: every key is checked for VISIBILITY (flows) and EXISTENCE
+    // (metrics) before anything is written — see `tileKeysAllowed`.
+    const keyError = await tileKeysAllowed(db, ctx.orgId, access, [...new Set(parsed.data.map((i) => i.tileKey))]);
+    if (keyError) return fail(keyError);
+
     /**
      * A GROUP ID FROM THE BROWSER IS RE-WALLED TO THE ORG.
      *
@@ -494,7 +569,8 @@ export async function addViewAction(fd: FormData): Promise<void> {
     if (source) p.set("source", source);
     return `/dashboard?${p.toString()}${p.size ? "&" : ""}${extra}`;
   };
-  if (await blocked(ctx)) redirect(back("error=rank"));
+  const access = await arranger(ctx);
+  if (!access) redirect(back("error=rank"));
 
   const db = getDb();
   const existing = await db
@@ -537,12 +613,18 @@ export async function addViewAction(fd: FormData): Promise<void> {
    * nobody is asked, and the board's own dropdown is where it is actually
    * chosen.
    *
-   * Validated against the KEY FORMAT rather than against the metric list. A
-   * post naming a metric that does not exist is not an error worth a round trip
-   * to detect: a placement is explicitly allowed to outlive its tile (that is
-   * how republishing a flow restores a board), so "points at nothing" is a
-   * state the calendar already renders honestly. What must not get through is a
-   * malformed key, which would sit in the table forever matching nothing.
+   * Validated against the KEY FORMAT, then against this caller's VISIBILITY —
+   * never against whether the metric still exists. A placement is explicitly
+   * allowed to outlive its tile (that is how republishing a flow restores a
+   * board), so "points at nothing" is a state the calendar already renders
+   * honestly and is not an error worth a round trip to detect. What must not
+   * get through is a malformed key, which would sit in the table forever
+   * matching nothing, or one this caller's rank may not see (C20) — a
+   * calendar's one placement is as much a tile key as any other, and the
+   * shape check alone never asked `canSeeMetric` about it.
+   *
+   * EITHER FAILURE FALLS BACK TO `null`, THE SAME AS ABSENT, rather than
+   * refusing the whole view — see the note below.
    *
    * ABSENT IS ALLOWED, AND IS NOT AN ERROR. A workspace with nothing published
    * has no first metric to send, and refusing to create the view would be the
@@ -552,7 +634,8 @@ export async function addViewAction(fd: FormData): Promise<void> {
    * board says there is nothing published yet.
    */
   const rawKey = String(fd.get("tileKey") ?? "");
-  const tileKey = kind === "calendar" && /^flow:[\w-]+:[\w-]+$/.test(rawKey) ? rawKey : null;
+  const wellFormedKey = kind === "calendar" && /^flow:[\w-]+:[\w-]+$/.test(rawKey);
+  const tileKey = wellFormedKey && (await tileKeysAllowed(db, ctx.orgId, access, [rawKey])) == null ? rawKey : null;
 
   /**
    * THE NAME. A calendar is called "Calendar", not after the metric it happens
@@ -661,13 +744,21 @@ export async function addViewAction(fd: FormData): Promise<void> {
  */
 export async function setCalendarMetricAction(viewId: string, fd: FormData): Promise<Result> {
   const ctx = await requireOrg();
-  if (await blocked(ctx)) return fail(RANK_BLOCKS);
+  const access = await arranger(ctx);
+  if (!access) return fail(RANK_BLOCKS);
   if (!idSchema.safeParse(viewId).success) return fail("Unknown view.");
   const tileKey = String(fd.get("tileKey") ?? "");
-  if (!/^flow:[\w-]+:[\w-]+$/.test(tileKey)) return fail("That isn't a metric we know.");
+  if (!/^flow:[\w-]+:[\w-]+$/.test(tileKey)) return fail(UNKNOWN_METRIC);
 
   try {
-    await getDb().execute(sql`
+    const db = getDb();
+    // C20: the shape check above says nothing about whether THIS caller may
+    // see the flow named — a rank scoped to a few metrics could otherwise
+    // point the shared calendar at any flow in the workspace.
+    const keyError = await tileKeysAllowed(db, ctx.orgId, access, [tileKey]);
+    if (keyError) return fail(keyError);
+
+    await db.execute(sql`
       with cleared as (
         delete from ${dashboardTilePlacements}
          where org_id = ${ctx.orgId} and view_id = ${viewId}
@@ -1025,7 +1116,8 @@ export async function addCustomTileAction(
   chart: string,
 ): Promise<Result<{ tile: BoardTileRow }>> {
   const ctx = await requireOrg();
-  if (await blocked(ctx)) return fail(RANK_BLOCKS);
+  const access = await arranger(ctx);
+  if (!access) return fail(RANK_BLOCKS);
   if (!idSchema.safeParse(viewId).success) return fail("Unknown view.");
   const key = tileKeySchema.safeParse(tileKey);
   if (!key.success) return fail(key.error.issues[0]?.message ?? "Unknown metric.");
@@ -1034,6 +1126,9 @@ export async function addCustomTileAction(
 
   try {
     const db = getDb();
+    // C20: a well-formed key is not the same as one this caller may use.
+    const keyError = await tileKeysAllowed(db, ctx.orgId, access, [key.data]);
+    if (keyError) return fail(keyError);
     if (!(await customView(ctx.orgId, viewId))) return fail("That view can't hold charts.");
 
     const existing = await db
@@ -1260,7 +1355,8 @@ export async function setCustomTileAction(
   patch: { chart?: string; tileKey?: string; title?: string; config?: unknown; clear?: string[] },
 ): Promise<Result> {
   const ctx = await requireOrg();
-  if (await blocked(ctx)) return fail(RANK_BLOCKS);
+  const access = await arranger(ctx);
+  if (!access) return fail(RANK_BLOCKS);
   if (!idSchema.safeParse(id).success) return fail("Unknown chart.");
 
   const next: { chart?: string; tileKey?: string; config?: unknown; updatedAt: Date } = {
@@ -1274,6 +1370,16 @@ export async function setCustomTileAction(
   if (patch.tileKey !== undefined) {
     const k = tileKeySchema.safeParse(patch.tileKey);
     if (!k.success) return fail(k.error.issues[0]?.message ?? "Unknown metric.");
+    // C20: only checked when a NEW key is being set — repointing is the one
+    // moment a caller chooses what a chart shows, so it is the one moment
+    // this needs asking. A patch that leaves `tileKey` untouched keeps
+    // whatever the row already had.
+    try {
+      const keyError = await tileKeysAllowed(getDb(), ctx.orgId, access, [k.data]);
+      if (keyError) return fail(keyError);
+    } catch (e) {
+      return oops(e);
+    }
     next.tileKey = k.data;
   }
   /**
