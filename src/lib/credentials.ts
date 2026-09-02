@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { connections } from "@/db/schema";
 import { encrypt, decrypt, getEncryptionKey } from "@/lib/crypto";
 import { refreshGoogleToken } from "@/lib/google-oauth";
+import { HttpError } from "@/lib/http-client";
 import type { DB } from "@/db/types";
 
 type CredConnection = { id: string; source: string; credentialsEncrypted: string | null };
@@ -30,13 +31,27 @@ export async function getConnectionCredentials(db: DB, conn: CredConnection): Pr
   const refreshToken = typeof creds.refreshToken === "string" ? creds.refreshToken : null;
 
   if (isGoogle && refreshToken && expiresAt < Date.now() + 60_000) {
-    const refreshed = await refreshGoogleToken(refreshToken);
-    const merged = { ...creds, ...refreshed };
-    await db
-      .update(connections)
-      .set({ credentialsEncrypted: encrypt(JSON.stringify(merged), getEncryptionKey()), updatedAt: new Date() })
-      .where(eq(connections.id, conn.id));
-    return merged;
+    try {
+      const refreshed = await refreshGoogleToken(refreshToken);
+      const merged = { ...creds, ...refreshed };
+      await db
+        .update(connections)
+        .set({ credentialsEncrypted: encrypt(JSON.stringify(merged), getEncryptionKey()), updatedAt: new Date() })
+        .where(eq(connections.id, conn.id));
+      return merged;
+    } catch (err) {
+      // C12 — Google answers a revoked or expired refresh token with 400
+      // `invalid_grant`, a permanent state no retry will ever fix. Reworded so
+      // the sweep's `lastError` and the connection page tell the user what to
+      // do, instead of reading as an opaque "provider failed" forever. Every
+      // other failure (a timeout, a 5xx) is transient or already typed for the
+      // breaker (recordProviderError/tripBreaker in ingestion/reconcile.ts)
+      // and must reach it unchanged.
+      if (err instanceof HttpError && err.body.includes("invalid_grant")) {
+        throw new Error("Google access has expired or been revoked. Reconnect this Google account from Integrations.");
+      }
+      throw err;
+    }
   }
   return creds;
 }

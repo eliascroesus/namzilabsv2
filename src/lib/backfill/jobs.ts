@@ -50,6 +50,24 @@ export type BackfillStatus = "queued" | "running" | (typeof TERMINAL_STATUSES)[n
 export type BackfillJob = typeof backfillJobs.$inferSelect;
 
 /**
+ * The exact `detail` `run.ts` writes when a slice finds the connection
+ * `disabled` mid-import (see `runBackfillSlice`). Terminal like any other
+ * `partial`, but for a reason nothing here should treat as permanent: the
+ * user did not run out of history and the row ceiling was not reached, the
+ * account was disconnected — and `reconnectConnection` (`lib/connections.ts`)
+ * matches on this exact string to decide which `partial` jobs to put back to
+ * work. A `partial` stopped by the row ceiling or an exhausted source is left
+ * alone: those really are done, and reviving them would re-walk history that
+ * correctly stopped.
+ *
+ * Lives here rather than in `run.ts` (where it is written) so `connections.ts`
+ * can depend on it without importing `run.ts` — which pulls in the connector
+ * registry and credentials, and risks an import cycle back through
+ * `connections.ts`. `run.ts` re-exports it for its own callers.
+ */
+export const DISCONNECTED_DETAIL = "The connection was disconnected before the import finished.";
+
+/**
  * Snap a target to UTC midnight.
  *
  * Without this, "90 days back" is a different instant on every call, so two

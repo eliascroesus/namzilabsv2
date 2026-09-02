@@ -2,12 +2,17 @@ import "server-only";
 import { randomBytes } from "node:crypto";
 import { and, desc, eq, ne, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { connections, sourceStreams } from "@/db/schema";
+import { backfillJobs, connections, sourceStreams } from "@/db/schema";
 import { CapError, connectionCap } from "@/lib/limits";
 import { encrypt, decrypt, getEncryptionKey } from "@/lib/crypto";
 import { getConnector } from "@/connectors/registry";
 import { catalogEntry } from "@/connectors/catalog";
 import { getConnectionCredentials } from "@/lib/credentials";
+// From jobs.ts, deliberately not from backfill/run.ts: run.ts imports the
+// connector registry and credentials, and connections.ts already sits
+// upstream of credentials.ts — importing run.ts here risks a cycle. jobs.ts
+// has no app imports (see its own docstring), so it is the safe side of C11.
+import { DISCONNECTED_DETAIL } from "@/lib/backfill/jobs";
 import { restoreConnectionEvents, retireConnectionEvents } from "@/lib/sync/retire-connection";
 import {
   deleteConnectionData,
@@ -225,7 +230,9 @@ export async function disableConnection(orgId: string, id: string): Promise<{ re
  * Free, because nothing was destroyed: the connection UUID survived, so every
  * event this connection ever wrote still carries ids that match what its
  * connector would produce today. Clearing the tombstones restores them in
- * place. No provider call, no backfill, no duplicate dataset.
+ * place. No provider call here, no duplicate dataset — the one exception is a
+ * backfill the disconnect itself cut short, which this puts back on the
+ * queue (C11) rather than leaving it looking finished forever.
  *
  * Credentials are NOT touched. A user reconnecting because a token expired
  * still has to re-authorise, and that path already exists; this is about the
@@ -261,6 +268,28 @@ export async function reconnectConnection(orgId: string, id: string): Promise<{ 
     .update(sourceStreams)
     .set({ status: "active", updatedAt: now })
     .where(and(eq(sourceStreams.connectionId, id), eq(sourceStreams.orgId, orgId), eq(sourceStreams.status, "disabled")));
+
+  // C11 — a backfill this disconnect cut short must not look finished forever.
+  // `runBackfillSlice` ends a job `partial` with exactly `DISCONNECTED_DETAIL`
+  // when it finds the connection disabled mid-slice, and `requestBackfill`
+  // treats ANY `partial` job as satisfying a request at least that deep —
+  // right for a job that stopped for its own honest reason (the row ceiling,
+  // an exhausted source), wrong for this one, since nobody asked the import to
+  // stop. Matching on the exact detail keeps those other `partial` jobs
+  // untouched. `checkpoint` / `reachedFloor` / `rowsImported` are left as they
+  // are so the job RESUMES rather than re-walks what it already landed.
+  await db
+    .update(backfillJobs)
+    .set({ status: "queued", detail: null, finishedAt: null, updatedAt: now })
+    .where(
+      and(
+        eq(backfillJobs.connectionId, id),
+        eq(backfillJobs.orgId, orgId),
+        eq(backfillJobs.status, "partial"),
+        eq(backfillJobs.detail, DISCONNECTED_DETAIL),
+      ),
+    );
+
   const restoredEvents = await restoreConnectionEvents(db, orgId, id);
   return { restoredEvents };
 }

@@ -7,7 +7,12 @@ import { upsertEvents } from "@/ingestion/pipeline";
 import { claimCalls, settlePollCalls } from "@/lib/provider-gateway/budget";
 import { pollOperation } from "@/lib/provider-gateway/operations";
 import { withConnectionSyncLock } from "@/lib/sync/locks";
-import { checkpointJob, finishJob, startJob, type BackfillJob } from "./jobs";
+import { checkpointJob, DISCONNECTED_DETAIL, finishJob, startJob, type BackfillJob } from "./jobs";
+
+// Re-exported so callers of this module (and its tests) have one place to get
+// the exact string a disconnect-terminated job carries — see jobs.ts for why
+// the constant itself lives there and not here.
+export { DISCONNECTED_DETAIL };
 
 /**
  * E.8 / Phase 6 — the fetching half of the backfill lane.
@@ -75,8 +80,10 @@ export async function runBackfillSlice(db: DB, job: BackfillJob, now = new Date(
   if (!conn) return finishWith(db, job, "failed", "The connection no longer exists.", now);
   if (conn.status === "disabled") {
     // Not a failure: the user disconnected. Terminal and explained, rather than
-    // a job that retries forever against credentials nobody authorised.
-    return finishWith(db, job, "partial", "The connection was disconnected before the import finished.", now);
+    // a job that retries forever against credentials nobody authorised — and
+    // `reconnectConnection` matches on this exact detail to revive it once
+    // they reconnect (see DISCONNECTED_DETAIL in jobs.ts).
+    return finishWith(db, job, "partial", DISCONNECTED_DETAIL, now);
   }
 
   const [stream] = await db.select().from(sourceStreams).where(eq(sourceStreams.id, job.streamId)).limit(1);
