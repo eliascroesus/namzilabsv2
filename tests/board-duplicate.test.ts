@@ -271,14 +271,24 @@ describe("what duplicating refuses", () => {
     expect(await viewsOf(A)).toHaveLength(2);
   });
 
-  it("refuses when the workspace is at its view cap", async () => {
+  it("still allows a copy one row short of the cap", async () => {
     vi.stubEnv("MAX_BOARD_VIEWS_PER_ORG", "3");
-    // Two rows plus the default view that has none = the cap.
+    // beforeEach seeds two rows for org A (canvas, cols) — one short of the
+    // cap of 3, since every view is a row now and there is no row-less
+    // default left to reserve a slot for.
+    const r = await duplicateViewAction("canvas");
+    expect(r.ok).toBe(true);
+    expect(await viewsOf(A)).toHaveLength(3);
+  });
+
+  it("refuses once the workspace is AT its view cap", async () => {
+    vi.stubEnv("MAX_BOARD_VIEWS_PER_ORG", "3");
+    // A third row reaches the cap before the duplicate is even attempted.
+    await db.insert(dashboardViews).values({ id: "extra", orgId: A, name: "Extra", pos: "s", kind: "custom" });
     const r = await duplicateViewAction("canvas");
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toContain("limit of 3 views");
-    // Two rows + the row-less default view = three, which is the cap.
-    expect(await viewsOf(A)).toHaveLength(2);
+    expect(await viewsOf(A)).toHaveLength(3);
   });
 
   it("refuses a view holding more charts than one may hold", async () => {

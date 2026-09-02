@@ -231,6 +231,18 @@ export async function assignRankAction(
   if (!memberUserId) return { ok: false, error: "Missing member." };
   const db = getDb();
 
+  // The member id arrives from the browser, same as the rank id below — but
+  // nothing here ever validated it against WorkOS, so any string was accepted
+  // as a member. Confirm an ACTIVE membership before either branch writes: a
+  // crafted or stale id must not be able to plant a rank assignment, or clear
+  // one, for someone who was never (or is no longer) in this workspace.
+  const { data: memberships } = await getWorkOS().userManagement.listOrganizationMemberships({
+    organizationId: orgId,
+    userId: memberUserId,
+    statuses: ["active"],
+  });
+  if (memberships.length === 0) return { ok: false, error: "That person is not a member of this workspace." };
+
   if (rankId === null) {
     // Clearing restores the no-rank default: full access, by design.
     await db.delete(rankAssignments).where(and(eq(rankAssignments.orgId, orgId), eq(rankAssignments.userId, memberUserId)));

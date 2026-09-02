@@ -803,9 +803,12 @@ export async function duplicateViewAction(id: string): Promise<Result<{ viewId: 
       .from(dashboardViews)
       .where(eq(dashboardViews.orgId, ctx.orgId));
     const viewCap = boardViewCap();
-    // The default view has no row, so it is not in `views` — hence the `+ 1`,
-    // the same arithmetic `addViewAction` does for the same reason.
-    if (views.length + 1 >= viewCap) {
+    // EVERY VIEW IS A ROW (since 7b23f37 — the default board is a row too), so
+    // the cap counts rows: the same arithmetic `addViewAction` uses, and for
+    // the same reason. This carried a `+ 1` for a row-less default board that
+    // no longer exists, which refused a copy one row before the cap actually
+    // bound.
+    if (views.length >= viewCap) {
       return fail(`This workspace has reached its limit of ${viewCap} views. Delete one to add another.`);
     }
 

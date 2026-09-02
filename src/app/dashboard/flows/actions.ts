@@ -3,9 +3,9 @@
 import { PublishBlocked } from "@/lib/flow/store";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { getDb, getReadDb } from "@/db/client";
-import { connections, flowResults } from "@/db/schema";
+import { connections, flowResults, flows } from "@/db/schema";
 import { requireOrg, type OrgContext } from "@/lib/auth";
 import { effectiveAccess } from "@/lib/permissions";
 import { streamConfigHash } from "@/lib/sync/stream-hash";
@@ -399,11 +399,37 @@ export async function refreshFlowAction(formData: FormData): Promise<void> {
  * than a second implementation that could drift from it: whatever the budget
  * cannot finish stays marked and the next tick picks it up, longest-stale
  * first.
+ *
+ * A RANK-RESTRICTED MEMBER ONLY MARKS WHAT THEY CAN SEE. This used to mark
+ * every `flow_results` row in the org stale with no gate at all, so a member
+ * confined to one flow tile could still force every OTHER flow in the
+ * workspace to recompute — and the mark itself is a leak independent of
+ * materialize ever running: a hidden flow's status visibly changing is the
+ * same tell `refreshFlowAction` above already refuses to give. Admins, the
+ * owner and an unranked member all resolve to full access inside
+ * effectiveAccess (see its doc comment), so the common, unrestricted case
+ * still marks everything as before — for the price of one extra rank
+ * resolution and one id lookup, trivial next to the recompute pass
+ * `materializeStaleAll` is about to run.
  */
 export async function refreshAllFlowsAction(): Promise<void> {
-  const { orgId } = await requireOrg();
+  const ctx = await requireOrg();
+  const { orgId } = ctx;
   const db = getDb();
-  await db.update(flowResults).set({ status: "stale" }).where(eq(flowResults.orgId, orgId));
+  const access = await effectiveAccess(db, ctx);
+  const published = await db
+    .select({ id: flows.id })
+    .from(flows)
+    .where(and(eq(flows.orgId, orgId), eq(flows.status, "published")));
+  const visibleIds = published.map((f) => f.id).filter((id) => access.canSeeMetric(`flow:${id}`));
+  // No flow visible: skip the write rather than run `inArray` on an empty
+  // list — either way nothing should be marked, but this says so directly.
+  if (visibleIds.length > 0) {
+    await db
+      .update(flowResults)
+      .set({ status: "stale" })
+      .where(and(eq(flowResults.orgId, orgId), inArray(flowResults.flowId, visibleIds)));
+  }
   await materializeStaleAll(db, { orgId });
   revalidatePath("/dashboard");
   // The calendar is a view of /dashboard now — covered above.
