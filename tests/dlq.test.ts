@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { eq, isNull } from "drizzle-orm";
 import { createTestDb, seedConnection } from "./helpers/testdb";
 import { storeRawEvent } from "@/ingestion/raw-store";
@@ -10,8 +10,47 @@ import type { DB } from "@/db/types";
 let db: DB;
 let close: () => Promise<void>;
 
+/**
+ * Mocks below back the `replayDeadLetterAction` describe block further down
+ * (the C.10 recompute-kick test for the server-action caller). They are
+ * file-scoped, but inert for every other test in this file: `replayRawEvent`
+ * and `deadLetterRawEvent` take `db` as an explicit argument and never call
+ * `getDb()`, so nothing above changes behaviour.
+ */
+vi.mock("server-only", () => ({}));
+vi.mock("@/db/client", () => ({ getDb: () => db }));
+
+let orgCtx: { orgId: string; userId: string; role?: string } = { orgId: "org_test", userId: "user_1" };
+vi.mock("@/lib/auth", () => ({ requireOrg: async () => orgCtx }));
+
+const hoistedRedirect = vi.hoisted(() => ({ url: null as unknown }));
+vi.mock("next/navigation", () => ({
+  redirect: (u: unknown) => {
+    hoistedRedirect.url = u;
+    throw new Error("NEXT_REDIRECT");
+  },
+}));
+vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
+
+const sentByAction: Array<{ name: string; data: Record<string, unknown> }> = [];
+let actionSendShouldFail = false;
+vi.mock("@/inngest/client", () => ({
+  inngest: {
+    send: async (e: { name: string; data: Record<string, unknown> }) => {
+      if (actionSendShouldFail) throw new Error("inngest unreachable");
+      sentByAction.push(e);
+    },
+  },
+}));
+
+const { replayDeadLetterAction } = await import("@/app/integrations/actions");
+
 beforeEach(async () => {
   ({ db, close } = await createTestDb());
+  orgCtx = { orgId: "org_test", userId: "user_1" };
+  hoistedRedirect.url = null;
+  sentByAction.length = 0;
+  actionSendShouldFail = false;
 });
 afterEach(async () => {
   await close();
@@ -241,5 +280,72 @@ describe("dead-letter read surface", () => {
       { connectionId: a, name: "Webhook A", count: 2 },
       { connectionId: b, name: "Webhook B", count: 1 },
     ]);
+  });
+});
+
+/**
+ * C.10 — the connection-page replay button is a THIN CALLER of the same
+ * `replayRawEvent` exercised above, and it needs the same fix: a replay that
+ * changed something must kick a recompute, or the repaired record sits
+ * "fixed" in the DB while its tile keeps serving the old number until the
+ * next age-backstop sweep. REVERT THE KICK IN `replayDeadLetterAction` AND
+ * THIS FAILS.
+ */
+describe("replayDeadLetterAction kicks a recompute on success", () => {
+  const fd = (rawEventId: string, connectionId: string) => {
+    const f = new FormData();
+    f.set("rawEventId", rawEventId);
+    f.set("connectionId", connectionId);
+    return f;
+  };
+
+  it("sends flow/recompute.requested for the org after a successful replay", async () => {
+    const connectionId = await seedConnection(db, { orgId: "org_test" });
+    const raw = await storeRawEvent(db, {
+      orgId: "org_test",
+      connectionId,
+      source: "webhook",
+      headers: {},
+      payload: { id: "e1", type: "booked" },
+      signatureValid: true,
+    });
+    await deadLetterRawEvent(db, raw.id, 3, "transient outage");
+
+    await expect(replayDeadLetterAction(fd(raw.id, connectionId))).rejects.toThrow(/NEXT_REDIRECT/);
+
+    expect(String(hoistedRedirect.url)).toContain("replay=ok");
+    const recomputes = sentByAction.filter((e) => e.name === "flow/recompute.requested");
+    expect(recomputes).toHaveLength(1);
+    expect(recomputes[0].data).toEqual({ orgId: "org_test" });
+  });
+
+  it("does not send a recompute when the replay fails", async () => {
+    const connectionId = await seedConnection(db, { orgId: "org_test" });
+
+    await expect(
+      replayDeadLetterAction(fd("00000000-0000-0000-0000-000000000000", connectionId)),
+    ).rejects.toThrow(/NEXT_REDIRECT/);
+
+    expect(String(hoistedRedirect.url)).toContain("replay=failed");
+    expect(sentByAction.filter((e) => e.name === "flow/recompute.requested")).toHaveLength(0);
+  });
+
+  it("a failed recompute kick does not fail the action (best-effort)", async () => {
+    const connectionId = await seedConnection(db, { orgId: "org_test" });
+    const raw = await storeRawEvent(db, {
+      orgId: "org_test",
+      connectionId,
+      source: "webhook",
+      headers: {},
+      payload: { id: "e1", type: "booked" },
+      signatureValid: true,
+    });
+    await deadLetterRawEvent(db, raw.id, 3, "transient outage");
+    actionSendShouldFail = true;
+
+    await expect(replayDeadLetterAction(fd(raw.id, connectionId))).rejects.toThrow(/NEXT_REDIRECT/);
+
+    // Still redirects to the OK path — the failed inngest.send never surfaces.
+    expect(String(hoistedRedirect.url)).toContain("replay=ok");
   });
 });

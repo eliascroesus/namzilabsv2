@@ -3,6 +3,7 @@ import { getDb } from "@/db/client";
 import { replayRawEvent } from "@/ingestion/pipeline";
 import { getOrgContext } from "@/lib/auth";
 import { effectiveAccess } from "@/lib/permissions";
+import { inngest } from "@/inngest/client";
 
 export const runtime = "nodejs";
 
@@ -52,6 +53,15 @@ export async function POST(req: Request) {
 
   try {
     const result = await replayRawEvent(getDb(), body.rawEventId, ctx.orgId);
+    /**
+     * C.10: a replay that changed something is data arriving, same as a fresh
+     * webhook — so it asks for a recompute on the same debounced signal
+     * (`flow/recompute.requested`, per org). `replayRawEvent` already marked
+     * the affected tiles stale; without this kick nothing recomputed them
+     * until the next age-backstop sweep. Best-effort: the repair is already
+     * committed, and a failed kick costs at most that backstop.
+     */
+    await inngest.send({ name: "flow/recompute.requested", data: { orgId: ctx.orgId } }).catch(() => {});
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

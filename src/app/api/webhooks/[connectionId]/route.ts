@@ -5,6 +5,7 @@ import { connections } from "@/db/schema";
 import { getConnector } from "@/connectors/registry";
 import { isStreamScoped } from "@/connectors/catalog";
 import { storeRawEvent } from "@/ingestion/raw-store";
+import { deadLetterRawEvent } from "@/ingestion/pipeline";
 import { inngest } from "@/inngest/client";
 import { headersToObject } from "@/lib/http";
 import { decrypt, getEncryptionKey } from "@/lib/crypto";
@@ -186,7 +187,28 @@ export async function POST(req: Request, ctx: { params: Promise<{ connectionId: 
   });
 
   // orgId rides along for the processor's per-tenant concurrency cap (C.3).
-  await inngest.send({ name: "ingest/raw.received", data: { rawEventId: raw.id, orgId: conn.orgId } });
+  try {
+    await inngest.send({ name: "ingest/raw.received", data: { rawEventId: raw.id, orgId: conn.orgId } });
+  } catch (err) {
+    /**
+     * C.1: an Inngest outage must not orphan the raw row. This used to be
+     * un-guarded — the send threw straight out of the handler, Vercel turned
+     * that into a 500, and the payload above was ALREADY committed to
+     * `raw_events` with nothing ever queued to process it. Not even the DLQ
+     * page could see it, because dead-lettering only ever ran from inside the
+     * processor this event never reached: a stored row, invisible and stuck.
+     *
+     * Fail the same way a processing failure fails, so the one DLQ surface
+     * covers both: park it (attempts: 0 — this never got as far as an
+     * attempt) and tell the caller it was accepted but not queued. No inline
+     * processing here — a synchronous fallback is exactly the slow path the
+     * fast-ack pattern above exists to avoid.
+     */
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn(`[webhook] inngest.send failed for raw event ${raw.id} (connection ${conn.id}): ${message}`);
+    await deadLetterRawEvent(db, raw.id, 0, `enqueue failed: ${message}`);
+    return NextResponse.json({ ok: true, rawEventId: raw.id, queued: false }, { status: 202 });
+  }
 
   // H.2: inbound data proves this connection is live — cancel any idle backoff
   // so the reconcile backstop returns to base cadence immediately.

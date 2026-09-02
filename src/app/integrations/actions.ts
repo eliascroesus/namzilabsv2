@@ -95,6 +95,14 @@ export async function replayDeadLetterAction(formData: FormData): Promise<void> 
   let ok = true;
   try {
     await replayRawEvent(getDb(), rawEventId, orgId);
+    /**
+     * C.10: same best-effort recompute kick as `/api/replay` — a replay that
+     * changed something is data arriving, and `replayRawEvent` already marked
+     * the affected tiles stale. Without this, nothing recomputed them until
+     * the next age-backstop sweep. The repair is already committed; a failed
+     * kick costs at most that backstop.
+     */
+    await inngest.send({ name: "flow/recompute.requested", data: { orgId } }).catch(() => {});
   } catch {
     // The failure detail is already recorded where it belongs: processing
     // re-parks the row with the fresh error, which the page renders.

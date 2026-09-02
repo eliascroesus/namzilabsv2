@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from "vite
 import { createHmac, randomBytes } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { createTestDb } from "./helpers/testdb";
-import { connections, rawEvents } from "@/db/schema";
+import { connections, deadLetter, deliveryLog, events, rawEvents } from "@/db/schema";
 import { encrypt } from "@/lib/crypto";
 import type { DB } from "@/db/types";
 
@@ -32,9 +32,11 @@ let close: () => Promise<void>;
 
 vi.mock("@/db/client", () => ({ getDb: () => db }));
 const sent: Array<{ name: string; data: Record<string, unknown> }> = [];
+let sendShouldFail = false;
 vi.mock("@/inngest/client", () => ({
   inngest: {
     send: async (e: { name: string; data: Record<string, unknown> }) => {
+      if (sendShouldFail) throw new Error("inngest unreachable");
       sent.push(e);
     },
   },
@@ -69,6 +71,7 @@ beforeAll(() => {
 
 beforeEach(async () => {
   sent.length = 0;
+  sendShouldFail = false;
   ({ db, close } = await createTestDb());
 });
 
@@ -240,5 +243,55 @@ describe("a stream-scoped webhook rings the bell without delivering anything", (
 
     expect(res.status).toBe(401);
     expect(sent).toHaveLength(0);
+  });
+});
+
+/**
+ * C.1 — an Inngest outage must never orphan the raw row.
+ *
+ * Before this guard, `inngest.send` threw straight out of the handler: Vercel
+ * turned that into a 500, and the payload the route HAD already stored sat in
+ * `raw_events` with nothing ever queued to process it — invisible even to the
+ * DLQ page, because dead-lettering only ever ran from inside the processor
+ * this event never reached. REVERT THE GUARD AND THIS FAILS: the row is
+ * stored, no dead_letter/delivery_log row exists, and the route throws instead
+ * of returning 202.
+ */
+describe("an Inngest enqueue failure does not orphan the raw row", () => {
+  it("dead-letters the raw event and still 202s when inngest.send throws", async () => {
+    const id = await seed({ source: "webhook", secret: null });
+    sendShouldFail = true;
+
+    const res = await post(id, { hello: "world" });
+
+    expect(res.status).toBe(202);
+    const body = await res.json();
+    expect(body).toMatchObject({ ok: true, queued: false });
+    expect(typeof body.rawEventId).toBe("string");
+
+    // The raw row is NOT orphaned — it is dead-lettered and replayable, same
+    // as any other processing failure.
+    const [raw] = await db.select().from(rawEvents).where(eq(rawEvents.connectionId, id));
+    expect(raw).toBeTruthy();
+    expect(raw.id).toBe(body.rawEventId);
+
+    const dlq = await db.select().from(deadLetter).where(eq(deadLetter.rawEventId, raw.id));
+    expect(dlq).toHaveLength(1);
+    expect(dlq[0].error).toContain("enqueue failed");
+    expect(dlq[0].attempts).toBe(0);
+
+    const log = await db.select().from(deliveryLog).where(eq(deliveryLog.rawEventId, raw.id));
+    expect(log.filter((l) => l.status === "failed")).toHaveLength(1);
+  });
+
+  it("does not process the event inline when the enqueue fails — no event exists yet", async () => {
+    const id = await seed({ source: "webhook", secret: null });
+    sendShouldFail = true;
+
+    await post(id, { id: "e1", type: "booked" });
+
+    // Fast-ack stays fast-ack: a queue outage is not a license to do the slow
+    // work synchronously inside the request.
+    expect(await db.select().from(events)).toHaveLength(0);
   });
 });
