@@ -244,6 +244,14 @@ function metricTimeFieldFor(graph: FlowGraph, nodeId: string): string | undefine
   // type, to isolate an unrelated concern) construct a graph that never went
   // through `parseGraph` at all. Every such graph predates metrics-based
   // publishing, so "no entry" is the correct answer, not a crash.
+  //
+  // `|| undefined`, deliberately rather than `??`: the Review & publish
+  // picker already writes `undefined` for "no field chosen" (see
+  // ReviewPublishModal's `timeField: v || undefined`), but a stored `""` is
+  // exactly as much "no field chosen" as a stored `undefined` is — the same
+  // tolerance `GroupBySchema.field` documents for a similar stale-draft
+  // shape — so this folds the two into one answer rather than asking
+  // `resolveTimeField` to treat an empty string as a real field name.
   return (graph.metrics ?? []).find((m) => m.enabled && m.nodeId === nodeId)?.timeField || undefined;
 }
 
@@ -1866,16 +1874,18 @@ export function tileByRange(
     return t;
   };
   /**
-   * Which field dates a given ARRAY of records — the `records.some(...)` probe
-   * was itself a full pass per node per range, and the answer cannot change
-   * between ranges for the same array.
+   * Which field dates a given ARRAY of records — the rule itself is
+   * `resolveTimeField`, shared with `aggregate()`'s time split; this cache is
+   * the reason to have a closure of our own rather than calling it directly:
+   * the underlying `records.some(...)` probe was itself a full pass per node
+   * per range, and the answer cannot change between ranges for the same
+   * array.
    */
   const fieldCache = new WeakMap<FlowRecord[], string>();
   const fieldFor = (records: FlowRecord[]): string => {
     const hit = fieldCache.get(records);
     if (hit !== undefined) return hit;
-    const field =
-      spec.timeField && records.some((r) => dateOf(r, spec.timeField!) != null) ? spec.timeField : "occurredAt";
+    const field = resolveTimeField(records, spec.timeField, dateOf);
     fieldCache.set(records, field);
     return field;
   };
@@ -2338,17 +2348,32 @@ function assertFieldHasValues(records: FlowRecord[], cfg: AggregateConfig): void
 }
 
 /**
- * WHICH FIELD DATES A TIME SPLIT — the chosen field if ANY record in this
- * exact set resolves it, else `occurredAt`. The same rule `tileByRange`'s
- * `fieldFor` applies to a range's own membership and to a raw dataset's
- * series, so all three can never disagree about which date a record was
- * filed under: a lane where the field never resolves is dated the ordinary
- * way rather than excluded wholesale (usually a comparison's other side, a
- * different source that never had the column); a lane where it resolves for
- * SOME records is using it, so the records it misses are genuinely undated.
+ * WHICH FIELD DATES A SET OF RECORDS — THE ONE PLACE THIS RULE IS STATED.
+ * The chosen field if it dates AT LEAST ONE record in the set, else
+ * `occurredAt`. A time split (`aggregate()`), a range's own membership and a
+ * raw dataset's series (both in `tileByRange`) all read it from here, so the
+ * three can never quietly drift into disagreeing about which date a record
+ * was filed under.
+ *
+ * Parameterized on HOW ONE RECORD'S DATE IS RESOLVED, not hardcoded to it:
+ * `aggregate()` calls this with no third argument and gets the plain `dateMs
+ * ∘ getField` probe below; `tileByRange`'s `fieldFor` passes its own
+ * WeakMap-cached `dateOf` instead, so the seven-ranges-times-many-nodes cost
+ * that cache exists to avoid (see its doc comment) is untouched — this
+ * function only ever calls the resolver it's given, never `dateOf` itself,
+ * so the cache and the rule can each change without the other moving.
+ *
+ * A lane where the field never resolves is dated the ordinary way rather
+ * than excluded wholesale (usually a comparison's other side, a different
+ * source that never had the column); a lane where it resolves for SOME
+ * records is using it, so the records it misses are genuinely undated.
  */
-function resolveTimeField(records: FlowRecord[], timeField: string | undefined): string {
-  return timeField && records.some((r) => dateMs(getField(r, timeField)) != null) ? timeField : "occurredAt";
+function resolveTimeField(
+  records: FlowRecord[],
+  timeField: string | undefined,
+  dateOf: (r: FlowRecord, field: string) => number | null = (r, f) => dateMs(getField(r, f)),
+): string {
+  return timeField && records.some((r) => dateOf(r, timeField!) != null) ? timeField : "occurredAt";
 }
 
 function aggregate(records: FlowRecord[], cfg: AggregateConfig): Scalar | Series | Grouped {

@@ -448,6 +448,27 @@ describe("a time-split Calculate buckets by the metric's own time reference", ()
     expect(shape.series).toHaveLength(2);
     expect(shape.total).toBe(2);
   });
+
+  it("also threads the chosen date into a dataset Formula — the other call site, the migrated legacy Count node", async () => {
+    // Same shape as the first test above, but through `execFormula`'s own
+    // dataset-op branch (a "formula" node with a dataset op, not a
+    // "calculate" node) — the second of the two places `timeField` now
+    // reaches, and the one none of the tests above exercised.
+    await ev({ eventType: "meeting", subject: "a", properties: { starts_at: "2026-01-01T00:00:00.000Z" } });
+    await ev({ eventType: "meeting", subject: "b", properties: { starts_at: "2026-02-15T00:00:00.000Z" } });
+
+    const g = parseGraph({
+      nodes: [N("a", "app", { connectionId: CONN }), N("f", "formula", { op: "count", groupBy: { type: "time", unit: "day" } })],
+      edges: [E("a", "f")],
+      metrics: [{ nodeId: "f", timeField: "properties.starts_at" }],
+    });
+    const res = await runFlow({ db, orgId: ORG }, g);
+    const shape = (res.nodes.get("f")! as { shape: { series?: Array<{ bucket: string; value: number }>; total?: number } }).shape;
+    expect(shape.series).toEqual([
+      { bucket: "2026-01-01", value: 1 },
+      { bucket: "2026-02-15", value: 1 },
+    ]);
+  });
 });
 
 /**
