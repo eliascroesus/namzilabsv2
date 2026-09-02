@@ -61,7 +61,7 @@ const EVENT_TYPE_MAP: Record<string, string> = {
  */
 export const calendlyConnector: Connector = {
   source: "calendly",
-  authType: "oauth2",
+  authType: "apiKey",
 
   /**
    * Every endpoint this connector can hit, each with its own budget in the
@@ -79,6 +79,15 @@ export const calendlyConnector: Connector = {
    */
   operationFor(): string {
     return "scheduled_events.list";
+  },
+
+  /**
+   * The budget operation for listOptions picker calls, which differ from the poll operation.
+   */
+  listOperationFor(key: string): string | undefined {
+    if (key === "groupUri") return "groups.list";
+    if (key === "meetingType") return "event_types.list";
+    return undefined;
   },
 
   /**

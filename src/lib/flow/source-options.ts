@@ -55,7 +55,8 @@ export async function listSourceOptions(
     const when = conn.pausedUntil ? ` — it retries around ${formatTime(conn.pausedUntil)}` : "";
     return { ok: false, error: `Syncing is paused (${conn.pausedReason ?? "provider limit"})${when}. Type the value manually or try again shortly.` };
   }
-  const claim = await claimCalls(db, conn, pollOperation(conn.source, config), 1, new Date(), "interactive");
+  const operation = connector.listOperationFor?.(key) ?? pollOperation(conn.source, config);
+  const claim = await claimCalls(db, conn, operation, 1, new Date(), "interactive");
   if (!claim.allowed) return { ok: false, error: claim.reason };
   const credentials = await getConnectionCredentials(db, conn);
   const options = await connector.listOptions(key, { connectionId, credentials, config });

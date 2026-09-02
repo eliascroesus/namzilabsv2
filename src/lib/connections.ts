@@ -21,6 +21,9 @@ import {
 } from "@/lib/sync/delete-connection";
 import { inngest } from "@/inngest/client";
 import type { CanonicalEvent } from "@/connectors/types";
+import { claimCalls, isPaused } from "@/lib/provider-gateway/budget";
+import { pollOperation } from "@/lib/provider-gateway/operations";
+import { formatTime } from "@/lib/format";
 
 export type Connection = typeof connections.$inferSelect;
 
@@ -327,13 +330,23 @@ export function getSigningSecret(conn: Connection): string | null {
 
 /** The connect-time "preview latest records" feature. */
 export async function previewLatest(orgId: string, id: string, n = 3): Promise<CanonicalEvent[]> {
+  const db = getDb();
   const conn = await getConnection(orgId, id);
   if (!conn) throw new Error("connection not found");
   const connector = getConnector(conn.source);
   if (!connector?.testFetchLatest) {
     throw new Error("Preview isn't available for this source (it's webhook-only — send a test event instead).");
   }
-  const credentials = await getConnectionCredentials(getDb(), conn);
+  // C17: Check if paused before attempting any fetch
+  if (isPaused(conn)) {
+    const when = conn.pausedUntil ? ` — it retries around ${formatTime(conn.pausedUntil)}` : "";
+    throw new Error(`Syncing is paused (${conn.pausedReason ?? "provider limit"})${when}`);
+  }
+  // C17: Claim one call on the interactive lane
+  const claim = await claimCalls(db, conn, pollOperation(conn.source, conn.config), 1, new Date(), "interactive");
+  if (!claim.allowed) throw new Error(claim.reason);
+
+  const credentials = await getConnectionCredentials(db, conn);
   return connector.testFetchLatest(n, {
     connectionId: conn.id,
     cursor: null,

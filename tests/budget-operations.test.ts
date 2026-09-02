@@ -294,3 +294,30 @@ describe("what the provider says about its own limit reaches the ledger", () => 
     expect(rows[0].observedLimit).toBeNull();
   });
 });
+
+/**
+ * C18: Calendly's listOptions calls claim against the correct operation
+ * (groups.list or event_types.list) instead of the poll operation.
+ * C19: Calendly's authType is apiKey (personal access token), not oauth2.
+ */
+describe("Calendly connector operations and auth", () => {
+  it("C19: calendlyConnector.authType is apiKey, not oauth2", async () => {
+    const { calendlyConnector } = await import("@/connectors/calendly");
+    expect(calendlyConnector.authType).toBe("apiKey");
+  });
+
+  it("C18: calendlyConnector.listOperationFor returns the correct operations", async () => {
+    const { calendlyConnector } = await import("@/connectors/calendly");
+
+    expect(calendlyConnector.listOperationFor?.("groupUri")).toBe("groups.list");
+    expect(calendlyConnector.listOperationFor?.("meetingType")).toBe("event_types.list");
+    expect(calendlyConnector.listOperationFor?.("unknown")).toBeUndefined();
+  });
+
+  it("C18: both Calendly operations are declared in the connector's operations array", async () => {
+    const { calendlyConnector } = await import("@/connectors/calendly");
+
+    expect(calendlyConnector.operations).toContain("groups.list");
+    expect(calendlyConnector.operations).toContain("event_types.list");
+  });
+});

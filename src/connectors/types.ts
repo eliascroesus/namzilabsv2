@@ -510,6 +510,10 @@ export interface Connector {
    * dead config, and tests/provider-gateway.test.ts fails on it.
    */
   operationFor?(config?: Record<string, unknown>): string;
+  /**
+   * The budget operation a `listOptions(key)` call spends, when it differs from the poll's.
+   */
+  listOperationFor?(key: string): string | undefined;
   /** Every operation key `operationFor` can return. Checked against the catalog. */
   operations?: readonly string[];
   /**

@@ -134,4 +134,17 @@ describe("listSourceOptions", () => {
 
     expect(res).toEqual({ ok: true, options: [] });
   });
+
+  it("C18: Calendly listOptions for groupUri and meetingType claim against the correct operations", async () => {
+    const { calendlyConnector } = await import("@/connectors/calendly");
+
+    // Verify listOperationFor returns the correct operations
+    expect(calendlyConnector.listOperationFor?.("groupUri")).toBe("groups.list");
+    expect(calendlyConnector.listOperationFor?.("meetingType")).toBe("event_types.list");
+    expect(calendlyConnector.listOperationFor?.("unknown")).toBeUndefined();
+
+    // Verify both operations are declared in the connector
+    expect(calendlyConnector.operations).toContain("groups.list");
+    expect(calendlyConnector.operations).toContain("event_types.list");
+  });
 });
