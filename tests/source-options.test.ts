@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { randomBytes } from "node:crypto";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { createTestDb } from "./helpers/testdb";
 import { connections, usageLedger } from "@/db/schema";
 import { encrypt, getEncryptionKey } from "@/lib/crypto";
@@ -45,6 +45,21 @@ async function seedClose(orgId = ORG): Promise<{ id: string; orgId: string; sour
   return { id: row.id, orgId, source: "close" };
 }
 
+async function seedCalendly(orgId = ORG): Promise<{ id: string; orgId: string; source: string }> {
+  const [row] = await db
+    .insert(connections)
+    .values({
+      orgId,
+      source: "calendly",
+      name: "Calendly",
+      status: "active",
+      authType: "apiKey",
+      credentialsEncrypted: encrypt(JSON.stringify({ apiKey: "k" }), getEncryptionKey()),
+    })
+    .returning({ id: connections.id });
+  return { id: row.id, orgId, source: "calendly" };
+}
+
 const pipelineFetch = () =>
   vi.fn(async () => ({
     ok: true,
@@ -61,6 +76,7 @@ beforeEach(async () => {
 });
 afterEach(async () => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
   await close();
 });
 
@@ -77,6 +93,11 @@ describe("listSourceOptions", () => {
       .select({ n: sql<number>`count(*)::int` })
       .from(usageLedger)) as Array<{ n: number }>;
     expect(Number(n)).toBeGreaterThan(0); // the claim exists — remove it and this is 0
+    // C18: Close declares no `listOperationFor`, so the claim must fall back to
+    // the poll operation ("*" — Close has no per-endpoint limits) rather than
+    // landing on some picker-specific key nothing declares.
+    const [row] = await db.select().from(usageLedger);
+    expect(row.operation).toBe("*");
   });
 
   it("answers 'not found' across the tenant wall, without touching the provider", async () => {
@@ -135,16 +156,37 @@ describe("listSourceOptions", () => {
     expect(res).toEqual({ ok: true, options: [] });
   });
 
-  it("C18: Calendly listOptions for groupUri and meetingType claim against the correct operations", async () => {
+  /**
+   * C18 — these two drive the REAL path, not just the mapping function.
+   * `budget-operations.test.ts` already pins `listOperationFor`'s return
+   * values in isolation; what that leaves unverified is that
+   * `listSourceOptions` actually calls it before falling back to
+   * `pollOperation`. Revert source-options.ts:58 to the bare
+   * `pollOperation(conn.source, config)` call and both of these fail — the
+   * ledger row lands on `scheduled_events.list` (Calendly's poll operation)
+   * instead of the picker's own declared endpoint.
+   */
+  it("C18: books a Calendly groupUri picker call against groups.list, not the poll operation", async () => {
+    const conn = await seedCalendly();
     const { calendlyConnector } = await import("@/connectors/calendly");
+    vi.spyOn(calendlyConnector, "listOptions").mockResolvedValue([]);
 
-    // Verify listOperationFor returns the correct operations
-    expect(calendlyConnector.listOperationFor?.("groupUri")).toBe("groups.list");
-    expect(calendlyConnector.listOperationFor?.("meetingType")).toBe("event_types.list");
-    expect(calendlyConnector.listOperationFor?.("unknown")).toBeUndefined();
+    const res = await listSourceOptions(db, ORG, conn.id, "groupUri", {});
 
-    // Verify both operations are declared in the connector
-    expect(calendlyConnector.operations).toContain("groups.list");
-    expect(calendlyConnector.operations).toContain("event_types.list");
+    expect(res).toEqual({ ok: true, options: [] });
+    const [row] = await db.select().from(usageLedger).where(eq(usageLedger.connectionId, conn.id));
+    expect(row.operation).toBe("groups.list");
+  });
+
+  it("C18: books a Calendly meetingType picker call against event_types.list, not the poll operation", async () => {
+    const conn = await seedCalendly();
+    const { calendlyConnector } = await import("@/connectors/calendly");
+    vi.spyOn(calendlyConnector, "listOptions").mockResolvedValue([]);
+
+    const res = await listSourceOptions(db, ORG, conn.id, "meetingType", {});
+
+    expect(res).toEqual({ ok: true, options: [] });
+    const [row] = await db.select().from(usageLedger).where(eq(usageLedger.connectionId, conn.id));
+    expect(row.operation).toBe("event_types.list");
   });
 });
