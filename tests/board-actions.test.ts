@@ -28,6 +28,22 @@ vi.mock("server-only", () => ({}));
 vi.mock("@/db/client", () => ({ getDb: () => db, getReadDb: () => db }));
 vi.mock("@/lib/auth", () => ({ requireOrg: async () => ctx }));
 
+/**
+ * `addViewAction` always ends in `redirect()`, which throws `NEXT_REDIRECT`
+ * in real Next rather than returning — the same shape `dlq.test.ts` and
+ * `auth-routes.test.ts` already mock for a redirect-throwing server action.
+ * Recording the URL and rethrowing lets a test drive the action for real and
+ * then read back what it actually wrote, rather than only what its source
+ * text mentions.
+ */
+const hoistedRedirect = vi.hoisted(() => ({ url: null as unknown }));
+vi.mock("next/navigation", () => ({
+  redirect: (u: unknown) => {
+    hoistedRedirect.url = u;
+    throw new Error("NEXT_REDIRECT");
+  },
+}));
+
 const {
   createGroupAction,
   renameGroupAction,
@@ -38,6 +54,7 @@ const {
   setGroupSortAction,
   setCalendarMetricAction,
   setViewPositionsAction,
+  addViewAction,
 } = await import("@/app/dashboard/board-actions");
 
 const A = "org_a";
@@ -46,6 +63,7 @@ const B = "org_b";
 beforeEach(async () => {
   ({ db, close } = await createTestDb());
   ctx = { orgId: A, userId: "user_1", role: "member" };
+  hoistedRedirect.url = null;
 });
 afterEach(async () => {
   await close();
@@ -452,6 +470,49 @@ describe("pointing a calendar at a metric", () => {
     await assignBuilderRank(["flow:f1"]);
     expect(await pick("v1", "flow:f1:n1")).toEqual({ ok: true });
     expect(await keys()).toEqual(["flow:f1:n1"]);
+  });
+});
+
+/**
+ * C20 FOLLOW-UP (fix round 1): `addViewAction` always ends in `redirect()`,
+ * which throws rather than returning, so the only way to check what it
+ * actually WROTE is to drive it for real and catch that throw — a source-text
+ * check on `tileKeysAllowed(` proves the call is wired in, but a neutered
+ * `tileKeysAllowed` (always returning null, i.e. "allowed") leaves that
+ * source-text assertion green while the smuggled placement gets written
+ * anyway. These two tests read the database after the redirect instead.
+ */
+describe("creating a calendar view with an initial metric", () => {
+  const post = (kind: string, tileKey: string) => {
+    const fd = new FormData();
+    fd.set("kind", kind);
+    fd.set("tileKey", tileKey);
+    return addViewAction(fd);
+  };
+  const viewsOf = async (orgId: string) => db.select().from(dashboardViews).where(eq(dashboardViews.orgId, orgId));
+
+  it("creates the view but drops a flow the caller's rank cannot see, rather than honoring it", async () => {
+    await assignBuilderRank(["flow:f1"]);
+    await expect(post("calendar", "flow:f2:n1")).rejects.toThrow(/NEXT_REDIRECT/);
+
+    // The refusal is silent: the view is still created (the same "absent is
+    // allowed" outcome as posting no key at all) — only the smuggled
+    // placement is not honored.
+    const views = await viewsOf(A);
+    expect(views).toHaveLength(1);
+    expect(views[0].kind).toBe("calendar");
+    expect(await placementsOf(A)).toHaveLength(0);
+  });
+
+  it("keeps a flow the caller's rank can see", async () => {
+    await assignBuilderRank(["flow:f1"]);
+    await expect(post("calendar", "flow:f1:n1")).rejects.toThrow(/NEXT_REDIRECT/);
+
+    const views = await viewsOf(A);
+    expect(views).toHaveLength(1);
+    const placements = await placementsOf(A);
+    expect(placements).toHaveLength(1);
+    expect(placements[0]).toMatchObject({ tileKey: "flow:f1:n1", viewId: views[0].id });
   });
 });
 

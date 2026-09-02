@@ -1359,6 +1359,10 @@ export async function setCustomTileAction(
   if (!access) return fail(RANK_BLOCKS);
   if (!idSchema.safeParse(id).success) return fail("Unknown chart.");
 
+  // One handle, reused below for both the visibility check and the write —
+  // the same shape the other four C20 sites use.
+  const db = getDb();
+
   const next: { chart?: string; tileKey?: string; config?: unknown; updatedAt: Date } = {
     updatedAt: new Date(),
   };
@@ -1375,7 +1379,7 @@ export async function setCustomTileAction(
     // this needs asking. A patch that leaves `tileKey` untouched keeps
     // whatever the row already had.
     try {
-      const keyError = await tileKeysAllowed(getDb(), ctx.orgId, access, [k.data]);
+      const keyError = await tileKeysAllowed(db, ctx.orgId, access, [k.data]);
       if (keyError) return fail(keyError);
     } catch (e) {
       return oops(e);
@@ -1469,7 +1473,7 @@ export async function setCustomTileAction(
   }
 
   try {
-    await getDb()
+    await db
       .update(dashboardTiles)
       .set(next)
       .where(and(eq(dashboardTiles.id, id), eq(dashboardTiles.orgId, ctx.orgId)));
