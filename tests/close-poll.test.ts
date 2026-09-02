@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { closeConnector } from "@/connectors/close";
 import { catalogEntry, isStreamScoped } from "@/connectors/catalog";
 import { hasStreamConfig, streamConfigHash } from "@/lib/sync/stream-hash";
+import { basicAuth } from "@/lib/http-client";
 import type { CanonicalEvent } from "@/connectors/types";
 
 /**
@@ -794,13 +795,14 @@ describe("Close webhook-subscription health", () => {
    * signing key comes back NEW.
    */
   function mockWebhookApi(hooks: Array<Record<string, unknown>>, created?: { id: string; signature_key: string }) {
-    const reqs: Array<{ url: string; method: string; body: unknown }> = [];
+    const reqs: Array<{ url: string; method: string; body: unknown; authorization: string | null }> = [];
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
         const url = String(input);
         const method = (init?.method ?? "GET").toUpperCase();
-        reqs.push({ url, method, body: init?.body ? JSON.parse(String(init.body)) : null });
+        const authorization = (init?.headers as Record<string, string> | undefined)?.["authorization"] ?? null;
+        reqs.push({ url, method, body: init?.body ? JSON.parse(String(init.body)) : null, authorization });
         if (method === "PUT") {
           const id = url.split("/webhook/")[1].replace(/\/$/, "");
           const hook = hooks.find((h) => h.id === id);
@@ -932,6 +934,29 @@ describe("Close webhook-subscription health", () => {
     expect(res.healthy).toBe(false);
     expect(res.reregistered).toBe(false);
     expect(res.detail).toContain("403");
+  });
+
+  /**
+   * C23 — permanent delete tells Close to stop delivering, best-effort. Same
+   * auth as every other Close call (API key as Basic username); 404 (already
+   * gone) counts as success since the goal is already true.
+   */
+  describe("unregisterWebhook", () => {
+    it("DELETEs the subscription with basic auth", async () => {
+      const reqs = mockWebhookApi([]);
+
+      await closeConnector.unregisterWebhook!({ ...args, externalId: "whsub_1" });
+
+      expect(reqs).toHaveLength(1);
+      expect(reqs[0]).toMatchObject({ method: "DELETE", authorization: basicAuth("k") });
+      expect(reqs[0].url).toContain("/webhook/whsub_1/");
+    });
+
+    it("treats a 404 (already gone) as done, not as a failure", async () => {
+      vi.stubGlobal("fetch", vi.fn(async () => jsonRes({ error: "not found" }, 404)));
+
+      await expect(closeConnector.unregisterWebhook!({ ...args, externalId: "whsub_missing" })).resolves.toBeUndefined();
+    });
   });
 });
 

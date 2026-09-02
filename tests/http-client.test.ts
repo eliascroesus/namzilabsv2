@@ -138,6 +138,37 @@ describe("fetchJson — timeout", () => {
   });
 });
 
+/**
+ * A 204 (No Content) has no body, and `res.json()` on an empty body throws —
+ * so a successful DELETE (Calendly's webhook teardown, C23) was read as a
+ * failure purely because of how the response was parsed, never because
+ * anything actually went wrong.
+ */
+describe("fetchJson — 204 No Content", () => {
+  it("returns undefined on 204 without calling res.json()", async () => {
+    const jsonSpy = vi.fn(async () => {
+      throw new Error("res.json() must not be called on a 204 — there is no body to parse");
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          ({
+            ok: true,
+            status: 204,
+            statusText: "No Content",
+            headers: { get: () => null },
+            json: jsonSpy,
+            text: async () => "",
+          }) as unknown as Response,
+      ),
+    );
+
+    await expect(fetchJson("https://api.test/x", { method: "DELETE" })).resolves.toBeUndefined();
+    expect(jsonSpy).not.toHaveBeenCalled();
+  });
+});
+
 describe("basicAuth", () => {
   it("encodes username with empty password", () => {
     expect(basicAuth("key")).toBe(`Basic ${Buffer.from("key:").toString("base64")}`);

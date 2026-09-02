@@ -153,7 +153,9 @@ export async function fetchJson<T = unknown>(url: string, init?: FetchJsonOption
       // Before the body: a failed response carries quota headers too, and those
       // are the most valuable ones.
       onResponse?.(res);
-      if (res.ok) return (await res.json()) as T;
+      // A 204 has no body — calling res.json() on it throws, which read a
+      // successful DELETE (Calendly's webhook teardown, C23) as a failure.
+      if (res.ok) return res.status === 204 ? (undefined as T) : ((await res.json()) as T);
 
       const body = await res.text().catch(() => "");
       const err = new HttpError({

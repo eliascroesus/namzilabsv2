@@ -14,6 +14,8 @@ import {
 import type { DB } from "@/db/types";
 import { FLEET_CONNECTION_ID, FLEET_ORG_ID } from "@/lib/provider-gateway/budget";
 import { markStaleForSource } from "@/lib/flow/materialize";
+import { getConnector } from "@/connectors/registry";
+import { getConnectionCredentials } from "@/lib/credentials";
 
 /**
  * REMOVING A CONNECTION AND EVERYTHING SYNCED FROM IT. Irreversible.
@@ -34,7 +36,18 @@ import { markStaleForSource } from "@/lib/flow/materialize";
 /** Rows removed per statement, so one pass can never lock a hot table. */
 const DELETE_BATCH = 5_000;
 
-export type DeleteConnectionResult = { removed: boolean; rows: Record<string, number> };
+export type DeleteConnectionResult = {
+  removed: boolean;
+  rows: Record<string, number>;
+  /**
+   * Best-effort provider-side webhook teardown (C23) — deliberately NOT
+   * inside `rows`, which a test cross-checks against every schema table that
+   * carries a `connection_id`; this describes an HTTP call, not a table.
+   * Absent on an early return (nothing was found to delete, so nothing was
+   * asked either).
+   */
+  webhook?: "removed" | "failed" | "none";
+};
 
 /**
  * Delete in bounded batches until a table holds none of this connection's rows.
@@ -59,6 +72,52 @@ async function deleteAllOf<T>(
   }
 }
 
+/** A non-empty string, or null — `config` values are `unknown` off a jsonb column. */
+function readId(v: unknown): string | null {
+  return typeof v === "string" && v.length > 0 ? v : null;
+}
+
+/**
+ * C23 — best-effort: ask the provider to stop delivering to this
+ * connection's webhook before its rows are gone, so a permanently-deleted
+ * connection does not sit forever as a live subscription pointed at a URL
+ * our own webhook route now 403s. Invisible to the customer; not to
+ * Calendly or Close, who keep retrying and eventually flag the integration
+ * for it.
+ *
+ * NEVER BLOCKS THE DELETE. The customer has already confirmed a
+ * destructive, irreversible action; a provider that is merely slow,
+ * unreachable, or already gone must not hold that hostage — every failure
+ * here, whatever its shape, is caught and downgraded to a logged warning.
+ *
+ * `config.webhookExternalId` (the health check's re-creation — see
+ * `verifyWebhookSubscription` persistence in `ingestion/reconcile.ts`) is
+ * preferred over `config.externalId` (the connect-time id, from
+ * `createConnection`) because a re-created subscription makes the original
+ * id stale; when both are present the re-created one is the current fact.
+ *
+ * Returns `"none"` — not an error — when there is nothing to ask: no id on
+ * record, or a source (e.g. gsheets) whose connector never registers a
+ * webhook in the first place.
+ */
+async function unregisterProviderWebhook(db: DB, conn: typeof connections.$inferSelect): Promise<"removed" | "failed" | "none"> {
+  const config = conn.config as Record<string, unknown>;
+  const externalId = readId(config.webhookExternalId) ?? readId(config.externalId);
+  if (!externalId) return "none";
+  const connector = getConnector(conn.source);
+  if (!connector?.unregisterWebhook) return "none";
+  try {
+    const credentials = await getConnectionCredentials(db, conn);
+    await connector.unregisterWebhook({ connectionId: conn.id, credentials, externalId, config });
+    return "removed";
+  } catch (e) {
+    console.warn(
+      `[delete-connection] best-effort ${conn.source} webhook teardown failed for ${conn.id}: ${e instanceof Error ? e.message : String(e)}`,
+    );
+    return "failed";
+  }
+}
+
 /**
  * Delete a connection and every row anywhere that belongs to it.
  *
@@ -77,8 +136,11 @@ async function deleteAllOf<T>(
  *      and the sweep skips it, which stops new rows arriving into tables this
  *      is about to empty;
  *   2. tell the dashboards, while the graph still resolves;
- *   3. delete the children;
- *   4. delete the connection row LAST.
+ *   3. tell the PROVIDER (C23) — best-effort, and before the children go so a
+ *      crash partway through the delete still leaves the outside world told,
+ *      same reasoning as step 1 but pointed outward instead of inward;
+ *   4. delete the children;
+ *   5. delete the connection row LAST.
  * A crash then leaves a disabled connection with some data gone: visible,
  * re-runnable, and syncing nothing. Deleting the row first would strand every
  * child row instead — no connection means no UI to find them from and no later
@@ -159,6 +221,9 @@ export async function deleteConnectionData(
    */
   await markStaleForSource(db, orgId, conn.source, id).catch(() => []);
 
+  // Step 3 above: tell the provider before the children go.
+  const webhook = await unregisterProviderWebhook(db, conn);
+
   const rows: Record<string, number> = {};
   rows.events = await deleteAllOf(
     (limit) => db.select({ id: events.id }).from(events).where(eq(events.connectionId, id)).limit(limit),
@@ -183,7 +248,7 @@ export async function deleteConnectionData(
   rows.connections = await count(
     db.delete(connections).where(and(eq(connections.id, id), eq(connections.orgId, orgId))).returning({ id: connections.id }),
   );
-  return { removed: rows.connections > 0, rows };
+  return { removed: rows.connections > 0, rows, webhook };
 }
 
 /**

@@ -9,6 +9,7 @@ import type {
   RegisterWebhookResult,
   VerifyWebhookArgs,
   VerifyWebhookResult,
+  UnregisterWebhookArgs,
   ImportCoverage,
 } from "./types";
 import { createHmac } from "node:crypto";
@@ -913,6 +914,24 @@ export const closeConnector: Connector = {
       return { healthy: true, reregistered: true };
     } catch (e) {
       return { healthy: false, reregistered: false, detail: e instanceof Error ? e.message : String(e) };
+    }
+  },
+
+  /**
+   * C23 — best-effort teardown at permanent connection delete. Same auth as
+   * every other Close call here (API key as Basic username). IDEMPOTENT: a
+   * 404 means the subscription is already gone, which is exactly the state
+   * being asked for, so that is success and not a failure to report.
+   */
+  async unregisterWebhook(args: UnregisterWebhookArgs): Promise<void> {
+    try {
+      await fetchJson(`${API}/webhook/${encodeURIComponent(args.externalId)}/`, {
+        method: "DELETE",
+        headers: { authorization: basicAuth(apiKey_(args.credentials)) },
+      });
+    } catch (e) {
+      if (e instanceof HttpError && e.status === 404) return; // already gone — the goal is already true
+      throw e;
     }
   },
 };

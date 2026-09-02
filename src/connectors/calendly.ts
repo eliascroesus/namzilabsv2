@@ -11,6 +11,7 @@ import type {
   RegisterWebhookResult,
   VerifyWebhookArgs,
   VerifyWebhookResult,
+  UnregisterWebhookArgs,
 } from "./types";
 import { hmacSha256Hex, safeEqual, timestampFreshness } from "@/lib/signatures";
 import { fetchJson, HttpError } from "@/lib/http-client";
@@ -222,6 +223,31 @@ export const calendlyConnector: Connector = {
     }
   },
 
+  /**
+   * C23 — best-effort teardown at permanent connection delete. IDEMPOTENT: a
+   * 404 means the subscription is already gone, which is exactly the state
+   * being asked for, so that is success and not a failure to report.
+   *
+   * NO `identity()` CALL, deliberately — deleting one already-known
+   * subscription URI needs no lookup of which organization we are, unlike
+   * `registerWebhook`/`verifyWebhookSubscription`, which must resolve it to
+   * scope a list or a create.
+   *
+   * `args.externalId` comes off a jsonb column (`connections.config`), so it
+   * is validated by `subscriptionUri` before it goes anywhere near a DELETE
+   * carrying the customer's bearer token — never fetched as given.
+   */
+  async unregisterWebhook(args: UnregisterWebhookArgs): Promise<void> {
+    const token = token_(args.credentials);
+    const uri = subscriptionUri(args.externalId);
+    try {
+      await fetchJson(uri, { method: "DELETE", headers: authHeader(token) });
+    } catch (e) {
+      if (e instanceof HttpError && e.status === 404) return; // already gone — the goal is already true
+      throw e;
+    }
+  },
+
   async testFetchLatest(n: number, args: PollArgs): Promise<CanonicalEvent[]> {
     // Newest few meetings for the connect-time preview — one page, no cursor.
     // Keeps no filter of its own, exactly as `poll` keeps none: meeting type is
@@ -349,6 +375,38 @@ const nextPage = (p?: { next_page?: string | null } | null): string | null => {
   }
   return url;
 };
+
+/**
+ * Validate a stored subscription reference before it becomes a DELETE
+ * request carrying the customer's bearer token.
+ *
+ * `args.externalId` (C23's `unregisterWebhook`) comes off a jsonb column
+ * (`connections.config.webhookExternalId` / `.externalId`), so treating it as
+ * a ready-to-fetch URL would let a corrupted or malicious config value send
+ * the request — and the token riding with it — anywhere. Two shapes are
+ * legitimate: Calendly's own `resource.uri` (what `registerWebhook` stores,
+ * and the only form ever written today), and a bare id, built into the same
+ * URI Calendly would have returned. Anything else is refused outright,
+ * before any network call, rather than fetched and found out about.
+ *
+ * `new URL(externalId).pathname` normalizes `.`/`..` segments per the URL
+ * spec, so a prefix check on it (rather than on the raw string) cannot be
+ * walked out of the `/webhook_subscriptions/` namespace by a crafted path —
+ * same principle `nextPage`'s origin check applies, one namespace narrower.
+ */
+function subscriptionUri(externalId: string): string {
+  const subscriptionsPath = "/webhook_subscriptions/";
+  if (/^[A-Za-z0-9_-]+$/.test(externalId)) return `${API}${subscriptionsPath}${externalId}`;
+  try {
+    const u = new URL(externalId);
+    if (u.origin === new URL(API).origin && u.pathname.startsWith(subscriptionsPath) && u.pathname.length > subscriptionsPath.length) {
+      return externalId;
+    }
+  } catch {
+    // not parseable as an absolute URL either — falls through to the refusal below
+  }
+  throw new Error(`calendly: refusing to DELETE a webhook subscription outside our namespace: ${externalId.slice(0, 120)}`);
+}
 
 async function listAll<T>(token: string, path: string, params: Record<string, string>): Promise<T[]> {
   const out: T[] = [];

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, beforeAll } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, beforeAll, vi } from "vitest";
 import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { and, eq, sql } from "drizzle-orm";
@@ -20,6 +20,7 @@ import {
 } from "@/db/schema";
 import { FLEET_CONNECTION_ID, FLEET_ORG_ID } from "@/lib/provider-gateway/budget";
 import { deleteConnectionData, recordCountsByConnection } from "@/lib/sync/delete-connection";
+import { encrypt } from "@/lib/crypto";
 import type { DB } from "@/db/types";
 
 /**
@@ -55,6 +56,7 @@ beforeEach(async () => {
   ({ db, close } = await createTestDb());
 });
 afterEach(async () => {
+  vi.unstubAllGlobals();
   await close();
 });
 
@@ -62,6 +64,24 @@ async function connection(orgId = ORG, over: Partial<typeof connections.$inferIn
   const [c] = await db
     .insert(connections)
     .values({ orgId, source: "gsheets", name: "Sheet", status: "active", authType: "oauth2", ...over })
+    .returning();
+  return c;
+}
+
+/** A Calendly connection, with real encrypted credentials — the one source in
+ * this file whose `unregisterWebhook` runs for real against a stubbed fetch. */
+async function calendlyConnection(config: Record<string, unknown> = {}, orgId = ORG) {
+  const [c] = await db
+    .insert(connections)
+    .values({
+      orgId,
+      source: "calendly",
+      name: "Cal",
+      status: "active",
+      authType: "apiKey",
+      credentialsEncrypted: encrypt(JSON.stringify({ accessToken: "tok" }), Buffer.from(KEY, "base64")),
+      config,
+    })
     .returning();
   return c;
 }
@@ -401,5 +421,108 @@ describe("the number shown in the warning", () => {
 
     const counts = await recordCountsByConnection(db, ORG);
     expect(Object.keys(counts)).toEqual([mine.id]);
+  });
+});
+
+/**
+ * C23 — TELLING THE PROVIDER. A permanent delete emptied every table but left
+ * the provider itself still delivering to a webhook route our own connection
+ * disable now 403s forever — invisible to the customer, not to Calendly or
+ * Close, who keep retrying and eventually flag the integration for it.
+ *
+ * Best-effort, deliberately: the customer has already confirmed a
+ * destructive, irreversible action, and a provider that is merely slow,
+ * unreachable, or already gone must not hold it hostage.
+ */
+describe("telling the provider to stop delivering", () => {
+  const stubFetch = (impl: (url: string, init?: RequestInit) => Promise<Response>) => {
+    vi.stubGlobal("fetch", vi.fn(async (i: string | URL | Request, init?: RequestInit) => impl(String(i), init)));
+  };
+  const noContent = async () =>
+    ({
+      ok: true,
+      status: 204,
+      statusText: "No Content",
+      headers: { get: () => null },
+      json: async () => {
+        throw new Error("no body to parse on a 204");
+      },
+      text: async () => "",
+    }) as unknown as Response;
+
+  it("asks the provider after the connection is disabled but before its rows are gone", async () => {
+    const conn = await calendlyConnection({ externalId: "https://api.calendly.com/webhook_subscriptions/ABC" });
+    await fillEveryTable(conn.id);
+    const seen: { status?: string; eventCount?: number } = {};
+    stubFetch(async () => {
+      const [row] = await db.select().from(connections).where(eq(connections.id, conn.id));
+      seen.status = row.status;
+      seen.eventCount = (await db.select().from(events).where(eq(events.connectionId, conn.id))).length;
+      return noContent();
+    });
+
+    const res = await deleteConnectionData(db, ORG, conn.id, "Cal");
+
+    expect(seen.status, "the connection must already be disabled when the provider is asked").toBe("disabled");
+    expect(seen.eventCount, "the connection's rows must still be there when the provider is asked").toBeGreaterThan(0);
+    expect(res.webhook).toBe("removed");
+  });
+
+  it("prefers the sweep's re-created id over the connect-time one — exactly one DELETE", async () => {
+    const conn = await calendlyConnection({
+      externalId: "https://api.calendly.com/webhook_subscriptions/OLD",
+      webhookExternalId: "https://api.calendly.com/webhook_subscriptions/NEW",
+    });
+    await fillEveryTable(conn.id);
+    const reqs: string[] = [];
+    stubFetch(async (url) => {
+      reqs.push(url);
+      return noContent();
+    });
+
+    const res = await deleteConnectionData(db, ORG, conn.id, "Cal");
+
+    expect(reqs).toEqual(["https://api.calendly.com/webhook_subscriptions/NEW"]);
+    expect(res.webhook).toBe("removed");
+  });
+
+  it("a provider failure never fails the delete", async () => {
+    const conn = await calendlyConnection({ externalId: "https://api.calendly.com/webhook_subscriptions/ABC" });
+    await fillEveryTable(conn.id);
+    stubFetch(async () => {
+      throw new Error("network is down");
+    });
+
+    const res = await deleteConnectionData(db, ORG, conn.id, "Cal");
+
+    expect(res.removed).toBe(true);
+    expect(res.webhook).toBe("failed");
+    for (const [table, n] of Object.entries(await remaining(conn.id))) {
+      expect(n, `${table} should still be fully removed even though the webhook teardown failed`).toBe(0);
+    }
+  });
+
+  it("asks nothing when the connection carries no subscription id", async () => {
+    const conn = await calendlyConnection({});
+    await fillEveryTable(conn.id);
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await deleteConnectionData(db, ORG, conn.id, "Cal");
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(res.webhook).toBe("none");
+  });
+
+  it("asks nothing for a source with no unregisterWebhook, even if config carries something that looks like an id", async () => {
+    const conn = await connection(ORG, { config: { externalId: "sheet-tab-1" } });
+    await fillEveryTable(conn.id);
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await deleteConnectionData(db, ORG, conn.id, "Sheet");
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(res.webhook).toBe("none");
   });
 });

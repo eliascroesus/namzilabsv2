@@ -464,6 +464,13 @@ export type VerifyWebhookResult = {
   unsupported?: boolean;
 };
 
+export type UnregisterWebhookArgs = {
+  connectionId: string;
+  credentials: Record<string, unknown>;
+  externalId: string;
+  config?: Record<string, unknown>;
+};
+
 /**
  * The contract every integration implements. `verifySignature` + `normalize`
  * power the instant (webhook) path; `poll` powers the reconciliation/backfill
@@ -563,4 +570,14 @@ export interface Connector {
    * re-create it when missing (webhook-health backstop, run by the sweep).
    */
   verifyWebhookSubscription?(args: VerifyWebhookArgs): Promise<VerifyWebhookResult>;
+  /**
+   * Optional: best-effort, idempotent teardown of the provider-side
+   * subscription at permanent connection delete (C23). A 404 (already gone)
+   * IS SUCCESS, not a failure — the goal ("stop delivering to this
+   * connection") is already true. Every other failure is the CALLER's to
+   * swallow: a customer who has already confirmed an irreversible delete
+   * must not be held hostage by a provider that is merely slow or
+   * unreachable.
+   */
+  unregisterWebhook?(args: UnregisterWebhookArgs): Promise<void>;
 }

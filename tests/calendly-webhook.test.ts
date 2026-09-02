@@ -161,6 +161,115 @@ describe("verifyWebhookSubscription", () => {
   });
 });
 
+/**
+ * C23 — permanent delete tells Calendly to stop delivering. Best-effort and
+ * idempotent: a 404 means the subscription is already gone, which is exactly
+ * the state being asked for. No `identity()` call here — deleting one known
+ * subscription URI needs no lookup of which organization we are, unlike
+ * register/verify.
+ */
+describe("unregisterWebhook", () => {
+  const stub = (impl: (url: string, init?: RequestInit) => Promise<Response>) => {
+    vi.stubGlobal("fetch", vi.fn(async (i: string | URL | Request, init?: RequestInit) => impl(String(i), init)));
+  };
+
+  it("DELETEs the stored subscription URI with the bearer token", async () => {
+    const reqs: Array<{ url: string; method: string; auth: string | null }> = [];
+    stub(async (url, init) => {
+      reqs.push({
+        url,
+        method: (init?.method ?? "GET").toUpperCase(),
+        auth: (init?.headers as Record<string, string> | undefined)?.["authorization"] ?? null,
+      });
+      return jsonRes({}, 204);
+    });
+
+    await calendlyConnector.unregisterWebhook!({
+      connectionId: "c1",
+      credentials: { accessToken: "tok" },
+      externalId: "https://api.calendly.com/webhook_subscriptions/W1",
+    });
+
+    expect(reqs).toEqual([{ url: "https://api.calendly.com/webhook_subscriptions/W1", method: "DELETE", auth: "Bearer tok" }]);
+  });
+
+  it("builds the URI from a bare id", async () => {
+    const reqs: string[] = [];
+    stub(async (url) => {
+      reqs.push(url);
+      return jsonRes({}, 204);
+    });
+
+    await calendlyConnector.unregisterWebhook!({ connectionId: "c1", credentials: { accessToken: "tok" }, externalId: "W1" });
+
+    expect(reqs).toEqual(["https://api.calendly.com/webhook_subscriptions/W1"]);
+  });
+
+  it("accepts a 204 whose body can't be parsed as JSON", async () => {
+    stub(
+      async () =>
+        ({
+          ok: true,
+          status: 204,
+          statusText: "No Content",
+          headers: { get: () => null },
+          json: async () => {
+            throw new Error("Unexpected end of JSON input");
+          },
+          text: async () => "",
+        }) as unknown as Response,
+    );
+
+    await expect(
+      calendlyConnector.unregisterWebhook!({
+        connectionId: "c1",
+        credentials: { accessToken: "tok" },
+        externalId: "https://api.calendly.com/webhook_subscriptions/W1",
+      }),
+    ).resolves.toBeUndefined();
+  });
+
+  it("treats a 404 (already gone) as done, not as a failure", async () => {
+    stub(async () => jsonRes({ message: "not found" }, 404));
+
+    await expect(
+      calendlyConnector.unregisterWebhook!({
+        connectionId: "c1",
+        credentials: { accessToken: "tok" },
+        externalId: "https://api.calendly.com/webhook_subscriptions/W1",
+      }),
+    ).resolves.toBeUndefined();
+  });
+
+  it("refuses a URI outside Calendly's subscription namespace, and touches the network never", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      calendlyConnector.unregisterWebhook!({
+        connectionId: "c1",
+        credentials: { accessToken: "tok" },
+        externalId: "https://evil.example/steal?token=1",
+      }),
+    ).rejects.toThrow();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("refuses a same-origin URL outside the subscriptions path", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      calendlyConnector.unregisterWebhook!({
+        connectionId: "c1",
+        credentials: { accessToken: "tok" },
+        externalId: "https://api.calendly.com/scheduled_events/E1",
+      }),
+    ).rejects.toThrow();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
 describe("reconcile persists a re-created subscription's key", () => {
   it("writes the new secret encrypted and reports the check as reregistered", async () => {
     const stub: Connector = {
