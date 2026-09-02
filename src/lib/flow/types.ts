@@ -212,6 +212,15 @@ const AggregateConfigSchema = z.object({
   extraFields: z.array(z.string()).default([]),
   distinctField: z.string().default("subject"),
   groupBy: GroupBySchema,
+  /**
+   * Which date a time split buckets by — the published metric's own "Time
+   * reference" (`MetricSpec.timeField`), threaded in by `execNode`/
+   * `tileByRange` for whichever node is currently running. NEVER copied onto
+   * a step's own saved config: a Calculate has no opinion of its own about
+   * it, so a later change to the published time reference needs no
+   * republish of the step itself.
+   */
+  timeField: z.string().optional(),
 });
 export type AggregateConfig = z.infer<typeof AggregateConfigSchema>;
 

@@ -225,6 +225,28 @@ function recordsReachBack(
   return { shape, exec: se, targetHandle: null, sourceNodeId: src.nodeId };
 }
 
+/**
+ * THE PUBLISHED "TIME REFERENCE" FOR ONE NODE — one lookup, asked from two
+ * places that must never disagree: `execNode`, for the node currently
+ * running the ordinary way, and `tileByRange`, for a node it revisits while
+ * answering a range. Both need the SAME answer for the SAME node, or a
+ * Calculate's time split would bucket one way in the stored series and
+ * another way inside a range.
+ *
+ * `undefined` for every node that isn't an enabled metric's own endpoint —
+ * which, topologically, is every ancestor a traversal passes through: a
+ * `MetricSpec` targets "a node with no next step", so a step feeding one
+ * never carries an entry of its own.
+ */
+function metricTimeFieldFor(graph: FlowGraph, nodeId: string): string | undefined {
+  // `?? []`: `metrics` is defaulted by `FlowGraphSchema`, but a handful of
+  // callers (tests/aggregate-scale.test.ts stubs a graph by hand, past the
+  // type, to isolate an unrelated concern) construct a graph that never went
+  // through `parseGraph` at all. Every such graph predates metrics-based
+  // publishing, so "no entry" is the correct answer, not a crash.
+  return (graph.metrics ?? []).find((m) => m.enabled && m.nodeId === nodeId)?.timeField || undefined;
+}
+
 async function execNode(ctx: EngineCtx, node: FlowNode, inputs: ResolvedInput[], inputError: boolean, graph: FlowGraph): Promise<NodeExec> {
   const err = (message: string): NodeExecErr => ({
     status: "error",
@@ -255,9 +277,9 @@ async function execNode(ctx: EngineCtx, node: FlowNode, inputs: ResolvedInput[],
       case "group":
         return execGroup(node, inputs);
       case "formula":
-        return execFormula(node, inputs);
+        return execFormula(node, inputs, metricTimeFieldFor(graph, node.id));
       case "calculate":
-        return execCalculate(node, inputs);
+        return execCalculate(node, inputs, metricTimeFieldFor(graph, node.id));
       case "output":
         return execOutput(node, inputs);
       default:
@@ -1372,7 +1394,7 @@ function formulaValue(op: string, a: number, b: number): number {
   }
 }
 
-function execFormula(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
+function execFormula(node: FlowNode, inputs: ResolvedInput[], timeField?: string): NodeExec {
   const cfg = FormulaConfigSchema.parse(node.data.config ?? {});
 
   if (isDatasetFormulaOp(cfg.op)) {
@@ -1406,7 +1428,7 @@ function execFormula(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
      * it would silently turn a customer's published breakdown into a single
      * number — pinned by "produces a time series and a grouped result".
      */
-    const acfg: AggregateConfig = { aggregation: cfg.op as AggregateConfig["aggregation"], field: cfg.field, extraFields: cfg.extraFields, distinctField: cfg.distinctField, groupBy: cfg.groupBy };
+    const acfg: AggregateConfig = { aggregation: cfg.op as AggregateConfig["aggregation"], field: cfg.field, extraFields: cfg.extraFields, distinctField: cfg.distinctField, groupBy: cfg.groupBy, timeField };
     const shape = aggregate(records, acfg);
     const recordsOut = shape.kind === "scalar" ? 1 : shape.kind === "series" ? shape.series.length : shape.groups.length;
     return { status: "ok", nodeType: "formula", shape, recordsIn: records.length, recordsOut, sample: records.slice(0, 3), outputSchema: [] };
@@ -1417,7 +1439,7 @@ function execFormula(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
 }
 
 // ---------- Calculate (merged Aggregate + Formula + Group) ----------
-function execCalculate(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
+function execCalculate(node: FlowNode, inputs: ResolvedInput[], timeField?: string): NodeExec {
   const cfg = CalculateConfigSchema.parse(node.data.config ?? {});
 
   if (cfg.mode === "compare") {
@@ -1446,7 +1468,7 @@ function execCalculate(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
   }
 
   // number
-  const acfg: AggregateConfig = { aggregation: cfg.aggregation, field: cfg.field, extraFields: cfg.extraFields, distinctField: cfg.distinctField, groupBy: cfg.groupBy };
+  const acfg: AggregateConfig = { aggregation: cfg.aggregation, field: cfg.field, extraFields: cfg.extraFields, distinctField: cfg.distinctField, groupBy: cfg.groupBy, timeField };
   const shape = aggregate(input.records, acfg);
   const recordsOut = shape.kind === "scalar" ? 1 : shape.kind === "series" ? shape.series.length : shape.groups.length;
   return { status: "ok", nodeType: "calculate", shape, recordsIn: input.records.length, recordsOut, sample: input.records.slice(0, 3), outputSchema: [] };
@@ -1981,7 +2003,20 @@ export function tileByRange(
           }
         });
         if (reachBack) inputs.push(reachBack);
-        const re = reexecPure(node, inputs);
+        /**
+         * WHICH TIME REFERENCE THIS RE-EXECUTION READS.
+         *
+         * The endpoint (`id === nodeId`) reads the tile's own presentation —
+         * already the metric's `timeField`, via `factCorrected`'s spread in
+         * materialize.ts — so it agrees with the un-windowed run `execNode`
+         * produced. Any OTHER node revisited on the way there is asked the
+         * same question `execNode` would ask it: `metricTimeFieldFor` reads
+         * its own metrics[] entry, if it has one. One rule, two callers,
+         * so a Calculate's time split cannot bucket one way in the stored
+         * series and another inside a range.
+         */
+        const timeField = id === nodeId ? spec.timeField : metricTimeFieldFor(graph, id);
+        const re = reexecPure(node, inputs, timeField);
         if (re.status !== "ok") throw new Error(re.error);
         result = re;
       }
@@ -2063,14 +2098,14 @@ export function tileByRange(
  * something from their input rather than produce records reach this, and none
  * of them touch the database — so a range costs arithmetic, not a query.
  */
-function reexecPure(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
+function reexecPure(node: FlowNode, inputs: ResolvedInput[], timeField?: string): NodeExec {
   switch (node.type) {
     case "output":
       return execOutput(node, inputs);
     case "calculate":
-      return execCalculate(node, inputs);
+      return execCalculate(node, inputs, timeField);
     case "formula":
-      return execFormula(node, inputs);
+      return execFormula(node, inputs, timeField);
     case "group":
       return execGroup(node, inputs);
     default:
@@ -2302,22 +2337,53 @@ function assertFieldHasValues(records: FlowRecord[], cfg: AggregateConfig): void
   throw new EmptyFieldError(fields.join('" + "'), records.length, cfg.aggregation);
 }
 
+/**
+ * WHICH FIELD DATES A TIME SPLIT — the chosen field if ANY record in this
+ * exact set resolves it, else `occurredAt`. The same rule `tileByRange`'s
+ * `fieldFor` applies to a range's own membership and to a raw dataset's
+ * series, so all three can never disagree about which date a record was
+ * filed under: a lane where the field never resolves is dated the ordinary
+ * way rather than excluded wholesale (usually a comparison's other side, a
+ * different source that never had the column); a lane where it resolves for
+ * SOME records is using it, so the records it misses are genuinely undated.
+ */
+function resolveTimeField(records: FlowRecord[], timeField: string | undefined): string {
+  return timeField && records.some((r) => dateMs(getField(r, timeField)) != null) ? timeField : "occurredAt";
+}
+
 function aggregate(records: FlowRecord[], cfg: AggregateConfig): Scalar | Series | Grouped {
   assertFieldHasValues(records, cfg);
   if (!cfg.groupBy) return { kind: "scalar", value: computeAgg(records, cfg.aggregation, aggregationFields(cfg), cfg.distinctField) };
   if (cfg.groupBy.type === "time") {
     const unit = cfg.groupBy.unit;
+    const field = resolveTimeField(records, cfg.timeField);
+    /**
+     * `occurredAt` IS ALREADY CANONICAL ISO AND NEVER ABSENT, so its own
+     * exact old path stays untouched — a flow with no chosen time reference
+     * (every flow published before this) buckets byte-for-byte as it always
+     * did. Any other field can hold anything `dateMs` reads (an epoch
+     * number, a date-only string, …), and a record it cannot date this way
+     * sits out of every bucket — the headline below still counts it; see the
+     * note on `Series.total`.
+     */
+    const bucketOf = (r: FlowRecord): string | null => {
+      if (field === "occurredAt") return bucketKey(r.occurredAt, unit);
+      const t = dateMs(getField(r, field));
+      return t == null ? null : bucketKey(new Date(t).toISOString(), unit);
+    };
     const buckets = new Map<string, FlowRecord[]>();
     for (const r of records) {
-      const key = bucketKey(r.occurredAt, unit);
+      const key = bucketOf(r);
+      if (key == null) continue;
       if (!buckets.has(key)) buckets.set(key, []);
       buckets.get(key)!.push(r);
     }
     return {
       kind: "series",
       series: [...buckets.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([bucket, recs]) => ({ bucket, value: computeAgg(recs, cfg.aggregation, aggregationFields(cfg), cfg.distinctField) })),
-      // The headline, computed HERE because this is where the records are. See
-      // the note on `Series` for why it cannot be derived from the buckets.
+      // The headline, computed HERE because this is where the records are —
+      // and over every record, dated or not. See the note on `Series` for why
+      // it cannot be derived from the buckets.
       total: computeAgg(records, cfg.aggregation, aggregationFields(cfg), cfg.distinctField),
     };
   }

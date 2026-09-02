@@ -387,6 +387,70 @@ describe("flow engine — App → Filter → Aggregate → Output", () => {
 });
 
 /**
+ * C4: A TIME-SPLIT CALCULATE BUCKETS BY THE METRIC'S OWN TIME REFERENCE.
+ *
+ * `groupBy: { type: "time" }` used to bucket every record by `occurredAt`
+ * no matter what "Time reference" was chosen at Review & publish — while
+ * `tileByRange`'s ranges and a raw dataset's own series both already honoured
+ * that choice. A meeting booked for today, filed under today's dashboard
+ * pill, could show up in a series bucket dated when the ROW arrived instead
+ * of when the meeting happens. `execNode` now hands the endpoint's enabled
+ * metric's `timeField` down into the aggregation itself.
+ */
+describe("a time-split Calculate buckets by the metric's own time reference", () => {
+  function timeSplitGraph(timeField: string) {
+    return parseGraph({
+      nodes: [N("a", "app", { connectionId: CONN }), N("c", "calculate", { mode: "number", aggregation: "count", groupBy: { type: "time", unit: "day" } })],
+      edges: [E("a", "c")],
+      metrics: [{ nodeId: "c", timeField }],
+    });
+  }
+
+  it("buckets by the chosen date, not by when the record arrived", async () => {
+    // Both records arrive the same day, so bucketing by `occurredAt` would
+    // put them in one bucket. Their booked dates are a month apart, so only
+    // reading `starts_at` can tell them apart.
+    await ev({ eventType: "meeting", subject: "a", properties: { starts_at: "2026-01-01T00:00:00.000Z" } });
+    await ev({ eventType: "meeting", subject: "b", properties: { starts_at: "2026-02-15T00:00:00.000Z" } });
+
+    const res = await runFlow({ db, orgId: ORG }, timeSplitGraph("properties.starts_at"));
+    const shape = (res.nodes.get("c")! as { shape: { series?: Array<{ bucket: string; value: number }>; total?: number } }).shape;
+    expect(shape.series).toEqual([
+      { bucket: "2026-01-01", value: 1 },
+      { bucket: "2026-02-15", value: 1 },
+    ]);
+  });
+
+  it("keeps an undated record in the headline and out of every bucket", async () => {
+    await ev({ eventType: "meeting", subject: "a", properties: { starts_at: "2026-01-01T00:00:00.000Z" } });
+    await ev({ eventType: "meeting", subject: "b", properties: { starts_at: "2026-01-01T00:00:00.000Z" } });
+    await ev({ eventType: "meeting", subject: "c", properties: {} }); // no starts_at at all
+
+    const res = await runFlow({ db, orgId: ORG }, timeSplitGraph("properties.starts_at"));
+    const shape = (res.nodes.get("c")! as { shape: { series?: Array<{ bucket: string; value: number }>; total?: number } }).shape;
+    // The dated pair is the only bucket — the undated record belongs to no period.
+    expect(shape.series).toEqual([{ bucket: "2026-01-01", value: 2 }]);
+    // The headline is every record that happened, dated or not.
+    expect(shape.total).toBe(3);
+  });
+
+  it("falls back to occurredAt when no record carries the chosen field", async () => {
+    // GUARD, not a sabotage test. When the chosen field resolves for NOTHING,
+    // `resolveTimeField` falls back to `occurredAt` — exactly what the engine
+    // did unconditionally before this change, so this passes on the old code
+    // too. It pins the fallback half of the rule so a later change cannot
+    // silently drop it.
+    await ev({ eventType: "meeting", subject: "a", daysAgo: 1, properties: {} });
+    await ev({ eventType: "meeting", subject: "b", daysAgo: 3, properties: {} });
+
+    const res = await runFlow({ db, orgId: ORG }, timeSplitGraph("properties.starts_at"));
+    const shape = (res.nodes.get("c")! as { shape: { series?: Array<{ bucket: string; value: number }>; total?: number } }).shape;
+    expect(shape.series).toHaveLength(2);
+    expect(shape.total).toBe(2);
+  });
+});
+
+/**
  * Meeting type narrows the READ, not the sync — the fix for a step that showed
  * `0 loaded` the moment a type was picked.
  *

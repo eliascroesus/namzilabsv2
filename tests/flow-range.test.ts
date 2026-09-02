@@ -238,6 +238,41 @@ describe("a range selects records; it does not re-run the flow against a truncat
   });
 
   /**
+   * C4: A TIME-SPLIT CALCULATE reads the same chosen reference as the range
+   * itself. `keep()` already filed this record under "today" by its booked
+   * date; the step's own `groupBy: { type: "time" }` bucket has to agree, or a
+   * "today" slot could hold a bucket dated when the row arrived instead — the
+   * defect this test exists to catch.
+   */
+  it("buckets a time-split Calculate by the metric's chosen reference — today, 7d and all agree", async () => {
+    // Arrived ten days ago; the meeting it books is today.
+    await ev({
+      eventType: "meeting_booked",
+      at: START_OF_TODAY - 10 * DAY,
+      key: "L1",
+      props: { starts_at: new Date(START_OF_TODAY + 5 * HOUR).toISOString() },
+    });
+
+    const graph = {
+      nodes: [
+        N("m", "app", { connectionId: CONN, source: "close", eventType: "meeting_booked" }),
+        N("c", "calculate", { mode: "number", aggregation: "count", groupBy: { type: "time", unit: "day" } }),
+      ],
+      edges: [E("m", "c")],
+    };
+
+    const by = await slots(graph, "c", SPEC({ timeField: "properties.starts_at" }));
+    const todayKey = "2026-08-18"; // START_OF_TODAY's own date
+    for (const key of ["today", "7d", "all"] as const) {
+      // REVERT THE TIME REFERENCE AND THIS BUCKET READS "2026-08-08" — the
+      // day the row arrived, ten days before the day it was let into the
+      // window under.
+      expect(by[key].series, `byRange.${key}`).toEqual([{ bucket: todayKey, value: 1 }]);
+      expect(by[key].value, `byRange.${key}`).toBe(1);
+    }
+  });
+
+  /**
    * Records with no date under the chosen reference belong to no period. They
    * must still be in "All time" — and the tile has to be told, or the missing
    * rows read as an answer.
