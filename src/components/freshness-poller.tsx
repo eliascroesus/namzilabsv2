@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { resultsEtag } from "@/lib/flow/results-etag";
 
 /**
  * G.4 client wire-up: poll the results-version beacon and refresh the
@@ -49,9 +50,30 @@ const RUNGS = [
 /** Pointer/keys/scroll: enough to notice a person, cheap enough to ignore. */
 const ACTIVITY = ["pointerdown", "keydown", "wheel", "touchstart"] as const;
 
-export function FreshnessPoller({ intervalMs = RUNGS[0].every }: { intervalMs?: number }) {
+export function FreshnessPoller({
+  intervalMs = RUNGS[0].every,
+  initialVersion,
+}: {
+  intervalMs?: number;
+  /**
+   * C16 — the version this page actually rendered, so the ref does not start
+   * empty. `changed` below requires a non-null previous tag, so an unseeded
+   * ref reads every first answer as "nothing to compare, carry on" even when
+   * the version moved between this render and the first poll — a change in
+   * that gap stayed invisible until some later, unrelated recompute happened
+   * to move the tag again. Seeding also means the very first request already
+   * carries `If-None-Match`, so an unchanged world is a 304 from poll one
+   * instead of poll two.
+   */
+  initialVersion?: string;
+}) {
   const router = useRouter();
-  const etag = useRef<string | null>(null);
+  // Only ever read on mount — React ignores later changes to a `useRef`
+  // initializer, which is exactly right here: `router.refresh()` re-renders
+  // this component with a fresh `initialVersion`, and re-seeding from it on
+  // every refresh would fight the ref's own bookkeeping of what the last
+  // poll actually saw.
+  const etag = useRef<string | null>(initialVersion != null ? resultsEtag(initialVersion) : null);
 
   useEffect(() => {
     let stop = false;

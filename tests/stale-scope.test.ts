@@ -1,8 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { eq } from "drizzle-orm";
 import { createTestDb, seedConnection } from "./helpers/testdb";
 import { flows, flowVersions, flowResults } from "@/db/schema";
 import { markStaleForSource, resultsVersion } from "@/lib/flow/materialize";
+import { resultsEtag } from "@/lib/flow/results-etag";
 import { streamConfigHash } from "@/lib/sync/stream-hash";
 import type { DB } from "@/db/types";
 
@@ -108,5 +111,24 @@ describe("G.4 — results-version beacon", () => {
     // import advancing changes no flow_results column, so without those last
     // two an open dashboard would never refresh its "still importing" label.
     expect(await resultsVersion(db, "org_other")).toBe("0.0.0.0.0.0");
+  });
+});
+
+describe("C16 — resultsEtag is the one spelling of the wire tag", () => {
+  it("formats a weak ETag exactly as the beacon route always has", () => {
+    expect(resultsEtag("0.0.0.0.0.0")).toBe('W/"0.0.0.0.0.0"');
+  });
+
+  it("the route and the poller both go through it — not a second, driftable copy", () => {
+    const route = readFileSync(join(process.cwd(), "src/app/api/results-version/route.ts"), "utf8");
+    const poller = readFileSync(join(process.cwd(), "src/components/freshness-poller.tsx"), "utf8");
+    const page = readFileSync(join(process.cwd(), "src/app/dashboard/page.tsx"), "utf8");
+
+    expect(route).toMatch(/import \{ resultsEtag \} from "@\/lib\/flow\/results-etag"/);
+    expect(poller).toMatch(/import \{ resultsEtag \} from "@\/lib\/flow\/results-etag"/);
+    // The page hands the poller the RAW version, not a pre-formatted tag —
+    // `resultsEtag` runs once, inside the poller, so seeding and polling can
+    // never disagree about the spelling.
+    expect(page).toMatch(/<FreshnessPoller initialVersion=/);
   });
 });

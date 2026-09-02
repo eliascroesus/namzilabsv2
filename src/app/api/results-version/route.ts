@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getReadDb } from "@/db/client";
 import { resultsVersion } from "@/lib/flow/materialize";
+import { resultsEtag } from "@/lib/flow/results-etag";
 import { getOrgContext } from "@/lib/auth";
 
 export const runtime = "nodejs";
@@ -17,7 +18,7 @@ export async function GET(req: Request) {
   if (!ctx) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const version = await resultsVersion(getReadDb(), ctx.orgId);
-  const etag = `W/"${version}"`;
+  const etag = resultsEtag(version);
 
   if (req.headers.get("if-none-match") === etag) {
     return new NextResponse(null, { status: 304, headers: { etag, "cache-control": "no-cache" } });

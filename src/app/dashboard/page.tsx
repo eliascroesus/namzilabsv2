@@ -39,7 +39,7 @@ import {
   type TilePlacement,
 } from "@/lib/board/types";
 import { importProgressByStreamRef } from "@/lib/backfill/jobs";
-import { calendarFlowTiles, publishedFlowTiles, unpublishedFlowIds } from "@/lib/flow/materialize";
+import { calendarFlowTiles, publishedFlowTiles, resultsVersion, unpublishedFlowIds } from "@/lib/flow/materialize";
 import { listFlowNames } from "@/lib/flow/store";
 import { CalendarBoard, type CalendarMetric } from "@/components/calendar/calendar-board";
 import { calendarMonths, dayKey } from "@/lib/metrics/calendar";
@@ -148,6 +148,19 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     console.error("[dashboard] published tiles read failed", e);
     return null;
   });
+  /**
+   * C16 — THE FRESHNESS POLLER'S SEED, started here for the same reason as
+   * the two above. `resultsVersion` is the exact aggregate
+   * `/api/results-version` computes, over this same `getReadDb()` handle
+   * (`db`), so there is no primary/replica lag between the number this
+   * render shows and the number the poller's first comparison uses — and no
+   * second query to drift from the route's. Swallowed rather than thrown: a
+   * poller that fails to seed still works, it just starts from `null` the
+   * way it always has (see `FreshnessPoller`'s own note on why that gap can
+   * miss a change). Awaited beside `metricCount`, right before the return —
+   * nothing between here and there reads it.
+   */
+  const resultsVersionP = resultsVersion(db, orgId).catch(() => undefined);
 
   /**
    * THE NORMALIZED KEY, not the one in the URL. `resolveRange` already falls
@@ -996,10 +1009,16 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
    */
   const metricCount = loadError ? undefined : metrics.length + flowTiles.length;
 
+  // Awaited here, not above: nothing between its start and this line reads
+  // it, so there is no reason to block on it any earlier — it has been
+  // racing every read above since before the `Promise.all`.
+  const initialResultsVersion = await resultsVersionP;
+
   return (
     <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email} metricCount={metricCount}>
-      {/* G.4: refresh the server-rendered tiles when the org's results move. */}
-      <FreshnessPoller />
+      {/* G.4: refresh the server-rendered tiles when the org's results move.
+          C16: seeded so a change before the first poll is never missed. */}
+      <FreshnessPoller initialVersion={initialResultsVersion} />
       <PageContainer width="full">
         {/* ── NOTHING HERE YET ──────────────────────────────────────────────
             A whole page shape rather than the usual one with holes in it. The
