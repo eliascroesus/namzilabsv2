@@ -48,11 +48,27 @@ async function touchGrant(db: DB, userId: string, orgId: string, source: "select
     .onConflictDoUpdate({ target: [mcpGrants.userId, mcpGrants.orgId], set: { lastUsedAt: new Date() } });
 }
 
+/**
+ * `mcp_bindings.binding_key` is the SOLE primary key (no schema change here —
+ * the migration may already be applied in production), so two users who
+ * happen to share one OAuth client_id would otherwise collide on one row:
+ * `bind()`'s `onConflictDoUpdate` only sets `orgId`/`expiresAt`, never
+ * `userId`, so the second user's select would silently leave the FIRST
+ * user's id on a row now pointing at the second user's workspace. Folding the
+ * user into the STORED key — composed here once so `bind()` and the lookup
+ * can never drift apart — means the two users' rows never share a primary
+ * key at all, so there is no conflict to resolve incorrectly.
+ */
+function storedBindingKey(userId: string, bindingKey: string): string {
+  return `${userId}|${bindingKey}`;
+}
+
 async function bind(db: DB, auth: McpAuth, orgId: string): Promise<void> {
   const exp = auth.extra.bindingKey.startsWith("token:") && auth.expiresAt ? new Date(auth.expiresAt * 1000) : new Date(Date.now() + BINDING_FALLBACK_TTL_MS);
+  const key = storedBindingKey(auth.extra.userId, auth.extra.bindingKey);
   await db
     .insert(mcpBindings)
-    .values({ bindingKey: auth.extra.bindingKey, userId: auth.extra.userId, orgId, expiresAt: exp })
+    .values({ bindingKey: key, userId: auth.extra.userId, orgId, expiresAt: exp })
     .onConflictDoUpdate({ target: mcpBindings.bindingKey, set: { orgId, expiresAt: exp } });
 }
 
@@ -74,10 +90,32 @@ async function finish(db: DB, auth: McpAuth, orgId: string, source: "selected" |
  */
 export async function resolveWorkspace(db: DB, auth: McpAuth): Promise<Resolution> {
   const { userId, orgIdClaim, bindingKey } = auth.extra;
-  if (orgIdClaim) return finish(db, auth, orgIdClaim, "claim");
+  if (orgIdClaim) {
+    const r = await finish(db, auth, orgIdClaim, "claim");
+    // A successful claim binds too, so a claim-connected client shows up in
+    // Settings' per-grant client count instead of reading zero forever.
+    if (r.ok) await bind(db, auth, orgIdClaim);
+    return r;
+  }
 
-  const [b] = await db.select().from(mcpBindings).where(and(eq(mcpBindings.bindingKey, bindingKey), gt(mcpBindings.expiresAt, new Date()))).limit(1);
-  if (b && b.userId === userId) return finish(db, auth, b.orgId, "selected");
+  const key = storedBindingKey(userId, bindingKey);
+  const [b] = await db
+    .select()
+    .from(mcpBindings)
+    .where(and(eq(mcpBindings.bindingKey, key), eq(mcpBindings.userId, userId), gt(mcpBindings.expiresAt, new Date())))
+    .limit(1);
+  if (b && b.userId === userId) {
+    // Refresh on EVERY consultation — even when the answer below is
+    // `revoked` — so a client that keeps calling keeps its tombstone alive.
+    // Without this the row expires ~24h after the client's last
+    // connect/select (pruneMcpTables then deletes it), and the client's NEXT
+    // call finds no binding and falls through to "the one live grant" below,
+    // which can silently reconnect a REVOKED client to a DIFFERENT
+    // workspace — exactly what `revoked` exists to prevent, merely delayed a
+    // day.
+    await bind(db, auth, b.orgId);
+    return finish(db, auth, b.orgId, "selected");
+  }
 
   const live = await db.select().from(mcpGrants).where(and(eq(mcpGrants.userId, userId), isNull(mcpGrants.revokedAt)));
   if (live.length === 1) {

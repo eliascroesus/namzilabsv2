@@ -3,7 +3,7 @@ import { createTestDb } from "./helpers/testdb";
 import { readFileSync } from "node:fs";
 import { mcpBindings, mcpCalls } from "@/db/schema";
 import type { DB } from "@/db/types";
-import { recordCall, checkRateLimit, summarizeArgs, pruneMcpTables, USER_PER_MINUTE } from "@/lib/mcp/audit";
+import { recordCall, checkRateLimit, summarizeArgs, pruneMcpTables, USER_PER_MINUTE, ORG_PER_HOUR } from "@/lib/mcp/audit";
 
 let db: DB; let close: () => Promise<void>;
 beforeEach(async () => { ({ db, close } = await createTestDb()); });
@@ -27,6 +27,16 @@ describe("mcp audit", () => {
     for (let i = 0; i < 5; i++) await recordCall(db, { orgId: "org_b", userId: "u1", tool: "list_metrics", argsSummary: {}, rows: 0, bytes: 0, durationMs: 1 });
     expect((await checkRateLimit(db, { orgId: "org_a", userId: "u9", tool: "list_metrics" })).allowed).toBe(true);
   });
+  it("trips the per-workspace hour limit at the 601st call, spread across many users so the per-user limit does not trip first", async () => {
+    // One multi-row insert rather than 600 sequential recordCall awaits, and
+    // spread over 20 users (30 calls each) so no single user's 60/minute
+    // limit is what actually trips this check.
+    const rows = Array.from({ length: ORG_PER_HOUR }, (_, i) => ({ orgId: "org_c", userId: `u${i % 20}`, tool: "list_metrics" }));
+    await db.insert(mcpCalls).values(rows);
+    const r = await checkRateLimit(db, { orgId: "org_c", userId: "u_new", tool: "list_metrics" });
+    expect(r.allowed).toBe(false);
+    if (!r.allowed) expect(r.reason).toMatch(/hour/);
+  });
   it("applies only the per-user limit to pre-workspace calls (empty orgId)", async () => {
     for (let i = 0; i < USER_PER_MINUTE; i++) await recordCall(db, { orgId: "", userId: "u3", tool: "list_workspaces", argsSummary: {}, rows: 0, bytes: 0, durationMs: 1 });
     expect((await checkRateLimit(db, { orgId: "", userId: "u3", tool: "list_workspaces" })).allowed).toBe(false);
@@ -46,8 +56,28 @@ describe("mcp audit", () => {
     expect((await db.select().from(mcpCalls)).map((c) => c.at.toISOString())).toEqual([now.toISOString()]);
     expect((await db.select().from(mcpBindings)).map((b) => b.bindingKey)).toEqual(["k_live"]);
   });
+  it("summarizes each kind of argument value the way the audit trail promises", () => {
+    const fortyChar = "a".repeat(40);
+    const fortyOneChar = "a".repeat(41);
+    expect(
+      summarizeArgs({ n: 5, b: true, z: null, fortyChar, fortyOneChar, spaced: "has space", arr: [1, 2, 3], obj: { a: 1 } }),
+    ).toEqual({ n: 5, b: true, z: null, fortyChar, fortyOneChar: "<text>", spaced: "<text>", arr: "<array:3>", obj: "<object>" });
+  });
+  it("truncates a stored error to 200 characters", async () => {
+    const long = "x".repeat(1000);
+    await recordCall(db, { orgId: "org_a", userId: "u1", tool: "t", argsSummary: {}, rows: 0, bytes: 0, durationMs: 1, error: long });
+    const [row] = await db.select().from(mcpCalls);
+    expect(row.error).toHaveLength(200);
+    expect(row.error).toBe("x".repeat(200));
+  });
   it("runs from the nightly prune-storage function under its inspect gate", () => {
     const src = readFileSync("src/inngest/functions/sync.ts", "utf8");
     expect(src).toMatch(/step\.run\("prune-mcp-tables", \(\) => pruneMcpTables\(getDb\(\), \{ inspect \}\)\)/);
+    // The MCP sweep's result belongs in pruneStorage's own return value...
+    expect(src).toMatch(/return \{ settledTestRuns: settled, \.\.\.retained, mcp, backlog, invariants, webhookEventTime: eventTime \};/);
+    // ...and a backlog bigger than one night's batch gets its own warning,
+    // not just a silent undercount.
+    expect(src).toContain("if (mcp.callsPastRetention > MCP_PRUNE_BATCH || mcp.bindingsExpired > MCP_PRUNE_BATCH) {");
+    expect(src).toContain("console.warn(`[storage-prune-truncated] mcp ${JSON.stringify(mcp)}`);");
   });
 });

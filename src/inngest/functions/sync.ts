@@ -5,7 +5,7 @@ import { runSync, reprocessConnection, syncChanged } from "@/lib/sync/resync";
 import { expireAgedResults, markStaleForSource, materializeStaleAll } from "@/lib/flow/materialize";
 import { sendOpsAlert } from "@/lib/alerts";
 import { pruneOperationalTables, pruneSettledTestRuns, retentionBacklog } from "@/lib/storage-lifecycle";
-import { pruneMcpTables } from "@/lib/mcp/audit";
+import { pruneMcpTables, MCP_PRUNE_BATCH } from "@/lib/mcp/audit";
 import { getJob, runnableJobsByProvider } from "@/lib/backfill/jobs";
 import { scanInvariants } from "@/lib/health/invariants";
 import { scanWebhookEventTime } from "@/lib/webhooks/event-time";
@@ -264,6 +264,14 @@ export const pruneStorage = inngest.createFunction(
     // MCP audit rows (90 days) and expired client bindings, under the same inspect gate.
     const mcp = await step.run("prune-mcp-tables", () => pruneMcpTables(getDb(), { inspect }));
     if (mcp.inspected) console.warn(`[storage-prune-inspect] mcp ${JSON.stringify(mcp)}`);
+    // One bounded batch per table per night: a backlog bigger than that batch
+    // is the same "not keeping up" signal `retained.truncated` gives above,
+    // just computed differently because pruneMcpTables has no truncated flag
+    // of its own — its per-table counts already say everything past
+    // retention, batch size included.
+    if (mcp.callsPastRetention > MCP_PRUNE_BATCH || mcp.bindingsExpired > MCP_PRUNE_BATCH) {
+      console.warn(`[storage-prune-truncated] mcp ${JSON.stringify(mcp)}`);
+    }
     // H.6 capacity signal: what is STILL past retention after this run. A
     // non-zero backlog that persists night after night means pruning is not
     // keeping up with ingest — visible here before it becomes a disk problem.
@@ -314,7 +322,7 @@ export const pruneStorage = inngest.createFunction(
         sendOpsAlert("[namzilabs] nightly invariant scan: findings", JSON.stringify(invariants, null, 2)),
       );
     }
-    return { settledTestRuns: settled, ...retained, backlog, invariants, webhookEventTime: eventTime };
+    return { settledTestRuns: settled, ...retained, mcp, backlog, invariants, webhookEventTime: eventTime };
   },
 );
 

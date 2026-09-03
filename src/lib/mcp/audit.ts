@@ -5,8 +5,14 @@ import type { DB } from "@/db/types";
 export const USER_PER_MINUTE = 60;
 export const ORG_PER_HOUR = 600;
 export const MCP_CALLS_RETENTION_DAYS = 90;
-/** Rows removed per table per night — same bound as storage-lifecycle.ts, so one sweep can't lock a hot table. */
-const PRUNE_BATCH = 5_000;
+/**
+ * Rows removed per table per night — same bound as storage-lifecycle.ts, so
+ * one sweep can't lock a hot table. Exported so `sync.ts` can compare its own
+ * batch's overdue counts against the SAME number rather than repeating 5000.
+ */
+export const MCP_PRUNE_BATCH = 5_000;
+/** How much of a caught error's own text `recordCall` will keep. See `CallEntry.error`. */
+const ERROR_MAX_CHARS = 200;
 
 export function summarizeArgs(args: unknown): Record<string, unknown> {
   if (!args || typeof args !== "object" || Array.isArray(args)) return {};
@@ -22,13 +28,24 @@ export function summarizeArgs(args: unknown): Record<string, unknown> {
 export type CallEntry = {
   orgId: string; userId: string; clientId?: string | null; tool: string;
   argsSummary: Record<string, unknown>; rows: number; bytes: number; durationMs: number;
-  revealContacts?: boolean; error?: string | null;
+  revealContacts?: boolean;
+  /**
+   * The tool's own one-sentence result text (what `fail()` produced), NEVER
+   * a caught exception's `.message`. `mcp_calls`' own schema comment says
+   * "never free text", and an exception message can carry anything a library
+   * or the runtime chooses to put there — a stack fragment, a connection
+   * string, a echoed-back argument. `recordCall` hard-truncates to
+   * `ERROR_MAX_CHARS` regardless, as a backstop rather than a license to pass
+   * anything through.
+   */
+  error?: string | null;
 };
 
 export async function recordCall(db: DB, e: CallEntry): Promise<void> {
   await db.insert(mcpCalls).values({
     orgId: e.orgId, userId: e.userId, clientId: e.clientId ?? null, tool: e.tool, argsSummary: e.argsSummary,
-    rows: e.rows, bytes: e.bytes, durationMs: e.durationMs, revealContacts: e.revealContacts ?? false, error: e.error ?? null,
+    rows: e.rows, bytes: e.bytes, durationMs: e.durationMs, revealContacts: e.revealContacts ?? false,
+    error: e.error ? e.error.slice(0, ERROR_MAX_CHARS) : null,
   });
 }
 
@@ -68,9 +85,9 @@ export async function pruneMcpTables(db: DB, opts: { inspect?: boolean; now?: Da
   ]);
   const out: McpPruneResult = { inspected: Boolean(opts.inspect), callsPastRetention: Number(calls?.n ?? 0), bindingsExpired: Number(bindings?.n ?? 0), callsDeleted: 0, bindingsDeleted: 0 };
   if (out.inspected) return out;
-  const ids = await db.select({ id: mcpCalls.id }).from(mcpCalls).where(callsWhere).limit(PRUNE_BATCH);
+  const ids = await db.select({ id: mcpCalls.id }).from(mcpCalls).where(callsWhere).limit(MCP_PRUNE_BATCH);
   if (ids.length) out.callsDeleted = (await db.delete(mcpCalls).where(inArray(mcpCalls.id, ids.map((r) => r.id))).returning({ id: mcpCalls.id })).length;
-  const keys = await db.select({ k: mcpBindings.bindingKey }).from(mcpBindings).where(bindingsWhere).limit(PRUNE_BATCH);
+  const keys = await db.select({ k: mcpBindings.bindingKey }).from(mcpBindings).where(bindingsWhere).limit(MCP_PRUNE_BATCH);
   if (keys.length) out.bindingsDeleted = (await db.delete(mcpBindings).where(inArray(mcpBindings.bindingKey, keys.map((r) => r.k))).returning({ k: mcpBindings.bindingKey })).length;
   return out;
 }

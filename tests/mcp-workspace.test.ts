@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { eq } from "drizzle-orm";
 import { createTestDb } from "./helpers/testdb";
 import { mcpGrants, mcpBindings } from "@/db/schema";
 import type { DB } from "@/db/types";
@@ -47,7 +48,9 @@ describe("resolveWorkspace", () => {
     await db.insert(mcpGrants).values({ userId: "user_1", orgId: "org_a", source: "selected" });
     const r = await resolveWorkspace(db, auth());
     expect(r).toMatchObject({ ok: true, ws: { orgId: "org_a" } });
-    expect((await db.select().from(mcpBindings))[0]).toMatchObject({ bindingKey: "client:c1", orgId: "org_a" });
+    // The stored key folds the user in ("<userId>|<bindingKey>") so two users
+    // sharing one client_id can never collide on one row — see storedBindingKey.
+    expect((await db.select().from(mcpBindings))[0]).toMatchObject({ bindingKey: "user_1|client:c1", userId: "user_1", orgId: "org_a" });
   });
   it("keeps two clients bound to two workspaces independently", async () => {
     member(["org_a", "org_b"]);
@@ -81,5 +84,59 @@ describe("resolveWorkspace", () => {
     expect(await resolveWorkspace(db, auth({ orgIdClaim: "org_a" }))).toMatchObject({ ok: true }); // cached
     clearMembershipCache();
     expect(await resolveWorkspace(db, auth({ orgIdClaim: "org_a" }))).toEqual({ ok: false, reason: "not_member" });
+  });
+  it("refreshes a client's binding on every consultation, even when the answer is revoked", async () => {
+    member(["org_a"]);
+    await selectWorkspace(db, auth({ bindingKey: "client:c1" }), "org_a");
+    await revokeGrant(db, "org_a", "user_1");
+    // Force the stored row to look about to expire, as if it had sat untouched
+    // since the original select — the exact situation the fix protects
+    // against: without a refresh, the NEXT call after this would find no
+    // binding at all and could fall through to a different workspace.
+    await db.update(mcpBindings).set({ expiresAt: new Date(Date.now() + 500) }).where(eq(mcpBindings.userId, "user_1"));
+    const r = await resolveWorkspace(db, auth({ bindingKey: "client:c1" }));
+    expect(r).toMatchObject({ ok: false, reason: "revoked" });
+    const after = (await db.select().from(mcpBindings))[0].expiresAt.getTime();
+    expect(after).toBeGreaterThan(Date.now() + 23 * 60 * 60 * 1000);
+  });
+  it("writes a binding on a successful claim, so a claim-connected client counts as a client in Settings", async () => {
+    member(["org_a"]);
+    await resolveWorkspace(db, auth({ orgIdClaim: "org_a", bindingKey: "client:c9" }));
+    expect((await listGrants(db, "org_a"))[0]).toMatchObject({ userId: "user_1", clients: 1 });
+  });
+  it("keeps two users' bindings independent even when they share one client bindingKey", async () => {
+    const orgsByUser: Record<string, string[]> = { user_1: ["org_a", "org_c"], user_2: ["org_b"] };
+    memberships.mockImplementation(async (a: { userId?: string; organizationId?: string }) => ({
+      data: (orgsByUser[a.userId ?? ""] ?? [])
+        .filter((o) => !a.organizationId || a.organizationId === o)
+        .map((o) => ({ organizationId: o, organizationName: `Org ${o}`, role: { slug: "member" } })),
+    }));
+    await selectWorkspace(db, auth({ userId: "user_1", bindingKey: "client:shared" }), "org_a");
+    // A second live grant for user_1, so if their binding were EVER lost the
+    // fallback would land on "workspace_required" rather than an accidental
+    // correct guess — the failure mode must be unmistakable, not masked.
+    await db.insert(mcpGrants).values({ userId: "user_1", orgId: "org_c", source: "selected" });
+    // user_2 selects using the SAME raw client bindingKey. mcp_bindings'
+    // primary key is bindingKey alone, so without storedBindingKey composing
+    // the user in, this upsert would silently overwrite user_1's row.
+    await selectWorkspace(db, auth({ userId: "user_2", bindingKey: "client:shared" }), "org_b");
+    expect(await resolveWorkspace(db, auth({ userId: "user_1", bindingKey: "client:shared" }))).toMatchObject({ ok: true, ws: { orgId: "org_a" } });
+    expect(await resolveWorkspace(db, auth({ userId: "user_2", bindingKey: "client:shared" }))).toMatchObject({ ok: true, ws: { orgId: "org_b" } });
+    expect(await db.select().from(mcpBindings)).toHaveLength(2);
+  });
+  it("ignores an expired binding and falls through past it", async () => {
+    member(["org_a", "org_b"]);
+    await db.insert(mcpGrants).values({ userId: "user_1", orgId: "org_a", source: "selected" });
+    // Points at org_b, but expired a second ago — must not be honoured.
+    await db.insert(mcpBindings).values({ bindingKey: "user_1|client:c9", userId: "user_1", orgId: "org_b", expiresAt: new Date(Date.now() - 1000) });
+    const r = await resolveWorkspace(db, auth({ bindingKey: "client:c9" }));
+    expect(r).toMatchObject({ ok: true, ws: { orgId: "org_a" } });
+  });
+});
+
+describe("selectWorkspace", () => {
+  it("refuses an org the user does not belong to", async () => {
+    member(["org_a"]);
+    expect(await selectWorkspace(db, auth(), "org_z")).toEqual({ ok: false, reason: "not_member" });
   });
 });
