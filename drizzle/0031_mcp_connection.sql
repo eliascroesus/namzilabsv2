@@ -1,5 +1,6 @@
 -- 0031 — the AI-assistant connection (MCP): grants, bindings, a workspace
--- switch and an audit trail. Additive; nothing reads these until MCP_ENABLED=1.
+-- switch and an audit trail. Additive. Nothing reads these tables until
+-- MCP_ENABLED=1; the nightly prune step is gated on the same flag.
 CREATE TABLE IF NOT EXISTS "mcp_grants" (
   "user_id" text NOT NULL,
   "org_id" text NOT NULL,

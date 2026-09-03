@@ -69,7 +69,10 @@ integrations — and never a credential: every tool projects an explicit column
 list, so an encrypted secret is never in scope to leak. No tool writes
 workspace data; `select_workspace` records the assistant's own choice of
 workspace, and every call is audited. Removing someone from the workspace cuts
-off their assistant within a minute.
+off their assistant within a minute. Disconnect forgets the assistant's
+access; the member can connect again. To cut a member's assistant off for
+good, remove Use AI assistants from their role or turn the workspace switch
+off.
 
 ## Stack
 

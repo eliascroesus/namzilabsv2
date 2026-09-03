@@ -6,6 +6,7 @@ import { expireAgedResults, markStaleForSource, materializeStaleAll } from "@/li
 import { sendOpsAlert } from "@/lib/alerts";
 import { pruneOperationalTables, pruneSettledTestRuns, retentionBacklog } from "@/lib/storage-lifecycle";
 import { pruneMcpTables, MCP_PRUNE_BATCH } from "@/lib/mcp/audit";
+import { mcpEnabled } from "@/lib/mcp/env";
 import { getJob, runnableJobsByProvider } from "@/lib/backfill/jobs";
 import { scanInvariants } from "@/lib/health/invariants";
 import { scanWebhookEventTime } from "@/lib/webhooks/event-time";
@@ -261,8 +262,16 @@ export const pruneStorage = inngest.createFunction(
         ),
       );
     }
-    // MCP audit rows (90 days) and expired client bindings, under the same inspect gate.
-    const mcp = await step.run("prune-mcp-tables", () => pruneMcpTables(getDb(), { inspect }));
+    // MCP audit rows (90 days) and expired client bindings, under the same
+    // inspect gate — but ONLY once MCP_ENABLED=1. `mcp_calls`/`mcp_bindings`
+    // exist only after 0031 is hand-pasted in Neon (see drizzle/HAND_APPLY.md),
+    // and this code can deploy before that paste happens; querying either
+    // table before it exists would throw, exhaust this step's retries, and
+    // fail the whole nightly prune-storage function for every customer —
+    // taking the invariant scan, backlog measure and event-time scan below
+    // down with it. Gated on the same flag the route itself is gated on, so
+    // there is exactly one switch for "is MCP live yet".
+    const mcp = await step.run("prune-mcp-tables", () => (mcpEnabled() ? pruneMcpTables(getDb(), { inspect }) : Promise.resolve({ inspected: false, callsPastRetention: 0, bindingsExpired: 0, callsDeleted: 0, bindingsDeleted: 0, skipped: true as const })));
     if (mcp.inspected) console.warn(`[storage-prune-inspect] mcp ${JSON.stringify(mcp)}`);
     // One bounded batch per table per night: a backlog bigger than that batch
     // is the same "not keeping up" signal `retained.truncated` gives above,

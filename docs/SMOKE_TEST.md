@@ -84,13 +84,19 @@ migrations applied by hand (`drizzle/HAND_APPLY.md` → Neon SQL Editor), WorkOS
 
 ## 8. AI assistants (MCP)
 
+- [ ] Before flipping `MCP_ENABLED` on: GET
+      `https://<WORKOS_AUTHKIT_DOMAIN>/.well-known/oauth-authorization-server`
+      and confirm its `issuer` equals the `WORKOS_AUTHKIT_DOMAIN` value byte
+      for byte (no trailing slash); a mismatch makes every token fail
+      verification.
 - [ ] With `MCP_ENABLED=1` and the WorkOS Connect config in place (CIMD on, DCR
       on, Resource Indicator = the deployment's `MCP_RESOURCE_URL`): open
       `/.well-known/oauth-protected-resource` → expect the JSON, not a 404.
 - [ ] Connect from Claude (Customize → Connectors → Add custom connector →
       paste the URL) or the MCP Inspector, and complete the OAuth flow.
-- [ ] Run `list_metrics`, then `get_metric` on one id it returns → the value
-      matches the same metric's headline on `/dashboard`.
+- [ ] Run `list_metrics`, then `get_metric` on one id it returns with
+      `range: "all"` → the value matches the same metric's **All** pill on
+      `/dashboard` (`list_metrics`' `headline` is that All-time figure too).
 
 ---
 

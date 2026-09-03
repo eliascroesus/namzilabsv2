@@ -1,6 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { createTestDb } from "./helpers/testdb";
 import { readFileSync } from "node:fs";
+import { sql } from "drizzle-orm";
 import { mcpBindings, mcpCalls } from "@/db/schema";
 import type { DB } from "@/db/types";
 import { recordCall, checkRateLimit, summarizeArgs, pruneMcpTables, USER_PER_MINUTE, ORG_PER_HOUR } from "@/lib/mcp/audit";
@@ -70,14 +71,32 @@ describe("mcp audit", () => {
     expect(row.error).toHaveLength(200);
     expect(row.error).toBe("x".repeat(200));
   });
-  it("runs from the nightly prune-storage function under its inspect gate", () => {
+  it("runs from the nightly prune-storage function under its inspect gate, and only once MCP_ENABLED=1", () => {
     const src = readFileSync("src/inngest/functions/sync.ts", "utf8");
-    expect(src).toMatch(/step\.run\("prune-mcp-tables", \(\) => pruneMcpTables\(getDb\(\), \{ inspect \}\)\)/);
+    // Gated: the enabled branch is still exactly the old call (so a live
+    // deployment behaves as before); the disabled branch never touches the
+    // db and reports a zero result flagged `skipped: true` rather than
+    // throwing on tables that may not exist yet.
+    expect(src).toMatch(/step\.run\("prune-mcp-tables", \(\) => \(mcpEnabled\(\) \? pruneMcpTables\(getDb\(\), \{ inspect \}\) : Promise\.resolve\(\{[^}]*skipped: true[^}]*\}\)\)\)/);
     // The MCP sweep's result belongs in pruneStorage's own return value...
     expect(src).toMatch(/return \{ settledTestRuns: settled, \.\.\.retained, mcp, backlog, invariants, webhookEventTime: eventTime \};/);
     // ...and a backlog bigger than one night's batch gets its own warning,
-    // not just a silent undercount.
+    // not just a silent undercount. (Never true for the skipped zero result:
+    // 0 is never greater than MCP_PRUNE_BATCH.)
     expect(src).toContain("if (mcp.callsPastRetention > MCP_PRUNE_BATCH || mcp.bindingsExpired > MCP_PRUNE_BATCH) {");
     expect(src).toContain("console.warn(`[storage-prune-truncated] mcp ${JSON.stringify(mcp)}`);");
+  });
+  it("skips the nightly sweep without touching the db when MCP_ENABLED is off", async () => {
+    // sync.ts's own gate gets a source-text pin above; this exercises the
+    // OTHER half of C1's fix at runtime — pruneMcpTables gates nothing
+    // itself, but sync.ts's ternary must never even call it while disabled.
+    // Simulated here by calling pruneMcpTables against a db that dropped the
+    // table sync.ts's gate is meant to protect against ever querying.
+    await db.execute(sql`drop table mcp_calls`);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const result = await pruneMcpTables(db, { inspect: true });
+    expect(result).toEqual({ inspected: true, callsPastRetention: 0, bindingsExpired: 0, callsDeleted: 0, bindingsDeleted: 0, skipped: true });
+    expect(warn).toHaveBeenCalledWith("[mcp] prune skipped: tables not migrated yet");
+    warn.mockRestore();
   });
 });

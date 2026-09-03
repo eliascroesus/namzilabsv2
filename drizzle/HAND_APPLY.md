@@ -1213,8 +1213,9 @@ Verify:
 SELECT count(*) AS should_be_4 FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('mcp_grants','mcp_bindings','workspace_settings','mcp_calls');
 ```
 
-Nothing reads these tables until `MCP_ENABLED=1`, so pasting early is safe and
-pasting late only delays the feature.
+Nothing reads these tables until MCP_ENABLED=1; the nightly prune step is
+gated on the same flag. Pasting early is safe and pasting late only delays
+the feature.
 
 `scripts/schema-audit.sql` was regenerated alongside this: 27 tables, 254
 columns.

@@ -31,8 +31,13 @@ async function membership(userId: string, orgId: string): Promise<{ role?: strin
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.member ? { role: hit.role } : undefined;
   const res = await getWorkOS().userManagement.listOrganizationMemberships({ userId, organizationId: orgId, statuses: ["active"] });
-  const m = res.data[0];
-  const role = (m as { role?: { slug?: string } } | undefined)?.role?.slug;
+  // The query above ASKS for this org and this user, but `res.data[0]` is not
+  // PROOF of either — a test double (or a future looser API) can hand back a
+  // row for a different org entirely, and taking position 0 on faith would
+  // grant membership nobody verified. Checking the row's own fields is the
+  // only way "the API returned something" becomes "the API returned THIS".
+  const m = res.data.find((row) => row.organizationId === orgId && (row.userId === undefined || row.userId === userId));
+  const role = m?.role?.slug;
   cache.set(key, { at: Date.now(), member: Boolean(m), role });
   return m ? { role } : undefined;
 }

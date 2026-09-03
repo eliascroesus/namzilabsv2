@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { withToolContext } from "@/lib/mcp/context";
+import { withToolContext, assistantsEnabled } from "@/lib/mcp/context";
 import { describe, fail, ok } from "@/lib/mcp/result";
 import { listUserWorkspaces, selectWorkspace } from "@/lib/mcp/workspace";
 
@@ -24,6 +24,12 @@ export const selectWorkspaceTool = {
   handler: withToolContext<{ workspaceId: string }>("select_workspace", { needsWorkspace: false }, async (ctx, args, auth) => {
     const r = await selectWorkspace(ctx.db, auth, args.workspaceId);
     if (!r.ok) return fail("You are not a member of that workspace.");
+    // M1: select_workspace used to ignore the workspace switch entirely — an
+    // assistant could connect to a workspace whose owner had turned AI
+    // assistants off, and only find out on its next call. Same sentence
+    // withToolContext already uses for every other tool once a workspace is
+    // resolved (context.ts).
+    if (!(await assistantsEnabled(ctx.db, r.ws.orgId))) return fail("AI assistants are turned off for this workspace by its owner.");
     const ws = await listUserWorkspaces(auth.extra.userId);
     const name = ws.find((w) => w.orgId === r.ws.orgId)?.name ?? r.ws.orgId;
     return ok({ workspace: { id: r.ws.orgId, name } });

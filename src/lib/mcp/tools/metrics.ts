@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { publishedFlowTiles, unpublishedFlowIds, calendarFlowTiles } from "@/lib/flow/materialize";
-import { listFlowNames } from "@/lib/flow/store";
+import { listFlowNames, getFlow } from "@/lib/flow/store";
 import { listMetrics, getMetric } from "@/lib/metrics/store";
 import { computeAggregate, computeFunnel } from "@/lib/metrics/compute";
 import { resolveRange } from "@/lib/metrics/range";
@@ -137,14 +137,16 @@ function parseTileId(id: string): { kind: "flow"; flowId: string; outputNodeId: 
 
 /**
  * The visible entry for exactly ONE id, at the cost of one row read — not
- * `metricCatalog`'s four whole-org queries. Permission is checked BEFORE any
- * tile or metric row is fetched: a hidden id costs nothing beyond parsing the
- * string and one `canSeeMetric` check.
+ * `metricCatalog`'s four whole-org queries — plus, for a flow tile whose own
+ * `tile.name` is absent, one more single-row `getFlow` lookup for its real
+ * name (never the whole-org `listFlowNames`). Permission is checked BEFORE
+ * any tile or metric row is fetched: a hidden id costs nothing beyond parsing
+ * the string and one `canSeeMetric` check.
  *
- * `editedSincePublish` and a flow's own stored name (the `unpublishedFlowIds`
- * / `listFlowNames` whole-org reads) are not computed here — neither
- * `get_metric` nor `get_metric_days` ever return them, and fetching either
- * would reintroduce the whole-org cost this function exists to avoid.
+ * `editedSincePublish` (the `unpublishedFlowIds` whole-org read) is not
+ * computed here — neither `get_metric` nor `get_metric_days` ever return it,
+ * and fetching it would reintroduce the whole-org cost this function exists
+ * to avoid. Both tools DO return `name`.
  */
 async function entryFor(ctx: McpCallContext, id: string): Promise<CatalogEntry | null> {
   const visKey = visibilityKeyOf(id);
@@ -157,7 +159,13 @@ async function entryFor(ctx: McpCallContext, id: string): Promise<CatalogEntry |
   }
   const tiles = await publishedFlowTiles(ctx.db, ctx.orgId, { flowId: parsed.flowId });
   const t = tiles.find((r) => r.outputNodeId === parsed.outputNodeId);
-  return t ? flowEntryOf(t, false, "Untitled") : null;
+  if (!t) return null;
+  // The same fallback the dashboard uses (src/app/dashboard/page.tsx): the
+  // flow's own stored name when the tile itself never got one, and only then
+  // the output id — never the generic, uninformative "Untitled".
+  const flow = await getFlow(ctx.db, ctx.orgId, parsed.flowId);
+  const fallbackName = flow?.name ?? `Output ${parsed.outputNodeId.slice(0, 8)}`;
+  return flowEntryOf(t, false, fallbackName);
 }
 
 /** The one calendar tile a flow-scoped read needs — shared by `get_metric`'s day branch and `get_metric_days`. */
@@ -167,11 +175,31 @@ async function calendarTileFor(ctx: McpCallContext, flowId: string | undefined, 
   return tiles.find((t) => t.outputNodeId === outputNodeId) ?? null;
 }
 
+/**
+ * A flow tile's value for one range — THE DASHBOARD'S OWN RULE
+ * (src/components/flow-tile.tsx, `tileValueForRange`): an unavailable slot
+ * means null, full stop, no fallback to the tile's top-level value even for
+ * "all". Every number that does come back is checked with `Number.isFinite`,
+ * the same guard the dashboard applies, so a malformed stored value never
+ * reaches a caller as if it were real.
+ *
+ * Shared by `list_metrics`' headline and `get_metric`'s own range branch so
+ * the two tools can never disagree about the same tile — the bug this fixes
+ * was `list_metrics` reporting a number for a tile whose slot `get_metric`
+ * (and the dashboard) both call unavailable.
+ */
+function flowValueForRange(tile: Record<string, unknown>, range: string): number | null {
+  const slot = ((tile.byRange as Record<string, Record<string, unknown>> | undefined) ?? {})[range] ?? {};
+  if (slot.unavailable) return null;
+  const raw = (slot.value as number | undefined) ?? (range === "all" ? (tile.value as number | undefined) : undefined);
+  return typeof raw === "number" && Number.isFinite(raw) ? raw : null;
+}
+
 export const listMetricsTool = {
   name: "list_metrics",
   title: "List metrics",
   description: describe(
-    "Lists every metric on this workspace's dashboard that you may see, with its id (use it in get_metric), format, sources, freshness and current headline. Flow metrics are precomputed; classic metrics show no headline until you call get_metric.",
+    "Lists every metric on this workspace's dashboard that you may see, with its id (use it in get_metric), format, sources, freshness and the All-time headline (the dashboard's All pill). Flow metrics are precomputed; classic metrics show no headline until you call get_metric.",
   ),
   inputSchema: z.object({}).strict(),
   outputSchema: z.object({
@@ -190,6 +218,7 @@ export const listMetricsTool = {
         status: z.string().nullable(),
         computedAt: z.string().nullable(),
         headline: z.number().nullable(),
+        headlineRange: z.literal("all"),
         editedSincePublish: z.boolean(),
         dashboardUrl: z.string(),
       }),
@@ -211,7 +240,8 @@ export const listMetricsTool = {
         sources: e.sources,
         status: e.status ?? null,
         computedAt: e.computedAt ? e.computedAt.toISOString() : null,
-        headline: e.kind === "flow" ? ((e.tile?.byRange as Record<string, { value?: number }> | undefined)?.all?.value ?? (e.tile?.value as number) ?? null) : null,
+        headline: e.kind === "flow" ? flowValueForRange(e.tile ?? {}, "all") : null,
+        headlineRange: "all" as const,
         editedSincePublish: e.editedSincePublish,
         dashboardUrl: e.dashboardUrl,
       })),
@@ -297,10 +327,11 @@ export const getMetricTool = {
         if (args.day) {
           const cal = await calendarTileFor(ctx, e.flowId, e.outputNodeId);
           const slot = ((cal?.tile as { byDay?: Record<string, { value: number }> } | null)?.byDay ?? {})[args.day];
+          const dayValue = typeof slot?.value === "number" && Number.isFinite(slot.value) ? slot.value : null;
           return ok({
             ...base,
             day: args.day,
-            value: slot?.value ?? null,
+            value: dayValue,
             unavailable: slot ? undefined : "No stored value for that day.",
             includesFutureDated: true,
             computedAt: e.computedAt?.toISOString() ?? null,
@@ -308,15 +339,26 @@ export const getMetricTool = {
           });
         }
         const range = args.range ?? "30d";
-        const slot = ((tile.byRange as Record<string, Record<string, unknown>> | undefined) ?? {})[range] ?? {};
-        // THE DASHBOARD'S OWN RULE (src/components/flow-tile.tsx,
-        // `tileValueForRange`): an unavailable slot means null, full stop —
-        // no fallback to the tile's top-level value, even for "all". Every
-        // number that does come back is checked with `Number.isFinite`, the
-        // same guard the dashboard applies, so a malformed stored value never
-        // reaches a caller as if it were real.
-        const rawValue = slot.unavailable ? undefined : ((slot.value as number | undefined) ?? (range === "all" ? (tile.value as number | undefined) : undefined));
-        const value = typeof rawValue === "number" && Number.isFinite(rawValue) ? rawValue : null;
+        const byRange = tile.byRange as Record<string, Record<string, unknown>> | undefined;
+        const slot = byRange?.[range] ?? {};
+        // THE DASHBOARD'S OWN RULE — see `flowValueForRange` above, which
+        // this shares with `list_metrics`' headline.
+        const value = flowValueForRange(tile, range);
+        // A range absent from `byRange` altogether (as opposed to a slot that
+        // is genuinely present and marked `unavailable`) is the ordinary
+        // state of a tile that has not been recomputed since a pill shipped —
+        // the dashboard's flow-tile.tsx calls this "missing" and picks one of
+        // two sentences depending on whether the tile's last run failed.
+        // Excludes "all": its fallback to the tile's top-level value (above)
+        // is deliberate legacy-tile support, not a gap to explain away.
+        const missingRange = byRange != null && range !== "all" && byRange[range] == null;
+        const unavailable =
+          (slot.unavailable as string | undefined) ??
+          (missingRange
+            ? e.status === "error"
+              ? "Not computed for this range — the last run of this flow failed."
+              : "Not computed yet for this range — Refresh to compute it."
+            : undefined);
         // The tile's top-level `groups` is the ALL-TIME breakdown: it stands
         // in only for range "all", exactly like `value` and `series` do. A
         // narrower range with no `byRange[range].groups` of its own has no
@@ -345,7 +387,7 @@ export const getMetricTool = {
           ...base,
           range,
           value,
-          unavailable: slot.unavailable,
+          unavailable,
           undated: slot.undated,
           includesFutureDated: true,
           series,

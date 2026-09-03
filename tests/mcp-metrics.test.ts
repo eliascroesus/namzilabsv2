@@ -146,7 +146,7 @@ describe("get_metric", () => {
       provenance: { streams: [{ connectionId: "c1", source: "calendly" }], engine: "stored" },
     });
   });
-  it("treats an unavailable \"all\" slot as null with no fallback to the tile's top-level value", async () => {
+  it("treats an unavailable \"all\" slot as null with no fallback to the tile's top-level value, in get_metric AND list_metrics' headline", async () => {
     await db
       .update(flowResults)
       .set({ tile: { name: "Bookings", format: "number", value: 9, byRange: { all: { unavailable: "No conversions yet." } } } })
@@ -155,6 +155,28 @@ describe("get_metric", () => {
     const s = (await getMetricTool.handler({ id: `flow:${flowId}:n1`, range: "all" } as never, { authInfo: authInfo() })).structuredContent as Record<string, unknown>;
     expect(s.value).toBeNull();
     expect(s.unavailable).toBe("No conversions yet.");
+    // C2: list_metrics used to fall back to the tile's top-level `value: 9`
+    // here (no unavailable check at all), reporting a number the dashboard
+    // hides and get_metric answers null for on the SAME tile.
+    const listed = (await listMetricsTool.handler({} as never, { authInfo: authInfo() })).structuredContent as { metrics: Array<Record<string, unknown>> };
+    expect(listed.metrics.find((m) => m.id === `flow:${flowId}:n1`)).toMatchObject({ headline: null, headlineRange: "all" });
+  });
+  it("gives a reason, not a bare null, for a range byRange never stored a slot for", async () => {
+    // I3: byRange has "7d" and "all" (the seeded fixture) but no "90d" at
+    // all — distinct from a slot that IS present and marked unavailable.
+    member("admin");
+    const s = (await getMetricTool.handler({ id: `flow:${flowId}:n1`, range: "90d" } as never, { authInfo: authInfo() })).structuredContent as Record<string, unknown>;
+    expect(s.value).toBeNull();
+    expect(s.unavailable).toMatch(/not computed|failed/i);
+  });
+  it("falls back to the flow's own name, never the generic \"Untitled\", when the tile itself has none", async () => {
+    // I1: entryFor (get_metric's single-id path) used to hardcode "Untitled"
+    // here instead of looking up the flow's real name the way list_metrics
+    // effectively does via its whole-org catalog.
+    await db.update(flowResults).set({ tile: { format: "number", value: 9, byRange: { "7d": { value: 3 }, all: { value: 9 } } } }).where(eq(flowResults.flowId, flowId));
+    member("admin");
+    const s = (await getMetricTool.handler({ id: `flow:${flowId}:n1`, range: "all" } as never, { authInfo: authInfo() })).structuredContent as Record<string, unknown>;
+    expect(s.name).toBe("Bookings");
   });
   it("refuses a hidden flow id before reading its tile", async () => {
     await db.insert(workspaceRanks).values({ id: "r1", orgId: "org_a", name: "Sales", permissions: ["use_ai_assistants"], metricKeys: [`metric:${metricId}`] });

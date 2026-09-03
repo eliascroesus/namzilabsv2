@@ -8,7 +8,9 @@ vi.mock("mcp-handler", () => ({
     return (await verify(req, token)) ? h(req) : new Response("", { status: 401, headers: { "www-authenticate": `Bearer resource_metadata="${opts.resourceUrl}${opts.resourceMetadataPath}"` } });
   },
   generateProtectedResourceMetadata: ({ authServerUrls, resourceUrl, additionalMetadata }: { authServerUrls: string[]; resourceUrl: string; additionalMetadata?: Record<string, unknown> }) => ({ resource: resourceUrl, authorization_servers: authServerUrls, ...additionalMetadata }),
-  metadataCorsOptionsRequestHandler: () => () => new Response(null, { status: 204, headers: { "access-control-allow-origin": "*" } }),
+  // The real helper (node_modules/mcp-handler/dist/index.js) answers 200, not
+  // 204 — the mock had drifted from it.
+  metadataCorsOptionsRequestHandler: () => () => new Response(null, { status: 200, headers: { "access-control-allow-origin": "*" } }),
 }));
 vi.mock("@/lib/mcp/auth", () => ({ verifyMcpToken: async (_r: Request, t?: string) => (t === "good" ? { token: t, clientId: "c", scopes: [], extra: { userId: "u", orgIdClaim: null, bindingKey: "k" } } : undefined) }));
 // The route's module graph reaches workspace.ts's top-level `@workos-inc/authkit-nextjs`
@@ -83,7 +85,7 @@ describe("/.well-known/oauth-protected-resource", () => {
     const scoped = await import("@/app/.well-known/oauth-protected-resource/api/mcp/route");
     for (const mod of [root, scoped]) {
       const res = await mod.OPTIONS();
-      expect(res.status).toBe(204);
+      expect(res.status).toBe(200);
       expect(res.headers.get("access-control-allow-origin")).toBe("*");
     }
     vi.stubEnv("MCP_ENABLED", "");

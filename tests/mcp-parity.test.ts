@@ -84,6 +84,27 @@ beforeEach(async () => {
     },
     provenance: { streams: [] },
   });
+
+  // A fourth published flow whose "all" slot is itself unavailable, over a
+  // top-level `value: 9` — exercises the rule C2 fixed: an unavailable slot
+  // is null with NO fallback to the tile's top-level value, even for "all".
+  const [allUnavail] = await db.insert(flows).values({ orgId: "org_a", name: "AllUnavailable", status: "published", publishedVersion: 1 }).returning();
+  await db.insert(flowVersions).values({ flowId: allUnavail.id, orgId: "org_a", version: 1, graph: { nodes: [], edges: [], metrics: [] } });
+  await db.insert(flowResults).values({
+    orgId: "org_a",
+    flowId: allUnavail.id,
+    version: 1,
+    outputNodeId: "n1",
+    status: "fresh",
+    computedAt: new Date(),
+    tile: {
+      name: "AllUnavailable",
+      format: "number",
+      value: 9,
+      byRange: { all: { unavailable: "No conversions yet." } },
+    },
+    provenance: { streams: [] },
+  });
 });
 afterEach(async () => { await close(); });
 
@@ -91,20 +112,28 @@ describe("get_metric / stored-tile parity", () => {
   it("get_metric answers exactly the stored slot for every published flow and every preset", async () => {
     member("admin");
     const tiles = await publishedFlowTiles(db, "org_a");
-    // Exactly the three seeded flows (Bookings, Full, Unavailable) — not just
-    // "at least one": `toBeGreaterThan(0)` would still pass if the Full or
-    // Unavailable fixture silently failed to seed, quietly dropping the
-    // present-value or unavailable-slot case from the loop below with no
-    // failure anywhere.
-    expect(tiles.length).toBe(3);
+    // Exactly the four seeded flows (Bookings, Full, Unavailable,
+    // AllUnavailable) — not just "at least one": `toBeGreaterThan(0)` would
+    // still pass if a fixture silently failed to seed, quietly dropping a
+    // case from the loop below with no failure anywhere.
+    expect(tiles.length).toBe(4);
     for (const t of tiles) {
       for (const range of PRESETS) {
-        const tile = t.tile as { value?: number; byRange?: Record<string, { value?: number; unavailable?: string }> };
-        const slot = tile.byRange?.[range];
-        const expected = slot?.value ?? (range === "all" ? (tile.value ?? null) : null);
+        const tile = t.tile as { value?: number; status?: string; byRange?: Record<string, { value?: number; unavailable?: string }> };
+        const byRange = tile.byRange;
+        const slot = byRange?.[range];
+        const expected = slot?.unavailable ? null : (slot?.value ?? (range === "all" ? (tile.value ?? null) : null));
         const s = (await getMetricTool.handler({ id: `flow:${t.flowId}:${t.outputNodeId}`, range } as never, { authInfo: authInfo() })).structuredContent as Record<string, unknown>;
         expect(s.value, `${t.flowId} ${range}`).toBe(expected);
-        expect(s.unavailable, `${t.flowId} ${range}`).toBe(slot?.unavailable);
+        // A range absent from `byRange` altogether (as opposed to a slot
+        // genuinely present and marked unavailable) gets the dashboard's own
+        // "missing" sentence instead of a bare, unexplained null — every
+        // fixture here is "fresh", so it is always the Refresh sentence, never
+        // the failed-run one. "all" is excluded: its fallback to the tile's
+        // top-level value is deliberate legacy-tile support, not a gap.
+        const missing = byRange != null && range !== "all" && byRange[range] == null;
+        const expectedUnavailable = slot?.unavailable ?? (missing ? "Not computed yet for this range — Refresh to compute it." : undefined);
+        expect(s.unavailable, `${t.flowId} ${range}`).toBe(expectedUnavailable);
       }
     }
   });

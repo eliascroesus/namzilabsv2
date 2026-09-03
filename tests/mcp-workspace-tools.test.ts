@@ -1,6 +1,6 @@
 import { it, expect, beforeEach, afterEach, vi } from "vitest";
 import { createTestDb } from "./helpers/testdb";
-import { mcpCalls, mcpGrants } from "@/db/schema";
+import { mcpCalls, mcpGrants, workspaceSettings } from "@/db/schema";
 import type { DB } from "@/db/types";
 
 const memberships = vi.fn();
@@ -39,11 +39,25 @@ it("writes an audit row for both pre-workspace tools, attributing select_workspa
   const calls = await db.select().from(mcpCalls);
   expect(calls.map((c) => [c.tool, c.orgId, c.userId])).toEqual([["list_workspaces", "", "user_1"], ["select_workspace", "org_a", "user_1"]]);
 });
+it("refuses to select a workspace whose AI assistants switch is off", async () => {
+  // M1: select_workspace used to ignore workspace_settings entirely — the
+  // switch other tools already honour once a workspace is resolved.
+  memberships.mockImplementation(async () => rows("org_a"));
+  await db.insert(workspaceSettings).values({ orgId: "org_a", aiAssistantsEnabled: false });
+  const r = await selectWorkspaceTool.handler({ workspaceId: "org_a" } as never, { authInfo: authInfo({ orgIdClaim: null }) });
+  expect(r.isError).toBe(true);
+  expect(r.content[0].text).toMatch(/turned off/);
+});
 it("reconnects a revoked grant only through select_workspace", async () => {
   memberships.mockImplementation(async () => rows("org_a"));
   await db.insert(mcpGrants).values({ userId: "user_1", orgId: "org_a", source: "claim", revokedAt: new Date() });
   const probe = withToolContext("probe", {}, async (ctx) => ok({ orgId: ctx.orgId }));
-  expect((await probe({}, { authInfo: authInfo() })).content[0].text).toMatch(/select_workspace/);
+  // I7: the refusal no longer tells the assistant to call select_workspace
+  // itself (that let an LLM undo an admin's Disconnect on its very next
+  // turn) — it just says a person disconnected it.
+  const refusal = (await probe({}, { authInfo: authInfo() })).content[0].text;
+  expect(refusal).toMatch(/disconnected/);
+  expect(refusal).not.toMatch(/select_workspace/);
   expect((await selectWorkspaceTool.handler({ workspaceId: "org_a" } as never, { authInfo: authInfo() })).isError).toBeFalsy();
   expect((await probe({}, { authInfo: authInfo() })).structuredContent).toEqual({ orgId: "org_a" });
 });

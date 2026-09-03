@@ -124,6 +124,16 @@ describe("resolveWorkspace", () => {
     expect(await resolveWorkspace(db, auth({ userId: "user_2", bindingKey: "client:shared" }))).toMatchObject({ ok: true, ws: { orgId: "org_b" } });
     expect(await db.select().from(mcpBindings)).toHaveLength(2);
   });
+  it("does not trust a membership row for a different org than the one asked about", async () => {
+    // I5: a well-behaved SDK filters server-side, but `membership()` must not
+    // take `res.data[0]` on faith — a test double (or a future looser API)
+    // that ignores the org filter and returns a row for org_other must not be
+    // treated as proof the user belongs to org_a.
+    memberships.mockImplementation(async () => ({
+      data: [{ id: "m", userId: "user_1", organizationId: "org_other", organizationName: "Org other", role: { slug: "admin" }, status: "active" }],
+    }));
+    expect(await resolveWorkspace(db, auth({ orgIdClaim: "org_a" }))).toEqual({ ok: false, reason: "not_member" });
+  });
   it("ignores an expired binding and falls through past it", async () => {
     member(["org_a", "org_b"]);
     await db.insert(mcpGrants).values({ userId: "user_1", orgId: "org_a", source: "selected" });

@@ -200,7 +200,10 @@ against a revoked grant stays refused (amended 3 Sep 2026: the client still
 holds a valid token, so letting an ordinary call revive the grant would undo
 Disconnect on the assistant's very next request). Removal from the
 WorkOS organization is caught by the membership check within the 60-second
-cache window described above.
+cache window described above. (Amended 3 Sep 2026 after the final review: the
+refusal does not instruct the assistant to reconnect; a member may reconnect
+deliberately; the permission and the workspace switch are the admin-grade
+controls.)
 
 ## Tools
 

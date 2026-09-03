@@ -66,7 +66,7 @@ export async function getWorkspaceName(orgId: string): Promise<string> {
   return org.name;
 }
 
-async function assistantsEnabled(db: DB, orgId: string): Promise<boolean> {
+export async function assistantsEnabled(db: DB, orgId: string): Promise<boolean> {
   const [s] = await db.select({ on: workspaceSettings.aiAssistantsEnabled }).from(workspaceSettings).where(eq(workspaceSettings.orgId, orgId)).limit(1);
   return s ? s.on : true;
 }
@@ -129,6 +129,16 @@ export function withToolContext<A>(tool: string, opts: ToolOptions, run: ToolRun
       // 1. Which workspace, and may this person use assistants there.
       let ctx: McpCallContext;
       if (needsWorkspace) {
+        // Rate limit BEFORE resolution too (review ruling): workspace_required,
+        // not_member and revoked are all refusals reached before any org is
+        // known, and workspace_required in particular costs a WorkOS call —
+        // without this, a caller stuck on any of them bypasses the limiter
+        // entirely and calls WorkOS for free on every single request.
+        // Per-user only (empty orgId): there is no workspace yet to count
+        // against. The org-aware check below still runs after resolution.
+        const preLimit = await checkRateLimit(db, { orgId: "", userId, tool });
+        if (!preLimit.allowed) return finish("", fail(preLimit.reason));
+
         const res = await resolveWorkspace(db, auth);
         if (!res.ok) {
           if (res.reason === "workspace_required") return finish("", ok({ code: "workspace_required", message: "Choose a workspace with select_workspace before asking about metrics.", workspaces: res.workspaces ?? [] }));
@@ -138,7 +148,14 @@ export function withToolContext<A>(tool: string, opts: ToolOptions, run: ToolRun
             // was — only the claim path's target is recoverable from `auth`
             // alone; the binding and single-live-grant paths don't surface
             // it. Blank there is safer than a wrong guess.
-            return finish(auth.extra.orgIdClaim ?? "", fail("This assistant was disconnected from the workspace. Call select_workspace to reconnect it, or ask an owner in Settings → AI assistants."));
+            //
+            // No instruction to reconnect (amended 3 Sep 2026 after the final
+            // review): the previous sentence told the assistant to call
+            // select_workspace itself, which let an LLM undo an admin's
+            // Disconnect on its very next turn. A member may still reconnect
+            // deliberately; the permission and the workspace switch are the
+            // admin-grade controls (spec, Revocation).
+            return finish(auth.extra.orgIdClaim ?? "", fail("This assistant was disconnected from the workspace by a person in Settings → AI assistants."));
           }
           return finish("", fail("You are not a member of that workspace."));
         }

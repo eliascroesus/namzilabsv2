@@ -72,9 +72,14 @@ describe("withToolContext", () => {
     clearMembershipCache(); member("admin");
     expect((await echo({}, { authInfo: authInfo() })).isError).toBeFalsy();
   });
-  it("blocks a revoked grant", async () => {
+  it("blocks a revoked grant with no instruction to reconnect", async () => {
     member(); await db.insert(mcpGrants).values({ userId: "user_1", orgId: "org_a", source: "claim", revokedAt: new Date() });
-    expect((await echo({}, { authInfo: authInfo() })).content[0].text).toMatch(/disconnected/);
+    const text = (await echo({}, { authInfo: authInfo() })).content[0].text;
+    expect(text).toBe("This assistant was disconnected from the workspace by a person in Settings → AI assistants.");
+    // I7: the old sentence told the assistant to call select_workspace
+    // itself, which let an LLM undo an admin's Disconnect on its very next
+    // turn — the refusal must never instruct a reconnect.
+    expect(text).not.toMatch(/select_workspace/);
   });
   it("reads auth from ctx.http.authInfo when the host puts it there", async () => {
     member();
@@ -127,7 +132,26 @@ describe("withToolContext", () => {
     expect(r.isError).toBe(true);
     expect(r.content[0].text).toMatch(/limit/);
     const rows = await db.select().from(mcpCalls);
-    expect(rows.find((c) => c.tool === "echo")).toMatchObject({ orgId: "org_a", error: expect.stringMatching(/limit/) });
+    // I6: the per-user check now runs BEFORE workspace resolution, so a
+    // caller who is already over the per-minute limit is refused there —
+    // before any org is confirmed — and the audit row is attributed to "",
+    // exactly like every other pre-resolution refusal (workspace_required,
+    // not_member, revoked).
+    expect(rows.find((c) => c.tool === "echo")).toMatchObject({ orgId: "", error: expect.stringMatching(/limit/) });
+  });
+  it("charges the per-user rate limit against a workspace_required-shaped call too, before resolveWorkspace's own WorkOS lookup", async () => {
+    // I6: pre-resolution refusals (workspace_required, not_member, revoked)
+    // used to bypass the rate limit entirely, so a caller stuck on
+    // workspace_required could call WorkOS for free on every single request.
+    // Seeded rows carry ANY org — the pre-check is per-user only.
+    for (let i = 0; i < 60; i++) {
+      await db.insert(mcpCalls).values({ orgId: "org_a", userId: "user_1", tool: "other", argsSummary: {}, rows: 0, bytes: 0, durationMs: 0 });
+    }
+    memberships.mockImplementation(async () => ({ data: [{ organizationId: "org_a", role: { slug: "member" } }, { organizationId: "org_b", role: { slug: "member" } }] }));
+    const r = await echo({}, { authInfo: authInfo({ orgIdClaim: null }) });
+    expect(r.isError).toBe(true);
+    expect(r.content[0].text).toMatch(/limit/);
+    expect(memberships).not.toHaveBeenCalled();
   });
   it("populates ctx.workspaceName from the organization's name", async () => {
     member("admin");

@@ -81,7 +81,7 @@ export function AiAssistantsSection({
         <header className="px-5 py-4">
           <SectionHeading className="mb-0 text-foreground">AI assistants</SectionHeading>
           <p className="mt-1.5 max-w-2xl text-sm text-muted-foreground">
-            Connect Claude or ChatGPT to this workspace's dashboard. It is read-only.
+            Connect Claude or ChatGPT to this workspace's dashboard. No tool writes workspace data.
           </p>
         </header>
 
@@ -124,6 +124,11 @@ export function AiAssistantsSection({
           </p>
           <p className="mt-1 text-sm text-muted-foreground">
             Removing a member from the workspace cuts off their assistant within a minute.
+          </p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Disconnect forgets the assistant&apos;s access; the member can connect again. To cut a
+            member&apos;s assistant off for good, remove Use AI assistants from their role or turn the
+            workspace switch off.
           </p>
 
           {/* The state sentence is for EVERYONE — a member walked through the

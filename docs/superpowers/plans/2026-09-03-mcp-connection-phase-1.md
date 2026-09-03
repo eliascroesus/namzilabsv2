@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - Every query is org-scoped; `orgId` comes only from the verified token's resolution, never from tool input.
-- Reads of `events` filter `deleted_at IS NULL` and never `select()` bare; Phase 1 does not read `events` at all.
+- Phase 1 reads `events` only through `computeAggregate`/`computeFunnel` (`src/lib/metrics/compute.ts`), whose base predicate carries `deleted_at is null`; no MCP code queries `events` directly.
 - `listConnections` (`src/lib/connections.ts`) is never used by MCP code: it returns encrypted credential columns. Project columns explicitly.
 - Migration rule: `src/db/schema.ts` declarations, `drizzle/0031_mcp_connection.sql`, the `drizzle/meta/_journal.json` entry and the `drizzle/HAND_APPLY.md` section land in ONE commit; `scripts/schema-audit.sql` is regenerated with `pnpm tsx scripts/check-schema-drift.ts --emit-sql`; the code that reads the new tables is deployed only after Elias pastes the block and the Schema drift check Action passes.
 - Feature flag: `MCP_ENABLED="1"` enables the route and the well-known documents; anything else → 404 and no health warning.
