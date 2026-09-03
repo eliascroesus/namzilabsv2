@@ -30,7 +30,7 @@ it("lists the person's workspaces without needing one selected", async () => {
 it("selects a workspace the person belongs to and refuses one they do not", async () => {
   memberships.mockImplementation(async (a: { organizationId?: string }) => (a.organizationId === "org_a" || !a.organizationId ? rows("org_a") : { data: [] }));
   expect((await selectWorkspaceTool.handler({ workspaceId: "org_a" } as never, { authInfo: authInfo({ orgIdClaim: null }) })).structuredContent).toEqual({ workspace: { id: "org_a", name: "Org org_a" } });
-  expect((await selectWorkspaceTool.handler({ workspaceId: "org_z" } as never, { authInfo: authInfo({ orgIdClaim: null }) })).isError).toBe(true);
+  expect((await selectWorkspaceTool.handler({ workspaceId: "org_z" } as never, { authInfo: authInfo({ orgIdClaim: null }) })).content[0].text).toMatch(/not a member/);
 });
 it("writes an audit row for both pre-workspace tools, attributing select_workspace to its choice", async () => {
   memberships.mockImplementation(async () => rows("org_a"));

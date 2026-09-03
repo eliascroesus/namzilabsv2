@@ -26,6 +26,7 @@ export type ToolOptions = {
 
 export const TOOL_DEADLINE_MS = 20_000;
 export const DEADLINE_SENTENCE = "That request took too long; try a narrower range or fewer groups.";
+const CAUGHT_SENTENCE = "That request could not be answered right now; try again in a moment.";
 
 const DENIED: Partial<Record<PermissionKey, string>> = {
   use_ai_assistants: "Your role in this workspace does not include AI assistants.",
@@ -44,7 +45,13 @@ function withDeadline(p: Promise<ToolResult>, ms: number): Promise<ToolResult> {
   return Promise.race([p, late]).finally(() => { if (timer) clearTimeout(timer); });
 }
 
-/** mcp-handler documents `ctx.http?.authInfo`; the server package types `ctx.authInfo`. Read whichever is set. */
+/**
+ * The installed SDK (v2) delivers auth at `ctx.http.authInfo` — see
+ * mcp-handler's migration notes ("extra.authInfo is now ctx.http?.authInfo")
+ * and @modelcontextprotocol/server's `ServerContext.http` field. `ctx.authInfo`
+ * is checked first only as a defensive fallback for a differently-shaped
+ * transport/version, not because it is the documented shape.
+ */
 export function authOf(serverCtx: ServerCtx | undefined): McpAuth | undefined {
   const a = (serverCtx?.authInfo ?? serverCtx?.http?.authInfo) as McpAuth | undefined;
   return a && typeof a === "object" && a.extra && typeof a.extra.userId === "string" ? a : undefined;
@@ -72,49 +79,99 @@ export function withToolContext<A>(tool: string, opts: ToolOptions, run: ToolRun
     const started = Date.now();
     const auth = authOf(serverCtx);
     if (!auth) return fail("Sign in again: this request carried no valid token.");
-    const db = getDb();
     const userId = auth.extra.userId;
 
-    // 1. Which workspace, and may this person use assistants there.
-    let ctx: McpCallContext;
-    if (needsWorkspace) {
-      const res = await resolveWorkspace(db, auth);
-      if (!res.ok) {
-        if (res.reason === "workspace_required") return ok({ code: "workspace_required", message: "Choose a workspace with select_workspace before asking about metrics.", workspaces: res.workspaces ?? [] });
-        if (res.reason === "revoked") return fail("This assistant was disconnected from the workspace. Call select_workspace to reconnect it, or ask an owner in Settings → AI assistants.");
-        return fail("You are not a member of that workspace.");
+    // `db` is acquired INSIDE the outer try below (getDb() itself can throw —
+    // no DATABASE_URL — and that must not escape either); `finish` tolerates
+    // it being unset so a throw before we ever get a handle still logs
+    // instead of crashing the closure that every return path goes through.
+    let db: DB | undefined;
+    // Best-effort attribution for the outer catch and for a "revoked" refusal:
+    // updated as soon as a workspace is actually known. Stays "" if nothing
+    // ever got that far (workspace_required, not_member, or a throw before
+    // resolution completed).
+    let knownOrgId = "";
+
+    /**
+     * EVERY outcome from here on — success or refusal alike — is recorded and
+     * logged through this ONE path (review ruling, Tasks 6-7 fix round 1): a
+     * denied caller must still count toward the rate limiter and show up in
+     * the audit trail, not vanish silently. A failing audit write is itself
+     * surfaced (logged, flagged) rather than swallowed — a silently-broken
+     * write is a silently-disabled rate limiter.
+     */
+    const finish = async (orgId: string, result: ToolResult): Promise<ToolResult> => {
+      const text = result.content[0]?.text ?? "";
+      const bytes = Buffer.byteLength(text, "utf8");
+      const rows = typeof result.structuredContent?.rows === "number" ? (result.structuredContent.rows as number) : 0;
+      const durationMs = Date.now() - started;
+      let auditFailed = false;
+      if (db) {
+        try {
+          await recordCall(db, {
+            orgId, userId, clientId: auth.clientId, tool, argsSummary: summarizeArgs(args), rows, bytes, durationMs,
+            revealContacts: Boolean((args as { revealContacts?: boolean } | undefined)?.revealContacts), error: result.isError ? text : null,
+          });
+        } catch (e) {
+          auditFailed = true;
+          console.error(`[mcp] audit write failed for ${tool}: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      } else {
+        auditFailed = true; // no db handle at all — nothing to write against
       }
-      const { orgId, role } = res.ws;
-      if (!(await assistantsEnabled(db, orgId))) return fail("AI assistants are turned off for this workspace by its owner.");
-      const access = await effectiveAccess(db, { orgId, userId, role });
-      for (const key of permissions) if (!access.can(key)) return fail(deniedMessage(key));
-      ctx = { db, orgId, userId, role, access, clientId: auth.clientId, bindingKey: auth.extra.bindingKey, workspaceName: await getWorkspaceName(orgId) };
-    } else {
-      ctx = { db, orgId: "", userId, access: NO_WORKSPACE_ACCESS, clientId: auth.clientId, bindingKey: auth.extra.bindingKey, workspaceName: "" };
-    }
+      console.log(JSON.stringify({ mcp: tool, orgId, userId, clientId: auth.clientId, durationMs, bytes, error: result.isError ? true : undefined, auditFailed: auditFailed || undefined }));
+      return result;
+    };
 
-    // 2. Limits, then the tool under a deadline; nothing thrown ever leaves.
-    const limit = await checkRateLimit(db, { orgId: ctx.orgId, userId, tool });
-    if (!limit.allowed) return fail(limit.reason);
-    let result: ToolResult;
     try {
-      result = await withDeadline(run(ctx, args, auth), deadlineMs);
-    } catch (e) {
-      result = fail("That request could not be answered right now; try again in a moment.");
-      console.error(`[mcp] ${tool} failed: ${e instanceof Error ? e.message : String(e)}`);
-    }
+      db = getDb();
 
-    // 3. One audit row and one log line. select_workspace has no ctx.orgId; its result names the org.
-    const text = result.content[0]?.text ?? "";
-    const chosen = (result.structuredContent?.workspace as { id?: unknown } | undefined)?.id;
-    const orgId = ctx.orgId || (typeof chosen === "string" ? chosen : "");
-    const rows = typeof result.structuredContent?.rows === "number" ? (result.structuredContent.rows as number) : 0;
-    const durationMs = Date.now() - started;
-    await recordCall(db, {
-      orgId, userId, clientId: auth.clientId, tool, argsSummary: summarizeArgs(args), rows, bytes: text.length, durationMs,
-      revealContacts: Boolean((args as { revealContacts?: boolean } | undefined)?.revealContacts), error: result.isError ? text : null,
-    }).catch(() => {});
-    console.log(JSON.stringify({ mcp: tool, orgId, userId, clientId: auth.clientId, durationMs, bytes: text.length, error: result.isError ? true : undefined }));
-    return result;
+      // 1. Which workspace, and may this person use assistants there.
+      let ctx: McpCallContext;
+      if (needsWorkspace) {
+        const res = await resolveWorkspace(db, auth);
+        if (!res.ok) {
+          if (res.reason === "workspace_required") return finish("", ok({ code: "workspace_required", message: "Choose a workspace with select_workspace before asking about metrics.", workspaces: res.workspaces ?? [] }));
+          if (res.reason === "revoked") {
+            // Membership WAS verified here (that's how "revoked" is reached),
+            // but `Resolution`'s failure shape doesn't carry which org that
+            // was — only the claim path's target is recoverable from `auth`
+            // alone; the binding and single-live-grant paths don't surface
+            // it. Blank there is safer than a wrong guess.
+            return finish(auth.extra.orgIdClaim ?? "", fail("This assistant was disconnected from the workspace. Call select_workspace to reconnect it, or ask an owner in Settings → AI assistants."));
+          }
+          return finish("", fail("You are not a member of that workspace."));
+        }
+        const { orgId, role } = res.ws;
+        knownOrgId = orgId;
+
+        // Rate limit right after resolution, BEFORE the switch and permission
+        // checks below (review ruling): a refused caller must still be
+        // throttled and counted, not get an unlimited, invisible stream of
+        // refusals.
+        const limit = await checkRateLimit(db, { orgId, userId, tool });
+        if (!limit.allowed) return finish(orgId, fail(limit.reason));
+
+        if (!(await assistantsEnabled(db, orgId))) return finish(orgId, fail("AI assistants are turned off for this workspace by its owner."));
+        const access = await effectiveAccess(db, { orgId, userId, role });
+        for (const key of permissions) if (!access.can(key)) return finish(orgId, fail(deniedMessage(key)));
+        ctx = { db, orgId, userId, role, access, clientId: auth.clientId, bindingKey: auth.extra.bindingKey, workspaceName: await getWorkspaceName(orgId) };
+      } else {
+        const limit = await checkRateLimit(db, { orgId: "", userId, tool });
+        if (!limit.allowed) return finish("", fail(limit.reason));
+        ctx = { db, orgId: "", userId, access: NO_WORKSPACE_ACCESS, clientId: auth.clientId, bindingKey: auth.extra.bindingKey, workspaceName: "" };
+      }
+
+      // 2. The tool itself, under a deadline.
+      const result = await withDeadline(run(ctx, args, auth), deadlineMs);
+
+      // select_workspace has no ctx.orgId; its result names the org it chose.
+      const chosen = (result.structuredContent?.workspace as { id?: unknown } | undefined)?.id;
+      const resultOrgId = ctx.orgId || (typeof chosen === "string" ? chosen : "");
+      return await finish(resultOrgId, result);
+    } catch (e) {
+      console.error(`[mcp] ${tool} failed: ${e instanceof Error ? e.message : String(e)}`);
+      return finish(knownOrgId, fail(CAUGHT_SENTENCE));
+    }
   };
 }
