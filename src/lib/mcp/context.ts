@@ -7,9 +7,6 @@ import { resolveWorkspace, assistantsEnabled } from "@/lib/mcp/workspace";
 import { checkRateLimit, recordCall, summarizeArgs } from "@/lib/mcp/audit";
 import { fail, ok, type ToolResult } from "@/lib/mcp/result";
 
-/** Re-exported so `tools/workspaces.ts` (and anywhere else) can import it from here, unchanged. Defined in `workspace.ts` — see its own docstring for why. */
-export { assistantsEnabled };
-
 export type McpCallContext = {
   db: DB; orgId: string; userId: string; role?: string; access: Access; clientId: string; bindingKey: string; workspaceName: string;
 };

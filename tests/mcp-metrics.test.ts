@@ -213,7 +213,9 @@ describe("get_metric", () => {
     vi.mocked(publishedFlowTiles).mockClear();
     const r = await getMetricTool.handler({ id: `flow:${flowId}:n1`, range: "all" } as never, { authInfo: authInfo() });
     expect(r.isError).toBe(true);
-    expect(publishedFlowTiles).not.toHaveBeenCalled();
+    // Call count rather than `.not.toHaveBeenCalled()`: the spy's first argument is the
+    // PGlite handle, which vitest's failure printer cannot serialise without exhausting memory.
+    expect(publishedFlowTiles).toHaveBeenCalledTimes(0);
   });
   it("caps a flow tile's series to the most recent 400 buckets, keeping the newest points", async () => {
     const series = Array.from({ length: 450 }, (_, i) => ({ bucket: `bucket-${i}`, value: i }));
