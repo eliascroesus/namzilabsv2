@@ -3,6 +3,7 @@ import type { ServerCtx } from "@/lib/mcp/context";
 import type { ToolResult } from "@/lib/mcp/result";
 import { listWorkspacesTool, selectWorkspaceTool } from "@/lib/mcp/tools/workspaces";
 import { listMetricsTool, getMetricTool, getMetricDaysTool } from "@/lib/mcp/tools/metrics";
+import { listSourcesTool } from "@/lib/mcp/tools/sources";
 
 export const READ_ONLY = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false } as const;
 
@@ -23,7 +24,7 @@ export type NamzilabsTool = {
 };
 
 /** Every tool the server exposes, in the order clients see them. Later tasks append here. */
-export const TOOLS: NamzilabsTool[] = [listWorkspacesTool, selectWorkspaceTool, listMetricsTool, getMetricTool, getMetricDaysTool];
+export const TOOLS: NamzilabsTool[] = [listWorkspacesTool, selectWorkspaceTool, listMetricsTool, getMetricTool, getMetricDaysTool, listSourcesTool];
 
 /**
  * A structural stand-in for the SDK's `McpServer`, so this module (and its
