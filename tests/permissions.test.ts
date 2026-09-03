@@ -1,5 +1,7 @@
-import { describe, it, expect } from "vitest";
-import { resolveRank, type RankRow } from "@/lib/permissions";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { createTestDb } from "./helpers/testdb";
+import { resolveRank, effectiveAccess, PERMISSIONS, type RankRow } from "@/lib/permissions";
+import type { DB } from "@/db/types";
 
 /**
  * resolveRank is the pure brain of the rank system: the union over a rank's
@@ -113,5 +115,22 @@ describe("resolveRank", () => {
     expect(r.allMetrics).toBe(false);
     expect(r.permissions.size).toBe(0);
     expect(r.metricKeys.size).toBe(0);
+  });
+});
+
+describe("use_ai_assistants", () => {
+  let db: DB;
+  let close: () => Promise<void>;
+  beforeEach(async () => {
+    ({ db, close } = await createTestDb());
+  });
+  afterEach(async () => {
+    await close();
+  });
+
+  it("lists use_ai_assistants in the catalogue, and an unranked member has it", async () => {
+    expect(PERMISSIONS.map((p) => p.key)).toContain("use_ai_assistants");
+    const access = await effectiveAccess(db, { orgId: "org_a", userId: "u_unranked" });
+    expect(access.can("use_ai_assistants")).toBe(true);
   });
 });

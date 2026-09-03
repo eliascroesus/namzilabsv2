@@ -17,6 +17,7 @@ export const PERMISSIONS = [
   { key: "create_flows", label: "Build flows & metrics", blurb: "Create, edit, publish and delete flows and dashboard metrics" },
   { key: "view_integrations", label: "View integrations", blurb: "Open the Apps page and see connections" },
   { key: "connect_integrations", label: "Manage integrations", blurb: "Connect and remove app accounts" },
+  { key: "use_ai_assistants", label: "Use AI assistants", blurb: "Connect Claude or ChatGPT to read this workspace's metrics" },
   // GOVERNANCE, not product access. Consulted only through canManageRanks —
   // deliberately NOT satisfied by the unranked member's full-product-access
   // default, because "can use everything" and "can govern everyone" are
@@ -25,7 +26,12 @@ export const PERMISSIONS = [
   { key: "manage_workspace", label: "Manage workspace", blurb: "Invite members, create roles and assign them" },
 ] as const;
 
-export type PermissionKey = "create_flows" | "view_integrations" | "connect_integrations" | "manage_workspace";
+export type PermissionKey =
+  | "create_flows"
+  | "view_integrations"
+  | "connect_integrations"
+  | "use_ai_assistants"
+  | "manage_workspace";
 
 /** One rank as stored: a bundle of grants plus the rank ids it inherits from. */
 export type RankRow = {
