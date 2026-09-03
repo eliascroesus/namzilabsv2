@@ -8,9 +8,11 @@ import { GET } from "@/app/api/health/route";
  * contract now: status is always public (a monitor tells up from down), the
  * WHY is gated behind HEALTH_CHECK_TOKEN, and a missing token fails CLOSED.
  *
- * The database is unreachable under vitest, which is exactly what exercises
+ * The database is unreachable under vitest (no DATABASE_URL) unless a test
+ * stubs one and relies on the mock below, which is exactly what exercises
  * the `databaseError` capture being withheld from anonymous callers.
  */
+vi.mock("@/db/client", () => ({ getDb: () => ({ execute: async () => [] }) }));
 
 afterEach(() => vi.unstubAllEnvs());
 
@@ -57,5 +59,28 @@ describe("/api/health disclosure gating", () => {
     // meaningful without the token, not which code it is here.
     expect(res.status).toBe(503);
     expect(((await res.json()) as { status: string }).status).toBe("unhealthy");
+  });
+
+  it("counts the MCP variables only when MCP_ENABLED is on", async () => {
+    vi.stubEnv("DATABASE_URL", "x");
+    vi.stubEnv("ENCRYPTION_KEY", "x");
+    vi.stubEnv("INNGEST_EVENT_KEY", "x");
+    vi.stubEnv("INNGEST_SIGNING_KEY", "x");
+    vi.stubEnv("APP_BASE_URL", "x");
+    vi.stubEnv("HEALTH_CHECK_TOKEN", "t");
+    vi.stubEnv("MCP_ENABLED", "");
+    vi.stubEnv("WORKOS_AUTHKIT_DOMAIN", "");
+    vi.stubEnv("MCP_RESOURCE_URL", "");
+    const off = (await (
+      await GET(new Request("http://x/api/health", { headers: { "x-health-token": "t" } }))
+    ).json()) as { status: string; checks?: { missingForMcp?: string[] } };
+    expect(off.status).toBe("ok");
+
+    vi.stubEnv("MCP_ENABLED", "1");
+    const on = (await (
+      await GET(new Request("http://x/api/health", { headers: { "x-health-token": "t" } }))
+    ).json()) as { status: string; checks?: { missingForMcp?: string[] } };
+    expect(on.status).toBe("degraded");
+    expect(on.checks?.missingForMcp).toEqual(["WORKOS_AUTHKIT_DOMAIN", "MCP_RESOURCE_URL"]);
   });
 });

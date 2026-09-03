@@ -36,6 +36,12 @@ const REQUIRED = ["DATABASE_URL", "ENCRYPTION_KEY"] as const;
 const REQUIRED_FOR_BACKGROUND = ["INNGEST_EVENT_KEY", "INNGEST_SIGNING_KEY", "APP_BASE_URL"] as const;
 
 /**
+ * Required only when the MCP connection is switched on. Off is not a fault:
+ * a deploy before the WorkOS dashboard is configured must not read as degraded.
+ */
+const REQUIRED_FOR_MCP = ["WORKOS_AUTHKIT_DOMAIN", "MCP_RESOURCE_URL"] as const;
+
+/**
  * The full `checks` object is for the OPERATOR, not the internet. This route
  * sits outside the auth proxy on purpose (an uptime monitor has no session),
  * and it used to hand every anonymous caller the list of configured env vars
@@ -78,8 +84,14 @@ export async function GET(req: Request) {
       "Data will silently stop refreshing.";
   }
 
+  const missingMcp = process.env.MCP_ENABLED === "1" ? REQUIRED_FOR_MCP.filter((n) => !present(n)) : [];
+  checks.missingForMcp = missingMcp;
+  if (missingMcp.length > 0) {
+    checks.mcpWarning = "MCP_ENABLED is on but the AI-assistant endpoint cannot verify tokens without these.";
+  }
+
   const healthy = database === "ok" && missingRequired.length === 0;
-  const status = healthy ? (missingBackground.length > 0 ? "degraded" : "ok") : "unhealthy";
+  const status = healthy ? (missingBackground.length > 0 || missingMcp.length > 0 ? "degraded" : "ok") : "unhealthy";
   const httpStatus = healthy ? 200 : 503;
   // The HTTP status and the status STRING are always derived from the full
   // picture and always public — a monitor without the token still tells up

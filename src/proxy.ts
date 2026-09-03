@@ -10,6 +10,9 @@ import { authkit, handleAuthkitHeaders } from "@workos-inc/authkit-nextjs";
  * entirely, so they are always public and never touch auth. Public marketing /
  * legal pages ("/", "/terms", "/privacy") are matched (so the header can render
  * auth-aware) but are not in the protected list, so anonymous users see them.
+ *
+ * `/api/mcp` and `/.well-known` are bearer-token machine endpoints (the MCP
+ * connection); the cookie wall never sees them.
  */
 /**
  * Every prefix here must name a route that EXISTS. This list once carried
@@ -54,5 +57,5 @@ export default async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/webhooks|api/inngest|api/health).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/webhooks|api/inngest|api/health|api/mcp|\\.well-known).*)"],
 };

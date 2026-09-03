@@ -1,0 +1,34 @@
+import { describe, it, expect, afterEach, vi } from "vitest";
+import { mcpEnabled, authkitDomain, mcpResourceUrl, mcpMaxScanRows } from "@/lib/mcp/env";
+
+afterEach(() => vi.unstubAllEnvs());
+
+describe("mcp env", () => {
+  it("is off unless MCP_ENABLED is exactly '1'", () => {
+    vi.stubEnv("MCP_ENABLED", "");
+    expect(mcpEnabled()).toBe(false);
+    vi.stubEnv("MCP_ENABLED", "true");
+    expect(mcpEnabled()).toBe(false);
+    vi.stubEnv("MCP_ENABLED", "1");
+    expect(mcpEnabled()).toBe(true);
+  });
+  it("derives the resource URL from APP_BASE_URL unless overridden", () => {
+    vi.stubEnv("APP_BASE_URL", "https://app.namzilabs.com");
+    vi.stubEnv("MCP_RESOURCE_URL", "");
+    expect(mcpResourceUrl()).toBe("https://app.namzilabs.com/api/mcp");
+    vi.stubEnv("MCP_RESOURCE_URL", "https://mcp.example.com/api/mcp");
+    expect(mcpResourceUrl()).toBe("https://mcp.example.com/api/mcp");
+  });
+  it("strips a trailing slash from the AuthKit domain and refuses an empty one", () => {
+    vi.stubEnv("WORKOS_AUTHKIT_DOMAIN", "https://x.authkit.app/");
+    expect(authkitDomain()).toBe("https://x.authkit.app");
+    vi.stubEnv("WORKOS_AUTHKIT_DOMAIN", "");
+    expect(() => authkitDomain()).toThrow(/WORKOS_AUTHKIT_DOMAIN/);
+  });
+  it("caps scan rows with a default of 200000", () => {
+    vi.stubEnv("MCP_MAX_SCAN_ROWS", "");
+    expect(mcpMaxScanRows()).toBe(200_000);
+    vi.stubEnv("MCP_MAX_SCAN_ROWS", "5000");
+    expect(mcpMaxScanRows()).toBe(5000);
+  });
+});
