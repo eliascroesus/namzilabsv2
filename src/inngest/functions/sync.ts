@@ -5,6 +5,7 @@ import { runSync, reprocessConnection, syncChanged } from "@/lib/sync/resync";
 import { expireAgedResults, markStaleForSource, materializeStaleAll } from "@/lib/flow/materialize";
 import { sendOpsAlert } from "@/lib/alerts";
 import { pruneOperationalTables, pruneSettledTestRuns, retentionBacklog } from "@/lib/storage-lifecycle";
+import { pruneMcpTables } from "@/lib/mcp/audit";
 import { getJob, runnableJobsByProvider } from "@/lib/backfill/jobs";
 import { scanInvariants } from "@/lib/health/invariants";
 import { scanWebhookEventTime } from "@/lib/webhooks/event-time";
@@ -260,6 +261,9 @@ export const pruneStorage = inngest.createFunction(
         ),
       );
     }
+    // MCP audit rows (90 days) and expired client bindings, under the same inspect gate.
+    const mcp = await step.run("prune-mcp-tables", () => pruneMcpTables(getDb(), { inspect }));
+    if (mcp.inspected) console.warn(`[storage-prune-inspect] mcp ${JSON.stringify(mcp)}`);
     // H.6 capacity signal: what is STILL past retention after this run. A
     // non-zero backlog that persists night after night means pruning is not
     // keeping up with ingest — visible here before it becomes a disk problem.

@@ -25,6 +25,11 @@ import { join } from "node:path";
 
 const schema = readFileSync(join(process.cwd(), "src/db/schema.ts"), "utf8");
 const lifecycle = readFileSync(join(process.cwd(), "src/lib/storage-lifecycle.ts"), "utf8");
+// The MCP tables are pruned from a SECOND file — src/lib/mcp/audit.ts's
+// pruneMcpTables, called as a step of the same nightly prune-storage function
+// — rather than from storage-lifecycle.ts itself, so the "has a path" check
+// below reads both.
+const mcpAudit = readFileSync(join(process.cwd(), "src/lib/mcp/audit.ts"), "utf8");
 
 /** Every `pgTable("name"` in the schema, which is the authoritative list. */
 function declaredTables(): string[] {
@@ -51,6 +56,12 @@ const TABLES: Record<string, Classification> = {
   delivery_log: { kind: "pruned", window: "30d" },
   test_runs: { kind: "pruned", window: "30d, plus a 24h sweep of settled runs" },
   usage_ledger: { kind: "pruned", window: "2d spent counters / 90d evidence" },
+  // pruneMcpTables (src/lib/mcp/audit.ts) runs as a step of the same nightly
+  // prune-storage function, under the same STORAGE_PRUNE_LIVE inspect gate —
+  // see the "has a path" check below, which reads that file rather than
+  // storage-lifecycle.ts for these two.
+  mcp_calls: { kind: "pruned", window: "90d" },
+  mcp_bindings: { kind: "pruned", window: "expires_at (the token's own expiry, not a fixed day count) — swept nightly, batches of 5000" },
 
   // ── Bounded by something other than activity ──────────────────────────────
   // (organizations/users/memberships are ABSENT on purpose: identity lives in
@@ -128,18 +139,10 @@ const TABLES: Record<string, Classification> = {
     kind: "gap",
     why: "one row per payload that failed processing, and RESOLVED rows are never removed — only connection deletion clears them. Smaller than the others because it only grows on failure, but it is unbounded in exactly the same way and nothing currently touches it",
   },
-  mcp_bindings: {
-    kind: "gap",
-    why: "one row per connected client identity (client_id/azp/sid, or a token hash as a last resort), so it grows with sessions rather than with a fixed set of clients. `expires_at` names when a row is safe to delete, but nothing sweeps expired rows yet — that lands with the audit/rate-limit engine later in this phase",
-  },
-  mcp_calls: {
-    kind: "gap",
-    why: "one row per tool call — the audit trail the Settings page shows and the counter the rate limiter reads. Grows with activity exactly like usage_ledger did before it had its own retention path; the design calls for 90-day retention but the sweep does not exist until the audit/rate-limit engine lands later in this phase",
-  },
 };
 
 /** Kept as a set so adding a gap is a deliberate edit to this file, not a silent pass. */
-const KNOWN_GAPS = ["dead_letter", "events", "mcp_bindings", "mcp_calls", "raw_events"];
+const KNOWN_GAPS = ["dead_letter", "events", "raw_events"];
 
 describe("every table is asked whether it needs retention", () => {
   it("classifies every table in the schema", () => {
@@ -159,22 +162,29 @@ describe("every table is asked whether it needs retention", () => {
     expect(stale, `Classified but no longer in the schema: ${stale.join(", ")}`).toEqual([]);
   });
 
-  it("every table claimed as pruned actually has a path in storage-lifecycle.ts", () => {
+  it("every table claimed as pruned actually has a path in storage-lifecycle.ts or the mcp audit sweep", () => {
     // Checked against the IMPORT rather than the file text, because a table
     // name appears in a comment for free and the claim has to be backed by code
     // that touches the table. Otherwise the list becomes a place to assert
     // coverage that does not exist — which is the failure it was written for.
-    const imported = lifecycle.match(/import \{([^}]+)\} from "@\/db\/schema"/)?.[1] ?? "";
-    const symbols = imported.split(",").map((s) => s.trim());
+    //
+    // Two files, not one: every table but the MCP pair is pruned from
+    // storage-lifecycle.ts, but mcp_calls and mcp_bindings are pruned by
+    // pruneMcpTables in src/lib/mcp/audit.ts — its own step of the SAME
+    // nightly prune-storage function, under the same inspect gate — so a
+    // table's path may be imported by either file.
+    const importsOf = (src: string) => (src.match(/import \{([^}]+)\} from "@\/db\/schema"/)?.[1] ?? "").split(",").map((s) => s.trim());
+    const lifecycleSymbols = importsOf(lifecycle);
+    const auditSymbols = importsOf(mcpAudit);
     const camel = (t: string) => t.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
 
     for (const [table, c] of Object.entries(TABLES)) {
       if (c.kind !== "pruned") continue;
       expect(
-        symbols,
-        `${table} is classified "pruned" (${c.window}) but src/lib/storage-lifecycle.ts does not import it, ` +
-          `so nothing there can be deleting from it.`,
-      ).toContain(camel(table));
+        lifecycleSymbols.includes(camel(table)) || auditSymbols.includes(camel(table)),
+        `${table} is classified "pruned" (${c.window}) but neither src/lib/storage-lifecycle.ts nor ` +
+          `src/lib/mcp/audit.ts imports it, so nothing there can be deleting from it.`,
+      ).toBe(true);
     }
   });
 
