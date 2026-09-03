@@ -27,13 +27,54 @@ describe("truncate", () => {
     expect(truncate(r)).toEqual(r);
   });
 
-  it("shrinks a list field from the end until the JSON fits, and marks truncated", () => {
+  it("shrinks records from the end until the JSON fits, and marks truncated", () => {
     const records = Array.from({ length: 5000 }, (_, i) => ({ id: i, note: "x".repeat(30) }));
     const r = ok({ records });
     expect(r.structuredContent?.truncated).toBe(true);
     expect((r.structuredContent?.records as unknown[]).length).toBeGreaterThan(0);
     expect((r.structuredContent?.records as unknown[]).length).toBeLessThan(records.length);
     expect(Buffer.byteLength(r.content[0].text, "utf8")).toBeLessThanOrEqual(MAX_RESULT_BYTES);
+    // records is oldest-to-newest-irrelevant list data (not a time axis) —
+    // it shrinks from the END, so the SURVIVING rows are the earliest ones.
+    const kept = r.structuredContent?.records as Array<{ id: number }>;
+    expect(kept[0]).toEqual(records[0]);
+  });
+
+  it("shrinks groups from the end, the same as records", () => {
+    const groups = Array.from({ length: 5000 }, (_, i) => ({ label: `g${i}`, value: i, note: "x".repeat(30) }));
+    const r = ok({ groups });
+    expect(r.structuredContent?.truncated).toBe(true);
+    const kept = r.structuredContent?.groups as Array<{ label: string }>;
+    expect(kept.length).toBeGreaterThan(0);
+    expect(kept.length).toBeLessThan(groups.length);
+    expect(kept[0]).toEqual(groups[0]);
+  });
+
+  it("shrinks series and days from the FRONT, keeping the most recent entries", () => {
+    // A time series and a run of calendar days are both written oldest-first
+    // — shrinking from the end (like records/groups) would throw away the
+    // newest points, which is exactly backwards for "what happened lately".
+    const series = Array.from({ length: 5000 }, (_, i) => ({ bucket: `2020-01-${i}`, value: i, note: "x".repeat(30) }));
+    const r = ok({ series });
+    expect(r.structuredContent?.truncated).toBe(true);
+    const kept = r.structuredContent?.series as Array<{ bucket: string; value: number }>;
+    expect(kept.length).toBeGreaterThan(0);
+    expect(kept.length).toBeLessThan(series.length);
+    // The LAST original entry (the newest) must survive; the FIRST (the
+    // oldest) must not — the opposite of how records/groups shrink.
+    expect(kept[kept.length - 1]).toEqual(series[series.length - 1]);
+    expect(kept[0]).not.toEqual(series[0]);
+    expect(Buffer.byteLength(r.content[0].text, "utf8")).toBeLessThanOrEqual(MAX_RESULT_BYTES);
+  });
+
+  it("shrinks days from the front too", () => {
+    const days = Array.from({ length: 5000 }, (_, i) => ({ day: `2020-01-${i}`, value: i, note: "x".repeat(30) }));
+    const r = ok({ days });
+    expect(r.structuredContent?.truncated).toBe(true);
+    const kept = r.structuredContent?.days as Array<{ day: string }>;
+    expect(kept.length).toBeGreaterThan(0);
+    expect(kept[kept.length - 1]).toEqual(days[days.length - 1]);
+    expect(kept[0]).not.toEqual(days[0]);
   });
 
   it("measures a multi-byte (emoji/CJK) payload in UTF-8 bytes, not UTF-16 length", () => {

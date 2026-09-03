@@ -12,8 +12,16 @@ vi.mock("@workos-inc/authkit-nextjs", () => ({
 }));
 let db: DB; let close: () => Promise<void>;
 vi.mock("@/db/client", () => ({ getDb: () => db, getReadDb: () => db }));
+// Wraps the real `publishedFlowTiles` so the "refuses before reading" test can
+// assert it was never called for a hidden id, without changing behaviour for
+// every other test (the wrapped function still delegates to the real one).
+vi.mock("@/lib/flow/materialize", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/flow/materialize")>();
+  return { ...actual, publishedFlowTiles: vi.fn(actual.publishedFlowTiles) };
+});
 
 import { listMetricsTool, getMetricTool, getMetricDaysTool } from "@/lib/mcp/tools/metrics";
+import { publishedFlowTiles } from "@/lib/flow/materialize";
 import { clearMembershipCache } from "@/lib/mcp/workspace";
 import { AggregateSchema, parseDefinition } from "@/lib/metrics/types";
 import { computeAggregate } from "@/lib/metrics/compute";
@@ -34,6 +42,7 @@ beforeEach(async () => {
   ({ db, close } = await createTestDb());
   memberships.mockReset();
   clearMembershipCache();
+  vi.mocked(publishedFlowTiles).mockClear();
 
   const [flow] = await db
     .insert(flows)
@@ -75,9 +84,13 @@ beforeEach(async () => {
   groupedFlowId = groupedFlow.id;
   await db.insert(flowVersions).values({ flowId: groupedFlowId, orgId: "org_a", version: 1, graph: { nodes: [], edges: [], metrics: [] } });
 
+  // `display: "trend"` (not "number") deliberately, so the format/viz split
+  // (item 3) is a real test: `format` must stay "number" regardless, and
+  // "trend" must surface only under `viz`. If `format` ever read `display`
+  // again, this fixture is the one that would catch it — "number" would not.
   const [metric] = await db
     .insert(metrics)
-    .values({ orgId: "org_a", name: "Replies", kind: "aggregate", display: "number", definition: metricDef })
+    .values({ orgId: "org_a", name: "Replies", kind: "aggregate", display: "trend", unit: "minutes", definition: metricDef })
     .returning();
   metricId = metric.id;
 
@@ -96,8 +109,13 @@ describe("list_metrics", () => {
     member("admin");
     const r = await listMetricsTool.handler({} as never, { authInfo: authInfo() });
     const s = r.structuredContent as { metrics: Array<Record<string, unknown>> };
-    expect(s.metrics.find((m) => m.id === `flow:${flowId}:n1`)).toMatchObject({ kind: "flow", name: "Bookings", headline: 9, status: "fresh", editedSincePublish: false });
-    expect(s.metrics.find((m) => m.id === `metric:${metricId}`)).toMatchObject({ kind: "classic", headline: null, format: "number" });
+    expect(s.metrics.find((m) => m.id === `flow:${flowId}:n1`)).toMatchObject({ kind: "flow", name: "Bookings", headline: 9, status: "fresh", editedSincePublish: false, sources: ["calendly"] });
+    // A classic metric's `display` column (number|trend|bar|funnel) is a
+    // chart shape, not a number format — the dashboard always renders its
+    // headline as a plain number, so `format` is "number" unconditionally
+    // and the chart shape surfaces separately under `viz`. `unit` comes off
+    // the metrics row itself, not off any tile.
+    expect(s.metrics.find((m) => m.id === `metric:${metricId}`)).toMatchObject({ kind: "classic", headline: null, format: "number", viz: "trend", unit: "minutes" });
     expect(JSON.parse(r.content[0].text)).toEqual(r.structuredContent);
   });
   it("carries the provenance sentence in its description, not in the result", () => {
@@ -116,7 +134,61 @@ describe("get_metric", () => {
   it("returns exactly the stored byRange slot for a flow tile, with includesFutureDated true", async () => {
     member("admin");
     const r = await getMetricTool.handler({ id: `flow:${flowId}:n1`, range: "7d" } as never, { authInfo: authInfo() });
-    expect(r.structuredContent).toMatchObject({ id: `flow:${flowId}:n1`, range: "7d", value: 3, includesFutureDated: true, kind: "flow" });
+    expect(r.structuredContent).toMatchObject({
+      id: `flow:${flowId}:n1`,
+      range: "7d",
+      value: 3,
+      includesFutureDated: true,
+      kind: "flow",
+      // The seeded provenance, read straight off `flow_results.provenance`
+      // (its own column) — not off a `tile.provenance` key that never
+      // exists. Reverting the read to `tile.provenance` must fail this.
+      provenance: { streams: [{ connectionId: "c1", source: "calendly" }], engine: "stored" },
+    });
+  });
+  it("treats an unavailable \"all\" slot as null with no fallback to the tile's top-level value", async () => {
+    await db
+      .update(flowResults)
+      .set({ tile: { name: "Bookings", format: "number", value: 9, byRange: { all: { unavailable: "No conversions yet." } } } })
+      .where(eq(flowResults.flowId, flowId));
+    member("admin");
+    const s = (await getMetricTool.handler({ id: `flow:${flowId}:n1`, range: "all" } as never, { authInfo: authInfo() })).structuredContent as Record<string, unknown>;
+    expect(s.value).toBeNull();
+    expect(s.unavailable).toBe("No conversions yet.");
+  });
+  it("refuses a hidden flow id before reading its tile", async () => {
+    await db.insert(workspaceRanks).values({ id: "r1", orgId: "org_a", name: "Sales", permissions: ["use_ai_assistants"], metricKeys: [`metric:${metricId}`] });
+    await db.insert(rankAssignments).values({ orgId: "org_a", userId: "user_1", rankId: "r1" });
+    member("member");
+    vi.mocked(publishedFlowTiles).mockClear();
+    const r = await getMetricTool.handler({ id: `flow:${flowId}:n1`, range: "all" } as never, { authInfo: authInfo() });
+    expect(r.isError).toBe(true);
+    expect(publishedFlowTiles).not.toHaveBeenCalled();
+  });
+  it("caps a flow tile's series to the most recent 400 buckets, keeping the newest points", async () => {
+    const series = Array.from({ length: 450 }, (_, i) => ({ bucket: `bucket-${i}`, value: i }));
+    const [seriesFlow] = await db
+      .insert(flows)
+      .values({ orgId: "org_a", name: "Series", status: "published", publishedVersion: 1 })
+      .returning();
+    await db.insert(flowVersions).values({ flowId: seriesFlow.id, orgId: "org_a", version: 1, graph: { nodes: [], edges: [], metrics: [] } });
+    await db.insert(flowResults).values({
+      orgId: "org_a",
+      flowId: seriesFlow.id,
+      version: 1,
+      outputNodeId: "n1",
+      status: "fresh",
+      computedAt: new Date(),
+      tile: { name: "Series", format: "number", value: 450, byRange: { all: { value: 450, series } } },
+      provenance: { streams: [] },
+    });
+    member("admin");
+    const s = (await getMetricTool.handler({ id: `flow:${seriesFlow.id}:n1`, range: "all", includeSeries: true } as never, { authInfo: authInfo() })).structuredContent as Record<string, unknown>;
+    const kept = s.series as Array<{ bucket: string; value: number }>;
+    expect(kept.length).toBe(400);
+    expect(kept[kept.length - 1]).toEqual(series[449]);
+    expect(kept[0]).toEqual(series[50]);
+    expect(s.partial).toEqual({ truncated: true, keptBuckets: 400, totalBuckets: 450 });
   });
   it("reads a single day from the calendar store", async () => {
     member("admin");
@@ -219,7 +291,10 @@ describe("get_metric", () => {
       { label: "Booked", count: 40, conversionFromPrev: 0.4 },
       { label: "Paid", count: 10, conversionFromPrev: 0.25 },
     ]);
-    expect(s.bottleneckIndex).toBe(2);
+    // The bottleneck is the LARGEST ABSOLUTE DROP (100→40 is 60, 40→10 is
+    // 30), matching `computeFunnel`'s own definition — not the smallest
+    // conversion ratio (which would have picked stage 2 here).
+    expect(s.bottleneckIndex).toBe(1);
   });
 });
 

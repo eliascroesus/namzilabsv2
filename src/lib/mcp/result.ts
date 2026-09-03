@@ -16,14 +16,26 @@ export function fail(sentence: string): ToolResult {
 }
 
 /**
- * Shrink list fields (records, series, days, groups) from the end until the
- * JSON fits `MAX_RESULT_BYTES`, measured in UTF-8 BYTES (`Buffer.byteLength`),
- * never `.length` (UTF-16 code units) — a payload full of multi-byte
- * characters (CJK, emoji) can run several bytes per character, so a
- * length-based cap under-counts exactly the payloads most likely to need
- * truncating. If every list is exhausted and the result is still over
- * budget (an oversized field with nothing to shrink, e.g. one huge string),
- * the payload is replaced outright rather than shipped over the cap.
+ * List fields whose NEWEST entries sit at the END of the array — a time
+ * series and a run of calendar days are both written oldest-first. Shrinking
+ * either from the end (like `records` and `groups` below) would discard the
+ * newest points first and answer a "last 90 days" question with its oldest
+ * slice. These two shrink from the FRONT instead, so the most recent entries
+ * are exactly the ones that survive.
+ */
+const KEEP_MOST_RECENT = new Set(["series", "days"]);
+
+/**
+ * Shrink list fields (records, series, days, groups) until the JSON fits
+ * `MAX_RESULT_BYTES`, measured in UTF-8 BYTES (`Buffer.byteLength`), never
+ * `.length` (UTF-16 code units) — a payload full of multi-byte characters
+ * (CJK, emoji) can run several bytes per character, so a length-based cap
+ * under-counts exactly the payloads most likely to need truncating.
+ * `records` and `groups` shrink from the end; `series` and `days` shrink from
+ * the front, keeping their most recent entries — see `KEEP_MOST_RECENT`. If
+ * every list is exhausted and the result is still over budget (an oversized
+ * field with nothing to shrink, e.g. one huge string), the payload is
+ * replaced outright rather than shipped over the cap.
  */
 export function truncate(r: ToolResult): ToolResult {
   if (!r.structuredContent) return r;
@@ -31,7 +43,9 @@ export function truncate(r: ToolResult): ToolResult {
   let text = JSON.stringify(s);
   for (const key of ["records", "series", "days", "groups"]) {
     while (Buffer.byteLength(text, "utf8") > MAX_RESULT_BYTES && Array.isArray(s[key]) && (s[key] as unknown[]).length > 0) {
-      s[key] = (s[key] as unknown[]).slice(0, Math.floor((s[key] as unknown[]).length * 0.8));
+      const arr = s[key] as unknown[];
+      const kept = Math.floor(arr.length * 0.8);
+      s[key] = KEEP_MOST_RECENT.has(key) ? arr.slice(arr.length - kept) : arr.slice(0, kept);
       s.truncated = true;
       text = JSON.stringify(s);
     }

@@ -567,8 +567,15 @@ export async function markStaleForSource(
  * failure — the empty state as a lie. The page turns a rejection into its
  * load-error banner; nothing below the page gets to decide that silence is
  * acceptable.
+ *
+ * `opts.flowId` narrows to one flow's tiles — additive and optional, so every
+ * existing caller (the dashboard, `unpublishedFlowIds`, `metricCatalog`) reads
+ * byte-identical SQL. It exists for `get_metric` / `get_metric_days`: an
+ * assistant asking about ONE id used to cost this whole-org read (`sample`
+ * records and all, for every published tile) just to find the one row it
+ * wanted.
  */
-export async function publishedFlowTiles(db: DB, orgId: string) {
+export async function publishedFlowTiles(db: DB, orgId: string, opts?: { flowId?: string }) {
   return db
     .select({
       flowId: flowResults.flowId,
@@ -608,7 +615,7 @@ export async function publishedFlowTiles(db: DB, orgId: string) {
     })
     .from(flowResults)
     .innerJoin(flows, eq(flows.id, flowResults.flowId))
-    .where(and(eq(flowResults.orgId, orgId), eq(flows.status, "published")));
+    .where(and(eq(flowResults.orgId, orgId), eq(flows.status, "published"), ...(opts?.flowId ? [eq(flowResults.flowId, opts.flowId)] : [])));
 }
 
 /**
@@ -625,8 +632,11 @@ export async function publishedFlowTiles(db: DB, orgId: string) {
  * A row with no stored tile yields an object of nulls rather than NULL, which
  * every reader here already handles: the name falls back to the output id and
  * the day map to `{}`.
+ *
+ * `opts.flowId` narrows to one flow, additive and optional — see the note on
+ * `publishedFlowTiles` above; the two share the same reason to exist.
  */
-export async function calendarFlowTiles(db: DB, orgId: string) {
+export async function calendarFlowTiles(db: DB, orgId: string, opts?: { flowId?: string }) {
   return db
     .select({
       flowId: flowResults.flowId,
@@ -646,7 +656,7 @@ export async function calendarFlowTiles(db: DB, orgId: string) {
     })
     .from(flowResults)
     .innerJoin(flows, eq(flows.id, flowResults.flowId))
-    .where(and(eq(flowResults.orgId, orgId), eq(flows.status, "published")));
+    .where(and(eq(flowResults.orgId, orgId), eq(flows.status, "published"), ...(opts?.flowId ? [eq(flowResults.flowId, opts.flowId)] : [])));
 }
 
 /**
