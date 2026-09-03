@@ -1,10 +1,13 @@
 import { z } from "zod";
-import { publishedFlowTiles, unpublishedFlowIds } from "@/lib/flow/materialize";
+import { publishedFlowTiles, unpublishedFlowIds, calendarFlowTiles } from "@/lib/flow/materialize";
 import { listFlowNames } from "@/lib/flow/store";
 import { listMetrics } from "@/lib/metrics/store";
+import { computeAggregate, computeFunnel } from "@/lib/metrics/compute";
+import { resolveRange } from "@/lib/metrics/range";
+import { parseDefinition } from "@/lib/metrics/types";
 import { tileKeyOfFlow, tileKeyOfMetric, visibilityKeyOf } from "@/lib/board/types";
 import { withToolContext, type McpCallContext } from "@/lib/mcp/context";
-import { describe, ok } from "@/lib/mcp/result";
+import { describe, fail, ok } from "@/lib/mcp/result";
 
 const APP = () => (process.env.APP_BASE_URL ?? "").replace(/\/+$/, "");
 
@@ -20,6 +23,14 @@ export type CatalogEntry = {
   computedAt?: Date | null;
   editedSincePublish: boolean;
   sources: string[];
+  /**
+   * The raw stream refs this number was computed from (flow tiles only;
+   * classic metrics carry none). `get_metric`'s provenance reads THIS, not
+   * `tile.provenance` — `flow_results.provenance` is its own database column,
+   * never nested inside the `tile` jsonb, so a lookup at `tile.provenance`
+   * would always answer undefined.
+   */
+  streams: Array<{ connectionId?: string; source?: string }>;
   definition?: Record<string, unknown>;
   display?: string;
   dashboardUrl: string;
@@ -60,6 +71,7 @@ export async function metricCatalog(ctx: McpCallContext): Promise<CatalogEntry[]
       computedAt: t.computedAt,
       editedSincePublish: edited.has(t.flowId),
       sources: [...new Set(streams.map((s) => s.source).filter((s): s is string => typeof s === "string"))],
+      streams,
       dashboardUrl: `${APP()}/dashboard/flows/${t.flowId}`,
     });
   }
@@ -72,6 +84,7 @@ export async function metricCatalog(ctx: McpCallContext): Promise<CatalogEntry[]
       name: m.name,
       editedSincePublish: false,
       sources: typeof def.source === "string" ? [def.source] : [],
+      streams: [],
       definition: def,
       display: m.display,
       dashboardUrl: `${APP()}/dashboard/metrics/${m.id}`,
@@ -132,4 +145,136 @@ export const listMetricsTool = {
       rows: cat.length,
     });
   }),
+};
+
+const RANGES = ["today", "yesterday", "7d", "30d", "90d", "all"] as const;
+
+export const getMetricTool = {
+  name: "get_metric",
+  title: "Get metric",
+  description: describe(
+    "Returns one metric for a range (today, yesterday, 7d, 30d, 90d, all; default 30d) or for a single day (YYYY-MM-DD), with the value, optional series and groups, funnel stages when the metric is a funnel, and provenance. Flow metrics come from stored results and their \"all\" includes future-dated meetings; classic metrics are computed now and their \"all\" ends tonight.",
+  ),
+  inputSchema: z
+    .object({
+      id: z.string().min(1),
+      range: z.enum(RANGES).optional(),
+      day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      includeSeries: z.boolean().optional(),
+      includeGroups: z.boolean().optional(),
+    })
+    .strict()
+    .refine((v) => !(v.range && v.day), { message: "Give either range or day, not both." }),
+  outputSchema: z.object({}).passthrough(),
+  handler: withToolContext<{ id: string; range?: (typeof RANGES)[number]; day?: string; includeSeries?: boolean; includeGroups?: boolean }>(
+    "get_metric",
+    {},
+    async (ctx, args) => {
+      const cat = await metricCatalog(ctx);
+      const e = cat.find((c) => c.id === args.id);
+      if (!e) return fail("That isn't a metric you can see in this workspace; call list_metrics for the ids.");
+      const base = {
+        workspace: { id: ctx.orgId, name: ctx.workspaceName },
+        id: e.id,
+        name: e.name,
+        kind: e.kind,
+        format: formatOf(e),
+        unit: (e.tile?.unit as string) ?? null,
+        currency: (e.tile?.currency as string) ?? null,
+        dashboardUrl: e.dashboardUrl,
+        asOf: new Date().toISOString(),
+      };
+
+      if (e.kind === "flow") {
+        const tile = e.tile ?? {};
+        if (args.day) {
+          const cal = (await calendarFlowTiles(ctx.db, ctx.orgId)).find((t) => t.flowId === e.flowId && t.outputNodeId === e.outputNodeId);
+          const slot = ((cal?.tile as { byDay?: Record<string, { value: number }> } | null)?.byDay ?? {})[args.day];
+          return ok({
+            ...base,
+            day: args.day,
+            value: slot?.value ?? null,
+            unavailable: slot ? undefined : "No stored value for that day.",
+            includesFutureDated: true,
+            computedAt: e.computedAt?.toISOString() ?? null,
+            provenance: { streams: e.streams, engine: "stored" },
+          });
+        }
+        const range = args.range ?? "30d";
+        const slot = ((tile.byRange as Record<string, Record<string, unknown>> | undefined) ?? {})[range] ?? {};
+        // The tile's top-level `groups` is the ALL-TIME breakdown: it stands
+        // in only for range "all", exactly like `value` and `series` do. A
+        // narrower range with no `byRange[range].groups` of its own has no
+        // breakdown at all — it must NOT borrow the all-time one.
+        const groupsAll =
+          (slot.groups as Array<{ label: string; value: number }> | undefined) ?? (range === "all" ? (tile.groups as Array<{ label: string; value: number }> | undefined) : undefined);
+        const groups = args.includeGroups && groupsAll ? [...groupsAll].sort((a, b) => b.value - a.value).slice(0, 100) : undefined;
+        const stages =
+          tile.viz === "funnel" && groupsAll
+            ? groupsAll.map((g, i, arr) => ({ label: g.label, count: g.value, conversionFromPrev: i === 0 ? 1 : arr[i - 1].value > 0 ? g.value / arr[i - 1].value : null }))
+            : undefined;
+        const partial: Record<string, unknown> = {};
+        if (groupsAll && groupsAll.length > 100 && groups) partial.groupsOmitted = groupsAll.length - 100;
+        return ok({
+          ...base,
+          range,
+          value: (slot.value as number) ?? (range === "all" ? ((tile.value as number) ?? null) : null),
+          unavailable: slot.unavailable,
+          undated: slot.undated,
+          includesFutureDated: true,
+          series: args.includeSeries ? ((slot.series as unknown[]) ?? (range === "all" ? (tile.series as unknown[]) : undefined)) : undefined,
+          groups,
+          stages,
+          bottleneckIndex: stages
+            ? stages.reduce((worst, s, i) => (i > 0 && (s.conversionFromPrev ?? 1) < (stages[worst].conversionFromPrev ?? 1) ? i : worst), 0)
+            : undefined,
+          partial: Object.keys(partial).length ? partial : undefined,
+          status: e.status,
+          computedAt: e.computedAt?.toISOString() ?? null,
+          provenance: { streams: e.streams, engine: "stored" },
+        });
+      }
+
+      if (args.day) return fail("Classic metrics have no per-day store; ask for a range instead.");
+      const { key, range } = resolveRange(args.range ?? "30d");
+      const parsed = parseDefinition(e.definition);
+      if (parsed.kind === "funnel") {
+        const f = await computeFunnel(ctx.db, ctx.orgId, parsed, range);
+        return ok({
+          ...base,
+          range: key,
+          value: f.stages[0]?.count ?? null,
+          stages: f.stages.map((s) => ({ label: s.label, count: s.count, conversionFromPrev: s.conversionFromPrev })),
+          bottleneckIndex: f.bottleneckIndex,
+          includesFutureDated: false,
+          provenance: { streams: [], engine: "classic" },
+        });
+      }
+      const a = await computeAggregate(ctx.db, ctx.orgId, parsed, range);
+      // THE SAME NUMBER THE DASHBOARD DRILL-IN SHOWS
+      // (src/app/dashboard/metrics/[id]/page.tsx): a scalar result IS the
+      // value; a bucketed series' value is the sum over EVERY bucket the
+      // query returned. That sum is taken BEFORE the 400-bucket cap below —
+      // never over the (possibly shorter) slice this tool actually returns
+      // under `series` — or a metric with a long history would silently
+      // report a partial sum that disagreed with its own dashboard page.
+      const fullSeries = a.kind === "series" ? a.series : undefined;
+      const value = a.kind === "scalar" ? a.value : fullSeries ? fullSeries.reduce((s, b) => s + b.value, 0) : null;
+      let series = fullSeries;
+      let partial: Record<string, unknown> | undefined;
+      if (series && series.length > 400) {
+        partial = { truncated: true, keptBuckets: 400, totalBuckets: series.length };
+        series = series.slice(-400);
+      }
+      return ok({
+        ...base,
+        range: key,
+        value,
+        series: args.includeSeries ? series : undefined,
+        partial,
+        includesFutureDated: false,
+        provenance: { streams: [], engine: "classic" },
+      });
+    },
+  ),
 };
