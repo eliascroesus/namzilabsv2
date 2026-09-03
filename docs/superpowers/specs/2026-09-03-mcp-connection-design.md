@@ -189,10 +189,10 @@ Revocation: Settings → AI assistants lists the workspace's `mcp_grants` rows
 with last-used time and the number of distinct bindings (clients), and a
 Disconnect action that sets `revoked_at`. Bindings are deliberately left in
 place (amended 3 Sep 2026 during implementation): a binding that still points
-at the revoked workspace makes the next call answer "revoked, call
-select_workspace", whereas deleting it would let the resolver fall through to
-the person's one other live grant and silently move that client to a
-different workspace. Expired bindings are pruned nightly regardless. Every
+at the revoked workspace makes the next call answer revoked, whereas deleting
+it would let the resolver fall through to the person's one other live grant
+and silently move that client to a different workspace. Expired bindings are
+pruned nightly regardless. Every
 call reads the grant, so app-level revocation takes
 effect on the next call regardless of token lifetime. Reconnecting requires an
 explicit `select_workspace`, which clears `revoked_at`; a claim-path call

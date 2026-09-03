@@ -59,7 +59,9 @@ const TABLES: Record<string, Classification> = {
   // pruneMcpTables (src/lib/mcp/audit.ts) runs as a step of the same nightly
   // prune-storage function, under the same STORAGE_PRUNE_LIVE inspect gate —
   // see the "has a path" check below, which reads that file rather than
-  // storage-lifecycle.ts for these two.
+  // storage-lifecycle.ts for these two. That step is ALSO gated on
+  // MCP_ENABLED=1 (sync.ts): a rollback that leaves MCP_ENABLED off with rows
+  // already present stops pruning them until the flag comes back on.
   mcp_calls: { kind: "pruned", window: "90d" },
   mcp_bindings: { kind: "pruned", window: "expires_at (the token's own expiry, not a fixed day count) — swept nightly, batches of 5000" },
 

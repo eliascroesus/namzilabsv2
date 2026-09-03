@@ -19,9 +19,17 @@ vi.mock("@/lib/flow/materialize", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/flow/materialize")>();
   return { ...actual, publishedFlowTiles: vi.fn(actual.publishedFlowTiles) };
 });
+// Same wrapping, for `getFlowName`: `entryFor` must call it ONLY when the
+// tile itself has no `name` — this spy is how a test proves it never fires
+// on the ordinary path.
+vi.mock("@/lib/flow/store", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/flow/store")>();
+  return { ...actual, getFlowName: vi.fn(actual.getFlowName) };
+});
 
 import { listMetricsTool, getMetricTool, getMetricDaysTool } from "@/lib/mcp/tools/metrics";
 import { publishedFlowTiles } from "@/lib/flow/materialize";
+import { getFlowName } from "@/lib/flow/store";
 import { clearMembershipCache } from "@/lib/mcp/workspace";
 import { AggregateSchema, parseDefinition } from "@/lib/metrics/types";
 import { computeAggregate } from "@/lib/metrics/compute";
@@ -43,6 +51,7 @@ beforeEach(async () => {
   memberships.mockReset();
   clearMembershipCache();
   vi.mocked(publishedFlowTiles).mockClear();
+  vi.mocked(getFlowName).mockClear();
 
   const [flow] = await db
     .insert(flows)
@@ -177,6 +186,25 @@ describe("get_metric", () => {
     member("admin");
     const s = (await getMetricTool.handler({ id: `flow:${flowId}:n1`, range: "all" } as never, { authInfo: authInfo() })).structuredContent as Record<string, unknown>;
     expect(s.name).toBe("Bookings");
+    // Round 2 review: the flow-name lookup must actually happen for this
+    // case (tile.name absent) — a narrow, name-only projection, not `getFlow`.
+    expect(getFlowName).toHaveBeenCalledTimes(1);
+  });
+  it("never reads the flow's own name when the tile already has one", async () => {
+    // Round 2 review: getFlow was called UNCONDITIONALLY on every flow-tile
+    // get_metric, a bare select() shipping draft_graph for a name almost
+    // never needed — the seeded "Bookings" tile here already has its own
+    // `tile.name`, so the lookup must never fire.
+    member("admin");
+    const s = (await getMetricTool.handler({ id: `flow:${flowId}:n1`, range: "7d" } as never, { authInfo: authInfo() })).structuredContent as Record<string, unknown>;
+    expect(s.name).toBe("Bookings");
+    // A plain call-count assertion, not `.not.toHaveBeenCalled()`: on failure
+    // the latter has vitest pretty-print every recorded call's arguments,
+    // and `getFlowName`'s first argument is the whole drizzle/PGlite `db`
+    // handle — a huge, self-referential object that blows up the printer
+    // (confirmed: reverting the fix under test crashed the process with
+    // "RangeError: Invalid string length" instead of failing cleanly).
+    expect(getFlowName).toHaveBeenCalledTimes(0);
   });
   it("refuses a hidden flow id before reading its tile", async () => {
     await db.insert(workspaceRanks).values({ id: "r1", orgId: "org_a", name: "Sales", permissions: ["use_ai_assistants"], metricKeys: [`metric:${metricId}`] });

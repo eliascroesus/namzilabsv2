@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { publishedFlowTiles, unpublishedFlowIds, calendarFlowTiles } from "@/lib/flow/materialize";
-import { listFlowNames, getFlow } from "@/lib/flow/store";
+import { listFlowNames, getFlowName } from "@/lib/flow/store";
 import { listMetrics, getMetric } from "@/lib/metrics/store";
 import { computeAggregate, computeFunnel } from "@/lib/metrics/compute";
 import { resolveRange } from "@/lib/metrics/range";
@@ -137,11 +137,13 @@ function parseTileId(id: string): { kind: "flow"; flowId: string; outputNodeId: 
 
 /**
  * The visible entry for exactly ONE id, at the cost of one row read — not
- * `metricCatalog`'s four whole-org queries — plus, for a flow tile whose own
- * `tile.name` is absent, one more single-row `getFlow` lookup for its real
- * name (never the whole-org `listFlowNames`). Permission is checked BEFORE
- * any tile or metric row is fetched: a hidden id costs nothing beyond parsing
- * the string and one `canSeeMetric` check.
+ * `metricCatalog`'s four whole-org queries — plus, ONLY for a flow tile whose
+ * own `tile.name` is absent, one more single-row `getFlowName` lookup for its
+ * real name (never the whole-org `listFlowNames`, and never `getFlow`'s bare
+ * `select()`, which ships a whole `draft_graph` for a string this only reads
+ * off `.name`). Permission is checked BEFORE any tile or metric row is
+ * fetched: a hidden id costs nothing beyond parsing the string and one
+ * `canSeeMetric` check.
  *
  * `editedSincePublish` (the `unpublishedFlowIds` whole-org read) is not
  * computed here — neither `get_metric` nor `get_metric_days` ever return it,
@@ -160,11 +162,16 @@ async function entryFor(ctx: McpCallContext, id: string): Promise<CatalogEntry |
   const tiles = await publishedFlowTiles(ctx.db, ctx.orgId, { flowId: parsed.flowId });
   const t = tiles.find((r) => r.outputNodeId === parsed.outputNodeId);
   if (!t) return null;
-  // The same fallback the dashboard uses (src/app/dashboard/page.tsx): the
-  // flow's own stored name when the tile itself never got one, and only then
-  // the output id — never the generic, uninformative "Untitled".
-  const flow = await getFlow(ctx.db, ctx.orgId, parsed.flowId);
-  const fallbackName = flow?.name ?? `Output ${parsed.outputNodeId.slice(0, 8)}`;
+  // The dashboard's own board tiles fall back straight from `tile.name` to
+  // `Output <id>` (src/app/dashboard/page.tsx ~807) — no flow-name step in
+  // between. This mirrors `list_metrics`' OWN catalog instead (`metricCatalog`
+  // above, via `listFlowNames`): the flow's real name before ever reaching
+  // that generic placeholder. Looked up ONLY when the tile itself has none —
+  // the ordinary case, since a published tile normally carries its own name —
+  // so a ONE-metric read never pays for a query it usually doesn't need.
+  const tileName = (t.tile as { name?: string } | null)?.name;
+  let fallbackName = `Output ${parsed.outputNodeId.slice(0, 8)}`;
+  if (!tileName) fallbackName = (await getFlowName(ctx.db, ctx.orgId, parsed.flowId)) ?? fallbackName;
   return flowEntryOf(t, false, fallbackName);
 }
 

@@ -68,8 +68,14 @@ export async function checkRateLimit(db: DB, k: { orgId: string; userId: string;
 
 export type McpPruneResult = { inspected: boolean; callsPastRetention: number; bindingsExpired: number; callsDeleted: number; bindingsDeleted: number; skipped?: boolean };
 
-/** A zero result flagged `skipped: true`, for the caller (sync.ts) and the belt-and-braces catch below to share. */
-function skippedResult(inspect: boolean | undefined): McpPruneResult {
+/**
+ * A zero result flagged `skipped: true` — exported so sync.ts's own
+ * `MCP_ENABLED` gate (the step never calling `pruneMcpTables` at all) and
+ * this function's belt-and-braces catch below (a table missing anyway)
+ * report the EXACT same shape, rather than sync.ts hand-rolling its own
+ * literal that could drift from this one.
+ */
+export function skippedResult(inspect: boolean | undefined): McpPruneResult {
   return { inspected: Boolean(inspect), callsPastRetention: 0, bindingsExpired: 0, callsDeleted: 0, bindingsDeleted: 0, skipped: true };
 }
 
@@ -77,14 +83,18 @@ function skippedResult(inspect: boolean | undefined): McpPruneResult {
  * Postgres' "undefined_table" (SQLSTATE 42P01), however the driver hands it
  * back: a direct `pg` client puts the code on the error itself, but the http
  * driver some deployments use wraps the original error under `.cause` and can
- * lose the code along the way — so the message text is checked too.
+ * lose the code along the way — so the message text is checked too, but
+ * narrowly: `/relation .* does not exist/i`, never a bare `/does not exist/i`,
+ * which would also match "column ... does not exist" or "function ... does
+ * not exist" — a real query bug wearing the same words, silently reported as
+ * "not migrated yet" instead of surfacing as the bug it is.
  */
 function isUndefinedTableError(e: unknown): boolean {
   if (!e || typeof e !== "object") return false;
   const err = e as { code?: unknown; message?: unknown; cause?: { code?: unknown; message?: unknown } };
   if (err.code === "42P01" || err.cause?.code === "42P01") return true;
   const message = `${typeof err.message === "string" ? err.message : ""} ${typeof err.cause?.message === "string" ? err.cause.message : ""}`;
-  return /does not exist/i.test(message);
+  return /relation .* does not exist/i.test(message);
 }
 
 /**
@@ -95,30 +105,36 @@ function isUndefinedTableError(e: unknown): boolean {
  *
  * Belt and braces alongside sync.ts's `MCP_ENABLED` gate: if either table is
  * somehow missing anyway (0031 not yet pasted, a gate this function cannot
- * see was bypassed), this catches Postgres' undefined-table error itself and
- * answers a skipped zero result rather than throwing and failing the whole
- * nightly prune-storage function.
+ * see was bypassed), the two `count(*)` probes below would be the first
+ * queries to hit that — so ONLY they run inside the catch. If they succeed,
+ * the tables exist, and the deletes that follow run OUTSIDE the catch: a
+ * failure there is a real bug (a lock timeout, a constraint, anything else),
+ * and must propagate and fail the step rather than being reported as a
+ * quiet, misleading "skipped" zero result.
  */
 export async function pruneMcpTables(db: DB, opts: { inspect?: boolean; now?: Date } = {}): Promise<McpPruneResult> {
   const now = opts.now ?? new Date();
   const cutoff = new Date(now.getTime() - MCP_CALLS_RETENTION_DAYS * 86_400_000);
   const callsWhere = lt(mcpCalls.at, cutoff);
   const bindingsWhere = lt(mcpBindings.expiresAt, now);
+  let calls: { n: number } | undefined;
+  let bindings: { n: number } | undefined;
   try {
-    const [[calls], [bindings]] = await Promise.all([
+    const counted = await Promise.all([
       db.select({ n: sql<number>`count(*)::int` }).from(mcpCalls).where(callsWhere),
       db.select({ n: sql<number>`count(*)::int` }).from(mcpBindings).where(bindingsWhere),
     ]);
-    const out: McpPruneResult = { inspected: Boolean(opts.inspect), callsPastRetention: Number(calls?.n ?? 0), bindingsExpired: Number(bindings?.n ?? 0), callsDeleted: 0, bindingsDeleted: 0 };
-    if (out.inspected) return out;
-    const ids = await db.select({ id: mcpCalls.id }).from(mcpCalls).where(callsWhere).limit(MCP_PRUNE_BATCH);
-    if (ids.length) out.callsDeleted = (await db.delete(mcpCalls).where(inArray(mcpCalls.id, ids.map((r) => r.id))).returning({ id: mcpCalls.id })).length;
-    const keys = await db.select({ k: mcpBindings.bindingKey }).from(mcpBindings).where(bindingsWhere).limit(MCP_PRUNE_BATCH);
-    if (keys.length) out.bindingsDeleted = (await db.delete(mcpBindings).where(inArray(mcpBindings.bindingKey, keys.map((r) => r.k))).returning({ k: mcpBindings.bindingKey })).length;
-    return out;
+    [[calls], [bindings]] = counted;
   } catch (e) {
     if (!isUndefinedTableError(e)) throw e;
     console.warn("[mcp] prune skipped: tables not migrated yet");
     return skippedResult(opts.inspect);
   }
+  const out: McpPruneResult = { inspected: Boolean(opts.inspect), callsPastRetention: Number(calls?.n ?? 0), bindingsExpired: Number(bindings?.n ?? 0), callsDeleted: 0, bindingsDeleted: 0 };
+  if (out.inspected) return out;
+  const ids = await db.select({ id: mcpCalls.id }).from(mcpCalls).where(callsWhere).limit(MCP_PRUNE_BATCH);
+  if (ids.length) out.callsDeleted = (await db.delete(mcpCalls).where(inArray(mcpCalls.id, ids.map((r) => r.id))).returning({ id: mcpCalls.id })).length;
+  const keys = await db.select({ k: mcpBindings.bindingKey }).from(mcpBindings).where(bindingsWhere).limit(MCP_PRUNE_BATCH);
+  if (keys.length) out.bindingsDeleted = (await db.delete(mcpBindings).where(inArray(mcpBindings.bindingKey, keys.map((r) => r.k))).returning({ k: mcpBindings.bindingKey })).length;
+  return out;
 }

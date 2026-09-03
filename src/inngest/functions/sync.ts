@@ -5,7 +5,7 @@ import { runSync, reprocessConnection, syncChanged } from "@/lib/sync/resync";
 import { expireAgedResults, markStaleForSource, materializeStaleAll } from "@/lib/flow/materialize";
 import { sendOpsAlert } from "@/lib/alerts";
 import { pruneOperationalTables, pruneSettledTestRuns, retentionBacklog } from "@/lib/storage-lifecycle";
-import { pruneMcpTables, MCP_PRUNE_BATCH } from "@/lib/mcp/audit";
+import { pruneMcpTables, skippedResult, MCP_PRUNE_BATCH } from "@/lib/mcp/audit";
 import { mcpEnabled } from "@/lib/mcp/env";
 import { getJob, runnableJobsByProvider } from "@/lib/backfill/jobs";
 import { scanInvariants } from "@/lib/health/invariants";
@@ -271,7 +271,7 @@ export const pruneStorage = inngest.createFunction(
     // taking the invariant scan, backlog measure and event-time scan below
     // down with it. Gated on the same flag the route itself is gated on, so
     // there is exactly one switch for "is MCP live yet".
-    const mcp = await step.run("prune-mcp-tables", () => (mcpEnabled() ? pruneMcpTables(getDb(), { inspect }) : Promise.resolve({ inspected: false, callsPastRetention: 0, bindingsExpired: 0, callsDeleted: 0, bindingsDeleted: 0, skipped: true as const })));
+    const mcp = await step.run("prune-mcp-tables", () => (mcpEnabled() ? pruneMcpTables(getDb(), { inspect }) : Promise.resolve(skippedResult(inspect))));
     if (mcp.inspected) console.warn(`[storage-prune-inspect] mcp ${JSON.stringify(mcp)}`);
     // One bounded batch per table per night: a backlog bigger than that batch
     // is the same "not keeping up" signal `retained.truncated` gives above,

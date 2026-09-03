@@ -1,6 +1,6 @@
 import { it, expect, beforeEach, afterEach, vi } from "vitest";
 import { createTestDb } from "./helpers/testdb";
-import { mcpCalls, mcpGrants, workspaceSettings } from "@/db/schema";
+import { mcpCalls, mcpGrants, mcpBindings, workspaceSettings } from "@/db/schema";
 import type { DB } from "@/db/types";
 
 const memberships = vi.fn();
@@ -47,6 +47,21 @@ it("refuses to select a workspace whose AI assistants switch is off", async () =
   const r = await selectWorkspaceTool.handler({ workspaceId: "org_a" } as never, { authInfo: authInfo({ orgIdClaim: null }) });
   expect(r.isError).toBe(true);
   expect(r.content[0].text).toMatch(/turned off/);
+});
+it("a refused select (switch off) changes nothing — leaves a revoked grant revoked and writes no binding", async () => {
+  // Round 2 review: the switch used to be checked AFTER the grant upsert
+  // (which clears revokedAt) and bind() — so a refused select still
+  // undid an admin's Disconnect and rebound the client. The check must sit
+  // between membership verification and the grant write.
+  memberships.mockImplementation(async () => rows("org_a"));
+  await db.insert(mcpGrants).values({ userId: "user_1", orgId: "org_a", source: "claim", revokedAt: new Date() });
+  await db.insert(workspaceSettings).values({ orgId: "org_a", aiAssistantsEnabled: false });
+  const r = await selectWorkspaceTool.handler({ workspaceId: "org_a" } as never, { authInfo: authInfo({ orgIdClaim: null }) });
+  expect(r.isError).toBe(true);
+  expect(r.content[0].text).toMatch(/turned off/);
+  const [grant] = await db.select().from(mcpGrants);
+  expect(grant.revokedAt).not.toBeNull();
+  expect(await db.select().from(mcpBindings)).toEqual([]);
 });
 it("reconnects a revoked grant only through select_workspace", async () => {
   memberships.mockImplementation(async () => rows("org_a"));

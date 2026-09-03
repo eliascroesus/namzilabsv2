@@ -1,13 +1,14 @@
-import { eq } from "drizzle-orm";
 import { getWorkOS } from "@workos-inc/authkit-nextjs";
 import { getDb } from "@/db/client";
-import { workspaceSettings } from "@/db/schema";
 import type { DB } from "@/db/types";
 import { effectiveAccess, type Access, type PermissionKey } from "@/lib/permissions";
 import type { McpAuth } from "@/lib/mcp/auth";
-import { resolveWorkspace } from "@/lib/mcp/workspace";
+import { resolveWorkspace, assistantsEnabled } from "@/lib/mcp/workspace";
 import { checkRateLimit, recordCall, summarizeArgs } from "@/lib/mcp/audit";
 import { fail, ok, type ToolResult } from "@/lib/mcp/result";
+
+/** Re-exported so `tools/workspaces.ts` (and anywhere else) can import it from here, unchanged. Defined in `workspace.ts` — see its own docstring for why. */
+export { assistantsEnabled };
 
 export type McpCallContext = {
   db: DB; orgId: string; userId: string; role?: string; access: Access; clientId: string; bindingKey: string; workspaceName: string;
@@ -64,11 +65,6 @@ export async function getWorkspaceName(orgId: string): Promise<string> {
   const org = await getWorkOS().organizations.getOrganization(orgId);
   names.set(orgId, { at: Date.now(), name: org.name });
   return org.name;
-}
-
-export async function assistantsEnabled(db: DB, orgId: string): Promise<boolean> {
-  const [s] = await db.select({ on: workspaceSettings.aiAssistantsEnabled }).from(workspaceSettings).where(eq(workspaceSettings.orgId, orgId)).limit(1);
-  return s ? s.on : true;
 }
 
 export function withToolContext<A>(tool: string, opts: ToolOptions, run: ToolRun<A>): ToolHandler<A> {

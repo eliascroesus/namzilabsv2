@@ -75,9 +75,10 @@ describe("mcp audit", () => {
     const src = readFileSync("src/inngest/functions/sync.ts", "utf8");
     // Gated: the enabled branch is still exactly the old call (so a live
     // deployment behaves as before); the disabled branch never touches the
-    // db and reports a zero result flagged `skipped: true` rather than
-    // throwing on tables that may not exist yet.
-    expect(src).toMatch(/step\.run\("prune-mcp-tables", \(\) => \(mcpEnabled\(\) \? pruneMcpTables\(getDb\(\), \{ inspect \}\) : Promise\.resolve\(\{[^}]*skipped: true[^}]*\}\)\)\)/);
+    // db and reports a zero result flagged `skipped: true` — the SAME
+    // `skippedResult` helper pruneMcpTables' own belt-and-braces catch
+    // returns, not a hand-rolled literal that could drift from it.
+    expect(src).toMatch(/step\.run\("prune-mcp-tables", \(\) => \(mcpEnabled\(\) \? pruneMcpTables\(getDb\(\), \{ inspect \}\) : Promise\.resolve\(skippedResult\(inspect\)\)\)\)/);
     // The MCP sweep's result belongs in pruneStorage's own return value...
     expect(src).toMatch(/return \{ settledTestRuns: settled, \.\.\.retained, mcp, backlog, invariants, webhookEventTime: eventTime \};/);
     // ...and a backlog bigger than one night's batch gets its own warning,
@@ -98,5 +99,36 @@ describe("mcp audit", () => {
     expect(result).toEqual({ inspected: true, callsPastRetention: 0, bindingsExpired: 0, callsDeleted: 0, bindingsDeleted: 0, skipped: true });
     expect(warn).toHaveBeenCalledWith("[mcp] prune skipped: tables not migrated yet");
     warn.mockRestore();
+  });
+  it("does not swallow a real query bug that merely says \"does not exist\" — only a missing RELATION is skipped", async () => {
+    // Round 2 review: a bare /does not exist/i also matches "column ... does
+    // not exist" and "function ... does not exist" — a genuine bug, not a
+    // not-migrated-yet table. Dropping a column `pruneMcpTables` itself
+    // queries (not the whole table) must propagate, not report skipped.
+    // Drizzle's own thrown error wraps the driver's real reason under
+    // `.cause` (the same shape `isUndefinedTableError` already reads), so
+    // that is what carries "does not exist", not the outer `.message`.
+    await db.execute(sql`alter table mcp_calls drop column at`);
+    const caught: { cause?: { message?: string } } = await pruneMcpTables(db, { inspect: true }).then(
+      () => { throw new Error("expected pruneMcpTables to reject"); },
+      (e) => e,
+    );
+    expect(caught.cause?.message).toMatch(/column .* does not exist/i);
+  });
+  it("lets a delete-phase failure propagate even when it LOOKS LIKE a missing table, once the count probes already proved the tables exist", async () => {
+    // Round 2 review: the catch now covers ONLY the two count(*) probes,
+    // never the deletes that follow — by the time a delete runs, those
+    // probes already proved both tables exist, so a delete-phase failure is
+    // a real bug (a lock timeout, a constraint, anything else) and must
+    // propagate, never be swallowed as "not migrated yet". Faking an error
+    // shaped exactly like `isUndefinedTableError` would accept (code
+    // 42P01, "relation ... does not exist") proves this precisely: even
+    // that must still propagate here, because it can only be a bug at this
+    // point, not a genuinely missing table.
+    await db.insert(mcpCalls).values({ orgId: "org_a", userId: "u1", tool: "t", at: new Date(Date.now() - 91 * 86_400_000) });
+    const fakeErr = Object.assign(new Error("Failed query"), { cause: { code: "42P01", message: 'relation "mcp_calls" does not exist' } });
+    const deleteSpy = vi.spyOn(db, "delete").mockImplementation(() => { throw fakeErr; });
+    await expect(pruneMcpTables(db, {})).rejects.toBe(fakeErr);
+    deleteSpy.mockRestore();
   });
 });

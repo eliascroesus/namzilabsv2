@@ -1,6 +1,6 @@
 import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import { getWorkOS } from "@workos-inc/authkit-nextjs";
-import { mcpGrants, mcpBindings } from "@/db/schema";
+import { mcpGrants, mcpBindings, workspaceSettings } from "@/db/schema";
 import type { DB } from "@/db/types";
 import type { McpAuth } from "@/lib/mcp/auth";
 
@@ -8,7 +8,18 @@ export type Workspace = { orgId: string; name: string };
 export type ResolvedWorkspace = { orgId: string; userId: string; role?: string; grantSource: "selected" | "claim" };
 export type Resolution =
   | { ok: true; ws: ResolvedWorkspace }
-  | { ok: false; reason: "workspace_required" | "revoked" | "not_member"; workspaces?: Workspace[] };
+  | { ok: false; reason: "workspace_required" | "revoked" | "not_member" | "disabled"; workspaces?: Workspace[] };
+
+/**
+ * Whether a workspace's owner has the AI-assistants switch on. Lives here
+ * (not `context.ts`, which imports it back) so `selectWorkspace` below can
+ * check it too, without a `workspace.ts` -> `context.ts` -> `workspace.ts`
+ * cycle.
+ */
+export async function assistantsEnabled(db: DB, orgId: string): Promise<boolean> {
+  const [s] = await db.select({ on: workspaceSettings.aiAssistantsEnabled }).from(workspaceSettings).where(eq(workspaceSettings.orgId, orgId)).limit(1);
+  return s ? s.on : true;
+}
 
 const CACHE_TTL_MS = 60_000;
 const BINDING_FALLBACK_TTL_MS = 24 * 60 * 60 * 1000;
@@ -144,6 +155,10 @@ export async function resolveWorkspace(db: DB, auth: McpAuth): Promise<Resolutio
 export async function selectWorkspace(db: DB, auth: McpAuth, orgId: string): Promise<Resolution> {
   const m = await membership(auth.extra.userId, orgId);
   if (!m) return { ok: false, reason: "not_member" };
+  // Checked BEFORE the grant write, not after (round 2 review): a refused
+  // select must never clear an admin's Disconnect (`revokedAt: null`) or
+  // rebind the client — a select that gets refused must change nothing.
+  if (!(await assistantsEnabled(db, orgId))) return { ok: false, reason: "disabled" };
   await db
     .insert(mcpGrants)
     .values({ userId: auth.extra.userId, orgId, source: "selected", lastUsedAt: new Date(), revokedAt: null })

@@ -78,6 +78,22 @@ export async function getFlow(db: DB, orgId: string, id: string): Promise<Flow |
   return row ?? null;
 }
 
+/**
+ * One flow's name only, org-scoped — `listFlowNames`' single-row twin, for a
+ * caller that already has exactly one flow id and needs nothing else.
+ * `getFlow`'s bare `select()` ships `draft_graph` (every node's config, plus
+ * cached Test samples that can run to tens of kilobytes) for a fallback that
+ * only ever reads `.name`.
+ */
+export async function getFlowName(db: DB, orgId: string, id: string): Promise<string | null> {
+  const [row] = await db
+    .select({ name: flows.name })
+    .from(flows)
+    .where(and(eq(flows.id, id), eq(flows.orgId, orgId)))
+    .limit(1);
+  return row?.name ?? null;
+}
+
 /** Autosave the editable draft. Never touches published versions. */
 export async function saveDraft(db: DB, orgId: string, id: string, graph: unknown): Promise<void> {
   const g = parseGraph(graph);
