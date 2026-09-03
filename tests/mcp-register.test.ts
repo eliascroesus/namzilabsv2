@@ -9,6 +9,10 @@ import type { z } from "zod";
 vi.mock("@workos-inc/authkit-nextjs", () => ({
   getWorkOS: () => ({ userManagement: { listOrganizationMemberships: async () => ({ data: [] }) }, organizations: { getOrganization: async (id: string) => ({ id, name: `Org ${id}` }) } }),
 }));
+// register.ts -> tools/metrics.ts -> lib/metrics/store.ts carries a top-level
+// `import "server-only"`, which throws outside a server component — same
+// reason tests/mcp-metrics.test.ts and tests/board-canvas-actions.test.ts stub it.
+vi.mock("server-only", () => ({}));
 vi.mock("@/db/client", () => ({ getDb: () => ({}), getReadDb: () => ({}) }));
 
 import { registerNamzilabsTools, TOOLS, READ_ONLY } from "@/lib/mcp/register";
