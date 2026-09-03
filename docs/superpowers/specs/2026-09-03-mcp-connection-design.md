@@ -189,8 +189,11 @@ Revocation: Settings → AI assistants lists the workspace's `mcp_grants` rows
 with last-used time and the number of distinct bindings (clients), and a
 Disconnect action that sets `revoked_at` and deletes the user's `mcp_bindings`
 rows for that org. Every call reads the grant, so app-level revocation takes
-effect on the next call regardless of token lifetime. Reconnecting (a new
-`select_workspace` or claim-path call) clears `revoked_at`. Removal from the
+effect on the next call regardless of token lifetime. Reconnecting requires an
+explicit `select_workspace`, which clears `revoked_at`; a claim-path call
+against a revoked grant stays refused (amended 3 Sep 2026: the client still
+holds a valid token, so letting an ordinary call revive the grant would undo
+Disconnect on the assistant's very next request). Removal from the
 WorkOS organization is caught by the membership check within the 60-second
 cache window described above.
 
@@ -200,7 +203,8 @@ Conventions for every tool
 - Registered with `title`, a three-to-four-sentence `description` that states
   what the data is and where it comes from, `inputSchema` (zod, strict, no
   additional properties), `outputSchema`, `annotations: { readOnlyHint: true,
-  destructiveHint: false, openWorldHint: false }`.
+  destructiveHint: false, idempotentHint: true, openWorldHint: false }`
+  (`idempotentHint` added 3 Sep 2026: every Phase 1 tool is a pure read).
 - Results carry `structuredContent` (the object) and `content: [{ type:
   "text", text: JSON.stringify(structuredContent) }]` — the text mirror is JSON
   so third-party strings are always inside a data string.
@@ -321,7 +325,9 @@ syncStatus, lastEventAt, pausedUntil, pausedReason, lastError, import:
 ImportStatus, deadLetters: number }] }`.
 Backed by a projected select on `connections` (never `listConnections`, which
 carries encrypted columns), `connectionImportStatuses`,
-`unresolvedDeadLetterCountsByConnection`. Rank: `can("view_integrations")`.
+`unresolvedDeadLetterCountsByConnection`. Rank: `can("use_ai_assistants")`
+AND `can("view_integrations")` — the second is in addition to the universal
+gate, never instead of it.
 
 ### `search`
 Input: `{ query }`. Output: `{ results: [{ id, title, url }] }` over metric
