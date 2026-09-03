@@ -235,9 +235,15 @@ run the tracker this section says never to trust. The workflow's one real
 protection, the 0003-disarm assertion, now lives in
 `tests/db-migrate-guard.test.ts`, which also pins that the migrator stays gone.
 
-Applied through **0020** (0021 pending paste). The rule, every time: paste the
-block, confirm it landed (Actions → *Schema drift check*, or paste
-`scripts/schema-audit.sql`), **then** deploy the code. Declaring a column in
+Applied through **0029**; **0030 (`user_profiles`) is missing in production** —
+confirmed by the *Schema drift check* Action run on 3 September 2026 at 00:02
+UTC (run 33697711483: https://github.com/eliascroesus/namzilabsv2/actions/runs/33697711483),
+which checked 23 tables and 228 columns and reported that one gap. The profile
+feature that deployed on 31 August is failing in production until the 0030
+block in `drizzle/HAND_APPLY.md` is pasted into the Neon SQL Editor and the
+Action is re-run to confirm. The rule, every time: paste the block, confirm it
+landed (Actions → *Schema drift check*, or paste `scripts/schema-audit.sql`),
+**then** deploy the code. Declaring a column in
 `schema.ts` is enough to break a deploy on its own — drizzle expands `select()`
 to an explicit column list — so a migration commit stays off the deploy branch
 until the SQL is applied.
@@ -352,9 +358,14 @@ must be regenerated (not renumbered) at merge time per the explanation under
 
 **Migrations now go through `0030`** — `drizzle/HAND_APPLY.md` has a
 pasteable block and a verify query for every one of them. Whether 0021–0030
-have actually been pasted into the production database is **not recorded
-anywhere in this repo** — the migrator's tracker was never trustworthy (see
-"How migrations work here" above) and nobody has written the answer down.
-The only way to know is Actions → *Schema drift check*: run it, then record
-the result here. Until that is done, treat every migration past 0020 as
-unverified in production, regardless of what any other document claims.
+have actually been pasted into the production database is now known: the
+*Schema drift check* Action ran on 3 September 2026 at 00:02 UTC (run
+33697711483: https://github.com/eliascroesus/namzilabsv2/actions/runs/33697711483),
+checked 23 tables and 228 columns, and reported exactly one gap — the
+`user_profiles` table (migration 0030) is **missing in production**. So
+0021–0029 are applied and 0030 is not; the profile feature that deployed on 31
+August is failing in production until the 0030 block in
+`drizzle/HAND_APPLY.md` is pasted into the Neon SQL Editor and the Action is
+re-run. (The scheduled run on 2 September at 11:20 UTC had already failed for
+the same reason.) Nothing about 0030 has been pasted yet — do not treat this
+entry as a fix, only as the diagnosis.

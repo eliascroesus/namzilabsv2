@@ -352,7 +352,9 @@ stack can send email, and the researched write-up is in the git history).
   only to callers holding a secret token. Point a free uptime monitor at it.
 - **The Schema drift check** (a button in GitHub Actions) — compares the live
   database against what the code expects, table by table, column by column.
-  You've run it; it passed 15 tables / 172 columns.
+  It checks 23 tables / 228 columns. The 3 September 2026 run found one gap:
+  the `user_profiles` table (migration 0030) is missing in production — see
+  `STATE.md` for the run and what it means for the profile feature.
 - **The invariant scan + alert email** — section 10.
 - **The dead-letter page** — section 9.
 - **Every tile's "Data as of…" stamp and import-progress bar** — section 8.

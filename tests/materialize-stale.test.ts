@@ -16,6 +16,12 @@ import type { DB } from "@/db/types";
 
 const NOW = new Date("2026-07-01T00:00:00Z");
 const back = (h: number) => new Date(NOW.getTime() - h * 3_600_000);
+// `expireAgedResults`'s cutoff is `Date.now() - maxAgeMs` — REAL wall-clock
+// time, unlike the fixed-epoch `back()` above (which only encodes ordering
+// relative to itself, not a literal distance from "now"). Anything that must
+// land on a specific side of that real cutoff has to be anchored to the real
+// clock, not to the fixed `NOW`.
+const hoursAgo = (h: number) => new Date(Date.now() - h * 3_600_000);
 
 let db: DB;
 let close: () => Promise<void>;
@@ -57,6 +63,36 @@ async function staleFlow(orgId: string, name: string, computedAt: Date | null) {
 async function statusOf(flowId: string): Promise<string> {
   const [r] = await db.select().from(flowResults).where(eq(flowResults.flowId, flowId));
   return r.status;
+}
+
+/** An `error` row from the start (the shape `materializeFlow`'s catch leaves
+ *  behind: `status: "error"` with `computed_at` untouched — null if the flow
+ *  never once succeeded). `createdAt` can be backdated because that is
+ *  exactly what an errored row falls back on when it has no `computed_at`. */
+async function erroredFlow(orgId: string, name: string, opts: { computedAt: Date | null; createdAt?: Date }) {
+  const connId = await seedConnection(db, { orgId, source: "webhook" });
+  const graph = {
+    nodes: [{ id: "a1", type: "app", data: { config: { connectionId: connId, source: "webhook" } } }],
+    edges: [],
+    metrics: [],
+  };
+  const [flow] = await db
+    .insert(flows)
+    .values({ orgId, name, draftGraph: graph, status: "published", publishedVersion: 1 })
+    .returning();
+  await db.insert(flowVersions).values({ flowId: flow.id, orgId, version: 1, graph });
+  await db.insert(flowResults).values({
+    orgId,
+    flowId: flow.id,
+    version: 1,
+    outputNodeId: "o1",
+    tile: { name, value: 1 },
+    status: "error",
+    error: "boom",
+    computedAt: opts.computedAt,
+    ...(opts.createdAt ? { createdAt: opts.createdAt } : {}),
+  });
+  return flow.id;
 }
 
 describe("org scoping", () => {
@@ -160,10 +196,10 @@ describe("age-based expiry (the clock is a data source too)", () => {
     expect(await statusOf(theirs)).toBe("fresh");
   });
 
-  it("re-marks fresh results older than the ceiling; leaves recent, stale and error rows alone", async () => {
+  it("re-marks fresh results older than the ceiling; leaves recent and stale rows alone, and a recent error too", async () => {
     const aged = await staleFlow("org_a", "aged", back(2));
     const recent = await staleFlow("org_a", "recent", new Date());
-    const erred = await staleFlow("org_a", "erred", back(3));
+    const erred = await staleFlow("org_a", "erred", hoursAgo(0.5));
     await setStatus(aged, "fresh");
     await setStatus(recent, "fresh");
     await setStatus(erred, "error");
@@ -174,8 +210,9 @@ describe("age-based expiry (the clock is a data source too)", () => {
     expect(await statusOf(aged)).toBe("stale");
     // A fresh, recent number is left exactly as it is…
     expect(await statusOf(recent)).toBe("fresh");
-    // …and an error row is never put on a timer: recomputing a known-broken
-    // flow every pass would re-run the same failure forever.
+    // …and an error row inside the backstop window is left alone too — it is
+    // only the AGE backstop that ever retries an error row (see the describe
+    // block below), never `nextChangeAt`, and this one isn't old enough yet.
     expect(await statusOf(erred)).toBe("error");
   });
 
@@ -217,6 +254,58 @@ describe("age-based expiry (the clock is a data source too)", () => {
     expect(await expireAgedResults(db, 3_600_000)).toBe(1);
     expect(await statusOf(crossed)).toBe("stale");
     expect(await statusOf(parked)).toBe("fresh");
+  });
+});
+
+/**
+ * C9 — an errored flow must self-heal. `materializeFlow`'s catch sets
+ * `status: "error"` but never touches `computed_at`, so before this an error
+ * row matched neither branch of `due` (it isn't "fresh") and NOTHING ever put
+ * it back on the queue: a transient failure (a token expiring, a flaky
+ * upstream call) stuck a dashboard tile on its error state until new data
+ * happened to arrive on that connection, or a human pressed Refresh.
+ *
+ * The fix retries an error row on the AGE BACKSTOP ONLY — never on
+ * `nextChangeAt`, which is stale data left over from whatever tile last
+ * computed successfully (or absent entirely on a row that never has). Using
+ * the default 6h backstop, that bounds a permanently broken flow to four
+ * retries a day, same as a quiet "fresh" tile with no crossing due.
+ *
+ * Sabotage: revert the `or(eq(status,'error'), ...)` branch back out of
+ * `due` and (a)/(b) fail — nothing else should move.
+ */
+describe("an errored flow retries on the age backstop (C9)", () => {
+  it("(a) an error row that never once succeeded expires off its created_at, 7h old", async () => {
+    const id = await erroredFlow("org_a", "never computed, then errored", { computedAt: null, createdAt: hoursAgo(7) });
+
+    expect(await expireAgedResults(db)).toBe(1);
+    expect(await statusOf(id)).toBe("stale");
+  });
+
+  it("(b) an error row with a stale computed_at from its last good run, 7h old, expires too", async () => {
+    const id = await erroredFlow("org_a", "went bad after computing fine once", { computedAt: hoursAgo(7) });
+
+    expect(await expireAgedResults(db)).toBe(1);
+    expect(await statusOf(id)).toBe("stale");
+  });
+
+  it("(c) an error row only 1h old stays error — the backstop hasn't arrived yet", async () => {
+    const id = await erroredFlow("org_a", "just failed", { computedAt: null, createdAt: hoursAgo(1) });
+
+    expect(await expireAgedResults(db)).toBe(0);
+    expect(await statusOf(id)).toBe("error");
+  });
+
+  it("(d) an error row ignores its tile's own nextChangeAt even when it has passed — only the age backstop retries it", async () => {
+    const id = await erroredFlow("org_a", "failed but carrying an old crossing", { computedAt: null, createdAt: hoursAgo(1) });
+    const [r] = await db.select().from(flowResults).where(eq(flowResults.flowId, id));
+    await db
+      .update(flowResults)
+      .set({ tile: { ...(r.tile as Record<string, unknown>), nextChangeAt: new Date(Date.now() - 60_000).toISOString() } })
+      .where(eq(flowResults.flowId, id));
+
+    expect(await expireAgedResults(db)).toBe(0);
+    expect(await statusOf(id)).toBe("error");
   });
 });
 

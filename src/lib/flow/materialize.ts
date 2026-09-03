@@ -873,45 +873,61 @@ const MATERIALIZE_BUDGET_MS = 45_000;
  * the future — either way, no tile can freeze for good. A quiet flow now
  * recomputes a handful of times a day instead of 144.
  *
- * Only "fresh" rows: an "error" row recomputing on a timer would re-run a
- * known-broken flow every pass, and "stale"/"computing" are already in flight.
+ * "fresh" rows follow both clocks above; "stale"/"computing" are already in
+ * flight so neither touches them. An "error" row follows neither — it has no
+ * trustworthy `nextChangeAt` (that field describes whatever tile last
+ * computed successfully, or is absent on a row that never has) — but it DOES
+ * retry on the age backstop, on the same cutoff as everything else: without
+ * that, `materializeFlow`'s catch sets `status: "error"` and never touches
+ * `computed_at`, so a transient failure (an expired token, a flaky upstream
+ * call) sticks a dashboard tile on its error state until new data happens to
+ * arrive on that connection or a human presses Refresh. Retrying on the
+ * backstop alone bounds a permanently broken flow to four recomputes a day —
+ * enough to self-heal, not enough to hammer a known-broken flow every pass.
  */
 const RESULT_MAX_AGE_MS = 6 * 60 * 60 * 1000;
 
 export async function expireAgedResults(db: DB, maxAgeMs = RESULT_MAX_AGE_MS, orgId?: string): Promise<number> {
   const cutoff = new Date(Date.now() - maxAgeMs);
-  const due = and(
-    eq(flowResults.status, "fresh"),
-    or(
-      /**
-       * The tile's own stated next crossing has arrived.
-       *
-       * THE CAST IS GUARDED BECAUSE ONE BAD ROW STOPS EVERY ROW. Postgres
-       * throws on a timestamp outside its range — `select
-       * '+010000-01-01T00:00:00.000Z'::timestamptz` is "time zone displacement
-       * out of range" — and this cast runs over every candidate, so a single
-       * tile carrying an extended-year spelling aborts the whole UPDATE and
-       * NOTHING in the org expires again. Behind green dots, which is the worst
-       * possible way to fail.
-       *
-       * `nextChangeAtIso` bounds what this function writes, but that only
-       * covers rows written after it shipped: a value already stored, or one
-       * written by an older build, is exactly the row this has to survive. So
-       * the shape is checked before the cast rather than trusted — CASE
-       * evaluates only the branch it selects, and a four-digit-year anchor
-       * rejects the extended-year form (it opens with `+`).
-       *
-       * A row that fails the shape test is not lost: it falls through to the
-       * age backstop below, so it still expires, just on the slower clock.
-       */
-      sql`case
-            when (${flowResults.tile} ->> 'nextChangeAt') ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T'
-            then (${flowResults.tile} ->> 'nextChangeAt')::timestamptz <= now()
-            else false
-          end`,
-      // Everything else waits for the age backstop alone.
-      lt(flowResults.computedAt, cutoff),
+  const due = or(
+    and(
+      eq(flowResults.status, "fresh"),
+      or(
+        /**
+         * The tile's own stated next crossing has arrived.
+         *
+         * THE CAST IS GUARDED BECAUSE ONE BAD ROW STOPS EVERY ROW. Postgres
+         * throws on a timestamp outside its range — `select
+         * '+010000-01-01T00:00:00.000Z'::timestamptz` is "time zone displacement
+         * out of range" — and this cast runs over every candidate, so a single
+         * tile carrying an extended-year spelling aborts the whole UPDATE and
+         * NOTHING in the org expires again. Behind green dots, which is the worst
+         * possible way to fail.
+         *
+         * `nextChangeAtIso` bounds what this function writes, but that only
+         * covers rows written after it shipped: a value already stored, or one
+         * written by an older build, is exactly the row this has to survive. So
+         * the shape is checked before the cast rather than trusted — CASE
+         * evaluates only the branch it selects, and a four-digit-year anchor
+         * rejects the extended-year form (it opens with `+`).
+         *
+         * A row that fails the shape test is not lost: it falls through to the
+         * age backstop below, so it still expires, just on the slower clock.
+         */
+        sql`case
+              when (${flowResults.tile} ->> 'nextChangeAt') ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T'
+              then (${flowResults.tile} ->> 'nextChangeAt')::timestamptz <= now()
+              else false
+            end`,
+        // Everything else waits for the age backstop alone.
+        lt(flowResults.computedAt, cutoff),
+      ),
     ),
+    // An "error" row ignores `nextChangeAt` entirely — it may be stale from a
+    // prior success, or absent — and retries on the age backstop only.
+    // `coalesce` because an error row can carry a null `computed_at` (it
+    // never once computed successfully) and still needs a clock to age against.
+    and(eq(flowResults.status, "error"), sql`coalesce(${flowResults.computedAt}, ${flowResults.createdAt}) < ${cutoff}`),
   );
   const rows = await db
     .update(flowResults)

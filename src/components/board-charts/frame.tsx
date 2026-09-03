@@ -95,7 +95,7 @@ export function ChartFrame({
     // board's `FlowTile` wears, so the two boards' cards cannot drift apart.
     // `padding="compact"` is the 16px this always had as a className override;
     // it is load-bearing arithmetic, not taste (see `tests/board-blocks.test.ts`
-    // — at ROW_UNIT_PX 40 the cartesian floor is measured against it).
+    // — at ROW_UNIT_PX 48 (24px gap) the cartesian floor is measured against it).
     /**
      * THE RULED HEAD — the reference's card shape, and the thing this tile did
      * not have.
