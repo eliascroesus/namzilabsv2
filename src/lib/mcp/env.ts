@@ -19,6 +19,7 @@ export function mcpResourceUrl(): string {
   const override = (process.env.MCP_RESOURCE_URL ?? "").trim();
   if (override) return override.replace(/\/+$/, "");
   const base = (process.env.APP_BASE_URL ?? "").trim().replace(/\/+$/, "");
+  if (!base) throw new Error("MCP_RESOURCE_URL is not set, and APP_BASE_URL is not set to derive a default from");
   return `${base}/api/mcp`;
 }
 

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { safeEqual } from "@/lib/signatures";
+import { mcpEnabled, mcpResourceUrl } from "@/lib/mcp/env";
 
 export const runtime = "nodejs";
 export const maxDuration = 10;
@@ -38,8 +39,14 @@ const REQUIRED_FOR_BACKGROUND = ["INNGEST_EVENT_KEY", "INNGEST_SIGNING_KEY", "AP
 /**
  * Required only when the MCP connection is switched on. Off is not a fault:
  * a deploy before the WorkOS dashboard is configured must not read as degraded.
+ *
+ * MCP_RESOURCE_URL is NOT listed here: `mcpResourceUrl()` (src/lib/mcp/env.ts)
+ * has a documented default (`${APP_BASE_URL}/api/mcp`), so a deploy that only
+ * sets APP_BASE_URL is correctly configured. A literal-name check on
+ * MCP_RESOURCE_URL alone would false-positive that deploy as degraded — it is
+ * checked below by calling `mcpResourceUrl()` itself and catching a throw.
  */
-const REQUIRED_FOR_MCP = ["WORKOS_AUTHKIT_DOMAIN", "MCP_RESOURCE_URL"] as const;
+const REQUIRED_FOR_MCP = ["WORKOS_AUTHKIT_DOMAIN"] as const;
 
 /**
  * The full `checks` object is for the OPERATOR, not the internet. This route
@@ -84,7 +91,15 @@ export async function GET(req: Request) {
       "Data will silently stop refreshing.";
   }
 
-  const missingMcp = process.env.MCP_ENABLED === "1" ? REQUIRED_FOR_MCP.filter((n) => !present(n)) : [];
+  const missingMcp: string[] = [];
+  if (mcpEnabled()) {
+    missingMcp.push(...REQUIRED_FOR_MCP.filter((n) => !present(n)));
+    try {
+      mcpResourceUrl();
+    } catch {
+      missingMcp.push("MCP_RESOURCE_URL (or APP_BASE_URL)");
+    }
+  }
   checks.missingForMcp = missingMcp;
   if (missingMcp.length > 0) {
     checks.mcpWarning = "MCP_ENABLED is on but the AI-assistant endpoint cannot verify tokens without these.";

@@ -19,6 +19,11 @@ describe("mcp env", () => {
     vi.stubEnv("MCP_RESOURCE_URL", "https://mcp.example.com/api/mcp");
     expect(mcpResourceUrl()).toBe("https://mcp.example.com/api/mcp");
   });
+  it("throws when neither MCP_RESOURCE_URL nor APP_BASE_URL is set to derive a default from", () => {
+    vi.stubEnv("APP_BASE_URL", "");
+    vi.stubEnv("MCP_RESOURCE_URL", "");
+    expect(() => mcpResourceUrl()).toThrow(/MCP_RESOURCE_URL|APP_BASE_URL/);
+  });
   it("strips a trailing slash from the AuthKit domain and refuses an empty one", () => {
     vi.stubEnv("WORKOS_AUTHKIT_DOMAIN", "https://x.authkit.app/");
     expect(authkitDomain()).toBe("https://x.authkit.app");
