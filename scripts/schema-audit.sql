@@ -21,7 +21,7 @@
 -- ============================================================================
 
 -- ---------------------------------------------------------------------------
--- QUERY 1 — tables and columns (23 tables, 228 columns).
+-- QUERY 1 — tables and columns (27 tables, 254 columns).
 -- This is the one to run. Self-contained; nothing above is needed.
 -- ---------------------------------------------------------------------------
 WITH expected (tbl, col) AS (
@@ -161,6 +161,29 @@ WITH expected (tbl, col) AS (
     ('flows', 'published_version'),
     ('flows', 'created_at'),
     ('flows', 'updated_at'),
+    ('mcp_bindings', 'binding_key'),
+    ('mcp_bindings', 'user_id'),
+    ('mcp_bindings', 'org_id'),
+    ('mcp_bindings', 'expires_at'),
+    ('mcp_bindings', 'created_at'),
+    ('mcp_calls', 'id'),
+    ('mcp_calls', 'org_id'),
+    ('mcp_calls', 'user_id'),
+    ('mcp_calls', 'client_id'),
+    ('mcp_calls', 'tool'),
+    ('mcp_calls', 'args_summary'),
+    ('mcp_calls', 'rows'),
+    ('mcp_calls', 'bytes'),
+    ('mcp_calls', 'duration_ms'),
+    ('mcp_calls', 'reveal_contacts'),
+    ('mcp_calls', 'error'),
+    ('mcp_calls', 'at'),
+    ('mcp_grants', 'user_id'),
+    ('mcp_grants', 'org_id'),
+    ('mcp_grants', 'source'),
+    ('mcp_grants', 'created_at'),
+    ('mcp_grants', 'last_used_at'),
+    ('mcp_grants', 'revoked_at'),
     ('metrics', 'id'),
     ('metrics', 'org_id'),
     ('metrics', 'name'),
@@ -253,7 +276,10 @@ WITH expected (tbl, col) AS (
     ('workspace_ranks', 'all_metrics'),
     ('workspace_ranks', 'metric_keys'),
     ('workspace_ranks', 'inherits'),
-    ('workspace_ranks', 'created_at')
+    ('workspace_ranks', 'created_at'),
+    ('workspace_settings', 'org_id'),
+    ('workspace_settings', 'ai_assistants_enabled'),
+    ('workspace_settings', 'updated_at')
 ),
 checked AS (
   SELECT
@@ -278,7 +304,7 @@ ORDER BY
   col;
 
 -- ---------------------------------------------------------------------------
--- QUERY 2 (optional) — indexes (43 expected).
+-- QUERY 2 (optional) — indexes (48 expected).
 -- A missing index never breaks a query, it only makes it slow, so this is
 -- separate and can be ignored while chasing a real outage.
 -- ---------------------------------------------------------------------------
@@ -314,6 +340,11 @@ WITH expected (tbl, idx) AS (
     ('flow_versions', 'flow_versions_flow_version_uq'),
     ('flow_versions', 'flow_versions_org_idx'),
     ('flows', 'flows_org_idx'),
+    ('mcp_bindings', 'mcp_bindings_user_idx'),
+    ('mcp_bindings', 'mcp_bindings_expires_idx'),
+    ('mcp_calls', 'mcp_calls_org_at_idx'),
+    ('mcp_calls', 'mcp_calls_user_at_idx'),
+    ('mcp_grants', 'mcp_grants_org_idx'),
     ('metrics', 'metrics_org_idx'),
     ('rank_assignments', 'rank_assignments_org_rank_idx'),
     ('raw_events', 'raw_events_conn_received_idx'),

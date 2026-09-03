@@ -1154,3 +1154,72 @@ columns.
 > `batch5/retention-purge` branch. Like 0024–0029 this migration carries no
 > drizzle snapshot and its journal entry uses a synthetic `when` stamp
 > continuing that sequence.
+
+## 0031 — the AI-assistant connection
+
+Four new tables, nothing altered. They are the whole schema the MCP server
+needs: `mcp_grants` records a person's consent to let their assistant read one
+workspace, `mcp_bindings` remembers which workspace one connected client
+chose, `workspace_settings` is the per-workspace on/off switch, and
+`mcp_calls` is the audit trail the Settings page shows and the rate limiter
+counts against.
+
+```sql
+CREATE TABLE IF NOT EXISTS "mcp_grants" (
+  "user_id" text NOT NULL,
+  "org_id" text NOT NULL,
+  "source" text NOT NULL,
+  "created_at" timestamp with time zone DEFAULT now() NOT NULL,
+  "last_used_at" timestamp with time zone,
+  "revoked_at" timestamp with time zone,
+  CONSTRAINT "mcp_grants_pk" PRIMARY KEY ("user_id", "org_id")
+);
+CREATE INDEX IF NOT EXISTS "mcp_grants_org_idx" ON "mcp_grants" USING btree ("org_id");
+CREATE TABLE IF NOT EXISTS "mcp_bindings" (
+  "binding_key" text PRIMARY KEY NOT NULL,
+  "user_id" text NOT NULL,
+  "org_id" text NOT NULL,
+  "expires_at" timestamp with time zone NOT NULL,
+  "created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+CREATE INDEX IF NOT EXISTS "mcp_bindings_user_idx" ON "mcp_bindings" USING btree ("user_id");
+CREATE INDEX IF NOT EXISTS "mcp_bindings_expires_idx" ON "mcp_bindings" USING btree ("expires_at");
+CREATE TABLE IF NOT EXISTS "workspace_settings" (
+  "org_id" text PRIMARY KEY NOT NULL,
+  "ai_assistants_enabled" boolean DEFAULT true NOT NULL,
+  "updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+CREATE TABLE IF NOT EXISTS "mcp_calls" (
+  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+  "org_id" text NOT NULL,
+  "user_id" text NOT NULL,
+  "client_id" text,
+  "tool" text NOT NULL,
+  "args_summary" jsonb DEFAULT '{}'::jsonb NOT NULL,
+  "rows" integer DEFAULT 0 NOT NULL,
+  "bytes" integer DEFAULT 0 NOT NULL,
+  "duration_ms" integer DEFAULT 0 NOT NULL,
+  "reveal_contacts" boolean DEFAULT false NOT NULL,
+  "error" text,
+  "at" timestamp with time zone DEFAULT now() NOT NULL
+);
+CREATE INDEX IF NOT EXISTS "mcp_calls_org_at_idx" ON "mcp_calls" USING btree ("org_id", "at" DESC);
+CREATE INDEX IF NOT EXISTS "mcp_calls_user_at_idx" ON "mcp_calls" USING btree ("user_id", "at" DESC);
+```
+
+Verify:
+
+```sql
+SELECT count(*) AS should_be_4 FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('mcp_grants','mcp_bindings','workspace_settings','mcp_calls');
+```
+
+Nothing reads these tables until `MCP_ENABLED=1`, so pasting early is safe and
+pasting late only delays the feature.
+
+`scripts/schema-audit.sql` was regenerated alongside this: 27 tables, 254
+columns.
+
+> **Numbering note.** 0016 is still reserved by the unmerged
+> `batch5/retention-purge` branch. Like 0024–0030 this migration carries no
+> drizzle snapshot and its journal entry uses a synthetic `when` stamp
+> continuing that sequence.

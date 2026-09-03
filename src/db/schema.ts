@@ -917,6 +917,77 @@ export const userProfiles = pgTable("user_profiles", {
 });
 
 /**
+ * THE AI-ASSISTANT CONNECTION (MCP). Four tables, one feature. See
+ * docs/superpowers/specs/2026-09-03-mcp-connection-design.md.
+ *
+ * A GRANT is a person's consent to let their assistant read ONE workspace,
+ * keyed (user, workspace) because a member of two workspaces may connect
+ * both; `revoked_at` is app-level revocation that beats token lifetime.
+ */
+export const mcpGrants = pgTable(
+  "mcp_grants",
+  {
+    userId: text("user_id").notNull(),
+    orgId: text("org_id").notNull(),
+    source: text("source", { enum: ["selected", "claim"] }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  },
+  (t) => [primaryKey({ name: "mcp_grants_pk", columns: [t.userId, t.orgId] }), index("mcp_grants_org_idx").on(t.orgId)],
+);
+
+/**
+ * A BINDING remembers which workspace ONE connected client chose. The key is
+ * the best client identity the token offers (client_id, azp, sid) or, failing
+ * all of them, a hash of the access token itself — so one assistant's
+ * selection can never move another's. Rows expire with the token.
+ */
+export const mcpBindings = pgTable(
+  "mcp_bindings",
+  {
+    bindingKey: text("binding_key").primaryKey(),
+    userId: text("user_id").notNull(),
+    orgId: text("org_id").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("mcp_bindings_user_idx").on(t.userId), index("mcp_bindings_expires_idx").on(t.expiresAt)],
+);
+
+/** Per-workspace switches. Absent row = every default. */
+export const workspaceSettings = pgTable("workspace_settings", {
+  orgId: text("org_id").primaryKey(),
+  aiAssistantsEnabled: boolean("ai_assistants_enabled").default(true).notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+/**
+ * One row per tool call: the audit trail the Settings page shows and the
+ * counter the rate limiter reads. `args_summary` holds enum values and key
+ * names only — never free text — and `reveal_contacts` records the one
+ * argument that widens what leaves.
+ */
+export const mcpCalls = pgTable(
+  "mcp_calls",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    orgId: text("org_id").notNull(),
+    userId: text("user_id").notNull(),
+    clientId: text("client_id"),
+    tool: text("tool").notNull(),
+    argsSummary: jsonb("args_summary").$type<Record<string, unknown>>().default({}).notNull(),
+    rows: integer("rows").default(0).notNull(),
+    bytes: integer("bytes").default(0).notNull(),
+    durationMs: integer("duration_ms").default(0).notNull(),
+    revealContacts: boolean("reveal_contacts").default(false).notNull(),
+    error: text("error"),
+    at: timestamp("at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("mcp_calls_org_at_idx").on(t.orgId, t.at.desc()), index("mcp_calls_user_at_idx").on(t.userId, t.at.desc())],
+);
+
+/**
  * ONE WAY OF LOOKING AT THE DASHBOARD — a Notion view.
  *
  * The metrics are the same in every view; what differs is the arrangement, so a

@@ -211,6 +211,13 @@
       "when": 1787184000006,
       "tag": "0030_user_profiles",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1787184000007,
+      "tag": "0031_mcp_connection",
+      "breakpoints": true
     }
   ]
 }

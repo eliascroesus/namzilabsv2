@@ -90,6 +90,17 @@ const TABLES: Record<string, Classification> = {
       "who have customised themselves rather than with sign-ins. The avatar is a URL, never bytes: " +
       "the image lives in blob storage, so a row stays a few hundred characters however large the picture is",
   },
+  mcp_grants: {
+    kind: "bounded",
+    by:
+      "at most one row per (user, workspace) — the composite PK enforces it. A grant is created once when " +
+      "someone connects an assistant to a workspace and revoked in place (revoked_at) rather than deleted, " +
+      "so it grows with membership times connections, never with calls",
+  },
+  workspace_settings: {
+    kind: "bounded",
+    by: "at most one row per org — the org id is the primary key, same as workspace_owners; a workspace with no row simply reads every default",
+  },
   dashboard_views: {
     kind: "bounded",
     by: "one row per view a human added above their board — the default view has no row at all, so this counts only the extra tabs",
@@ -117,10 +128,18 @@ const TABLES: Record<string, Classification> = {
     kind: "gap",
     why: "one row per payload that failed processing, and RESOLVED rows are never removed — only connection deletion clears them. Smaller than the others because it only grows on failure, but it is unbounded in exactly the same way and nothing currently touches it",
   },
+  mcp_bindings: {
+    kind: "gap",
+    why: "one row per connected client identity (client_id/azp/sid, or a token hash as a last resort), so it grows with sessions rather than with a fixed set of clients. `expires_at` names when a row is safe to delete, but nothing sweeps expired rows yet — that lands with the audit/rate-limit engine later in this phase",
+  },
+  mcp_calls: {
+    kind: "gap",
+    why: "one row per tool call — the audit trail the Settings page shows and the counter the rate limiter reads. Grows with activity exactly like usage_ledger did before it had its own retention path; the design calls for 90-day retention but the sweep does not exist until the audit/rate-limit engine lands later in this phase",
+  },
 };
 
 /** Kept as a set so adding a gap is a deliberate edit to this file, not a silent pass. */
-const KNOWN_GAPS = ["dead_letter", "events", "raw_events"];
+const KNOWN_GAPS = ["dead_letter", "events", "mcp_bindings", "mcp_calls", "raw_events"];
 
 describe("every table is asked whether it needs retention", () => {
   it("classifies every table in the schema", () => {
