@@ -98,11 +98,15 @@ WorkOS dashboard (one-time, by Elias):
 3. Note the AuthKit domain (`https://<project>.authkit.app` or the custom
    auth domain).
 
-Environment: `WORKOS_AUTHKIT_DOMAIN` (issuer and JWKS host),
-`MCP_RESOURCE_URL` (defaults to `${APP_BASE_URL}/api/mcp`). Both documented in
-`.env.example`; `/api/health` reports `degraded` without them only when the
-MCP feature is enabled (a soft check, since the rest of the app does not need
-them).
+Environment: `MCP_ENABLED` (`"1"` turns the feature on; unset or anything
+else leaves the MCP route answering 404 and the `.well-known` documents
+absent, so a deploy before the WorkOS dashboard is configured exposes
+nothing), `WORKOS_AUTHKIT_DOMAIN` (issuer and JWKS host), `MCP_RESOURCE_URL`
+(defaults to `${APP_BASE_URL}/api/mcp`). All three documented in
+`.env.example`. `/api/health` gains a third list, `REQUIRED_FOR_MCP =
+["WORKOS_AUTHKIT_DOMAIN", "MCP_RESOURCE_URL"]`, consulted only when
+`MCP_ENABLED` is `"1"`; missing entries then count as `degraded`, mirroring
+how `REQUIRED_FOR_BACKGROUND` is kept separate from `REQUIRED`.
 
 Protected resource metadata (served by us):
 
@@ -126,29 +130,48 @@ module-level `createRemoteJWKSet`. Returns `{ token, clientId, scopes,
 extra: { userId: payload.sub, orgIdClaim: payload.org_id ?? null } }`. Any
 failure → `undefined` (401). Tokens are never forwarded anywhere.
 
-Workspace resolution (`resolveWorkspace(userId, orgIdClaim)`):
+Workspace resolution (`resolveWorkspace(auth)`), where `auth` is the verified
+token's `{ userId, orgIdClaim, bindingKey }` and `bindingKey` identifies the
+connected client as well as the token allows: the token's `client_id` claim
+if present, else `azp`, else `sid`, else `sha256(token)` (a per-access-token
+key, stable for the token's lifetime). Nothing in WorkOS's documentation
+promises any of the first three on Connect-issued tokens, so the design works
+with the last one alone.
 1. If `orgIdClaim` is present: verify an active membership via
    `getWorkOS().userManagement.listOrganizationMemberships({ userId,
-   organizationId: orgIdClaim, statuses: ["active"] })`; use it. WorkOS
-   documents `org_id` on session tokens "when an organization was selected at
-   sign-in"; whether Connect-issued tokens carry it is unverified, so this is
-   the fast path, not the only path.
-2. Else: read `mcp_grants` for `userId`; if a row with `org_id` exists and is
-   not revoked, verify membership the same way and use it.
-3. Else: the call returns a structured error `{ code: "workspace_required",
-   workspaces: [...] }` and every tool description says to call
-   `select_workspace` first. `list_workspaces` lists the user's active
-   memberships (id, name); `select_workspace(orgId)` verifies membership and
-   upserts `mcp_grants`.
-Membership lookups are cached in memory for 5 minutes per (userId, orgId).
+   organizationId: orgIdClaim, statuses: ["active"] })`; capture
+   `role = membership.role?.slug` (the same field `src/components/app-shell.tsx`
+   reads for the cookie session, so a WorkOS admin is admin here too); use it.
+   WorkOS documents `org_id` on session tokens "when an organization was
+   selected at sign-in"; whether Connect-issued tokens carry it is unverified,
+   so this is the fast path, not the only path.
+2. Else, read `mcp_bindings` for `bindingKey`; a live, un-expired row names the
+   org this client chose; verify membership and role as in step 1; use it.
+3. Else, read the user's un-revoked `mcp_grants` rows: exactly one → verify
+   membership and use it (and write an `mcp_bindings` row for this
+   `bindingKey` so later calls skip the lookup); zero or several → the call
+   returns a structured error `{ code: "workspace_required", workspaces:
+   [...] }` and every tool description says to call `select_workspace` first.
+   `list_workspaces` lists the user's active memberships (id, name);
+   `select_workspace(orgId)` verifies membership, upserts the `(user_id,
+   org_id)` grant, and writes the `mcp_bindings` row for this `bindingKey`
+   (expiry = the token's `exp`, or 24 h when `bindingKey` is a claim rather
+   than a token hash). One client's selection therefore never moves another
+   client's workspace.
+Membership and role lookups are cached in memory for 60 seconds per
+(userId, orgId); on serverless the cache is per instance, so a member removed
+from the WorkOS organization can keep reading for up to 60 seconds plus the
+token's remaining lifetime on the claim path. That window is stated in the
+Settings page copy ("Removing a member from the workspace cuts off their
+assistant within a minute") rather than oversold as instantaneous.
 
-Grant checks on every call: the `mcp_grants` row must exist and be
-un-revoked (a first successful `select_workspace` or, on the claim path, the
-first call creates it with `source: "claim"`); `workspace_settings.
-ai_assistants_enabled` must be true; `effectiveAccess(...).can(
-"use_ai_assistants")` must hold. Failing any of these returns an MCP error
-result (`isError: true`, plain sentence), never a 401 — a 401 would make
-Claude re-run OAuth, which cannot fix a permission problem.
+Grant checks on every call: the `(user_id, org_id)` row in `mcp_grants` must
+exist and be un-revoked (a first successful `select_workspace` or, on the
+claim path, the first call creates it with `source: "claim"`); `workspace_
+settings.ai_assistants_enabled` must be true; `effectiveAccess(db, { orgId,
+userId, role }).can("use_ai_assistants")` must hold. Failing any of these
+returns an MCP error result (`isError: true`, plain sentence), never a 401 —
+a 401 would make Claude re-run OAuth, which cannot fix a permission problem.
 
 Claude specifics honoured: PRM `resource` equals the URL the user enters;
 first `authorization_servers` entry is WorkOS; discovery answers within 10 s
@@ -161,11 +184,15 @@ performs the full resource-server checks itself. The OpenAI mTLS client
 certificate is not validated in v1 (optional per their docs) — noted as a
 later hardening.
 
-Revocation: Settings → AI assistants lists `mcp_grants` rows for the user
-(and, for owners / `manage_workspace`, every member's) with last-used time
-and client, and a Disconnect action that sets `revoked_at`. Every call reads
-the row, so revocation is immediate regardless of token lifetime. Reconnecting
-clears `revoked_at`.
+Revocation: Settings → AI assistants lists the workspace's `mcp_grants` rows
+(the member's own; owners and `manage_workspace` holders see every member's)
+with last-used time and the number of distinct bindings (clients), and a
+Disconnect action that sets `revoked_at` and deletes the user's `mcp_bindings`
+rows for that org. Every call reads the grant, so app-level revocation takes
+effect on the next call regardless of token lifetime. Reconnecting (a new
+`select_workspace` or claim-path call) clears `revoked_at`. Removal from the
+WorkOS organization is caught by the membership check within the 60-second
+cache window described above.
 
 ## Tools
 
@@ -194,8 +221,10 @@ Input: none. Output: `{ workspaces: [{ id, name }] }` from WorkOS active
 memberships for `userId`. No rank filter (it is the pre-workspace step).
 
 ### `select_workspace`
-Input: `{ workspaceId }`. Verifies membership; upserts `mcp_grants` (`source:
-"selected"`); returns `{ workspace }`. Audited.
+Input: `{ workspaceId }`. Verifies membership; upserts the `(user_id,
+org_id)` grant (`source: "selected"`, clearing `revoked_at`); writes the
+`mcp_bindings` row for this call's `bindingKey`; returns `{ workspace }`.
+Audited.
 
 ### `list_metrics`
 Input: `{}`. Output: `{ workspace, asOf, metrics: [{ id, name, kind:
@@ -213,16 +242,34 @@ Input: `{ id, range?: "today"|"yesterday"|"7d"|"30d"|"90d"|"all", day?:
 "YYYY-MM-DD", includeSeries?: boolean, includeGroups?: boolean }` (`range`
 default `"30d"`; `day` and `range` are exclusive).
 Output: `{ workspace, id, name, kind, format, unit, currency, range|day,
-value: number|null, unavailable?: string, undated?: number, partial?: {...},
-series?: [{ bucket, value }], groups?: [{ label, value }], stages?: [{ label,
-count, conversionFromPrev }], bottleneckIndex?, computedAt, provenance: {
-streams, engine }, dashboardUrl }`.
+value: number|null, unavailable?: string, undated?: number,
+includesFutureDated: boolean, partial?: { truncated?: true, keptBuckets?,
+totalBuckets?, groupsOmitted? }, series?: [{ bucket, value }], groups?: [{
+label, value }], stages?: [{ label, count, conversionFromPrev }],
+bottleneckIndex?, computedAt, provenance: { streams, engine }, dashboardUrl }`.
 Backed by the stored tile: `tile.byRange[range]` (value, series, groups,
 unavailable, undated), `tile.byDay[day]` via `calendarFlowTiles`, funnel
 `stages` when `tile.viz === "funnel"` or `facts.kind` says so; classic metrics
-via `computeAggregate` / `computeFunnel` with `resolveRange(range)`. Series
-capped at 400 points (drop to the coarsest bucket that fits, say so in
-`partial`). Rank: `canSeeMetric`.
+via `computeAggregate` / `computeFunnel` with `resolveRange(range)`, returned
+exactly as the dashboard's metric page computes them — never re-bucketed.
+Two facts the tool states rather than hides:
+- **Series caps differ by kind.** Flow series are already at most 64 points
+  (the engine's `bucketWindowsFor`), so no cap applies. A classic metric's
+  series is at its stored `timeBucket`; if it exceeds 400 points the tool
+  returns the most recent 400 and sets `partial: { truncated: true,
+  keptBuckets: 400, totalBuckets: N }`. It never coarsens buckets, because
+  the classic path has no re-bucketing and coarsening an avg / median /
+  count-distinct series would change the numbers.
+- **`all` means different things.** A flow tile's `all` is the whole stored
+  run, which for Calendly and Calendar includes meetings that have not
+  happened yet; a classic metric's `all` ends tonight (`computeAggregate`
+  bounds `occurred_at`). `includesFutureDated` is `true` for flow metrics and
+  `false` for classic ones, and the description says so.
+Groups are never folded into an "other" row: a breakdown with more than 100
+groups returns the top 100 by value and `partial: { groupsOmitted: N }`.
+Summing the tail is wrong for count-distinct, avg, median, min and max (the
+same defect the C3 fix removed from headlines), and the stored tile holds no
+records to recompute from. Rank: `canSeeMetric`.
 
 ### `get_metric_days`
 Input: `{ id, from: "YYYY-MM-DD", to: "YYYY-MM-DD" }` (≤ 62 days).
@@ -243,19 +290,28 @@ Output: `{ workspace, total: number, groups?: [{ label, value }], buckets?:
 [{ bucket, value }], records?: [{ id, occurredAt, source, eventType,
 subject, value, currency, fields: {...} }], scanned, truncated: boolean,
 asOf }`.
-Backed by a new `src/lib/mcp/query.ts` that builds the WHERE the way
-`appConds` does (`org_id`, `deleted_at IS NULL`, optional `connection_id`,
-`source`, `event_type`, `occurred_at` between the resolved range) so the
-partial live indexes serve it, aggregates in SQL (`count(*)`, `count(distinct
-…)`, `sum(...)`, `group by date_trunc` or a jsonb text path), and reads
-records with the nine `RECORD_COLUMNS` projection. Filters map to the same
-operators the flow engine uses (`src/lib/flow/compile/operators.ts` is the SQL
-oracle for `equals`/`contains`/…). Cost guard: a pre-count over the range; if
-above `MCP_MAX_SCAN_ROWS` (200,000), refuse with "narrow the range". Rank:
-`use_ai_assistants` plus at least one visible metric fed by that connection;
-if a member's rank hides every metric a connection feeds, its raw events are
-hidden too (the visible set is the `connection_id`s of visible flows' Get data
-steps, read from `publishedFlowTiles` provenance streams). Records: masked by default
+Backed by a new `src/lib/mcp/query.ts`. Before any SQL, the tool computes
+`visibleConnectionIds`: the `connection_id`s of the Get data steps of every
+published flow the caller may see (from `publishedFlowTiles` provenance
+streams and the published graphs), plus the connections behind visible
+classic metrics. The WHERE clause ALWAYS carries `connection_id = ANY(
+visibleConnectionIds)` — unconditionally, whether or not the caller supplied
+`connectionId` or `source` — alongside `org_id`, `deleted_at IS NULL`, the
+optional `connection_id` / `source` / `event_type` filters and `occurred_at`
+between the resolved range, the same shape as `appConds`, so the partial live
+indexes serve it. A supplied `connectionId` or `source` outside the visible
+set is refused with "That source isn't available to you."; an empty visible
+set answers zero rows. Aggregates run in SQL (`count(*)`, `count(distinct
+…)`, `sum(...)`, `group by date_trunc` or a jsonb text path); records use the
+nine `RECORD_COLUMNS` projection. Filters map to the same operators the flow
+engine uses (`src/lib/flow/compile/operators.ts` is the SQL oracle for
+`equals`/`contains`/…). Grouped results return at most 100 groups by value;
+the tail is reported as `groupsOmitted: N`, never folded into an "other" row
+(for `count_distinct` a summed tail would be wrong). Cost guard: a pre-count
+over the range; if above `MCP_MAX_SCAN_ROWS` (200,000), refuse with "narrow
+the range". Rank: `use_ai_assistants`; visibility is the connection scope
+above, so a member whose rank hides every metric a connection feeds cannot
+read that connection's raw events by omitting a filter. Records: masked by default
 (see Data minimisation); `revealContacts: true` unmasks `subject` and
 email/phone fields and is audited as such.
 
@@ -313,7 +369,8 @@ run").
   grouping key for "per rep" questions). `revealContacts: true` unmasks and is
   written to the audit row.
 - Sizes: response text ≤ 64 KB (truncate records, say `truncated: true`);
-  series ≤ 400 points; groups ≤ 100 (rest folded into "other").
+  classic-metric series ≤ 400 most-recent points with `partial.truncated`;
+  groups ≤ 100 with `partial.groupsOmitted`, never an "other" row.
 - Untrusted text never becomes instructions: results are JSON; descriptions
   say so; no tool echoes free text from a record into a top-level string.
 
@@ -339,15 +396,25 @@ run").
 
 ```sql
 CREATE TABLE IF NOT EXISTS "mcp_grants" (
-  "user_id" text PRIMARY KEY NOT NULL,
+  "user_id" text NOT NULL,
   "org_id" text NOT NULL,
   "source" text NOT NULL,               -- 'selected' | 'claim'
-  "client_id" text,
   "created_at" timestamp with time zone DEFAULT now() NOT NULL,
   "last_used_at" timestamp with time zone,
-  "revoked_at" timestamp with time zone
+  "revoked_at" timestamp with time zone,
+  CONSTRAINT "mcp_grants_pk" PRIMARY KEY ("user_id", "org_id")
 );
 CREATE INDEX IF NOT EXISTS "mcp_grants_org_idx" ON "mcp_grants" ("org_id");
+
+CREATE TABLE IF NOT EXISTS "mcp_bindings" (
+  "binding_key" text PRIMARY KEY NOT NULL,   -- client_id | azp | sid | sha256(token)
+  "user_id" text NOT NULL,
+  "org_id" text NOT NULL,
+  "expires_at" timestamp with time zone NOT NULL,
+  "created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+CREATE INDEX IF NOT EXISTS "mcp_bindings_user_idx" ON "mcp_bindings" ("user_id");
+CREATE INDEX IF NOT EXISTS "mcp_bindings_expires_idx" ON "mcp_bindings" ("expires_at");
 
 CREATE TABLE IF NOT EXISTS "workspace_settings" (
   "org_id" text PRIMARY KEY NOT NULL,
@@ -378,8 +445,9 @@ commit as the migration file and the HAND_APPLY section (the drift check
 derives "expected" from `schema.ts`); regenerate `scripts/schema-audit.sql`
 with `pnpm tsx scripts/check-schema-drift.ts --emit-sql`; paste and verify in
 Neon (Actions → Schema drift check) BEFORE the code that reads the tables is
-deployed; `mcp_calls` joins the nightly retention list (90 days) once
-`STORAGE_PRUNE_LIVE` is on. `workspace_settings` reads "absent row = enabled".
+deployed; `mcp_calls` (90 days) and expired `mcp_bindings` rows join the
+nightly retention list once `STORAGE_PRUNE_LIVE` is on. `workspace_settings`
+reads "absent row = enabled".
 
 ## Rollout phases
 
@@ -407,9 +475,16 @@ deployed; `mcp_calls` joins the nightly retention list (90 days) once
   `jwtVerify`/`createRemoteJWKSet` and `getWorkOS`: token with wrong
   audience/issuer/expired/missing → 401 shape; claim path and selected path
   resolve the same org; a user in two orgs cannot read the other's metrics
-  (two-tenant fixture like `tests/tenant-isolation.test.ts`); ranked member
-  sees only granted metrics; `workspace_settings` off blocks every tool;
-  revoked grant blocks; masking and whitelist; series/records caps; rate
+  (two-tenant fixture like `tests/tenant-isolation.test.ts`); one user binds
+  client A to org A and client B to org B and client A's next call still
+  resolves to A, Settings lists both grants, disconnecting B leaves A intact;
+  a WorkOS `admin` role slug bypasses ranks through the token path exactly as
+  on the dashboard; ranked member sees only granted metrics; `query_events`
+  with no `connectionId`/`source` returns nothing from a connection whose only
+  flow is hidden, with and without `includeRecords`; `workspace_settings` off
+  blocks every tool; revoked grant blocks; `MCP_ENABLED` unset → 404; masking
+  and whitelist; classic series truncation reports `partial`; groups never
+  produce an "other" row; `includesFutureDated` per kind; records caps; rate
   limit trips at 61; every call writes an audit row.
 - Parity test: for every seeded published flow, `get_metric` for each preset
   returns exactly `publishedFlowTiles` → `tile.byRange[preset].value`, and
@@ -425,7 +500,11 @@ deployed; `mcp_calls` joins the nightly retention list (90 days) once
 ## Risks
 
 - `org_id` may be absent on Connect-issued tokens — designed around with
-  `select_workspace`; if present, one round trip fewer.
+  `select_workspace` and `mcp_bindings`; if present, one round trip fewer.
+- Client identity in the token is unverified: if no `client_id`/`azp`/`sid`
+  claim exists, a binding lives only as long as one access token (typically
+  an hour) and a multi-workspace user is asked to `select_workspace` again
+  after each refresh; single-workspace users never see this.
 - WorkOS Connect availability on the account's plan — unverified; the
   token-verification seam is provider-neutral (issuer, JWKS, audience).
 - ChatGPT freezes a workspace's tool snapshot after an admin publishes; tool
