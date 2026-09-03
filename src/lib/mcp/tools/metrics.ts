@@ -278,3 +278,40 @@ export const getMetricTool = {
     },
   ),
 };
+
+export const getMetricDaysTool = {
+  name: "get_metric_days",
+  title: "Get metric by day",
+  description: describe(
+    "Returns a flow metric's value for each calendar day between two dates (at most 62 days), from the calendar store, so day-over-day and week-over-week comparisons are simple arithmetic. Days with no stored value are listed under missing.",
+  ),
+  inputSchema: z.object({ id: z.string().min(1), from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).strict(),
+  outputSchema: z.object({}).passthrough(),
+  handler: withToolContext<{ id: string; from: string; to: string }>("get_metric_days", {}, async (ctx, args) => {
+    const e = (await metricCatalog(ctx)).find((c) => c.id === args.id);
+    if (!e) return fail("That isn't a metric you can see in this workspace; call list_metrics for the ids.");
+    if (e.kind !== "flow") return fail("Classic metrics have no per-day store; ask get_metric for a range instead.");
+    const from = Date.parse(`${args.from}T00:00:00Z`);
+    const to = Date.parse(`${args.to}T00:00:00Z`);
+    if (!(from <= to) || (to - from) / 86_400_000 > 61) return fail("Give a from and to at most 62 days apart, from before to.");
+    const cal = (await calendarFlowTiles(ctx.db, ctx.orgId)).find((t) => t.flowId === e.flowId && t.outputNodeId === e.outputNodeId);
+    const byDay = (cal?.tile as { byDay?: Record<string, { value: number }> } | null)?.byDay ?? {};
+    const days: Array<{ day: string; value: number }> = [];
+    const missing: string[] = [];
+    for (let t = from; t <= to; t += 86_400_000) {
+      const d = new Date(t).toISOString().slice(0, 10);
+      if (byDay[d]) days.push({ day: d, value: byDay[d].value });
+      else missing.push(d);
+    }
+    return ok({
+      workspace: { id: ctx.orgId, name: ctx.workspaceName },
+      id: e.id,
+      name: e.name,
+      days,
+      missing,
+      rows: days.length,
+      computedAt: cal?.computedAt?.toISOString() ?? null,
+      dashboardUrl: e.dashboardUrl,
+    });
+  }),
+};

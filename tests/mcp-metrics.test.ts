@@ -13,7 +13,7 @@ vi.mock("@workos-inc/authkit-nextjs", () => ({
 let db: DB; let close: () => Promise<void>;
 vi.mock("@/db/client", () => ({ getDb: () => db, getReadDb: () => db }));
 
-import { listMetricsTool, getMetricTool } from "@/lib/mcp/tools/metrics";
+import { listMetricsTool, getMetricTool, getMetricDaysTool } from "@/lib/mcp/tools/metrics";
 import { clearMembershipCache } from "@/lib/mcp/workspace";
 import { AggregateSchema, parseDefinition } from "@/lib/metrics/types";
 import { computeAggregate } from "@/lib/metrics/compute";
@@ -220,5 +220,32 @@ describe("get_metric", () => {
       { label: "Paid", count: 10, conversionFromPrev: 0.25 },
     ]);
     expect(s.bottleneckIndex).toBe(2);
+  });
+});
+
+describe("get_metric_days", () => {
+  it("returns the stored day values in order and lists the days without one", async () => {
+    member("admin");
+    const s = (await getMetricDaysTool.handler({ id: `flow:${flowId}:n1`, from: "2026-08-30", to: "2026-09-03" } as never, { authInfo: authInfo() })).structuredContent as Record<string, unknown>;
+    expect(s.days).toEqual([{ day: "2026-09-01", value: 2 }]);
+    expect(s.missing).toEqual(["2026-08-30", "2026-08-31", "2026-09-02", "2026-09-03"]);
+    expect(s.rows).toBe(1);
+  });
+  it("refuses a window longer than 62 days or a reversed one", async () => {
+    member("admin");
+    expect((await getMetricDaysTool.handler({ id: `flow:${flowId}:n1`, from: "2026-01-01", to: "2026-09-01" } as never, { authInfo: authInfo() })).isError).toBe(true);
+    expect((await getMetricDaysTool.handler({ id: `flow:${flowId}:n1`, from: "2026-09-03", to: "2026-09-01" } as never, { authInfo: authInfo() })).isError).toBe(true);
+  });
+  it("refuses a classic metric with the per-day sentence", async () => {
+    member("admin");
+    const r = await getMetricDaysTool.handler({ id: `metric:${metricId}`, from: "2026-09-01", to: "2026-09-02" } as never, { authInfo: authInfo() });
+    expect(r.isError).toBe(true);
+    expect(r.content[0].text).toMatch(/no per-day store/);
+  });
+  it("refuses an id the rank cannot see", async () => {
+    await db.insert(workspaceRanks).values({ id: "r1", orgId: "org_a", name: "Sales", permissions: ["use_ai_assistants"], metricKeys: [`metric:${metricId}`] });
+    await db.insert(rankAssignments).values({ orgId: "org_a", userId: "user_1", rankId: "r1" });
+    member("member");
+    expect((await getMetricDaysTool.handler({ id: `flow:${flowId}:n1`, from: "2026-09-01", to: "2026-09-02" } as never, { authInfo: authInfo() })).isError).toBe(true);
   });
 });
