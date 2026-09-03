@@ -82,6 +82,16 @@ migrations applied by hand (`drizzle/HAND_APPLY.md` → Neon SQL Editor), WorkOS
 - [ ] Integrations connect form shows real field **labels** with example placeholders (nothing looks pre-filled); Calendly has a **Fetch meetings for** dropdown (User / Organization / Group).
 - [ ] Reload `/onboarding` as a user who already has a workspace → you're offered to **enter** an existing workspace, and creating is behind an explicit "Create another workspace" — no duplicate org is minted.
 
+## 8. AI assistants (MCP)
+
+- [ ] With `MCP_ENABLED=1` and the WorkOS Connect config in place (CIMD on, DCR
+      on, Resource Indicator = the deployment's `MCP_RESOURCE_URL`): open
+      `/.well-known/oauth-protected-resource` → expect the JSON, not a 404.
+- [ ] Connect from Claude (Customize → Connectors → Add custom connector →
+      paste the URL) or the MCP Inspector, and complete the OAuth flow.
+- [ ] Run `list_metrics`, then `get_metric` on one id it returns → the value
+      matches the same metric's headline on `/dashboard`.
+
 ---
 
 If any box fails, capture the response/log and do not promote the deploy.

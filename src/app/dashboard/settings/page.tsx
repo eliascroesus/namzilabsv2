@@ -6,8 +6,10 @@ import { and, eq } from "drizzle-orm";
 import { requireOrg } from "@/lib/auth";
 import { canManageRanks, claimOwnerIfMissing } from "@/lib/permissions";
 import { getDb, getReadDb } from "@/db/client";
-import { flows, metrics, rankAssignments, workspaceRanks } from "@/db/schema";
+import { flows, metrics, rankAssignments, workspaceRanks, workspaceSettings } from "@/db/schema";
 import { formatDate } from "@/lib/format";
+import { mcpEnabled } from "@/lib/mcp/env";
+import { listGrants } from "@/lib/mcp/workspace";
 import { AppShell } from "@/components/app-shell";
 import { Badge, StatusPill } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -19,6 +21,7 @@ import { PageContainer, PageHeader, SectionHeading } from "@/components/ui/page"
 import { CopyField } from "@/components/copy-field";
 import { inviteMemberAction, revokeInviteAction } from "./actions";
 import { MemberRankSelect, RanksPanel } from "./RanksPanel";
+import { AiAssistantsSection } from "./AiAssistantsSection";
 
 export const dynamic = "force-dynamic";
 
@@ -203,6 +206,22 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       : [],
     isAdmin ? db.select({ id: metrics.id, name: metrics.name }).from(metrics).where(eq(metrics.orgId, orgId)) : [],
   ]);
+
+  // AI assistants: skipped entirely on a deployment with MCP_ENABLED off —
+  // no reason to query a switch and a grant list nobody can reach yet. An
+  // admin sees every grant in the workspace; anyone else sees only their own
+  // (listGrants(db, orgId, userId) narrows at the query, same wall as every
+  // other per-member read on this page).
+  const [aiSettingsRow, aiGrants]: [Array<{ on: boolean }>, Awaited<ReturnType<typeof listGrants>>] = mcpEnabled()
+    ? await Promise.all([
+        db.select({ on: workspaceSettings.aiAssistantsEnabled }).from(workspaceSettings).where(eq(workspaceSettings.orgId, orgId)).limit(1),
+        listGrants(db, orgId, isAdmin ? undefined : userId),
+      ])
+    : [[], []];
+  // Absent row = every default (schema comment on workspace_settings): the
+  // switch reads as "on" until someone actually flips it off.
+  const aiAssistantsEnabled = aiSettingsRow[0] ? aiSettingsRow[0].on : true;
+
   const emailByUser = new Map(orgUsers.data.map((u) => [u.id, u.email]));
   const members = memberships.data.map((m) => ({
     id: m.id,
@@ -509,6 +528,13 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               <RanksPanel ranks={rankRows} memberCounts={memberCounts} catalogue={catalogue} />
             </SettingsSection>
           )}
+
+          <AiAssistantsSection
+            isAdmin={isAdmin}
+            currentUserId={userId}
+            aiAssistantsEnabled={aiAssistantsEnabled}
+            grants={aiGrants}
+          />
 
         </div>
       </PageContainer>

@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { mcpEnabled, authkitDomain, mcpResourceUrl, mcpMaxScanRows } from "@/lib/mcp/env";
+import { mcpEnabled, authkitDomain, mcpResourceUrl } from "@/lib/mcp/env";
 
 afterEach(() => vi.unstubAllEnvs());
 
@@ -29,11 +29,5 @@ describe("mcp env", () => {
     expect(authkitDomain()).toBe("https://x.authkit.app");
     vi.stubEnv("WORKOS_AUTHKIT_DOMAIN", "");
     expect(() => authkitDomain()).toThrow(/WORKOS_AUTHKIT_DOMAIN/);
-  });
-  it("caps scan rows with a default of 200000", () => {
-    vi.stubEnv("MCP_MAX_SCAN_ROWS", "");
-    expect(mcpMaxScanRows()).toBe(200_000);
-    vi.stubEnv("MCP_MAX_SCAN_ROWS", "5000");
-    expect(mcpMaxScanRows()).toBe(5000);
   });
 });

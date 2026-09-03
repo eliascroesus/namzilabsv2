@@ -50,6 +50,26 @@ webhook auto-registers where supported → `/connections/[id]` shows health, the
 inbound URL + signing secret, a **"Preview latest records"** pull, **Re-sync now**
 (fires reconciliation), and Disconnect. All connection data is org-scoped.
 
+### Connect an assistant
+
+An MCP server (`/api/mcp`, behind `MCP_ENABLED`) lets Claude or ChatGPT read a
+workspace's dashboard directly — list its metrics, pull one metric for a range
+or a single day, and list the connected data sources with their sync state.
+Settings → **AI assistants** shows the connection URL and every connected
+assistant.
+
+- **Claude:** Settings → Customize → Connectors → Add custom connector → paste
+  the URL.
+- **ChatGPT:** Settings → Apps → Advanced → Developer mode → Create → paste
+  the URL.
+
+An assistant sees exactly what the connecting person's role can see — the
+metrics their role can view, and data sources if their role can view
+integrations — and never a credential: every tool projects an explicit column
+list, so an encrypted secret is never in scope to leak. It is **read-only**:
+no tool writes to the workspace, and removing someone from the workspace cuts
+off their assistant within a minute.
+
 ## Stack
 
 - **Next.js 16** (App Router, TypeScript) on **Vercel**

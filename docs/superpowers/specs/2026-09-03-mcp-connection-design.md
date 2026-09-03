@@ -246,10 +246,13 @@ Input: `{}`. Output: `{ workspace, asOf, metrics: [{ id, name, kind:
 "fresh"|"stale"|"computing"|"error", computedAt, headline: number|null,
 editedSincePublish: boolean, dashboardUrl }] }`.
 Backed by `publishedFlowTiles(db, orgId)` (tile → headline `value`, `format`,
-`unit`, `currency`, `provenance.streams` → sources), `listFlowNames`,
-`unpublishedFlowIds` (the edited flag), `listMetrics(orgId)` for classic rows
-(`headline: null`, computed on demand by `get_metric`). Rank: keep only ids
-where `access.canSeeMetric(visibilityKeyOf(id))`.
+`unit`, `currency`; the row's separate `provenance` column → `streams` →
+sources), `listFlowNames`, `unpublishedFlowIds` (the edited flag),
+`listMetrics(orgId)` for classic rows (`headline: null`, computed on demand by
+`get_metric`; `format` is `"number"`, which is how the dashboard renders a
+classic headline, and `unit` comes from the `metrics` row; the row's `display`
+kind is exposed as `viz` for both kinds — amended 3 Sep 2026). Rank: keep only
+ids where `access.canSeeMetric(visibilityKeyOf(id))`.
 
 ### `get_metric`
 Input: `{ id, range?: "today"|"yesterday"|"7d"|"30d"|"90d"|"all", day?:

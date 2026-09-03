@@ -369,3 +369,5 @@ August is failing in production until the 0030 block in
 re-run. (The scheduled run on 2 September at 11:20 UTC had already failed for
 the same reason.) Nothing about 0030 has been pasted yet — do not treat this
 entry as a fix, only as the diagnosis.
+
+**MCP Phase 1 (the AI-assistant connection) shipped, behind `MCP_ENABLED`** — Claude or ChatGPT can connect to `/api/mcp` and read a workspace's metrics and data sources read-only, off by default until `MCP_ENABLED`, `WORKOS_AUTHKIT_DOMAIN` and WorkOS Connect are configured.

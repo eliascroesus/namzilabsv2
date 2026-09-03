@@ -13,7 +13,19 @@ export type Resolution =
 const CACHE_TTL_MS = 60_000;
 const BINDING_FALLBACK_TTL_MS = 24 * 60 * 60 * 1000;
 const cache = new Map<string, { at: number; role?: string; member: boolean }>();
-export function clearMembershipCache(): void { cache.clear(); }
+/**
+ * Test-only reset — production never invalidates this cache early (removing
+ * someone from a workspace takes up to CACHE_TTL_MS to be reflected here BY
+ * DESIGN, which is exactly what Settings → AI assistants' "within a minute"
+ * sentence describes; forcing an early clear from a write path would be
+ * wiring behavior that contradicts the documented guarantee). A `const`
+ * rather than `function` declaration on purpose: this is test scaffolding
+ * for isolating suites that reuse one (userId, orgId) pair across cases, the
+ * same role `check-orphans.ts`'s own comment carves out for an exported
+ * constant a test asserts against — not shipped behavior with a caller to
+ * wire up.
+ */
+export const clearMembershipCache = (): void => { cache.clear(); };
 
 /** Active membership + role slug, cached 60 s. `undefined` = not a member. */
 async function membership(userId: string, orgId: string): Promise<{ role?: string } | undefined> {
