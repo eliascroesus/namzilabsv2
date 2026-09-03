@@ -207,9 +207,14 @@ cache window described above.
 Conventions for every tool
 - Registered with `title`, a three-to-four-sentence `description` that states
   what the data is and where it comes from, `inputSchema` (zod, strict, no
-  additional properties), `outputSchema`, `annotations: { readOnlyHint: true,
+  additional properties), `annotations: { readOnlyHint: true,
   destructiveHint: false, idempotentHint: true, openWorldHint: false }`
   (`idempotentHint` added 3 Sep 2026: every Phase 1 tool is a pure read).
+  Tools carry an `outputSchema` on their object for documentation, but the
+  registry does not pass it to the SDK in Phase 1 (amended 3 Sep 2026): the
+  SDK validates every non-error result against a declared output schema, and
+  the `workspace_required` result is a deliberate second shape every
+  workspace tool can return.
 - Results carry `structuredContent` (the object) and `content: [{ type:
   "text", text: JSON.stringify(structuredContent) }]` — the text mirror is JSON
   so third-party strings are always inside a data string.
