@@ -55,7 +55,7 @@ migrations applied by hand (`drizzle/HAND_APPLY.md` → Neon SQL Editor), WorkOS
 ## 5. Flows canvas + materialized dashboard (M1–M3)
 
 - [ ] `/dashboard/flows` → **New flow** opens the canvas.
-- [ ] Build **App → Filter → Aggregate → Output**; **Test** each node → shows records in/out + latest 3 samples; the variable picker lists upstream fields.
+- [ ] Build **App → Filter → Calculate → Output**; **Test** each node → shows records in/out + latest 3 samples; the variable picker lists upstream fields.
 - [ ] **Publish** → a stored tile appears on `/dashboard` with a freshness badge and `Updated …` time.
 - [ ] Edit the draft (e.g. change the filter) — the published dashboard tile does **not** change until you **Publish** again (immutable version).
 
@@ -70,12 +70,11 @@ migrations applied by hand (`drizzle/HAND_APPLY.md` → Neon SQL Editor), WorkOS
 
 ## 7. Canvas v2 UX + fixes
 
-- [ ] Apply migration `0003` first — all previously-built flows are gone (expected; no back-compat).
 - [ ] Canvas has no permanent left palette. **+ Add step** (toolbar), the **+** on a node's right edge, and the **+** on a connection all open the searchable **Add a step** library; picking a tool adds/inserts it (auto-connected).
 - [ ] Nodes show **step number + icon + editable title** (e.g. "1. Google Sheets"), with the node type as secondary text; renaming in the config header updates the card.
 - [ ] Config tabs are a guided progression: **Setup / Configure / Test** with ✓ checkmarks, Test disabled until setup is complete, and one primary CTA that reads **Fix N required fields → Continue → Test node**.
 - [ ] Variable picker (the **+** by a field) shows **Standard fields before any test**, then adds each tested upstream step's custom fields with type + sample value pills, grouped by step.
-- [ ] Add a **Formula**: it has two labeled input handles (e.g. **Numerator / Denominator**); the card and Configure tab show the live expression (`A ÷ B × 100`); connecting Aggregate→A and Aggregate→B computes correctly regardless of connection order.
+- [ ] Add a **Calculate** step configured as a comparison: it has two labeled input handles (e.g. **Numerator / Denominator**); the card and Configure tab show the live expression (`A ÷ B × 100`); connecting Calculate→A and Calculate→B computes correctly regardless of connection order.
 - [ ] Filter operators read in plain language (Exactly matches, Does not match, Starts with, …); **is empty / is not empty** hide the value box.
 - [ ] Test tab shows **"56 of 74 records passed"** and a compact **Before / After** sample preview.
 - [ ] **Auto layout** tidies the graph left→right; **Fit**, **Align**, and **Collapse/Expand** work; edges are smoothstep (no overlap tangles).

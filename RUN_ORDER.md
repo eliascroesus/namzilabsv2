@@ -1,5 +1,24 @@
 # RUN ORDER — wiping the data and starting clean
 
+> **Superseded on these points as of 3 September 2026** — treat any specific
+> migration number or Action name in this file as history, not current
+> state. See `STATE.md` for what is actually true today.
+>
+> Migrations did not stop at `0012`: they run to `0030` now, and every one is
+> applied by hand into the Neon SQL Editor, one pasteable block per
+> migration, per `drizzle/HAND_APPLY.md`. The *Database migration* Action
+> this file warns against running no longer exists in any form — there is no
+> migrator to run; everything is pasted by hand and checked with the *Schema
+> drift check* Action. (The advice to skip it is still correct, just for a
+> different reason now.)
+>
+> `PRE_LAUNCH_CHECKLIST.md`'s item 5 (one-time legacy-row reconciliation) is
+> done, resolved by the 29 July 2026 data wipe. Sendblue has been removed
+> from the product entirely — connector, catalog entry, scripts and tests.
+> `PRE_LAUNCH_CHECKLIST.md`'s item 8 (the compiled query engine flag) is no
+> longer a future step: `ENGINE_COMPILE_TEST` / `ENGINE_COMPILE` exist in the
+> code today, off by default.
+
 This is the whole procedure, in order, for emptying the synced data and letting
 it rebuild from the providers. Follow it top to bottom. Every step says what a
 good result looks like and what a bad one looks like, so you never have to guess

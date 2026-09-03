@@ -42,6 +42,7 @@ for backfill and preview). Adding one is additive — the engine never changes.
 | **Instantly** | ✔ email/reply events | optional HMAC `x-instantly-signature` | — | manual URL + secret |
 | **Google Sheets** | (Apps Script push, optional) | HMAC | ✔ **poll-primary**, row cursor | n/a (OAuth) |
 | **Google Calendar** | — | — | ✔ incremental `syncToken` | n/a (OAuth) |
+| **Whop** | ✔ Standard Webhooks | `webhook-signature` v1 over `id.ts.body`, five-minute window | ✔ payments by `updated_after`, memberships by `created_after`, first sync 90 days | manual URL + your own signing secret |
 | **Custom Webhook** | ✔ any app | optional HMAC | — | manual URL + secret |
 
 **Connect UX:** `/integrations` (gallery) → connect via API key or Google OAuth →
@@ -99,9 +100,10 @@ src/
                 builders + drill-down, API routes (webhooks, inngest, replay,
                 health, google oauth)
 drizzle/        generated SQL migrations
-tests/          69 tests: crypto, ids, signatures, dedup, DLQ+replay, reconciliation
-                (incl. credential decrypt), tenant isolation, per-connector
-                signature/normalize/poll, oauth-state, metric compute + funnels
+tests/          178 files / 2,434 tests: crypto, ids, signatures, dedup, DLQ+replay,
+                reconciliation (incl. credential decrypt), tenant isolation,
+                per-connector signature/normalize/poll, oauth-state, metric
+                compute + funnels
 ```
 
 ## Auth & tenancy (WorkOS AuthKit)
@@ -141,7 +143,7 @@ Generate an encryption key: `openssl rand -base64 32`.
 
 ```bash
 pnpm typecheck   # tsc --noEmit
-pnpm test        # 1,000+ tests against a real Postgres (PGlite) — proves dedup,
+pnpm test        # 2,434 tests against a real Postgres (PGlite) — proves dedup,
                  # idempotency, DLQ + replay, reconciliation, signatures, crypto
 pnpm build       # production build
 ```

@@ -1,5 +1,25 @@
 # Pre-launch checklist — one-time human steps
 
+> **Superseded on these points as of 3 September 2026** — treat any specific
+> migration number or Action name in this file as history, not current
+> state. See `STATE.md` for what is actually true today.
+>
+> Migrations did not stop at `0011`, or even at the `0020` that item 0 below
+> verified: they run to `0030` now, and every one is applied by hand into the
+> Neon SQL Editor, one pasteable block per migration, per
+> `drizzle/HAND_APPLY.md`. The *DB Migrate (production)* Action this file
+> describes removing has, in fact, been removed — there is no migrator to
+> run; everything is pasted by hand and checked with the *Schema drift
+> check* Action.
+>
+> This file's item 5 (one-time legacy-row reconciliation) is done, resolved
+> by the 29 July 2026 data wipe — already reflected below, restated here so
+> this banner's checklist is complete. Sendblue has been removed from the
+> product entirely — connector, catalog entry, scripts and tests. This
+> file's item 8 (the compiled query engine flag) is no longer a future step:
+> `ENGINE_COMPILE_TEST` / `ENGINE_COMPILE` exist in the code today, off by
+> default — also already reflected below.
+
 Every human verification/rollout step from the backend hardening effort, in the
 order to run them, collected here so nothing is asked mid-build. Each item says
 exactly what to run, where the key comes from, what PASS looks like, and what to

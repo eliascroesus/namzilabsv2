@@ -83,8 +83,8 @@ connection with a healthy webhook widens to the 60-minute backstop.
 - **Sync core** — one writer (`upsertEvents`), generation model, soft deletes,
   per-stream cursors, per-connection lease, provider budget ledger with a
   breaker.
-- **Five connectors** — Calendly, Close, Instantly, Google Sheets,
-  Google Calendar, plus the custom webhook. **Close's incremental window is
+- **Six connectors** — Calendly, Close, Instantly, Google Sheets,
+  Google Calendar, Whop, plus the custom webhook. **Close's incremental window is
   verified against the live API**: it bounds on `date_updated` (the field the
   endpoint filters and sorts on) and dates rows by `date_created` (when the thing
   happened). Those are different fields on purpose — Close consolidates edits
@@ -165,8 +165,11 @@ Three things to know before it moves:
 - **Google push notifications (Phase 4b).** `sync_state.channelId` /
   `channelResourceId` / `channelExpiry` exist and nothing reads or writes them.
   Also needs domain verification in Google Cloud, which is a human step.
-- **The compiled query engine flag.** Checklist item 8 describes it; no flag
-  exists in the code yet.
+- **The compiled query engine flag.** Checklist item 8 describes it, and it
+  exists in the code (`src/lib/flow/compile/flags.ts`, `ENGINE_COMPILE_TEST`
+  for the Test surface then `ENGINE_COMPILE` for materialization) — off by
+  default, on this list because the default is the point, not because the
+  flag is missing.
 - **Client-side error tracking (Sentry et al.) — deferred, on purpose.** At
   invite-only scale the real failure classes are covered without it: Vercel
   function logs (server/route errors), Inngest run history (background
@@ -261,7 +264,97 @@ grep for `-drift\|-scan\|-probe` covers every "look at this" signal.
 ## Verification bar
 
 `pnpm typecheck && pnpm test && pnpm build && pnpm check:orphans`, all green,
-before anything ships. Currently **858 tests / 70 files**. Behavioural changes
+before anything ships. Currently **2,434 tests / 178 files**. Behavioural changes
 are sabotage-verified: break the thing, confirm its own test fails and no other.
 `check:orphans` fails the build on an exported function no production code
 calls — a feature only its own tests call is not shipped.
+
+---
+
+## Update — 3 September 2026
+
+This file (and the rest of the root docs) had drifted to a 14 August snapshot.
+What changed since, in the same plain-English register as the rest of this
+file:
+
+**The Inngest CEL incident.** Three function configs used JavaScript's `??`
+where Inngest evaluates the expression as CEL — a language with no `??`.
+Inngest rejects a whole app sync on one function that fails to compile, and
+the rejection is total, not partial: only 4 of the app's 12 functions were
+registered, for an unknown period measured in weeks. Dead the whole time:
+`sync-connection` (so "Sync now" and a new connection's initial history both
+did nothing — the ten-minute sweep still picked new connections up
+incrementally, which is why data flowed at all), `run-backfill` (no
+historical import ever ran), `run-flow-test` (only the editor's fast inline
+Test path survived), `reprocess-connection`, and `prune-storage` — which
+also took `scanInvariants` down with it, since the invariant scan runs
+*inside* `prune-storage`, so the watchdog went dark along with everything it
+watches. Fixed 31 August 2026 (`24f2fa1`). **Tiles kept recomputing the
+entire time regardless** — `reconcile-one-connection` was one of the four
+functions that stayed registered, and it runs `expireAgedResults` and
+`materializeStaleAll` inline on every ten-minute sweep, independent of the
+functions that had gone dark.
+
+A second door to the same outage closed the same day (`f3e1d8f`): Inngest
+also refuses a whole app sync when any function's global `concurrency`
+exceeds the account's plan ceiling, and `reconcile-one-connection` (declared
+10) and `run-flow-test` (declared 6) both exceeded the plan's ceiling of 5.
+Fixed by adding one named constant, `PLAN_MAX_CONCURRENCY = 5` in
+`src/inngest/client.ts`. `tests/inngest-expressions.test.ts` now guards both
+classes of failure from recurring: the CEL grammar (rejects `??`, `?.`,
+`===`, arrows and more, reading every live function's expressions rather
+than pinning a literal) and the concurrency ceiling (every global cap stays
+at or under `PLAN_MAX_CONCURRENCY`, and never alone — a per-tenant cap must
+exist beside it). `tests/inngest-config.test.ts` is the separate, narrower
+test that pins each function's exact configuration values — the same kind of
+literal-pinning test that faithfully protected the original `?? 0` bug for
+months, kept for the functions it does catch regressions in.
+
+**The two ten-and-five-minute crons are one ten-minute cron now.** Neon bills
+by the hour its endpoint is awake, autosuspending after 5 idle minutes — and a
+5-minute `backfill-dispatch` cron running forever meant the database never got
+5 idle minutes to suspend in. Folded into `materialize-stale`'s existing
+10-minute tick on 31 August (`77cc82f`); same queries, same events, same
+budgets, only the clock changed. The backfill worker (`run-backfill`) now
+drains up to 12 slices (about 45 seconds of wall clock) per invocation instead
+of one slice per five-minute wake — the loop moved inside the function so a
+hundred-slice import no longer takes eight-plus hours of scheduling gaps.
+`reconcile-one-connection` also still runs one backfill slice inline per
+connection per sweep, unchanged.
+
+**`flow/data.changed` has no emitters left.** Staleness is written directly —
+in the same function that ingested the data — by `process-inbound-event`,
+`reconcile-one-connection`, replay and reprocess. The event and its handler
+stay registered (belt, not a replacement for the braces), but nothing sends
+it anymore; this was true before today's fixes too and is restated here only
+because `docs/HOW_THE_BACKEND_WORKS.md` used to describe an event hop that
+does not exist.
+
+**The compiled engine flags exist** — corrected above, under "Not built,
+stated rather than hidden." `ENGINE_COMPILE_TEST` and `ENGINE_COMPILE`
+(`src/lib/flow/compile/flags.ts`) are real in the code, both off by default.
+
+**Test suite:** 178 files / 2,434 tests, green — corrected above, under
+"Verification bar."
+
+**A sixth connector: Whop** (`src/connectors/whop.ts`). API key + company id;
+polls payments (by `updated_after`) and memberships (by `created_after`);
+Standard Webhooks signing (`webhook-signature`, `v1`, over `id.ts.body`, a
+five-minute replay window); first sync reaches back 90 days. Seven sources
+total counting the custom webhook — corrected above, under "What is live on
+`main`."
+
+**`scripts/purge-retired-data.ts`** exists only on the unmerged
+`batch5/retention-purge` branch — see "What is held, and why" above. That
+branch is now 355 commits behind `main` and carries migration 0016, which
+must be regenerated (not renumbered) at merge time per the explanation under
+0018 in `drizzle/HAND_APPLY.md`.
+
+**Migrations now go through `0030`** — `drizzle/HAND_APPLY.md` has a
+pasteable block and a verify query for every one of them. Whether 0021–0030
+have actually been pasted into the production database is **not recorded
+anywhere in this repo** — the migrator's tracker was never trustworthy (see
+"How migrations work here" above) and nobody has written the answer down.
+The only way to know is Actions → *Schema drift check*: run it, then record
+the result here. Until that is done, treat every migration past 0020 as
+unverified in production, regardless of what any other document claims.

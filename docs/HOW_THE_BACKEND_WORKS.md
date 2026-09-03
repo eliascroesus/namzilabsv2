@@ -11,7 +11,7 @@ that it works. Wherever something can be verified, this document says how.
 
 **The backend's job is: pull your customers' data out of the tools they
 already use (Close, Calendly, Instantly, Google Sheets, Google
-Calendar, or any custom source), keep one clean, always-up-to-date copy of
+Calendar, Whop, or any custom source), keep one clean, always-up-to-date copy of
 it, and turn it into the numbers on their dashboard — without ever losing
 data, mixing up two customers, or getting banned by the tools it pulls from.**
 
@@ -50,10 +50,19 @@ Say a lead gets updated in Close. Here is everything that happens:
 
 1. Close sends a message to our address the moment the lead changes.
 2. **The door checks ID.** Every incoming message must carry a valid
-   cryptographic signature — proof it really came from Close and not from a
-   stranger. Wrong or missing signature → rejected. Messages that are too
-   big (over 1MB) or too old (a replay of something from more than 5 minutes
-   ago) are rejected too.
+   cryptographic signature — proof it really came from the tool it claims to
+   be from, not from a stranger. Wrong or missing signature → rejected.
+   Messages over 1MB are rejected too. Close, Calendly and Whop also sign a
+   timestamp, so a captured message replayed more than 5 minutes later is
+   rejected as stale; the other sources don't sign one, so this particular
+   check is specific to those three. Your own custom webhook is the one
+   deliberately open door: until you set a signing secret on it, it accepts
+   anything (there is nothing else to check it against), and starts
+   verifying every message the moment you do. Every rejection — bad
+   signature, oversized body, a signing secret that failed to decrypt —
+   leaves a row in the delivery log (status "rejected"), so a connection
+   silently failing every delivery now shows up instead of leaving no trace
+   at all.
 3. **The original is saved first, untouched.** Before we do anything else,
    the raw message is stored exactly as received (the `raw_events` table).
    This is our "keep the original receipt" rule — if anything ever goes
@@ -66,24 +75,51 @@ Say a lead gets updated in Close. Here is everything that happens:
    happens all the time with webhooks — the second copy is recognized and
    merged, never duplicated. This is why a webhook AND a poll seeing the
    same record produce ONE row, not two.
-6. The dashboard's numbers that depend on this data are marked "stale" and
-   recalculated shortly after (see section 8).
+6. The dashboard's numbers that depend on this data are marked "stale"
+   immediately, by the same step that just wrote the data — not by sending a
+   signal and hoping something downstream picks it up. (An earlier version
+   did exactly that — a "data changed" announcement a separate step listened
+   for — and on production it went undelivered for a full day of new rows
+   before anyone noticed the tiles hadn't moved. Nothing announces it
+   anymore; see section 8 for how "stale" turns back into a fresh number.)
 
 ### Path B — the safety net (polling)
 
-Webhooks can be missed — a provider hiccup, a moment of downtime. So every
-10 minutes a sweep visits each connection and asks "what's new since my
-bookmark?" Each connection keeps a **bookmark** (called a cursor) marking
-exactly where its last read ended, so the sweep never re-reads everything —
-it picks up precisely where it left off. Anything the webhook already
-delivered gets deduplicated by the fingerprint; anything the webhook missed
-gets caught here. **This is why the system "never misses" — the instant path
-is fast, and the poll path is guaranteed.**
+Webhooks can be missed — a provider hiccup, a moment of downtime. So a sweep
+visits each connection and asks "what's new since my bookmark?" Each
+connection keeps a **bookmark** (called a cursor) marking exactly where its
+last read ended, so the sweep never re-reads everything — it picks up
+precisely where it left off. Anything the webhook already delivered gets
+deduplicated by the fingerprint; anything the webhook missed gets caught
+here. **This is why the system "never misses" — the instant path is fast,
+and the poll path is guaranteed.**
+
+Every connection starts on a **10-minute** sweep. A connection that hasn't
+changed anything in a while backs off — 10 minutes, then 30, then 2 hours,
+then 6, then once a day — so a quiet account costs almost nothing, and any
+new activity (or a person clicking something) snaps it straight back to 10
+minutes. A connection whose webhook has proven itself healthy recently widens
+its floor to 60 minutes instead, since the instant path is already doing the
+real-time work and the poll is only a backstop for it.
 
 Some sources (Calendly, Instantly, Sheets, Calendar) are organized into
 **streams** — one bookmark per resource (one spreadsheet tab, one calendar,
 one campaign) rather than one per account — so each flow's data source
 tracks its own progress independently.
+
+*A brief incident, because it's the kind of failure this design is meant to
+survive.* For a few weeks in August 2026, a misconfiguration (three of the
+backend's background jobs used a JavaScript shorthand their task scheduler's
+expression language doesn't support) meant only 4 of the backend's 12
+background jobs were actually registered and running — including the
+historical-import job and the nightly cleanup-and-health-check job. It went
+unnoticed on the dashboard because the sweep that stayed running already
+recomputes tiles directly on every pass (the paragraph above this one), so
+numbers kept updating the whole time; what silently stopped was history
+import, the nightly retention sweep, and the health scan that would normally
+have flagged the problem itself. Fixed 31 August 2026, and now guarded by
+tests that check every background job's configuration is syntactically valid
+and fits inside the account's capacity, rather than trusting either by eye.
 
 ---
 
@@ -100,7 +136,16 @@ Google login, etc.).
   away, not at the next sweep.
 - Disconnecting **hides** the data instead of destroying it. Reconnect
   within 30 days and everything comes back exactly as it was. Only after
-  30 days disconnected does cleanup begin.
+  30 days disconnected does the original raw copies of its messages become
+  *eligible* for cleanup — and even then, nothing is actually deleted until
+  you turn that on (`STORAGE_PRUNE_LIVE=1`); until you do, the nightly job
+  only reports what it would have removed. The customer-visible records
+  themselves are never touched by this — see the warehouse guarantees below.
+- There is a second, separate way to remove a connection: **Delete
+  permanently**. Unlike Disconnect, this is immediate and cannot be undone —
+  it erases the connection and every row belonging to it across ten tables —
+  so it asks you to type the connection's name first, to make sure a click
+  wasn't a mistake.
 - Each workspace can create at most 10 connections and 25 flows (adjustable)
   — a guard against runaway scripts, not a business limit.
 
@@ -173,11 +218,17 @@ records. The system scales its appetite to its allowance automatically.
 ## 7. The history importer — backfill
 
 When a customer connects a source, they usually want the past 90 days, not
-just today onward. Historical imports are their own system because they're
-big:
+just today onward. The same thing happens any time a genuinely *new* stream
+shows up on a connection that already exists — a spreadsheet tab, a calendar,
+a campaign nobody had picked before — it gets its own 90-day import queued
+automatically, with no button to remember to press. Historical imports are
+their own system because they're big:
 
-- They run in **small slices** (a few pages every 5 minutes), in the lowest
-  priority lane, so they never crowd out live syncing.
+- They run in **small slices**, dispatched from the same 10-minute tick that
+  runs the regular sweep, in the lowest priority lane, so they never crowd
+  out live syncing. A connection with history left to import drains up to
+  12 slices (about 45 seconds) every time that tick comes around, instead of
+  one slice per wake — so a long import finishes in minutes, not hours.
 - Every slice saves a **checkpoint**. If anything dies mid-import, the next
   slice resumes exactly where the last one saved — never starting over,
   never re-downloading.
@@ -198,9 +249,14 @@ group → count → show on the dashboard.
 - When a flow is **published**, its numbers are computed and **stored**
   (in `flow_results`). The dashboard reads stored numbers — that's why it
   loads instantly regardless of data size.
-- When new data arrives, affected numbers are marked stale and recomputed
-  shortly after (bursts of new data are batched into one recomputation per
-  workspace, so a webhook storm doesn't trigger a hundred recalculations).
+- When new data arrives, affected numbers are marked stale immediately (a
+  direct write, not an announcement that something downstream has to catch —
+  see section 3) and recomputed shortly after: a debounced pass per
+  workspace so a webhook storm doesn't trigger a hundred recalculations, AND
+  again as part of every connection's routine 10-minute sweep, so a recompute
+  is never waiting only on the debounce. That same sweep also nudges along
+  one slice of that connection's history import, if it has one running, so a
+  backfill makes some progress even on a quiet tick.
 - The browser quietly asks "did anything change?" every 12 seconds using a
   fingerprint of the results — a near-free question — and only refetches
   when the answer is yes. Open dashboards cost almost nothing.
@@ -224,43 +280,63 @@ Sometimes a message arrives that the translator chokes on (malformed data,
 an unexpected shape). The rule is: **never drop it, never let it break
 anything else.**
 
-- After several automatic retries, the message is parked in the
-  **dead-letter queue** — a holding shelf. The original raw copy is intact.
+- After 5 automatic retries fail (recorded as 6 attempts, counting the first
+  try), the message is parked in the **dead-letter queue** — a holding
+  shelf. The original raw copy is intact.
 - The dashboard shows a red count linking to the connection's page, where
   each parked message is listed with its error and a **Replay** button.
   Replay re-processes the original — no re-downloading, no provider calls.
 - One poisoned message never stops the connection: syncing continues around
-  it.
+  it, and the connection itself is left active rather than flagged as
+  broken — a bad message says nothing about whether the credentials or the
+  provider are healthy, so it isn't treated as if they weren't. The
+  connection's error banner still shows what failed, and Replay clears it.
 
 ---
 
 ## 10. The night shift — cleanup and self-checks
 
-Every night at 3:17 AM, three things happen:
+Every night at 3:17 AM, five things happen, in order:
 
-**Cleanup (retention).** Operational records that only matter briefly are
+**1. Tidy the editor.** Test runs left over from the flow editor's "Test"
+button are cleared out once they're a day old, so the editor's own scratch
+space never accumulates.
+
+**2. Cleanup (retention).** Operational records that only matter briefly are
 deleted on schedules: processing logs after 30 days, spent rate-limit
-counters after 2 days (rare "evidence" rows kept 90), old editor test runs
-after a day, raw originals only for connections disconnected 30+ days,
-and tombstones (soft-deleted rows) older than 30 days on active
-connections. Customer data itself is never aged out. **Important: all
-deletion is currently in rehearsal mode** — every night it reports exactly
-what it *would* delete and deletes nothing, until you flip
+counters after 2 days (rare "evidence" rows kept 90), raw originals only for
+connections disconnected 30+ days, and tombstones (soft-deleted rows) older
+than 30 days on active connections. Customer data itself is never aged out.
+**Important: all of this is currently in rehearsal mode** — every night it
+reports exactly what it *would* delete and deletes nothing, until you flip
 `STORAGE_PRUNE_LIVE=1` after reading one night's report (the procedure is
 checklist item 7b).
 
-**The "is work still happening?" scan.** Most monitoring asks "did this task
-fail?" This scan asks the more dangerous question: "is anything that should
-be moving quietly standing still?" It looks for streams nobody has polled in
-a day, imports that claim to be running but haven't progressed, connections
-failing over and over, endpoints rejecting deliveries, mirrors that read
-successfully yet hold nothing, and — specific to Close — a bookmark aging
-toward Close's own 30-day data-deletion cliff (Close permanently deletes
-its event history after 30 days; we warn at 25).
+**3. Measure the backlog.** A capacity check with no switch: how many rows
+are currently sitting past their retention window, still waiting to be
+cleaned up. A backlog that keeps growing night after night means cleanup is
+falling behind how fast data comes in — visible here before it turns into a
+storage problem.
 
-**The alert email (this is Resend).** The scan's findings used to go into a
-log line at 3 AM that nobody reads. Now, if the scan finds anything, it
-emails you. This needs three values in Vercel (`RESEND_API_KEY`,
+**4. The webhook event-time scan.** For every custom-webhook connection,
+work out which field in its payloads actually holds "when this happened,"
+and record the answer. Same rehearsal-mode idea as cleanup: purely an
+observation until you turn it on, and it changes nothing about how events
+are dated in the meantime.
+
+**5. The "is work still happening?" scan, and the alert email.** Most
+monitoring asks "did this task fail?" This scan asks the more dangerous
+question: "is anything that should be moving quietly standing still?" It
+looks for streams nobody has polled in a day, imports that claim to be
+running but haven't progressed, connections failing over and over,
+connections being throttled hard enough that it matters, a paged scan stuck
+restarting instead of advancing, dead letters sitting unresolved, endpoints
+rejecting deliveries, mirrors that read successfully yet hold nothing, and —
+specific to Close — a bookmark aging toward Close's own 30-day
+data-deletion cliff (Close permanently deletes its event history after 30
+days; we warn at 25). The findings used to go into a log line at 3 AM that
+nobody reads. Now, if the scan finds anything, it emails you (this is
+Resend). This needs three values in Vercel (`RESEND_API_KEY`,
 `ALERT_EMAIL`, `ALERT_FROM` — free Resend account, ~2 emails/day maximum).
 **Until you add them, the email part is asleep: nothing breaks, findings
 just stay in the logs.** The code is ~22 lines, costs nothing, and was

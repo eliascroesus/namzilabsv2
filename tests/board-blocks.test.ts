@@ -225,8 +225,9 @@ describe("how small a chart may be made", () => {
   });
 
   it("gives the cartesian family the extra row its axis frame needs", () => {
-    // Measured, not guessed: at ROW_UNIT_PX 40 and p-4, four rows leaves 38px
-    // for an axis frame that needs 49 with five ticks — the x-labels clip.
+    // Measured, not guessed: at ROW_UNIT_PX 48 and p-4, a cartesian tile
+    // needs h=5 before its axis frame and five ticks both fit — four rows
+    // clips the x-labels.
     for (const id of ["line", "area", "bar", "category", "table"] as const) {
       expect(minSize(id).h, `${id} needs five rows`).toBeGreaterThanOrEqual(5);
     }

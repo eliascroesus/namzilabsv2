@@ -1,5 +1,25 @@
 # Launch day — one-sitting run sheet
 
+> **Superseded on these points as of 3 September 2026** — the status block
+> and step numbers below are a snapshot from the Instantly/hardening phase;
+> treat any specific migration number or Action name in this file as history,
+> not current state. See `STATE.md` for what is actually true today.
+>
+> Migrations did not stop at `0011`: they run to `0030` now, and every one is
+> applied by hand into the Neon SQL Editor, one pasteable block per
+> migration, per `drizzle/HAND_APPLY.md`. The *DB Migrate (production)*
+> Action this file describes running no longer exists in any form — there is
+> no migrator to run; everything is pasted by hand and checked with the
+> *Schema drift check* Action.
+>
+> `PRE_LAUNCH_CHECKLIST.md`'s item 5 (one-time legacy-row reconciliation) is
+> done, resolved by the 29 July 2026 data wipe rather than by running its
+> remaining steps. Sendblue has been removed from the product entirely —
+> connector, catalog entry, scripts and tests. `PRE_LAUNCH_CHECKLIST.md`'s
+> item 8 (the compiled query engine flag) is no longer a future step:
+> `ENGINE_COMPILE_TEST` / `ENGINE_COMPILE` exist in the code today, off by
+> default.
+
 > **STATUS (updated after the Instantly/hardening phase).**
 > **Phases A–C are DONE.** The tracker was repaired, migrations `0005`–`0011`
 > applied (verified: 12 tracker rows, high-water mark `1785004537576`, flow
