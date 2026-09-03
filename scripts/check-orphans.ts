@@ -35,6 +35,11 @@ const ALLOWLIST: Record<string, string> = {
   // The dialect seam exists so the compiler can target more than Postgres; its
   // methods are called through the interface, which this scan can't see.
   postgresDialect: "B.4 — consumed through the Dialect interface, not by name",
+  // MCP Tasks 11-12 fix round 1: test-only cache reset; no production caller
+  // by design (see the doc comment on its declaration in
+  // src/lib/mcp/workspace.ts) — production lets the 60s TTL expire on its
+  // own rather than invalidating early.
+  clearMembershipCache: "test-only cache reset; no production caller by design",
 };
 
 /** Framework entry points: the framework calls these, not our code. */

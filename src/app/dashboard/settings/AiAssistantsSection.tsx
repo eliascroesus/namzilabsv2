@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { SectionHeading } from "@/components/ui/page";
@@ -21,17 +22,32 @@ import { setAiAssistantsEnabledAction, disconnectAssistantAction } from "./ai-ac
  * CopyField, Button — the same discipline as every other section on this
  * page. A toggle rendered as two Buttons (Turn on / Turn off) needs nothing
  * this page has not already imported.
+ *
+ * ERRORS FOLLOW page.tsx's OWN `?invite_error=` CONVENTION (fix round 1):
+ * `setAiAssistantsEnabledAction`/`disconnectAssistantAction` stay plain
+ * `{ ok, error? }`-returning actions (tests/settings-ai-actions.test.ts calls
+ * them directly and asserts on that return value), so the redirect-on-refusal
+ * lives in the inline `"use server"` closure that calls each one from its
+ * form — the same shape `inviteMemberAction` uses, just one level further
+ * out. A `?ai_error=` on the refusal path, and a bare redirect back to the
+ * plain URL on success so a stale error from an earlier attempt cannot
+ * outlive it.
  */
 export function AiAssistantsSection({
   isAdmin,
   currentUserId,
   aiAssistantsEnabled,
   grants,
+  emailByUser,
+  error,
 }: {
   isAdmin: boolean;
   currentUserId: string;
   aiAssistantsEnabled: boolean;
   grants: GrantRow[];
+  /** WorkOS user id → email, the same map page.tsx builds for the Members list. */
+  emailByUser: Map<string, string>;
+  error?: string;
 }) {
   if (!mcpEnabled()) {
     return (
@@ -70,6 +86,8 @@ export function AiAssistantsSection({
         </header>
 
         <div className="border-t border-border px-5 py-4">
+          {error && <p className="mb-4 text-sm text-danger-ink">{error}</p>}
+
           <CopyField
             label="Connection URL"
             value={resourceUrl}
@@ -108,22 +126,28 @@ export function AiAssistantsSection({
             Removing a member from the workspace cuts off their assistant within a minute.
           </p>
 
-          {isAdmin && (
-            <form
-              action={async () => {
-                "use server";
-                await setAiAssistantsEnabledAction(!aiAssistantsEnabled);
-              }}
-              className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4"
-            >
-              <p className="text-sm text-foreground">
-                AI assistants are currently <b>{aiAssistantsEnabled ? "on" : "off"}</b> for this workspace.
-              </p>
-              <Button type="submit" variant={aiAssistantsEnabled ? "destructiveGhost" : "accent"} size="sm">
-                {aiAssistantsEnabled ? "Turn off" : "Turn on"}
-              </Button>
-            </form>
-          )}
+          {/* The state sentence is for EVERYONE — a member walked through the
+              connect steps above needs to know whether the switch is even on
+              before they try. Only the control that flips it is admin-only. */}
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
+            <p className="text-sm text-foreground">
+              AI assistants are currently <b>{aiAssistantsEnabled ? "on" : "off"}</b> for this workspace.
+            </p>
+            {isAdmin && (
+              <form
+                action={async () => {
+                  "use server";
+                  const r = await setAiAssistantsEnabledAction(!aiAssistantsEnabled);
+                  if (!r.ok) redirect(`/dashboard/settings?ai_error=${encodeURIComponent(r.error)}`);
+                  redirect("/dashboard/settings");
+                }}
+              >
+                <Button type="submit" variant={aiAssistantsEnabled ? "destructiveGhost" : "accent"} size="sm">
+                  {aiAssistantsEnabled ? "Turn off" : "Turn on"}
+                </Button>
+              </form>
+            )}
+          </div>
 
           <div className="mt-4 divide-y divide-border border-t border-border">
             {grants.length === 0 && (
@@ -133,10 +157,11 @@ export function AiAssistantsSection({
               const isSelf = g.userId === currentUserId;
               const revoked = g.revokedAt !== null;
               const clientsLabel = g.clients === 0 ? "no clients connected" : `${g.clients} client${g.clients === 1 ? "" : "s"}`;
+              const label = isSelf ? "You" : (emailByUser.get(g.userId) ?? g.userId);
               return (
                 <div key={g.userId} className="flex flex-wrap items-center justify-between gap-2 py-3">
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-foreground">{isSelf ? "You" : g.userId}</p>
+                    <p className="truncate text-sm font-semibold text-foreground">{label}</p>
                     <p className="mt-0.5 text-xs text-muted-foreground">
                       {g.lastUsedAt ? `Last used ${formatDateTime(g.lastUsedAt)}` : "Never used"}
                       {" · "}
@@ -148,7 +173,9 @@ export function AiAssistantsSection({
                     <form
                       action={async () => {
                         "use server";
-                        await disconnectAssistantAction(g.userId);
+                        const r = await disconnectAssistantAction(g.userId);
+                        if (!r.ok) redirect(`/dashboard/settings?ai_error=${encodeURIComponent(r.error)}`);
+                        redirect("/dashboard/settings");
                       }}
                     >
                       <Button type="submit" variant="destructiveGhost" size="sm">

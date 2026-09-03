@@ -150,6 +150,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const sp = await searchParams;
   const invited = one(sp.invited);
   const inviteError = one(sp.invite_error);
+  const aiError = one(sp.ai_error);
   const workos = getWorkOS();
   const db = getReadDb(); // read-only page load: rides the DB_DRIVER_READ soak seam (B.3)
   // Emails via one org-scoped listUsers, not a getUser per membership: the
@@ -534,6 +535,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             currentUserId={userId}
             aiAssistantsEnabled={aiAssistantsEnabled}
             grants={aiGrants}
+            emailByUser={emailByUser}
+            error={aiError}
           />
 
         </div>

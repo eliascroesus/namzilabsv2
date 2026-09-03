@@ -91,7 +91,12 @@ describe("get_metric / stored-tile parity", () => {
   it("get_metric answers exactly the stored slot for every published flow and every preset", async () => {
     member("admin");
     const tiles = await publishedFlowTiles(db, "org_a");
-    expect(tiles.length).toBeGreaterThan(0);
+    // Exactly the three seeded flows (Bookings, Full, Unavailable) — not just
+    // "at least one": `toBeGreaterThan(0)` would still pass if the Full or
+    // Unavailable fixture silently failed to seed, quietly dropping the
+    // present-value or unavailable-slot case from the loop below with no
+    // failure anywhere.
+    expect(tiles.length).toBe(3);
     for (const t of tiles) {
       for (const range of PRESETS) {
         const tile = t.tile as { value?: number; byRange?: Record<string, { value?: number; unavailable?: string }> };

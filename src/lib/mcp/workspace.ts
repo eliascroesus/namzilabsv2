@@ -18,14 +18,12 @@ const cache = new Map<string, { at: number; role?: string; member: boolean }>();
  * someone from a workspace takes up to CACHE_TTL_MS to be reflected here BY
  * DESIGN, which is exactly what Settings → AI assistants' "within a minute"
  * sentence describes; forcing an early clear from a write path would be
- * wiring behavior that contradicts the documented guarantee). A `const`
- * rather than `function` declaration on purpose: this is test scaffolding
- * for isolating suites that reuse one (userId, orgId) pair across cases, the
- * same role `check-orphans.ts`'s own comment carves out for an exported
- * constant a test asserts against — not shipped behavior with a caller to
- * wire up.
+ * wiring behavior that contradicts the documented guarantee). No production
+ * caller by design — allowlisted in scripts/check-orphans.ts rather than
+ * disguised as a const: a `function` declaration says plainly what this is,
+ * and the checker is the honest place to record why it has no caller.
  */
-export const clearMembershipCache = (): void => { cache.clear(); };
+export function clearMembershipCache(): void { cache.clear(); }
 
 /** Active membership + role slug, cached 60 s. `undefined` = not a member. */
 async function membership(userId: string, orgId: string): Promise<{ role?: string } | undefined> {

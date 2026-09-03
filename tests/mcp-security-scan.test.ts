@@ -79,6 +79,15 @@ describe("MCP security scan", () => {
       expect(r.isError, t.name).toBeFalsy();
       expect(r.content[0].text, t.name).not.toMatch(FORBIDDEN);
       expect(JSON.stringify(r.structuredContent), t.name).not.toMatch(FORBIDDEN);
+      if (t.name === "list_sources") {
+        // Non-vacuous: without this, an empty `sources: []` would ALSO pass
+        // the credential assertions above with nothing meaningful scanned —
+        // the seeded connection (with its real SECRET-CREDS) must actually be
+        // in the result for the absence of those strings to mean anything.
+        const s = r.structuredContent as { sources: Array<Record<string, unknown>> };
+        expect(s.sources.length, "list_sources").toBeGreaterThan(0);
+        expect(s.sources.some((c) => c.source === "close"), "list_sources").toBe(true);
+      }
     }
   });
 });

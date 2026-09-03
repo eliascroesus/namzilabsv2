@@ -23,6 +23,12 @@ describe("Settings page wires in AiAssistantsSection", () => {
   it("renders it", () => {
     expect(page).toContain("<AiAssistantsSection");
   });
+
+  it("passes the same emailByUser map the Members list uses (finding #8)", () => {
+    const idx = page.indexOf("<AiAssistantsSection");
+    const block = page.slice(idx, page.indexOf("/>", idx));
+    expect(block).toMatch(/emailByUser=\{emailByUser\}/);
+  });
 });
 
 describe("AiAssistantsSection", () => {
@@ -48,6 +54,46 @@ describe("AiAssistantsSection", () => {
     // member, not just an owner / manage_workspace holder.
     const before = src.slice(Math.max(0, formIdx - 400), formIdx);
     expect(before).toMatch(/isAdmin\s*&&/);
+  });
+
+  it("renders the on/off state sentence for every viewer, not just isAdmin (fix round 1, finding #2)", () => {
+    // A non-admin walked through the connect steps needs to know whether the
+    // switch is even on before trying — the sentence must sit OUTSIDE the
+    // isAdmin gate that wraps the switch's form and button.
+    const sentenceIdx = src.indexOf("AI assistants are currently");
+    expect(sentenceIdx, "the on/off sentence was not found").toBeGreaterThan(-1);
+    // The nearest `isAdmin && (` BEFORE the form's call site is the gate that
+    // must NOT also enclose the sentence. Sabotage: move the sentence back
+    // inside `{isAdmin && (...)}` and this fails because the gate then opens
+    // before the sentence too.
+    const formIdx = src.indexOf("await setAiAssistantsEnabledAction");
+    const gateIdx = src.lastIndexOf("isAdmin && (", formIdx);
+    expect(gateIdx, "the isAdmin gate around the switch was not found").toBeGreaterThan(-1);
+    expect(sentenceIdx).toBeLessThan(gateIdx);
+  });
+
+  it("redirects with an error param when the switch action refuses, instead of failing silently (finding #3)", () => {
+    const idx = src.indexOf("await setAiAssistantsEnabledAction");
+    expect(idx, "the switch action call was not found").toBeGreaterThan(-1);
+    // Sabotage: drop the `if (!r.ok) redirect(...)` line and a refusal (e.g. a
+    // non-admin somehow reaching the form) re-renders with no feedback at all.
+    const after = src.slice(idx, idx + 300);
+    expect(after).toMatch(/if\s*\(!r\.ok\)/);
+    expect(after).toMatch(/ai_error/);
+  });
+
+  it("redirects with an error param when disconnecting refuses, instead of failing silently (finding #3)", () => {
+    const idx = src.indexOf("await disconnectAssistantAction");
+    expect(idx, "the disconnect action call was not found").toBeGreaterThan(-1);
+    const after = src.slice(idx, idx + 300);
+    expect(after).toMatch(/if\s*\(!r\.ok\)/);
+    expect(after).toMatch(/ai_error/);
+  });
+
+  it("shows the member's email, falling back to their id, instead of a raw WorkOS id (finding #8)", () => {
+    // Sabotage: read `g.userId` straight into the row label and this fails —
+    // `emailByUser` must be consulted first.
+    expect(src).toMatch(/emailByUser\.get\(g\.userId\)/);
   });
 
   it("tells people removal cuts off the assistant within a minute", () => {

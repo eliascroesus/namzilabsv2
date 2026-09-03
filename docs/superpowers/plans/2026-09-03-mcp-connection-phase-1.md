@@ -39,6 +39,7 @@
 | File | Responsibility |
 |---|---|
 | `src/lib/mcp/env.ts` | `mcpEnabled()`, `authkitDomain()`, `mcpResourceUrl()`, `mcpMaxScanRows()` — the only place MCP env vars are read |
+| | *(Task 12: `mcpMaxScanRows()` was removed — Phase-2-only prep with no Phase 1 caller; `check:orphans` flagged it. Re-added in Phase 2 beside `query_events`, the tool that actually reads it.)* |
 | `src/lib/mcp/auth.ts` | `verifyMcpToken(req, token)` → `AuthInfo` via jose; `bindingKeyOf(payload, token)` |
 | `src/lib/mcp/workspace.ts` | `resolveWorkspace(db, auth)`, `listUserWorkspaces`, `selectWorkspace`, `revokeGrant`, membership cache, role capture |
 | `src/lib/mcp/context.ts` | `McpCallContext` type and `withToolContext(name, handler)` — the per-call pipeline: flag → auth → workspace → grant/switch/permission → rate limit → run → audit → wrap |
@@ -69,6 +70,7 @@
 
 **Interfaces:**
 - Produces: `mcpEnabled(): boolean`, `authkitDomain(): string` (throws when unset), `mcpResourceUrl(): string`, `mcpMaxScanRows(): number` from `src/lib/mcp/env.ts`.
+  *(Task 12: `mcpMaxScanRows()` was removed — Phase-2-only, no Phase 1 caller.)*
 
 - [ ] **Step 1: Install the packages**
 
@@ -153,6 +155,8 @@ export function mcpMaxScanRows(): number {
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : 200_000;
 }
 ```
+
+*(Task 12: `mcpMaxScanRows()` was removed from `src/lib/mcp/env.ts` — Phase-2-only prep for `query_events`, which Phase 1 never shipped, so `check:orphans` had no caller to find. This code sample is left as written for the plan's own history; it no longer matches the file.)*
 
 - [ ] **Step 5: Run the env test**
 
