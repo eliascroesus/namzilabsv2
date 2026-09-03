@@ -7,7 +7,12 @@ export const READ_ONLY = { readOnlyHint: true, destructiveHint: false, idempoten
 
 export type NamzilabsTool = {
   name: string; title: string; description: string;
-  inputSchema: z.ZodTypeAny; outputSchema: z.ZodTypeAny;
+  inputSchema: z.ZodTypeAny;
+  /**
+   * Documentation only — see the ruling on `registerNamzilabsTools` below for
+   * why this is never handed to the SDK.
+   */
+  outputSchema: z.ZodTypeAny;
   /**
    * Exactly what withToolContext returns. `never` for args lets tools with
    * different argument shapes share one list; the ctx type must stay
@@ -30,8 +35,19 @@ export const TOOLS: NamzilabsTool[] = [listWorkspacesTool, selectWorkspaceTool];
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Registrable = { registerTool: (name: string, config: Record<string, unknown>, handler: (...a: any[]) => any) => unknown };
 
+/**
+ * RULING (Tasks 6-7 review, fix round 1): `outputSchema` is deliberately NOT
+ * forwarded to `registerTool`. The SDK validates every non-error tool result
+ * against a declared outputSchema, but a pre-workspace tool can legitimately
+ * answer with the `workspace_required` escape-hatch shape (`{ code, message,
+ * workspaces }`) instead of its documented success shape — a shape neither
+ * tool's real outputSchema can ever satisfy. Declaring it would make the SDK
+ * reject that answer outright. `NamzilabsTool.outputSchema` stays on the tool
+ * object purely for documentation (and for a future tool whose result shape
+ * has no such escape hatch to register it for real).
+ */
 export function registerNamzilabsTools(server: Registrable): void {
   for (const t of TOOLS) {
-    server.registerTool(t.name, { title: t.title, description: t.description, inputSchema: t.inputSchema, outputSchema: t.outputSchema, annotations: READ_ONLY }, t.handler as (...a: never[]) => unknown);
+    server.registerTool(t.name, { title: t.title, description: t.description, inputSchema: t.inputSchema, annotations: READ_ONLY }, t.handler as (...a: never[]) => unknown);
   }
 }
