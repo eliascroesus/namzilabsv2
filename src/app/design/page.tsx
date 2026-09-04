@@ -65,33 +65,27 @@ export const metadata = { title: "Namzilabs — UI kit" };
  * indigo hexes — a kit page confidently lying about the kit.
  */
 /**
- * THE BRAND RAMP IS ONE BLUE, AND IT NO LONGER NEEDS A SECOND COLOUR BESIDE
- * IT.
+ * THE BRAND RAMP IS ONE BLUE, ACROSS THREE JOBS.
  *
- * This table used to be printed next to a violet one, because the two were the
- * halves of a single rule: `brand-*` was what a FILLED object is and `marker-*`
- * was what a LINE is, and the split existed because #eecf00 measures 1.55:1 as
- * a stroke on white and 11.24:1 as a fill. The brand could only ever safely do
- * one of the two jobs.
- *
- * On #1b191a the blue is 9.20:1 as a stroke and 8.08:1 as a fill under
- * near-black ink. Both clear their bar, so 500 DRAWS and 600 FILLS as two steps
- * of one ramp rather than as two colours covering for each other.
- *
- * HOVER WALKS UP, NOT DOWN, and that inverted with the surface: on a light
- * ground brightening the brand moved it toward the white behind it and the
- * label's contrast fell at the moment of the press. On near-black, raised means
- * lighter.
+ * `600` fills (`--primary`, both themes, under white ink at 4.68:1). `500` is
+ * the brand itself — the Figma's own #007BFF — one step too light to carry
+ * white text at 4.5:1 (3.98:1), so it never fills, but exactly right as the
+ * hover of the fill, a decorative dot, a chart's default series and the
+ * workspace-initial tint. `400` and `800` draw: the dark stroke and the light
+ * stroke, one rung lighter than the fill on each surface, because a 1px ring
+ * owes more room than a button's own ink needs.
  */
 const BRAND: Array<{ step: string; cls: string; hex: string }> = [
-  { step: "50", cls: "bg-brand-50", hex: "#e0f7fd" },
-  { step: "100", cls: "bg-brand-100", hex: "#b5ecfa" },
-  { step: "200", cls: "bg-brand-200", hex: "#7fdff6" },
-  { step: "300", cls: "bg-brand-300", hex: "#45d2f2" },
-  { step: "400", cls: "bg-brand-400", hex: "#1ac9ed" },
-  { step: "500", cls: "bg-brand-500", hex: "#00cdf5" },
-  { step: "600", cls: "bg-brand-600", hex: "#00c0e8" },
-  { step: "700", cls: "bg-brand-700", hex: "#00a6c9" },
+  { step: "50", cls: "bg-brand-50", hex: "#e6f2ff" },
+  { step: "100", cls: "bg-brand-100", hex: "#cce5ff" },
+  { step: "200", cls: "bg-brand-200", hex: "#99cbff" },
+  { step: "300", cls: "bg-brand-300", hex: "#66b2ff" },
+  { step: "400", cls: "bg-brand-400", hex: "#3d9bff" },
+  { step: "500", cls: "bg-brand-500", hex: "#007bff" },
+  { step: "600", cls: "bg-brand-600", hex: "#0070e8" },
+  { step: "700", cls: "bg-brand-700", hex: "#0069d9" },
+  { step: "800", cls: "bg-brand-800", hex: "#0062cc" },
+  { step: "900", cls: "bg-brand-900", hex: "#0056b3" },
 ];
 /**
  * THE SURFACE HALF of the neutral ramp — the five steps the interface is built

@@ -184,53 +184,48 @@
      technical strings stop wearing the browser's fallback serif-mono mix. */
   --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
 
-  /* --- Brand: the green, and why it no longer needs a rule to govern it ----
-   * ONE COLOUR, BOTH JOBS.
+  /* --- Brand: blue, and why one ramp does both jobs -----------------------
+   * ONE COLOUR, THREE JOBS, ACROSS TWO RETHEMES.
    *
    * The kit ran "YELLOW FILLS, VIOLET DRAWS" for exactly one reason, and it is
-   * worth writing down because the reason is now gone rather than forgotten.
-   * #eecf00 measures 1.55:1 as a stroke on white and 11.24:1 as a fill under
-   * near-black ink. That is not a dim line and a bright box, it is an ABSENT
-   * line and a superb box — so the brand could only ever safely do one of the
-   * two jobs, a second colour had to do the other, and `check-ui.ts` needed a
+   * worth keeping on the record because the reason is gone rather than
+   * forgotten. #eecf00 measured 1.55:1 as a stroke on white and 11.24:1 as a
+   * fill under near-black ink — an ABSENT line and a superb box, so the brand
+   * could only ever safely do one of the two jobs and `check-ui.ts` needed a
    * rule (`yellow-as-stroke`) to keep them from swapping places.
    *
-   * On #1b191a the blue measures:
+   * The 2 September cyan re-theme retired that rule once the brand moved onto
+   * a hue that cleared its bar both ways. The 4 September Figma replaces the
+   * cyan itself with #007BFF — a full re-cut, not a hex swap, because the
+   * ground it is measured against moves too (three surfaces from the next
+   * task on: #0F1011, #111111, #181818, in place of one #1B191A).
    *
-   *                                as a STROKE / TEXT    as a FILL under #1b191a
-   *   on the ground   #1b191a            9.20:1                    —
-   *   on a card       #272426            8.49:1                    —
-   *   #00c0e8 fill                         —                     8.08:1
+   * `--primary` fills, `--marker` draws, and they are two steps of one ramp
+   * rather than two colours holding each other's job open.
    *
-   * Both columns clear their bar with room, so the split has nothing left to
-   * prevent. `--primary` fills, `--marker` draws, and they are two steps of one
-   * ramp rather than two colours holding each other's job open. The gate rule
-   * retires with the token it policed.
-   *
-   * HOVER WALKS UP, NOT DOWN. On a light ground the brand darkened under the
-   * pointer, because brightening a yellow moves it toward the white behind it
-   * and the label's contrast falls at the moment of the press. On near-black
-   * the argument inverts with the surface: raised means lighter, so hover is
-   * `500` and the press is `700`.
+   * HOVER WALKS UP, NOT DOWN, on dark. On a light ground the brand darkened
+   * under the pointer, because brightening a colour moves it toward the white
+   * behind it and the label's contrast falls at the moment of the press. On
+   * near-black the argument inverts with the surface: raised means lighter, so
+   * hover is `500` and the press is `700`.
    */
-  /* THE RAMP IS CYAN NOW, ANCHORED ON THE FILL RATHER THAN THE MIDDLE.
-     #00c0e8 is the value the design supplies, and it is supplied as the shape
-     of a BUTTON — "New flow", "Refresh all", the lit period pill — so it is
-     `600`, the step `--primary` reads, and the rest of the ladder is cut
-     around it rather than the other way about. The green it replaces was
-     anchored the same way and every ratio below was re-measured, not carried
-     over: the ground moved four counts lighter at the same time (see the
-     neutral ramp), so every number in the old table was stale by construction. */
-  --color-brand-50: #e0f7fd;
-  --color-brand-100: #b5ecfa;
-  --color-brand-200: #7fdff6;
-  --color-brand-300: #45d2f2;
-  --color-brand-400: #1ac9ed;
-  --color-brand-500: #00cdf5; /* THE STROKE — 9.20:1 on the ground, 8.49:1 on a card */
-  --color-brand-600: #00c0e8; /* THE FILL — 8.08:1 under #1b191a ink */
-  --color-brand-700: #00a6c9; /* pressed */
-  --color-brand-800: #008ba8;
-  --color-brand-900: #00647a; /* THE LIGHT THEME'S STROKE — 6.77:1 on white */
+  /* THE 4 SEPTEMBER FIGMA SUPPLIES EVERY STEP. #007BFF is named as THE BRAND,
+     but it is not the FILL: measured white-on-fill it is 3.98:1, under the 4.5
+     a 15px label owes. `--primary` reads one step deeper, `600` (#0070E8,
+     4.68:1 white-on-fill) — indistinguishable beside the named value, and it
+     clears the bar the Figma's own choice does not. #007BFF keeps its place at
+     `500`: the hover of the fill, the workspace-initial tint, decorative dots
+     and the chart's default series. */
+  --color-brand-50: #e6f2ff;
+  --color-brand-100: #cce5ff;
+  --color-brand-200: #99cbff;
+  --color-brand-300: #66b2ff; /* 8.51:1 on #0F1011 */
+  --color-brand-400: #3d9bff; /* THE DARK STROKE (`--marker` in `.dark`) — 6.65:1 on #0F1011, 6.59:1 on #111111, 6.20:1 on #181818 */
+  --color-brand-500: #007bff; /* THE BRAND — hover of the fill, the workspace-initial tint, decorative dots, the chart's default series. 4.79:1 as a stroke on #0F1011 */
+  --color-brand-600: #0070e8; /* THE FILL (`--primary`, both themes) under WHITE ink — 4.68:1 */
+  --color-brand-700: #0069d9; /* pressed — 5.22:1 under white */
+  --color-brand-800: #0062cc; /* THE LIGHT STROKE (`--marker` in `:root`) — 5.80:1 on white */
+  --color-brand-900: #0056b3; /* reserved — the light theme's hover-of-a-stroke, 7.04:1 on white */
 
   /* --- The decorative set -------------------------------------------------
    * The kit page draws its chips and pins in a fixed set beside the neutrals.
@@ -574,12 +569,12 @@
  *    wrong here.
  *
  * THE BRAND CANNOT BE ONE VALUE, AND THAT IS THE SAME TRAP THE YELLOW FELL IN.
- * #00cdf5 measures 1.9:1 on white — invisible as a rule, a link or a glyph, in
- * exactly the way #eecf00 was. So the FILL stays `brand-600` in both themes
- * (it carries near-black ink at 8.08:1 either way, because a filled button is
- * the same object at both exposures) and the STROKE step drops to `brand-900`
- * here: 6.77:1 on white, where on the dark ground it would be 2.59:1. Two rungs of one ramp, one role
- * name each, which is the arrangement `--primary` / `--marker` was built for.
+ * #007BFF measures 3.98:1 white-on-fill — under the 4.5 a 15px label owes, in
+ * the same way #eecf00 was invisible as a rule. So the FILL stays `brand-600`
+ * (#0070E8, 4.68:1 white-on-fill) in both themes, and the STROKE step drops to
+ * `brand-800` on white — 5.80:1 — where `brand-400` (the dark theme's stroke)
+ * is 6.65:1 on the ground. Two rungs of one ramp, one role name each, which is
+ * the arrangement `--primary` / `--marker` was built for.
  */
 :root {
   /* ---- Surface ----------------------------------------------------------- */
@@ -604,12 +599,13 @@
 
   /* ---- Brand ------------------------------------------------------------- */
   --primary: var(--color-brand-600); /* the fill does not change with the theme */
-  --primary-foreground: var(--color-neutral-950);
-  --marker: var(--color-brand-900); /* 5.91:1 on white, where brand-500 is 1.9:1 */
-  --brand-soft: rgb(0 192 232 / 0.1);
-  /* 30%, not the dark theme's 20%: the same alpha over white is a third of the
-     edge it is over #272426, and a wash with no ring is not a badge. */
-  --brand-soft-line: rgb(0 192 232 / 0.3);
+  --primary-foreground: #ffffff;
+  --marker: var(--color-brand-800); /* THE LIGHT STROKE — 5.80:1 on white */
+  --brand-soft: rgb(0 123 255 / 0.1);
+  /* 30%, not the dark theme's 25%: the same alpha over white is a smaller edge
+     than it is over the near-black surfaces, and a wash with no ring is not a
+     badge. */
+  --brand-soft-line: rgb(0 123 255 / 0.3);
 
   /* ---- Neutral roles ----------------------------------------------------- */
   --secondary: #f1f3f5;
@@ -681,22 +677,24 @@
   --control: var(--color-neutral-900);
 
   /* ---- Brand ------------------------------------------------------------- */
-  /* THE FILL. Blue under near-black ink at 8.08:1 — and the ink is a CONSTANT
-     rather than `--foreground`, because a primary button is one object and the
-     thing written on it does not get to be #e8e6e7 on #00c0e8 (1.74:1). */
+  /* THE FILL. #0070E8 under WHITE ink at 4.68:1 — white rather than
+     `--foreground`, because a primary button is one object and the ink on it
+     does not change with the theme. It is white in `:root` too now, where the
+     old cyan needed near-black ink in both. */
   --primary: var(--color-brand-600);
-  --primary-foreground: var(--color-neutral-950);
+  --primary-foreground: #ffffff;
 
-  /* THE STROKE. Every line, ring and coloured glyph: the focus ring, links, the
-     active tab's rule, the active rail chip's glyph, a selected edge. 9.20:1 on
-     the ground and 8.49:1 on a card, so unlike the violet it replaces it needs
-     no second step to carry text. */
-  --marker: var(--color-brand-500);
+  /* THE STROKE. Every line, ring and coloured glyph: the focus ring, links,
+     the active tab's rule, a selected edge. 6.65:1 on the ground, 6.59:1 on
+     the chrome, 6.20:1 on the panel — one step LIGHTER than the fill (`400`,
+     not `500`), because the fill's own step reads as a stroke at only 4.79:1
+     and a 1px ring owes more room than a button's ink does. */
+  --marker: var(--color-brand-400);
   /* The brand as a WASH — the "Free" and "Developer" pills, a selected row, a
-     soft banner. Alpha rather than a mixed step so it sits correctly on the
-     card AND on the ground without a second token. */
-  --brand-soft: rgb(0 192 232 / 0.1);
-  --brand-soft-line: rgb(0 192 232 / 0.2);
+     soft banner. Alpha rather than a mixed step so it sits correctly on any of
+     the dark surfaces without a second token. */
+  --brand-soft: rgb(0 123 255 / 0.1);
+  --brand-soft-line: rgb(0 123 255 / 0.25);
 
   /* ---- Neutral roles ----------------------------------------------------- */
   --secondary: var(--color-neutral-700);

@@ -56,13 +56,20 @@ function darkToken(name: string): string | null {
 }
 
 describe("the console's supplied constants", () => {
-  it("fills with #00c0e8 and grounds on #1b191a", () => {
+  it("fills with #0070e8", () => {
     // The blue is the FILL step, because it was supplied as the shape of a
     // button — `--primary` reads `brand-600` and nothing else may be the
-    // primary. The ground is `neutral-950`, which every surface is cut from.
-    expect(token("color-brand-600")).toBe("#00c0e8");
-    expect(token("color-neutral-950")).toBe("#1b191a");
+    // primary. #0070E8, not the Figma's own #007BFF: that value measures
+    // 3.98:1 white-on-fill, under the 4.5 a 15px label owes; one step deeper
+    // is indistinguishable beside it and clears the bar.
+    expect(token("color-brand-600")).toBe("#0070e8");
     expect(token("primary")).toBe("var(--color-brand-600)");
+  });
+
+  it("grounds on #1b191a", () => {
+    // The ground every surface is cut from. Untouched by this task — the
+    // three-surface recut is a separate change.
+    expect(token("color-neutral-950")).toBe("#1b191a");
   });
 
   it("keeps the canvas and the chrome on one colour", () => {
