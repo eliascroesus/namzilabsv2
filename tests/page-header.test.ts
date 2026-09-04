@@ -1,7 +1,12 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { PageHeader } from "@/components/ui/page";
+
+const root = join(__dirname, "..");
+const read = (p: string) => readFileSync(join(root, p), "utf8");
 
 /**
  * THE THIRD ZONE, AND THE PROMISE THE OTHER SEVENTEEN CALL SITES GET FOR
@@ -36,5 +41,35 @@ describe("PageHeader's title, with and without a tab strip beside it", () => {
     expect(tabsAt).toBeGreaterThan(-1);
     expect(titleAt).toBeGreaterThan(tabsAt);
     expect(actionsAt).toBeGreaterThan(titleAt);
+  });
+
+  it("spells the h1 recipe exactly once, in one title block shared by both layouts", () => {
+    // "The h1 is the ONLY page-title spelling in the product" is a claim the
+    // two-branch component used to make false by spelling the class string
+    // twice, once per branch. A source count is what actually pins "once".
+    const source = read("src/components/ui/page.tsx");
+    const matches = source.match(/text-display-xs font-semibold tracking-\[0\.07px\] text-heading/g) ?? [];
+    expect(matches.length, "the h1 recipe must appear exactly once in the file").toBe(1);
+  });
+
+  it("lets the tab strip scroll inside its own container instead of widening the page", () => {
+    // The spec's Mobile section requires the tab strip to scroll in its own
+    // overflow container rather than push the page into horizontal scroll —
+    // the same failure mode `actions`' own `min-w-0` note already guards
+    // against for the OTHER two columns of this row.
+    const source = read("src/components/ui/page.tsx");
+    expect(source).toMatch(/flex min-w-0 items-center overflow-x-auto/);
+  });
+
+  it("never gives the title column its own min-w-0", () => {
+    // The title column must stay free to demand its natural width — it is
+    // the SIDE columns (tabs, actions) that give way when the row is tight,
+    // not the title. See the note above PageHeader's return for why.
+    const source = read("src/components/ui/page.tsx");
+    const titleWrappers = [...source.matchAll(/<HeaderTitle\s[^>]*className="([^"]+)"/g)].map((m) => m[1]);
+    expect(titleWrappers.length, "both layouts must render the shared title block").toBeGreaterThanOrEqual(2);
+    for (const cls of titleWrappers) {
+      expect(cls, "the title column must not get min-w-0").not.toMatch(/\bmin-w-0\b/);
+    }
   });
 });

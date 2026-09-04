@@ -199,7 +199,89 @@ export type PageHeaderProps = {
   className?: string;
 };
 
+/**
+ * THE TITLE BLOCK, SPELLED ONCE FOR BOTH LAYOUTS.
+ *
+ * The h1 recipe is "the ONLY page-title spelling in the product" per the doc
+ * comment above — a claim `PageHeader` below used to make false by spelling
+ * the h1 and its lede TWICE, once per branch, in near-identical JSX. One
+ * `<h1>` and one lede `<p>` live here; each branch below supplies only the
+ * wrapper alignment that actually differs between them (centred and stacked
+ * in the three-zone row, left-aligned in the plain one) — see the note above
+ * `PageHeader`'s `return` for why neither wrapper takes `min-w-0`.
+ */
+function HeaderTitle({
+  title,
+  lede,
+  className,
+}: {
+  title: React.ReactNode;
+  lede?: React.ReactNode;
+  className: string;
+}) {
+  return (
+    <div className={className}>
+      <h1 className="text-display-xs font-semibold tracking-[0.07px] text-heading">{title}</h1>
+      {lede && <p className="max-w-2xl text-sm font-normal leading-5 text-muted-foreground">{lede}</p>}
+    </div>
+  );
+}
+
 export function PageHeader({ title, lede, actions, tabs, back, className }: PageHeaderProps) {
+  /**
+   * THE INSTITUTIONAL REASONING BEHIND FOUR CHOICES BELOW, KEPT IN ONE PLACE
+   * NOW THAT THE TITLE MARKUP LIVES ONCE (`HeaderTitle`, above) RATHER THAN
+   * ONCE PER BRANCH.
+   *
+   * NO `min-w-0` ON THE TITLE COLUMN, IN EITHER LAYOUT — THE FIX FOR "Vie…".
+   * The two-zone row wraps; the three-zone row is a grid. In both, giving the
+   * title its own `min-w-0` lets it shrink below its own content instead of
+   * the row making room for it: on the flex row a 520px period control once
+   * squeezed the h1 down to a few characters and a `truncate` span did the
+   * rest — "View 2" rendered as "Vie…" with an entire empty row beneath it.
+   * On the grid, the title's `auto` column doing the same thing would push
+   * the SIDE tracks around instead: it is `tabs` and `actions` — the columns
+   * that grow unpredictably — that carry `min-w-0` (see the grid comment
+   * below) so THEY give way, and the title stays free to demand its natural
+   * width in both layouts.
+   *
+   * `items-start` IN THE TWO-ZONE ROW, `items-center` IN THE THREE-ZONE ONE —
+   * BOTH ARE THE SAME FIX FOR THE SAME BUG. A flex column stretches its
+   * children by default, so an unconstrained title block let a title
+   * `Button`'s hover wash run the full width of whichever row it sat in
+   * rather than hug the word it was cast from — `justify-start` merely parks
+   * the text at the edge of a wash that is already too wide. Cross-axis
+   * alignment tracks the title's own alignment (left in the plain header,
+   * centred beside a centred title) so the wash hugs the name in both cases,
+   * because the name is what you press.
+   *
+   * THE TITLE IS 24px (`text-display-xs`), `text-heading` NOT
+   * `text-foreground`. It was `text-xl` (20px) while `/design` printed
+   * `display-xs` beside "Page titles (PageHeader)" — the product's one h1 and
+   * the page documenting it had drifted a step. `text-heading` is the one
+   * place besides the metric numeral this product reaches past body ink on
+   * purpose: a page title in the same grey as the sentence under it is not a
+   * title, and it was `text-white` once, which was correct in a one-theme
+   * product and INVISIBLE the moment the light theme came back. 24/600 at
+   * 32px leading with 0.07px tracking is what the reference measures; no
+   * `.font-display`, because that class's -0.022em tracking is TIGHTER than
+   * the reference's own +0.07px and belongs to the landing's 48–64px hero
+   * instead. The lede sits at 14px under an 8px gap — a SUBTITLE naming the
+   * page's scope in a phrase, not a second heading — and keeps `max-w-2xl`
+   * for the pages that still put a whole sentence there.
+   *
+   * `actions` TAKES `min-w-0`, NOT `shrink-0`. `shrink-0` was free while this
+   * slot held only buttons — `buttonVariants`' own base is already
+   * `shrink-0`, so the wrapper's flag changed nothing for the pages that put
+   * buttons here. It was NOT free for the board, whose period control was a
+   * ~520px track: `shrink-0` pins a flex item at its max-content width even
+   * after `flex-wrap` drops it onto its own line, which pushed the WHOLE PAGE
+   * into horizontal scroll on a narrow viewport — the exact failure the
+   * track's own internal scroller could not prevent from inside a parent
+   * that refuses to narrow. The three-zone row's `tabs` and `actions`
+   * columns carry the same `min-w-0` for the identical reason: a grid track
+   * defaults to `min-width: auto`, the same bug in a different layout mode.
+   */
   return (
     /**
      * NO RULE UNDER THE HEADER ANY MORE — the spacing survives, the hairline
@@ -216,12 +298,14 @@ export function PageHeader({ title, lede, actions, tabs, back, className }: Page
     <header className={cn("pb-6", className)}>
       {back && (
         /**
-         * A PILL, NOT A LINE OF TEXT. The sheet's shape rule is pill-first, and
-         * this was the one navigation control in the app with no box at all: a
-         * 14px string with a 14px glyph beside it, ~90px wide and 17px tall,
-         * which is under every pointer-target minimum there is. Same colour,
-         * same words, now with a hit area and a hover state — pulled left by
-         * its own padding so the words still line up with the title beneath.
+         * AN 8px CONTROL, NOT A LINE OF TEXT. This was the one navigation
+         * control in the app with no box at all: a 14px string with a 14px
+         * glyph beside it, ~90px wide and 17px tall, which is under every
+         * pointer-target minimum there is. `rounded-control` — the same 8px
+         * rectangle every other pressable thing in the kit takes, per the
+         * 4 Sep 2026 Figma — gives it a hit area and a hover state. Same
+         * colour, same words, pulled left by its own padding so the words
+         * still line up with the title beneath.
          */
         <Link
           href={back.href}
@@ -239,11 +323,14 @@ export function PageHeader({ title, lede, actions, tabs, back, className }: Page
          * wide the tab strip or the actions are, rather than merely centred
          * in whatever space `justify-content: center` happens to leave over.
          *
-         * `min-w-0` on the side columns is the same fix `actions` always
-         * needed below: a grid track defaults to `min-width: auto`, which
-         * refuses to shrink below its content's own width — the same bug
-         * that once pushed a 520px period track into horizontal page scroll,
-         * and a grid column inherits the identical failure mode.
+         * `min-w-0` on the side columns is the same fix `actions` has always
+         * needed (see the note above the header's return): a grid track
+         * defaults to `min-width: auto`, which refuses to shrink below its
+         * content's own width — the same bug that once pushed a 520px period
+         * track into horizontal page scroll, and a grid column inherits the
+         * identical failure mode. The tab strip additionally scrolls inside
+         * its own container (`overflow-x-auto`) rather than relying on that
+         * shrink alone, per the spec's Mobile section.
          *
          * Base layout stacks (title, then tabs, then actions) below `sm`,
          * where three side-by-side zones have no room left to be zones.
@@ -254,21 +341,15 @@ export function PageHeader({ title, lede, actions, tabs, back, className }: Page
             back && "mt-3",
           )}
         >
-          <div className="flex min-w-0 items-center">{tabs}</div>
-          <div className="flex flex-col items-center gap-2 text-center">
-            <h1 className="text-display-xs font-semibold tracking-[0.07px] text-heading">{title}</h1>
-            {lede && <p className="max-w-2xl text-sm font-normal leading-5 text-muted-foreground">{lede}</p>}
-          </div>
+          <div className="flex min-w-0 items-center overflow-x-auto">{tabs}</div>
+          <HeaderTitle title={title} lede={lede} className="flex flex-col items-center gap-2 text-center" />
           {actions && (
             <div className="flex min-w-0 flex-wrap items-center justify-center gap-2 sm:justify-end">{actions}</div>
           )}
         </div>
       ) : (
         <div className={cn("flex flex-wrap items-center justify-between gap-x-4 gap-y-3", back && "mt-3")}>
-          <div className="flex flex-col items-start gap-2">
-            <h1 className="text-display-xs font-semibold tracking-[0.07px] text-heading">{title}</h1>
-            {lede && <p className="max-w-2xl text-sm font-normal leading-5 text-muted-foreground">{lede}</p>}
-          </div>
+          <HeaderTitle title={title} lede={lede} className="flex flex-col items-start gap-2" />
           {actions && <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">{actions}</div>}
         </div>
       )}

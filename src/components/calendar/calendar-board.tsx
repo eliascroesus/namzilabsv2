@@ -456,10 +456,10 @@ export function CalendarBoard({
             >
               <ChevronRight />
             </Button>
-            {/* "This month" LIVES IN THE GROOVE TOO, as a pill — it is one of
-                the spans this control can select, exactly as "Today" is on the
-                range track. Outside it, it was a fourth loose object on a row
-                that already had three. */}
+            {/* "This month" LIVES IN THE GROOVE TOO, as one of the track's 8px
+                segments — it is one of the spans this control can select,
+                exactly as "Today" is on the range track. Outside it, it was a
+                fourth loose object on a row that already had three. */}
             <Button
               variant="ghost"
               onClick={() => setMonthIdx(months.length - 1)}
@@ -476,9 +476,12 @@ export function CalendarBoard({
               best day" and a number they cannot reproduce. Three letters on
               the control that changes days says it where it applies, instead
               of a sentence at the top of the page that says it once.
-              A PILL, because the sheet's chips are pills — and it stays
-              neutral: a footnote that takes a colour from the accent set would
-              be the third hue in a bar that already has two. */}
+              STILL A CIRCLE, though the sheet's chips are 8px rectangles now
+              — this one is a static tag rather than a pressable chip, the same
+              "badge and count" exception the day-cell numeral and the legend
+              swatch below keep. It stays neutral: a footnote that took a
+              colour from the accent set would be the third hue in a bar that
+              already has two. */}
           <span
             title="Days are UTC — the same days your metrics are counted in"
             className="rounded-full border border-border px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground"

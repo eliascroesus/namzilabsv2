@@ -26,16 +26,19 @@ function Tabs({
 }
 
 /**
- * THE TRACK IS AN 8px RECTANGLE, AND SO IS THE TAB INSIDE IT.
+ * `default` IS AN 8px RECTANGLE TRACK WITH AN 8px RECTANGLE TAB INSIDE IT;
+ * `line` HAS NO TRACK AT ALL.
  *
  * `p-[3px]` became `p-1`. Three pixels is not a step on the 4px grid; it was
  * there so a squarish `rounded-surface` tab could sit inside a squarish
  * `rounded-surface` track without the two corners fighting. `--radius-control`
- * is 8px, not the fully round capsule this comment used to claim, so both
- * track and tab are ordinary rounded rectangles and the inset is simply
- * breathing room — which is what puts the active tab's edge on the same
- * rhythm as everything else in the row, whether it is filled (`default`) or
- * bare (`line`).
+ * is 8px, not the fully round capsule this comment used to claim, so in the
+ * `default` variant both track and tab are ordinary rounded rectangles, and
+ * the inset is simply breathing room — which is what puts the active tab's
+ * edge on the same rhythm as everything else in the row. `line` shares the
+ * same `rounded-control` on its own tab (there is still a hover wash to
+ * round) but draws no track at all — `bg-transparent`, no border — so it is
+ * bare where `default` is enclosed, not the same shape in a different colour.
  *
  * The `line` variant keeps its padding at zero: it has no track to inset from,
  * and 4px there pushed the underline 4px clear of the text it underlines.

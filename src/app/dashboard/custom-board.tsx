@@ -991,9 +991,13 @@ function EmptyTile({ chart, canEdit, onPick }: { chart: string; canEdit: boolean
     <Button
       variant="ghost"
       onClick={onPick}
-      /* `h-auto`/`w-full` because `buttonVariants` opens as a one-line pill, and
-         the arbitrary radius spelling is what displaces its `rounded-full` —
-         `rounded-surface` loses to it in `cn()`.
+      /* `h-auto`/`w-full` because `buttonVariants` opens as a one-line control
+         at the FIELD radius (`rounded-control`, 8px), and this slot wants the
+         CARD radius (`rounded-surface`, 10px) instead — a real override, just
+         no longer one escaping a pill. `cn()`'s tailwind-merge has known the
+         kit's radius names since `lib/utils.ts` registered them, so a plain
+         `rounded-surface` would resolve correctly today; the arbitrary-value
+         spelling here is simply the override this file already used.
          THE HOVER EDGE IS THE MARKER'S, because a border is a line: the brand
          yellow measures 1.55:1 as a stroke on this card and the dashed rim would
          read as vanishing under the pointer rather than as answering it. */

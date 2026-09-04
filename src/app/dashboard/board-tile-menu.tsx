@@ -10,23 +10,17 @@ import { cn } from "@/lib/utils";
 import { MENU_ATTR, TILE_ATTR } from "./board-drag";
 
 /**
- * A MENU ROW'S SHAPE, SPELLED ONCE — and spelled as an arbitrary value on
- * purpose.
+ * A MENU ROW'S SHAPE, SPELLED ONCE.
  *
  * The kit gives a menu exactly two shapes and no third: a floating PANEL is
  * `rounded-surface` with the surface shadow, and a ROW inside it is
- * `rounded-control`. A row that is a PILL is the third option — pills belong to
- * buttons and chips, not to the inside of a panel — and every row in the
- * board's three menus was one, because every row here is a `Button` (a raw
- * `<button>` under `src/app/` fails `check:ui`'s ninth rule) and `Button`'s
- * base is `rounded-full`.
- *
- * `rounded-control` cannot take that off, which is the part worth writing down:
- * `cn()`'s tailwind-merge only recognises radii it can read as sizes, so it
- * keeps BOTH classes, and Tailwind emits them alphabetically — `.rounded-full`
- * lands after `.rounded-control` and quietly wins. The arbitrary form IS
- * recognised, so the pill is dropped, and it still names the kit's token rather
- * than freezing an 8px literal into twenty call sites.
+ * `rounded-control`. `Button`'s own base is `rounded-control` now — the 4 Sep
+ * 2026 Figma retired the pill base entirely (see `ui/button.tsx`) — so this
+ * arbitrary-value spelling is no longer displacing a pill on every row here
+ * (every row is a `Button`, since a raw `<button>` under `src/app/` fails
+ * `check:ui`'s ninth rule); it simply says the same 8px radius the base
+ * already draws, in a form `cn()`'s tailwind-merge has recognised since
+ * `lib/utils.ts` registered the kit's own radius names.
  *
  * Exported because the column's menu and the view tab's menu are the same
  * surface wearing different contents, and three spellings of one shape is

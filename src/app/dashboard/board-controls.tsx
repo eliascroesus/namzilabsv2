@@ -891,13 +891,15 @@ export function ViewTitle({
       }}
       title="Rename this view"
       /**
-       * `rounded-control`, BECAUSE `buttonVariants` IS A PILL.
+       * `rounded-control` — WHICH `buttonVariants`' BASE ALREADY IS.
        *
-       * Every other button in the kit is one line tall, so `rounded-full` reads
-       * as a pill. This one is `h-auto` and WRAPS, and a full radius on a
-       * two-line box is half its height — so a wrapped title sat inside a grey
-       * circle the size of the words. The 8px control radius is the shape a
-       * multi-line pressable block should have had all along.
+       * This used to explain an override: every other button in the kit was
+       * one line tall and `rounded-full` read as a pill, so a WRAPPED title
+       * (`h-auto`, two lines) needed an explicit `rounded-control` to avoid
+       * sitting inside a grey circle the size of the words. The 4 Sep 2026
+       * Figma retired the pill base entirely (see `ui/button.tsx`), so
+       * `rounded-control` on a multi-line button is no longer fighting
+       * anything — it is simply what the base already draws.
        *
        * `leading-tight` for the same reason: the display step's own 38px
        * line-height is drawn for a single heading, and two lines of it inside a
@@ -913,10 +915,12 @@ export function ViewTitle({
        * behaviour is for the NAME to stay whole and the period control to drop
        * to its own line when they cannot share one.
        *
-       * `rounded-control` now actually applies, too. It was passed before and
-       * silently lost to `buttonVariants`' `rounded-full`, because
-       * tailwind-merge did not know the kit's radius names and kept both — so a
-       * wrapped title rendered inside a grey circle. See lib/utils.ts.
+       * `rounded-control` needs no help applying any more, either. It used to
+       * be passed and silently lost to `buttonVariants`' `rounded-full`
+       * because tailwind-merge did not know the kit's radius names and kept
+       * both — see lib/utils.ts, which fixed that — and separately, the base
+       * itself is `rounded-control` now, so there is no pill left to lose to
+       * in the first place.
        */
       /**
        * THE WASH IS ON THE TEXT, NOT ON THE BUTTON — and it is inline style.

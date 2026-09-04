@@ -54,11 +54,13 @@ function AvatarFallback({
         // analytics tool — so treating it as the degraded case left the
         // app's people looking like missing images.
         //
-        // `--foreground` carries the initials: `--avatar` is a plain
-        // near-black neutral fill, not a tint with a matching text pair, so
-        // the ink is the kit's ordinary white body colour rather than a
-        // role built for this one fill.
-        "flex size-full items-center justify-center rounded-full bg-avatar text-sm font-semibold text-foreground group-data-[size=sm]/avatar:text-xs",
+        // `--foreground` carries the initials in BOTH themes: a near-black
+        // fill under white ink on dark, a white disc under black ink on
+        // light. `border-input` is what actually FINDS the circle in the
+        // second case — a white disc on a `#F7F8F9` page has no edge of its
+        // own, the same problem every white surface in this kit has — and it
+        // costs nothing on dark, where `--input` already aliases `--border`.
+        "flex size-full items-center justify-center rounded-full border border-input bg-avatar text-sm font-semibold text-foreground group-data-[size=sm]/avatar:text-xs",
         className
       )}
       {...props}
@@ -110,10 +112,13 @@ function AvatarGroupCount({
     <div
       data-slot="avatar-group-count"
       className={cn(
-        // Same `--avatar` fill as `AvatarFallback` — one neutral circle for
-        // every avatar-shaped thing the kit draws, per the shape rule's
-        // "circles only for avatars/badges" clause.
-        "relative flex size-8 shrink-0 items-center justify-center rounded-full bg-avatar text-sm text-foreground ring-2 ring-background group-has-data-[size=lg]/avatar-group:size-10 group-has-data-[size=sm]/avatar-group:size-6 [&>svg]:size-4 group-has-data-[size=lg]/avatar-group:[&>svg]:size-5 group-has-data-[size=sm]/avatar-group:[&>svg]:size-3",
+        // Same `--avatar` fill AND the same `--input` edge as
+        // `AvatarFallback` — one neutral circle for every avatar-shaped
+        // thing the kit draws, per the shape rule's "circles only for
+        // avatars/badges" clause. `ring-2 ring-background` stays on top of
+        // the border: the ring is what separates one overlapping avatar from
+        // the next in the stack, a job the 1px edge cannot do on its own.
+        "relative flex size-8 shrink-0 items-center justify-center rounded-full border border-input bg-avatar text-sm text-foreground ring-2 ring-background group-has-data-[size=lg]/avatar-group:size-10 group-has-data-[size=sm]/avatar-group:size-6 [&>svg]:size-4 group-has-data-[size=lg]/avatar-group:[&>svg]:size-5 group-has-data-[size=sm]/avatar-group:[&>svg]:size-3",
         className
       )}
       {...props}
