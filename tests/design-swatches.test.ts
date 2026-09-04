@@ -185,3 +185,50 @@ describe("the theme-color meta matches the app background", () => {
     expect([...dark].filter((n) => !light.has(n)), "declared in dark but not light").toEqual([]);
   });
 });
+
+describe("the blue re-theme's supplied shape and type constants", () => {
+  it("draws the Figma's own card shadow", () => {
+    const m = css.match(/--shadow-card:\s*([^;]+);/);
+    expect(m?.[1].replace(/\s+/g, " ").trim()).toBe("0 1px 2px rgb(0 0 0 / 0.2), 0 0 3px rgb(0 0 0 / 0.1)");
+  });
+
+  it("shrinks the tile numeral to 28px/40px, set in Inter", () => {
+    const size = css.match(/--text-display-md:\s*([0-9.]+)rem;/)?.[1];
+    const lh = css.match(/--text-display-md--line-height:\s*([0-9.]+)rem;/)?.[1];
+    expect(size, "--text-display-md is not a rem literal").toBeTruthy();
+    expect(Number(size) * 16).toBe(28);
+    expect(Number(lh) * 16).toBe(40);
+    const numeral = css.match(/\.stat-numeral\s*\{([\s\S]*?)\n\}/)?.[1] ?? "";
+    expect(numeral, "the .stat-numeral rule is missing").toBeTruthy();
+    expect(numeral).toMatch(/font-family:\s*var\(--font-inter/);
+  });
+
+  it("gives the wordmark its own class — Inter 900, the one weight above 600", () => {
+    const wordmark = css.match(/\.wordmark\s*\{([\s\S]*?)\n\}/)?.[1] ?? "";
+    expect(wordmark, "the .wordmark rule is missing").toBeTruthy();
+    expect(wordmark).toMatch(/font-weight:\s*900;/);
+    expect(Number(wordmark.match(/font-size:\s*([0-9.]+)rem;/)?.[1]) * 16).toBe(24);
+    expect(Number(wordmark.match(/line-height:\s*([0-9.]+)rem;/)?.[1]) * 16).toBe(22);
+  });
+});
+
+describe("the bridge exposes every new role as a utility", () => {
+  const bridge = css.match(/@theme inline \{([\s\S]*?)\n\}/)?.[1] ?? "";
+
+  it("finds the bridge block (a parse matching nothing would pass everything)", () => {
+    expect(bridge.length, "the @theme inline parser missed the block").toBeGreaterThan(200);
+  });
+
+  for (const role of ["chrome", "panel", "avatar", "faint", "freshness-dot", "freshness-halo"]) {
+    it(`--color-${role} is bridged to a utility`, () => {
+      expect(bridge).toMatch(new RegExp(`--color-${role}:\\s*var\\(--${role}\\);`));
+    });
+  }
+
+  it("bridges --color-heading to --heading, not the undefined --title", () => {
+    // Found while adding the six roles above: this line read `var(--title)`,
+    // a property nowhere else in the file defines, so `text-heading` has been
+    // compiling to nothing since it was written.
+    expect(bridge).toMatch(/--color-heading:\s*var\(--heading\);/);
+  });
+});

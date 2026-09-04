@@ -165,7 +165,7 @@ const DIRECTION: Array<{ rule: string; why: string }> = [
 ];
 
 const TYPE: Array<{ token: string; cls: string; px: string; use: string; sample: string }> = [
-  { token: "text-display-md", cls: "stat-numeral text-display-md", px: "36px", use: "Headline numbers, via formatMetricValue — the ledger numeral", sample: "1,204" },
+  { token: "text-display-md", cls: "stat-numeral text-display-md", px: "28px", use: "Headline numbers, via formatMetricValue — the ledger numeral, set in Inter", sample: "1,204" },
   { token: "text-display-sm", cls: "font-display text-display-sm font-semibold", px: "30px", use: "Reserved — no in-app consumer since page titles came down to 24", sample: "Speed to lead" },
   { token: "text-display-xs", cls: "text-display-xs font-semibold", px: "26px", use: "Page titles (PageHeader), and the legal pages' h1", sample: "Speed to lead" },
   { token: "text-xl", cls: "text-xl font-semibold tracking-tight", px: "20px", use: "The step above a card title, where a section needs one", sample: "Speed to lead" },

@@ -367,8 +367,8 @@
   --text-display-xs--line-height: 2.125rem;
   --text-display-sm: 1.875rem; /* 30px */
   --text-display-sm--line-height: 2.375rem;
-  --text-display-md: 2.25rem; /* 36px — the tile's headline number */
-  --text-display-md--line-height: 2.75rem;
+  --text-display-md: 1.75rem; /* 28px — the tile's headline number */
+  --text-display-md--line-height: 2.5rem; /* 40px */
   --text-display-lg: 3rem; /* 48px — the landing hero */
   --text-display-lg--line-height: 3.75rem;
 
@@ -508,7 +508,7 @@
   --shadow-pop: 0 0 0 1px rgb(255 255 255 / 0.07), 0 25px 50px -12px rgb(0 0 0 / 0.6);
 
   /* The two the kit actually chooses, by name. */
-  --shadow-card: var(--shadow-sm);
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.2), 0 0 3px rgb(0 0 0 / 0.1); /* the Figma's card shadow, both themes — no longer an alias of `--shadow-sm` */
   --shadow-card-hover: var(--shadow-md);
   --shadow-island: var(--shadow-lg);
   --shadow-panel: var(--shadow-pop);
@@ -903,6 +903,15 @@
  * `bg-card`, `text-muted-foreground`, `border-border` and `ring-marker` all
  * COMPILE. Without it the roles above are forty variables and a rail ends up
  * with a hex in its class list.
+ *
+ * Six roles are new with the blue re-theme's three-surface model — `chrome`,
+ * `panel`, `avatar`, `faint`, `freshness-dot`, `freshness-halo` — and each
+ * needs a line here or `bg-chrome` etc. compile to nothing, silently, exactly
+ * like every other role above. `--color-heading` was also found pointing at
+ * `var(--title)`, a property this file never defines anywhere — a bridge
+ * entry that has compiled to nothing since it was written, catchable only by
+ * rendering a page whose title unexpectedly inherits the wrong ink. Fixed to
+ * `var(--heading)` in the same pass that added the six.
  */
 @theme inline {
   --color-background: var(--background);
@@ -912,17 +921,21 @@
   --color-popover: var(--popover);
   --color-popover-foreground: var(--popover-foreground);
   --color-control: var(--control);
+  --color-chrome: var(--chrome);
+  --color-panel: var(--panel);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
   --color-marker: var(--marker);
   --color-rule: var(--rule);
-  --color-heading: var(--title);
+  --color-heading: var(--heading);
   --color-brand-soft: var(--brand-soft);
   --color-brand-soft-line: var(--brand-soft-line);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
+  --color-avatar: var(--avatar);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
+  --color-faint: var(--faint);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
@@ -939,6 +952,8 @@
   --color-danger: var(--danger);
   --color-danger-soft: var(--danger-soft);
   --color-danger-ink: var(--danger-ink);
+  --color-freshness-dot: var(--freshness-dot);
+  --color-freshness-halo: var(--freshness-halo);
   --color-canvas-bg: var(--canvas-bg);
   --color-canvas-dot: var(--canvas-dot);
   --color-canvas-edge: var(--canvas-edge);
@@ -1238,19 +1253,23 @@ select:-webkit-autofill {
 }
 
 /**
- * THE LEDGER NUMERAL — the product's one signature.
+ * THE LEDGER NUMERAL — the product's one signature, and now its one named
+ * exception to "no second typeface".
  *
- * A tile's number is the entire payoff of the product: six tools disagreed,
- * and this is the answer. It carries the WHOLE separation between the chrome
- * and the content now that there is no second typeface doing half of it — 36px
- * at -0.03em against a 14px interface, which is a bigger gap than a family
- * change was ever making.
+ * The 2 September re-theme deleted the display face on the argument that a
+ * numeral at 36px and -0.03em against a 15px interface already carried the
+ * separation size alone could pay for. The 4 September Figma names Inter
+ * specifically for this one number — the only place the export calls out a
+ * face by name — so the numeral gets its own `font-family` here rather than
+ * reading `--font-display` (which stays system-ui-first for every OTHER
+ * heading). The size drops with it: 28px, not 36, because the old size was
+ * solved for a face this element no longer uses.
  *
  * `tabular-nums` is not decoration: these numbers refresh in place, and
  * proportional figures make a tile twitch every time a 1 becomes a 4.
  */
 .stat-numeral {
-  font-family: var(--font-display);
+  font-family: var(--font-inter, "Inter"), var(--font-sans);
   font-feature-settings: "tnum";
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.03em;
@@ -1265,6 +1284,28 @@ select:-webkit-autofill {
 .font-display {
   font-family: var(--font-display);
   letter-spacing: -0.022em;
+}
+
+/**
+ * THE WORDMARK — "Namzilabs", and the only weight above 600 anywhere in the
+ * kit.
+ *
+ * The Figma sets it in Inter at 900/24px/22px line — a real exception to the
+ * "never 700" weight lock the rest of the type system holds, not an
+ * oversight.
+ *
+ * THE WEIGHT IS DECLARED HERE, IN CSS, AND THAT IS WHAT KEEPS IT THE ONLY ONE.
+ * A call site writes `className="wordmark"` and never `font-black`, so
+ * `scripts/check-ui.ts` — which reads `.tsx` and never `.css` — still fails
+ * the build on any heavy-weight UTILITY anywhere in the app, with no
+ * allow-list entry to widen and no spelling convention for a consumer to get
+ * wrong. The exception lives in exactly one rule in one file.
+ */
+.wordmark {
+  font-family: var(--font-inter, "Inter"), var(--font-sans);
+  font-size: 1.5rem; /* 24px */
+  line-height: 1.375rem; /* 22px */
+  font-weight: 900;
 }
 
 /**
