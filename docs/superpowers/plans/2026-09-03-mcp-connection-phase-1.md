@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** A workspace member can add `https://app.namzilabs.com/api/mcp` to Claude or ChatGPT, consent through WorkOS, and ask about their metrics; the answers come from the same stored results the dashboard renders, filtered by rank, audited and rate-limited.
+**Goal:** A workspace member can add `https://namzilabs.co/api/mcp` to Claude or ChatGPT, consent through WorkOS, and ask about their metrics; the answers come from the same stored results the dashboard renders, filtered by rank, audited and rate-limited.
 
 **Architecture:** One Streamable HTTP MCP route in the Next.js app (`mcp-handler` 2.x), bearer tokens verified with `jose` against WorkOS AuthKit's JWKS, workspace resolved from an `org_id` claim or a stored per-workspace grant plus a per-client binding, then the existing `effectiveAccess` gate on every tool call. Phase 1 ships the six non-drill-down tools, the Settings section, audit and limits, and migration 0031. Phase 2 (query_events, search/fetch, prompts) is a separate plan.
 
@@ -96,9 +96,9 @@ describe("mcp env", () => {
     expect(mcpEnabled()).toBe(true);
   });
   it("derives the resource URL from APP_BASE_URL unless overridden", () => {
-    vi.stubEnv("APP_BASE_URL", "https://app.namzilabs.com");
+    vi.stubEnv("APP_BASE_URL", "https://namzilabs.co");
     vi.stubEnv("MCP_RESOURCE_URL", "");
-    expect(mcpResourceUrl()).toBe("https://app.namzilabs.com/api/mcp");
+    expect(mcpResourceUrl()).toBe("https://namzilabs.co/api/mcp");
     vi.stubEnv("MCP_RESOURCE_URL", "https://mcp.example.com/api/mcp");
     expect(mcpResourceUrl()).toBe("https://mcp.example.com/api/mcp");
   });
@@ -2196,6 +2196,6 @@ Commit: `git add src/app/dashboard/settings/ai-actions.ts src/app/dashboard/sett
 ## After the last task (controller, not an implementer)
 
 1. Whole-branch review with the data-accuracy lens (parity of `get_metric` with stored tiles; tenant walls; nothing encrypted in any tool output).
-2. Elias: paste the 0031 block into Neon, run the Schema drift check Action, configure WorkOS Connect (CIMD on, DCR on, Resource Indicator = `https://app.namzilabs.com/api/mcp`), set `WORKOS_AUTHKIT_DOMAIN`, `MCP_RESOURCE_URL` and `MCP_ENABLED=1` in Vercel.
+2. Elias: paste the 0031 block into Neon, run the Schema drift check Action, configure WorkOS Connect (CIMD on, DCR on, Resource Indicator = `https://namzilabs.co/api/mcp`), set `WORKOS_AUTHKIT_DOMAIN`, `MCP_RESOURCE_URL` and `MCP_ENABLED=1` in Vercel.
 3. Merge to `main`, push, then the manual smoke test from `docs/SMOKE_TEST.md` with the MCP Inspector, Claude and ChatGPT developer mode.
 4. Phase 2 plan: `query_events`, `search`, `fetch`, the two prompts.

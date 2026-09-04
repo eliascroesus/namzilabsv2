@@ -93,7 +93,7 @@ WorkOS dashboard (one-time, by Elias):
 1. Connect → Configuration: enable **Client ID Metadata Document**; enable
    **Dynamic Client Registration** (older clients).
 2. Connect → Configuration → Resource Indicators: add
-   `https://app.namzilabs.com/api/mcp` (exact string; also set it as the
+   `https://namzilabs.co/api/mcp` (exact string; also set it as the
    default resource indicator via the "…" menu).
 3. Note the AuthKit domain (`https://<project>.authkit.app` or the custom
    auth domain).
@@ -112,7 +112,7 @@ Protected resource metadata (served by us):
 
 ```json
 {
-  "resource": "https://app.namzilabs.com/api/mcp",
+  "resource": "https://namzilabs.co/api/mcp",
   "authorization_servers": ["https://<authkit_domain>"],
   "bearer_methods_supported": ["header"],
   "scopes_supported": ["openid", "profile", "email", "offline_access"]
@@ -121,7 +121,7 @@ Protected resource metadata (served by us):
 
 Challenge on a missing or invalid token: `401` with
 `WWW-Authenticate: Bearer error="unauthorized", error_description="Authorization
-needed", resource_metadata="https://app.namzilabs.com/.well-known/oauth-protected-resource"`.
+needed", resource_metadata="https://namzilabs.co/.well-known/oauth-protected-resource"`.
 `mcp-handler` emits this shape.
 
 Token verification (`verifyToken(req, token)`): `jwtVerify(token, JWKS, {
@@ -539,8 +539,8 @@ reads "absent row = enabled".
 ## Open questions for the owner (answer at build time)
 
 1. The AuthKit domain for `WORKOS_AUTHKIT_DOMAIN`.
-2. Confirm `https://app.namzilabs.com` is the production origin
-   (`APP_BASE_URL`), so `MCP_RESOURCE_URL` is `https://app.namzilabs.com/api/mcp`.
+2. Confirm `https://namzilabs.co` is the production origin
+   (`APP_BASE_URL`), so `MCP_RESOURCE_URL` is `https://namzilabs.co/api/mcp`.
 3. Confirm Connect (AuthKit for MCP) is available on the WorkOS plan.
 4. Retention for `mcp_calls` (proposed 90 days).
 

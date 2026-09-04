@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 
 /**
  * WorkOS redirects here after authentication (must match
- * NEXT_PUBLIC_WORKOS_REDIRECT_URI, e.g. https://app.namzilabs.com/callback).
+ * NEXT_PUBLIC_WORKOS_REDIRECT_URI, e.g. https://namzilabs.co/callback).
  *
  * onError: without it, any callback failure answers with the SDK's raw JSON
  * blob — which is what an invited teammate once saw as their very first
