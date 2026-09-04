@@ -91,7 +91,7 @@ ROLE.
 **Depth, stated honestly.** The old line — "a control recesses from a card" —
 does not survive this Figma and is not carried forward. On dark, on the
 `#111111` chrome and cards, a field is a step UP (`--control` `#202020`) and its
-hover a further step up (`--accent` `#333333`). On light a field is a step DOWN
+hover a further step up (`--accent` `#3A3A3A`, amended 5 Sep). On light a field is a step DOWN
 (`#F4F4F4` on white) and its hover a further step down (`#ECECEC`). The two
 directions mirror each other; neither is "recessed".
 
