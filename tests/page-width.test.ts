@@ -431,3 +431,64 @@ describe("the rail's pinned mode", () => {
     expect(code).toMatch(/peer-hover:left-65/);
   });
 });
+
+describe("the frame's new shape — a full-width bar over [rail | panel]", () => {
+  const frame = read("src/components/app-frame.tsx");
+  const bar = read("src/components/top-bar.tsx");
+
+  it("renders the top bar before the rail, as a column rather than a row", () => {
+    const code = frame.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    expect(code).toMatch(/className="flex h-dvh flex-col bg-background"/);
+    expect(code.indexOf("<TopBar")).toBeGreaterThan(-1);
+    expect(code.indexOf("<Sidebar")).toBeGreaterThan(code.indexOf("<TopBar"));
+  });
+
+  it("gives the panel its own surface and a top-RIGHT corner", () => {
+    // THE FIGMA ROUNDS THE FAR CORNER, NOT THE NEAR ONE. The panel meets the
+    // rail on its left with a hairline and butts square against it; the corner
+    // the export softens is the one under the bar at the opposite end. This
+    // reverses the shell's own historical `rounded-tl-frame` convention, which
+    // is exactly why it is pinned rather than left to a comment.
+    expect(frame).toMatch(/rounded-tr-frame bg-panel/);
+    expect(frame, "the old top-left notch must not come back").not.toMatch(/rounded-tl-frame/);
+  });
+
+  it("hands the rail the workspace and the account it will need for its own switcher", () => {
+    const code = frame.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    expect(code).toMatch(/<Sidebar[^>]*\bworkspace=\{workspace\}/);
+    expect(code).toMatch(/<Sidebar[^>]*\baccount=\{account\}/);
+    expect(read("src/components/sidebar.tsx")).toMatch(/workspace\?:\s*string/);
+  });
+
+  it("moves the wordmark into the bar", () => {
+    expect(bar).toMatch(/\bwordmark\b/);
+    expect(bar).toMatch(/>\s*Namzilabs\s*</);
+  });
+
+  it("stops threading the workspace name into the top bar", () => {
+    const props = bar.match(/export function TopBar\(\{([\s\S]*?)\}:/)?.[1] ?? "";
+    expect(props).not.toMatch(/\bworkspace\b/);
+  });
+
+  it("drops the old identity dropdown along with the workspace group it opened", () => {
+    expect(bar).not.toMatch(/DropdownMenu/);
+    expect(bar).not.toMatch(/ChevronDown/);
+  });
+
+  it("drops the metrics-setup ring, and the whole chain that fed it", () => {
+    /**
+     * THE FIGMA'S BAR HAS NO RING, and the progress it reported has a better
+     * home already: the dashboard's own setup checklist says the same thing
+     * with room to say what to do about it. So it goes — and with it the
+     * four-file pass-through nobody else was reading, because a prop chain
+     * whose only consumer has been deleted is dead weight that still costs a
+     * render and still reads as a feature to the next person.
+     */
+    expect(bar, "the ring's arc is gone").not.toMatch(/METRIC_GOAL/);
+    expect(bar, "and its geometry with it").not.toMatch(/RING_RADIUS/);
+    expect(bar, "the bar no longer takes a count").not.toMatch(/metricCount/);
+    for (const p of ["src/components/app-frame.tsx", "src/components/app-shell.tsx", "src/app/dashboard/page.tsx"]) {
+      expect(read(p), `${p} still threads metricCount`).not.toMatch(/metricCount/);
+    }
+  });
+});

@@ -365,6 +365,15 @@ export function Sidebar({
   hide?: string[];
   views?: BoardView[];
   pinned?: boolean;
+  /**
+   * The active workspace's name and the signed-in account — accepted here
+   * now, unused until the next commit. `AppFrame` hands both down because the
+   * rail's head block is about to become the workspace switcher; splitting
+   * the prop-plumbing commit from the rendering one keeps each one small
+   * enough to read in one sitting.
+   */
+  workspace?: string;
+  account?: { initials: string; avatarUrl?: string | null; panel: ReactNode };
 }) {
   const pathname = usePathname();
   const params = useSearchParams();

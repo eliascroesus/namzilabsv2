@@ -5,22 +5,29 @@ import { cn } from "@/lib/utils";
 import type { BoardView } from "@/lib/board/types";
 
 /**
- * THE FRAME: three surfaces and two hairlines, and nothing else.
+ * THE FRAME — a full-width bar above a row of [rail | panel].
  *
- * WHAT IT WAS: one dark gradient painted here, with a transparent rail sitting
- * on it and the canvas cut 32px into it at the left corners so the wash showed
- * through the notch. That whole apparatus is gone with the dark rail — the
- * navigation is a white column now, `--radius-frame` is 0, and this div paints
- * nothing but `background` behind two children that are opaque anyway. The
- * prose is kept short on purpose: what is left is a flex row, and a page of
- * argument about a gradient nobody can see is how a file starts lying.
+ * IT USED TO RUN THE OTHER WAY: the rail full height on the left, the bar
+ * confined to the content column beside it, on the argument that a bar
+ * spanning both would put the workspace switcher above the navigation that
+ * switches it. That argument dissolved when the switcher moved OFF the bar
+ * and into the rail's own head block (see `Sidebar`) — there is no longer
+ * anything in the bar for the rail to sit "above" in that sense, and the
+ * Figma this re-theme follows draws one continuous bar across the top with
+ * the rail hanging beneath its left end, which is what this file now does.
  *
- * THE SHAPE, AND WHY IT IS THIS ONE. The column runs the full height; the top
- * bar belongs to the CONTENT beside it rather than spanning the viewport,
- * exactly as it does in Miro, Notion and Figma. A bar spanning both would put
- * the workspace switcher above the navigation that switching it changes, and
- * the two hairlines — the column's right edge and the bar's bottom edge — would
- * stop meeting to make the single seam the chrome reads as.
+ * THREE SURFACES, NOT ONE. The bar and the rail are `--chrome`; the panel
+ * under them is `--panel`, its own material, which is what gives a corner
+ * something to reveal again after two days at `--radius-frame: 0`.
+ *
+ * IT IS THE TOP-RIGHT CORNER, AND THAT REVERSES THIS FILE'S OWN HISTORY.
+ * Every previous era cut the panel's TOP-LEFT — the corner nearest the rail —
+ * because the rail was a different material and the notch was how the page
+ * wrapped around it. The 4 September Figma does not: the panel butts square
+ * against the rail behind a hairline, and the corner it softens is the far
+ * one, under the bar at the opposite end of the row. Followed literally
+ * rather than corrected toward the old convention, and pinned in
+ * `tests/page-width.test.ts` so the convention cannot quietly reassert itself.
  *
  * `surface` is still the caller's, because the pages genuinely disagree about
  * SCROLLING: list pages scroll, the builder does not.
@@ -29,7 +36,6 @@ export function AppFrame({
   account,
   workspace,
   firstName,
-  metricCount,
   views,
   surface,
   hide,
@@ -50,25 +56,12 @@ export function AppFrame({
    */
   firstName?: string;
   /**
-   * How many metrics this workspace has, for the top bar's ring.
-   *
-   * A PASS-THROUGH, and it stays one. This frame is handed the number because
-   * the only component that can produce it is the PAGE — the dashboard counts
-   * its published flow tiles and classic metrics as part of the work it already
-   * does, and every other route genuinely does not read the metrics table at
-   * all. Resolving it here instead would mean one more query on every render of
-   * every screen in the product to fill in a decoration, which is the trade the
-   * whole file is built to avoid (see `firstName` above: same seam, same
-   * reason). Left undefined, the ring stands down — see `TopBar`.
-   */
-  metricCount?: number;
-  /**
    * The workspace's dashboard views, for the rail's nested list under Dashboard.
    *
-   * A PASS-THROUGH, like `metricCount` — but resolved in the shell rather than
-   * by each page, because unlike a metric count this is NAVIGATION and has to be
-   * the same on every route. `navViews` is per-request cached so the dashboard
-   * does not pay for it twice; see that file.
+   * A PASS-THROUGH, resolved in the shell rather than by each page, because
+   * this is NAVIGATION and has to be the same on every route. `navViews` is
+   * per-request cached so the dashboard does not pay for it twice; see that
+   * file.
    */
   views?: BoardView[];
   surface: string;
@@ -123,71 +116,45 @@ export function AppFrame({
    * other route gets the ground without mentioning it.
    */
   /**
-   * THE NOTCH IS GONE, AND `--radius-frame` IS 0 TO SAY SO.
+   * THE NOTCH IS BACK, ON THE OTHER SIDE.
    *
-   * `rounded-tl-frame` cut a 16px corner out of the page's top-left — the one
-   * corner where the page met both halves of the band at once, the rail to its
-   * left and the top bar above it — and it is what turned two straight edges
-   * into one wrapped shape.
+   * `--radius-frame` went to 0 when the rail, the bar and the page became one
+   * #1B191A: a radius reveals whatever is BEHIND the element it is cut into,
+   * and cutting a corner out of a colour to reveal the same colour draws
+   * nothing at the cost of a gap the bar's hairline then has to stop short of.
+   * There are three surfaces again — the panel is `--panel`, the bar and rail
+   * `--chrome` — so there is something behind it, and the token is 8px.
    *
-   * A radius reveals whatever is BEHIND the element it is cut into, and that is
-   * exactly why it cannot survive here: the thing behind this column is now the
-   * SAME COLOUR as this column. Cutting a corner out of #1b191a to reveal
-   * #1b191a draws nothing at all, at the cost of a rounded gap that the top
-   * bar's hairline then has to end short of. The class is dropped rather than
-   * pointed at a zero token, so nothing is computing a radius nobody can see.
-   *
-   * `bg-background` rather than `bg-ground`: `--ground` is retired. The page and
-   * the app's background were two tokens because the band wrapped a page that
-   * was a different surface from it; they are one surface now, by construction
-   * rather than by coincidence, so they are one token.
+   * WHICH corner is the part that changed. Every previous notch was TOP-LEFT,
+   * nearest the rail. The 4 September Figma cuts the TOP-RIGHT instead and
+   * leaves the rail-side corner square, so that is what this spells.
    */
-  const className = cn("relative min-w-0 flex-1 bg-background", surface);
+  const className = cn("relative min-w-0 flex-1 rounded-tr-frame bg-panel", surface);
 
   return (
-    // `h-dvh`, not `h-screen`: on mobile Safari `100vh` is the height the
-    // viewport has with the browser chrome RETRACTED, so a full-height frame
-    // is permanently taller than the window and the rail's account control
-    // sits below the fold with nothing to scroll it into view.
-    //
-    // The safe-area padding is the other half of `viewportFit: "cover"` in
-    // layout.tsx. Cover lets the wash run edge to edge — which is what you want
-    // for a full-bleed dark rail — but without these insets the rail's mark
-    // sits under the camera cutout in landscape, and its account avatar under
-    // the home indicator. Padding the FRAME rather than the rail keeps the
-    // colour full-bleed and moves only the content.
+    // `h-dvh`, not `h-screen` — see the safe-area note below; unchanged.
     <div
-      className="flex h-dvh bg-background"
+      className="flex h-dvh flex-col bg-background"
       style={{
         paddingLeft: "env(safe-area-inset-left)",
         paddingRight: "env(safe-area-inset-right)",
       }}
     >
-      {/* THE RAIL TAKES ONLY `hide` NOW. It used to be handed the workspace
-          name and the account panel because it opened with a switcher and
-          closed with an avatar; at 70px it carries neither — the workspace
-          identity and the account menu are both in the top bar, which is where
-          every reference puts them. Passing them anyway would be two props a
-          component ignores, which is how a signature stops describing what a
-          thing actually needs. */}
-      <Sidebar hide={hide} views={views} pinned={railPinned} />
-      {/* The top bar belongs to the CONTENT column, not the viewport: the
-          sidebar runs full height beside it, exactly as it does in Miro and
-          Notion. A bar spanning both would put the workspace switcher above
-          the navigation that switching it changes. */}
-      {/* NOTHING SHOWS THROUGH THIS ANY MORE, so it is the plain background.
-          It was `bg-background` — the band's charcoal — for one reason: the page
-          below cut a notch out of its own top-left corner and whatever this
-          element was painted showed through it. There is no notch (see the
-          `className` note above) and there is no second colour: the bar, this
-          column and the page are all `--background`, and the hairline under the
-          bar is what says where one stops. */}
-      <div className="flex min-w-0 flex-1 flex-col bg-background">
-        {/* THE BAR IS WHERE IDENTITY LANDS. The workspace's name and the
-            account panel used to go to the rail; at 70px the rail is icons and
-            nothing else, so both come here — the workspace avatar and name at
-            the reading edge, the account at the far one. */}
-        <TopBar account={account} workspace={workspace} firstName={firstName} metricCount={metricCount} />
+      {/* THE BAR SPANS EVERYTHING, ABOVE THE RAIL RATHER THAN BESIDE IT.
+          It no longer receives `workspace` — the workspace switcher moved into
+          the rail's own head block, and it needs `workspace`/`account` for
+          that, not the bar — and it no longer takes a metric count either,
+          because the setup ring that was the only reader of it is gone (the
+          Figma has no ring; the dashboard's checklist reports the same
+          progress). What the bar draws on its own account is the wordmark,
+          the greeting and the right-hand cluster. */}
+      <TopBar account={account} firstName={firstName} />
+      {/* THE ROW BELOW THE BAR — the rail, then the panel. `min-h-0` is load
+          bearing: without it a flex row with a scrolling child never shrinks
+          past its content's natural height, and the panel's own
+          `overflow-y-auto` never gets anything to scroll AGAINST. */}
+      <div className="flex min-h-0 flex-1">
+        <Sidebar hide={hide} views={views} pinned={railPinned} workspace={workspace} account={account} />
         {ownsMain ? (
           <main id="main" className={className}>
             {children}

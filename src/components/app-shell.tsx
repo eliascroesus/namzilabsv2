@@ -64,42 +64,24 @@ export async function AppShell({
   userId,
   orgId,
   userEmail,
-  metricCount,
   children,
 }: {
   userId: string;
   orgId: string;
   userEmail?: string | null;
-  /**
-   * HOW MANY METRICS THIS WORKSPACE HAS — supplied by the PAGE, never counted
-   * here, and that is the one interesting decision in this prop.
-   *
-   * The shell is the wrong place to resolve it. It renders on ten routes and
-   * only one of them — the dashboard — reads the metrics table at all, so a
-   * count taken here would be a query the other nine pay on every render, and
-   * on the dashboard it would be a SECOND read of rows that page has already
-   * got in hand. Worse, the note at the top of this file explains that
-   * `AppShell` runs strictly AFTER the page's own awaits: a query added here
-   * overlaps nothing and lands whole on the critical path, twelve seconds
-   * apart, forever, in every open tab.
-   *
-   * So the dashboard hands down `metrics.length + flowTiles.length` — both
-   * already resolved, both already narrowed by rank — and every other route
-   * leaves this undefined, which the bar reads as "nobody counted" and answers
-   * by not drawing a ring. Undefined is deliberately NOT zero: see `TopBar`.
-   */
-  metricCount?: number;
   children: React.ReactNode;
 }) {
   /**
    * STARTED BEFORE THE AWAIT BELOW, so it overlaps rather than queues.
    *
-   * The note on `metricCount` explains why this shell is the wrong place to
-   * resolve a page's data, and it still is — but the rail's view list is not a
-   * page's data, it is navigation, needed on every route. `navViews` is
-   * `cache()`d per request, so on the dashboard this awaits the promise that
-   * page has already started and costs nothing; everywhere else it is one narrow
-   * read that runs alongside the membership lookup instead of after it.
+   * This shell is the wrong place to resolve a PAGE's own data — it renders on
+   * ten routes and runs strictly after the page's own awaits, so anything
+   * counted here lands whole on the critical path, twelve seconds apart,
+   * forever, in every open tab. The rail's view list is not a page's data,
+   * though, it is navigation, needed on every route. `navViews` is `cache()`d
+   * per request, so on the dashboard this awaits the promise that page has
+   * already started and costs nothing; everywhere else it is one narrow read
+   * that runs alongside the membership lookup instead of after it.
    */
   const railViewsP = navViewsOrNone(orgId);
   const memberships = await listMemberships(userId);
@@ -198,7 +180,6 @@ export async function AppShell({
          corrupted value degrades to the default rather than to a broken one. */
       railPinned={(await cookies()).get("rail")?.value === "pinned"}
       workspace={workspace}
-      metricCount={metricCount}
       views={await railViewsP}
       account={{
         initials,

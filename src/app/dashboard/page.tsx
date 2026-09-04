@@ -157,8 +157,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
    * second query to drift from the route's. Swallowed rather than thrown: a
    * poller that fails to seed still works, it just starts from `null` the
    * way it always has (see `FreshnessPoller`'s own note on why that gap can
-   * miss a change). Awaited beside `metricCount`, right before the return —
-   * nothing between here and there reads it.
+   * miss a change). Awaited right before the return — nothing between here and
+   * there reads it.
    */
   const resultsVersionP = resultsVersion(db, orgId).catch(() => undefined);
 
@@ -984,38 +984,13 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     }];
   });
 
-  /**
-   * WHAT THE TOP BAR'S RING COUNTS, AND WHY IT COSTS NOTHING.
-   *
-   * Two arrays this page already holds: every published flow tile and every
-   * classic metric, both of them already narrowed by `access` above, so the
-   * ring can never count a metric its viewer is not allowed to see. No query is
-   * added — the shell renders after this body's awaits (see its own note), so
-   * anything counted THERE would be a fresh round trip on the critical path of
-   * every render and every twelve-second poll.
-   *
-   * `metrics`, NOT `tiles`. They are the same list on a groups board and they
-   * diverge on a custom view, where `classicsToCompute` narrows the compute to
-   * the classics the canvas actually references. That is a statement about what
-   * is expensive to draw, not about what the workspace HAS — reading `tiles`
-   * here would make the ring drop when you switched to a custom view, as though
-   * metrics had been deleted by opening a tab.
-   *
-   * UNDEFINED UNDER A LOAD ERROR. When either read above failed, these arrays
-   * are short or empty for a reason that has nothing to do with the customer's
-   * workspace, and "0/6" is then a false claim printed over the banner that
-   * says the data could not be loaded. No answer is the honest answer, and the
-   * bar knows how to draw that: no ring.
-   */
-  const metricCount = loadError ? undefined : metrics.length + flowTiles.length;
-
   // Awaited here, not above: nothing between its start and this line reads
   // it, so there is no reason to block on it any earlier — it has been
   // racing every read above since before the `Promise.all`.
   const initialResultsVersion = await resultsVersionP;
 
   return (
-    <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email} metricCount={metricCount}>
+    <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email}>
       {/* G.4: refresh the server-rendered tiles when the org's results move.
           C16: seeded so a change before the first poll is never missed. */}
       <FreshnessPoller initialVersion={initialResultsVersion} />

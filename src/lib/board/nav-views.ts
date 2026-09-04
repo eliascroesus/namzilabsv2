@@ -10,9 +10,10 @@ import type { BoardView } from "./types";
  * every authenticated route. That is exactly the read `AppShell` is documented
  * as the wrong place for: it renders on ten routes, it runs strictly AFTER the
  * page's own awaits, and `FreshnessPoller` re-renders it every twelve seconds in
- * every open tab. `metricCount` is passed down from the page for precisely this
- * reason. A view list cannot be — the whole feature is jumping to a view from
- * somewhere that is not the dashboard.
+ * every open tab. The top bar's metric count used to be passed down from the
+ * page for precisely this reason, until the ring that read it was deleted with
+ * the 4 September re-theme. A view list cannot be passed down that way — the
+ * whole feature is jumping to a view from somewhere that is not the dashboard.
  *
  * React's `cache()` is the way out, and the codebase already relies on it for
  * the same shape of problem: `requestAccess` is cached so that "AppShell shares
