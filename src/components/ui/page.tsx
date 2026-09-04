@@ -110,7 +110,7 @@ export function PageContainer({
 export const BOARD_GRID = "grid gap-6 sm:grid-cols-2 xl:grid-cols-3";
 
 /**
- * THE HEADER'S TIME CONTROL — the groove, and the pills that sit in it.
+ * THE HEADER'S TIME CONTROL — the groove, and the segments that sit in it.
  *
  * Every view answers "what span am I reading" in the same slot beside the page
  * title, and until this constant existed each one drew that answer itself: the
@@ -122,53 +122,58 @@ export const BOARD_GRID = "grid gap-6 sm:grid-cols-2 xl:grid-cols-3";
  *
  * THE SEGMENTS FILL THE TRACK, AND THE TRACK IS A BUTTON'S HEIGHT.
  *
- * It was a 32px groove holding 28px pills with a 2px inset, which is the
+ * It was a 32px groove holding 28px segments with a 2px inset, which is the
  * classic segmented shape and the wrong one beside "Refresh all": the group
  * measured 32 but every option in it measured 28, so a row containing both had
  * two control heights in it and the one you press was the shorter.
  *
  * `h-full` on the segment and `overflow-hidden` on the track: each option is
- * the full 32, the active fill runs edge to edge, and the track's own 10px
- * corners clip it. `rounded-none` on the segment is what lets that work — a
- * radius inside a clipped container draws a gap at the corners rather than a
- * seam.
+ * the full 32, the active fill runs edge to edge, and the track's own corners
+ * clip whatever sits inside it.
  *
- * 32px, DOWN FROM 40. This is the reference's
- * control height and it is the same 32 as every select, every date picker and
- * every dense button in the product — which is the point of shrinking it. At 40
- * it was the tallest object in the page header and it sat beside a title that
- * has just come DOWN to 24px; the row read as a control with a caption rather
- * than a page with a filter.
+ * 32px, DOWN FROM 40. This is the reference's control height and it is the
+ * same 32 as every select, every date picker and every dense button in the
+ * product — which is the point of shrinking it. At 40 it was the tallest
+ * object in the page header and it sat beside a title that has just come DOWN
+ * to 24px; the row read as a control with a caption rather than a page with a
+ * filter.
  *
- * THE GROOVE STAYS. ONLY THE CORNERS MOVED, and that is the whole change —
- * recorded because the previous pass got it wrong in a way worth not repeating.
+ * THE CORNERS HAVE NOW MOVED TWICE, AND THE 4 SEP 2026 FIGMA
+ * (docs/superpowers/specs/2026-09-04-retheme-blue-design.md) IS THE LAST WORD.
  *
- * The brief was "all buttons and timeline buttons have 999 radius". That pass
- * read it as licence to restyle the control: it deleted the border, the fill
- * and the enclosure, and left six bare labels with the selected one floating on
- * the page. Nobody asked for that. A radius is a radius — the bordered
- * `bg-control` track is the design this product already had, and it is back.
+ * The first move was recorded here as a correction: a brief that said "all
+ * buttons and timeline buttons have 999 radius" had been read as licence to
+ * restyle the whole control, deleting the border, the fill and the enclosure
+ * and leaving six bare labels floating on the page. Nobody asked for that, so
+ * the groove came back as a bordered `bg-control` track with every segment a
+ * full capsule inside it — a radius change, and only a radius change.
  *
- * So: the track is a capsule and every segment inside it is a capsule, which is
- * the one thing that WAS asked for. `overflow-hidden` plus `h-full` is what
- * makes them agree — a segment fills the track's full 32px, so the first and
- * last segment's outer corners land exactly on the track's own, and the lit
- * segment reads as a pill inside a pill rather than as a capsule rattling
- * around inside a rectangle.
+ * The second move is this one, and it is the opposite correction for the
+ * opposite reason: the groove was never asked to be a capsule AT ALL, only to
+ * follow whatever the sheet said buttons were, and the sheet now says 8px,
+ * everywhere, permanently. So `rounded-full` comes off the track and the
+ * segment both, and `--radius-control` is what both now spell — the same
+ * token the button beside them already uses. `overflow-hidden` plus `h-full`
+ * still does the work of making them agree: a segment fills the track's full
+ * 32px, so the first and last segment's outer corners land exactly on the
+ * track's own 8px corners, and the lit segment reads as a rectangle inside a
+ * rectangle rather than a shape fighting the one around it — there is no
+ * smaller-radius-inside-a-bigger-clip seam to avoid any more, since track and
+ * segment now share the identical radius.
  *
  * `bg-control` + `border-border`, and the three `--period-*` tokens stay
- * retired. They existed because this was "the one control that follows the PAGE
- * rather than the band" — a near-black pill group on a light page would have
- * been a second dark object competing with the chrome, so it needed its own
- * surface that inverted separately. There is one surface; a control is
+ * retired. They existed because this was "the one control that follows the
+ * PAGE rather than the band" — a near-black pill group on a light page would
+ * have been a second dark object competing with the chrome, so it needed its
+ * own surface that inverted separately. There is one surface; a control is
  * `--control`.
  */
 export const PERIOD_TRACK =
-  "inline-flex h-8 items-center overflow-hidden rounded-full border border-border bg-control";
+  "inline-flex h-8 items-center overflow-hidden rounded-control border border-border bg-control";
 
 /** One control inside that groove — a period link, a month arrow, "This month". */
 export const PERIOD_PILL =
-  "inline-flex h-full shrink-0 items-center rounded-full px-3 text-sm font-medium transition-colors duration-(--duration-fast)";
+  "inline-flex h-full shrink-0 items-center rounded-control px-3 text-sm font-medium transition-colors duration-(--duration-fast)";
 
 /**
  * Title row: optional back link, one h1 recipe, optional lede, actions on

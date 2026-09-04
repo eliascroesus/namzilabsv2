@@ -44,24 +44,26 @@ const buttonVariants = cva(
   // `transition-colors`, not `transition-all`: `all` animates the outline too,
   // so the focus ring grew into place a beat after the key was pressed.
     //
-  // `rounded-full`, AND THE SHAPE RULE HAS INVERTED BACK. This has now moved
-  // twice, so it is worth being exact about what decides it: the SHEET does.
-  // The 8px rectangle came from a reference whose buttons, badges and selects
-  // were all rounded rectangles, and a pill among them read as borrowed. The
-  // sheet this interface is drawn from now pills every pressable thing —
-  // "New flow", "Refresh all", "Invite members", the lit period chip, the
-  // notification bell — while leaving cards at 10px and fields at 8px. So the
-  // pill comes back HERE, on the button, and not on `--radius-control`: that
-  // token was 9999px for one commit once and 51 files inherited it, which is
-  // how every text field, menu row and small panel went capsule-shaped.
+  // `rounded-control`, AND THE SHAPE RULE IS DONE MOVING. It went rectangle,
+  // then pill, then rectangle again — three sheets, three answers — and the
+  // 4 Sep 2026 Figma (docs/superpowers/specs/2026-09-04-retheme-blue-design.md)
+  // is recorded as the LAST word specifically so the next flip needs a new
+  // design, not a comment: 8px on every button, chip, input, select, tab and
+  // the period switch, circles reserved for avatars, badges and dots. The
+  // capsule "New flow"/"Refresh all"/"Invite members" drew in the previous
+  // sheet is gone with it.
   //
-  // THE ONE EXCEPTION THE PILL NEEDS IS STILL REAL: a control that WRAPS
-  // cannot be a pill, because a full radius on a two-line box is half its
-  // height and renders as a circle around the words. Such a call site passes
-  // `rounded-control` and now genuinely wins, because `cn()` was taught the
-  // kit's radius names (see lib/utils.ts) — the last time this was a pill, that
-  // override was silently dropped and the page title rendered inside a circle.
-  "inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-full font-medium transition-colors duration-(--duration-fast) ease-(--ease-standard) disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0",
+  // The token itself was never the risk — `--radius-control` was 9999px for
+  // one commit once and 51 files inherited it, which is how every text field,
+  // menu row and small panel went capsule-shaped, and that is why the base
+  // class has always spelled its OWN radius rather than deferring to the
+  // token. It still does, so a stray global pill-ification can't recur.
+  //
+  // THE ONE EXCEPTION IS UNCHANGED: a control that WRAPS still passes an
+  // explicit `rounded-control` override, which still wins over this base
+  // through `cn()` (see lib/utils.ts) — it is simply no longer overriding a
+  // different shape.
+  "inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-control font-medium transition-colors duration-(--duration-fast) ease-(--ease-standard) disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0",
   {
     variants: {
       variant: {
@@ -102,9 +104,21 @@ const buttonVariants = cva(
          * moment the button was under a pointer.
          */
         accent: "bg-primary text-primary-foreground shadow-xs hover:bg-brand-500 active:bg-brand-700",
-        /** The recessed twin of `default` — a control sitting ON a card, where
-         *  the card's own colour would give the button no edge to be found by. */
-        secondary: "border border-border bg-control text-foreground shadow-xs hover:bg-accent active:bg-accent",
+        /**
+         * THE RECESSED TWIN OF `default`, AND NOW ITS OWN TOKEN.
+         *
+         * It used to borrow `--control` — the surface a search field or a
+         * select sits on — because `--secondary` had no consumer anywhere in
+         * the app to prove it out. The 4 Sep 2026 Figma draws these buttons as
+         * their own grey (#333333 dark, white-with-a-hairline light), distinct
+         * from a field's own fill, so this is the button that finally spends
+         * the token that was sitting there unused. `border-input` rather than
+         * `border-border`: it is the SAME hairline in the dark theme (`--input`
+         * aliases `--border` there) and the Figma's own lighter edge in the
+         * light theme, where a white button on an off-white page has no other
+         * way to be found.
+         */
+        secondary: "border border-input bg-secondary text-secondary-foreground shadow-xs hover:bg-accent active:bg-accent",
         /**
          * WHITE, AND LITERALLY #FFFFFF — the one variant that does not go
          * through a role.

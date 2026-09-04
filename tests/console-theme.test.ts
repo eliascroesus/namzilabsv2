@@ -82,14 +82,68 @@ describe("the console's supplied constants", () => {
     expect(token("color-neutral-950")).not.toBe(darkToken("canvas-bg"));
   });
 
-  it("draws every button and every period pill as a full capsule", () => {
-    // On `buttonVariants`' BASE, not on `--radius-control`: that token was
-    // 9999px for one commit and 51 files inherited it, so fields, menu rows and
-    // small panels all went capsule-shaped. The token must stay a rectangle.
-    expect(button).toMatch(/"inline-flex shrink-0[^"]*\brounded-full\b/);
-    expect(page).toMatch(/PERIOD_PILL =\s*\n?\s*"[^"]*\brounded-full\b/);
+  it("draws every button and the period pill at the control radius — the shape rule's final word", () => {
+    // THE 4 SEP 2026 FIGMA IS THE LAST WORD: 8px on every button, chip, input,
+    // select, tab and the period switch, no pills anywhere in the kit. The
+    // TOKEN itself must still stay a rectangle regardless of what the BASE
+    // class spells, so a stray `--radius-control: 9999px` experiment (it
+    // happened once) can't silently pill-ify every field, menu row and small
+    // panel again.
+    expect(button).toMatch(/"inline-flex shrink-0[^"]*\brounded-control\b/);
+    expect(button, "the pill must not come back on the base class").not.toMatch(
+      /"inline-flex shrink-0[^"]*\brounded-full\b/,
+    );
+    expect(page).toMatch(/PERIOD_PILL =\s*\n?\s*"[^"]*\brounded-control\b/);
+    expect(page, "the period pill must not come back either").not.toMatch(
+      /PERIOD_PILL =\s*\n?\s*"[^"]*\brounded-full\b/,
+    );
     expect(token("radius-control")).toBe("var(--radius-md)");
     expect(token("radius-md")).toBe("0.5rem");
+  });
+
+  it("keeps the period control's groove — only its corners were asked to move, again", () => {
+    /**
+     * A REGRESSION TEST FOR OVER-REACH, not for a value.
+     *
+     * The brief was "all buttons and timeline buttons have 999 radius", the
+     * FIRST time this control's shape changed. The pass that implemented it
+     * also deleted the track's border, its fill and its enclosure, leaving six
+     * bare labels on the page — a redesign nobody asked for, delivered under a
+     * radius change. This asserts the three properties that were silently
+     * dropped, so the next tidy-up of this control — including THIS one, which
+     * flips the corners back from a pill to 8px — has to be deliberate about
+     * losing them.
+     */
+    const track = page.match(/PERIOD_TRACK =\s*\n?\s*"([^"]+)"/)?.[1] ?? "";
+    expect(track, "the groove lost its border").toMatch(/\bborder-border\b/);
+    expect(track, "the groove lost its fill").toMatch(/\bbg-control\b/);
+    expect(track, "the groove lost its enclosure").toMatch(/\boverflow-hidden\b/);
+    // And the part THIS pass changed: the groove is an 8px rectangle now, per
+    // the 4 Sep 2026 Figma — not the capsule the previous pass drew.
+    expect(track).toMatch(/\brounded-control\b/);
+    expect(track, "the pill must not come back").not.toMatch(/\brounded-full\b/);
+  });
+
+  it("leaves the month stepper's arrows the same 8px as every other button", () => {
+    // A SOURCE PIN, because the offence is an OVERRIDE rather than a default.
+    // `calendar-board.tsx`'s two month arrows spelled `rounded-full` on top of
+    // `buttonVariants`' base, so flipping the base alone would have left two
+    // circles sitting inside an 8px groove — the one place in the product
+    // where the old shape could survive this pass unnoticed.
+    const calendar = read("src/components/calendar/calendar-board.tsx");
+    expect(calendar, "the month arrows must not re-spell a pill").not.toMatch(
+      /className="rounded-full text-muted-foreground/,
+    );
+  });
+
+  it("confirms Select already draws at the control radius — verified, not changed", () => {
+    // The spec's Shape bullet names SELECTS alongside buttons, inputs, tabs
+    // and nav rows. `select.tsx` was already `rounded-control` on both its
+    // trigger and its items and needs no edit; this asserts that rather than
+    // leaving "presumably fine" as the plan's answer.
+    const select = read("src/components/ui/select.tsx");
+    expect(select).toMatch(/rounded-control border border-input bg-control/);
+    expect(select, "the trigger must not go back to a pill").not.toMatch(/rounded-full/);
   });
 
   it("spaces the rail's icons 8px apart, in both of its groups", () => {
@@ -99,27 +153,6 @@ describe("the console's supplied constants", () => {
     const gaps = [...sidebar.matchAll(/flex[^"]*\bflex-col\b[^"]*\bgap-(\S+)/g)].map((m) => m[1]);
     expect(gaps.length).toBeGreaterThanOrEqual(2);
     for (const g of gaps) expect(g, "a rail column that is not 8px apart").toBe("2");
-  });
-
-  it("keeps the period control's groove — only its corners were asked to move", () => {
-    /**
-     * A REGRESSION TEST FOR OVER-REACH, not for a value.
-     *
-     * The brief was "all buttons and timeline buttons have 999 radius". The
-     * pass that implemented it also deleted the track's border, its fill and
-     * its enclosure, leaving six bare labels on the page — a redesign nobody
-     * asked for, delivered under a radius change. This asserts the three
-     * properties that were silently dropped, so the next tidy-up of this
-     * control has to be deliberate about losing them.
-     */
-    const track = page.match(/PERIOD_TRACK =\s*\n?\s*"([^"]+)"/)?.[1] ?? "";
-    expect(track, "the groove lost its border").toMatch(/\bborder-border\b/);
-    expect(track, "the groove lost its fill").toMatch(/\bbg-control\b/);
-    expect(track, "the groove lost its enclosure").toMatch(/\boverflow-hidden\b/);
-    // And the part that WAS asked for: both the track and its segments are
-    // capsules, which is what makes a lit segment sit inside the groove
-    // instead of rattling around in a rectangle.
-    expect(track).toMatch(/\brounded-full\b/);
   });
 
   it("fills the Add button with literal white", () => {
