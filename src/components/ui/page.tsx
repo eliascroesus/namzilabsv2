@@ -183,11 +183,23 @@ export type PageHeaderProps = {
   title: React.ReactNode;
   lede?: React.ReactNode;
   actions?: React.ReactNode;
+  /**
+   * THE TAB STRIP, AND THE THIRD ZONE THE FIGMA ADDS.
+   *
+   * Every route so far put a title on the left of this header and actions on
+   * the right. The board's own page carries a THIRD object beside them — its
+   * view tab strip — and the reference sets it to the LEFT of a title that
+   * itself moves to the CENTRE of the row, actions staying right. Passing
+   * `tabs` is what asks for that row; leave it out and the header renders
+   * exactly as it always has — every one of the other seventeen call sites is
+   * unaffected by this prop's existence.
+   */
+  tabs?: React.ReactNode;
   back?: { href: string; label: string };
   className?: string;
 };
 
-export function PageHeader({ title, lede, actions, back, className }: PageHeaderProps) {
+export function PageHeader({ title, lede, actions, tabs, back, className }: PageHeaderProps) {
   return (
     /**
      * NO RULE UNDER THE HEADER ANY MORE — the spacing survives, the hairline
@@ -219,100 +231,47 @@ export function PageHeader({ title, lede, actions, back, className }: PageHeader
           {back.label}
         </Link>
       )}
-      {/* `items-center`, and this time it is right — see the note on `actions`
-          below for why it was `items-start` and what changed. */}
-      <div className={cn("flex flex-wrap items-center justify-between gap-x-4 gap-y-3", back && "mt-3")}>
-        {/* THE TITLE BLOCK IS A COLUMN WITH A GAP, not a paragraph with a
-            top margin. 8px, stated once, so the pair sets as one object and
-            a page with no lede is not a title carrying an invisible `mt-1.5`
-            underneath it. */}
-        {/* NO `min-w-0`, AND THAT IS THE FIX FOR "Vie…".
-            This row wraps. With `min-w-0` the title block was allowed to
-            shrink below its own content, so a 520px period control on the
-            right squeezed the h1 down to a few characters and the `truncate`
-            on the span did the rest — "View 2" rendered as "Vie…" on a
-            1440px screen with an entire empty row beneath it. Flex would
-            rather shrink a shrinkable item than wrap. Take the permission
-            away and it wraps instead, which is what the wrap was for. */}
-        {/* `items-start` — THE FIX FOR THE HOVER WASH THAT WAS WIDER THAN THE
-            WORD. A flex column stretches its children by default, so the title
-            Button filled this block's whole width and its hover background ran
-            the length of the header while `justify-start` merely parked the
-            text at the left of it. The wash has to hug the name, because the
-            name is what you press. */}
-        <div className="flex flex-col items-start gap-2">
-          {/* THE TITLE IS 24px, WHICH IS THE STEP THE KIT ALREADY NAMES FOR IT.
-              It was set at `text-xl` — 20px — while `/design` printed
-              `display-xs` beside the words "Page titles (PageHeader)", so the
-              product's one h1 and the page documenting it had drifted by a
-              step. 24 is also the size the brand sheet's own headings are cut
-              at, and it is what gives a page a head rather than a first line.
-
-              The display face's one in-app appearance besides the metric
-              numeral. `.font-display` carries its own tracking (-0.022em), so
-              no `tracking-tight` here — the two would compound. */}
-          {/* `text-heading`, NOT `text-foreground`, and it is the one place in the
-              product that reaches past the body ink on purpose: a page title in
-              the same grey as the sentence under it is not a title.
-              IT WAS `text-white`, which was correct in a one-theme product and
-              INVISIBLE the moment the light theme came back — the kit page's own
-              h1 simply was not on the screen. A value that has to differ between
-              the two themes is a ROLE; that is the whole reason roles exist.
-
-              24px (`display-xs`), DOWN FROM 30. It went UP to 30 when the title
-              shared its row with a 40px period band and read as a caption
-              beside it; that control is 32px now and the row no longer
-              overpowers a 24px heading. 24/600 at 32px leading with 0.07px
-              tracking is what the reference measures, and it is also the step
-              `/design` has printed beside "Page titles" the whole time.
-
-              NO `.font-display`. That class is now purely a -0.022em tracking
-              utility (the display face and the app face are one stack), and
-              -0.022em at this size is 0.57px TIGHTER per character — while the
-              reference tracks its title at +0.07px, which is essentially
-              normal. A heading set tighter than the sentence under it reads as
-              a different typeface rather than as a heading, and `.font-display`
-              stays where the negative tracking is actually right: the landing's
-              48–64px hero. */}
-          <h1 className="text-display-xs font-semibold tracking-[0.07px] text-heading">{title}</h1>
-          {/* 14px, DOWN FROM 16, and the old argument for 16 is retired rather
-              than overruled by taste. It said a lede has to be 16px "to read
-              as a sentence rather than as a caption of the heading" — true when
-              the header was a title and a paragraph, and no longer what this
-              slot is. Paired at 8px under a 24px title it is a SUBTITLE: it
-              names the page's scope in a phrase, and at 16px a phrase that
-              short reads as a second heading competing with the first.
-
-              `max-w-2xl` survives for the pages that still put a whole sentence
-              here: one running the full 1152px of the container is ~150
-              characters a line, roughly twice a comfortable measure. */}
-          {lede && <p className="max-w-2xl text-sm font-normal leading-5 text-muted-foreground">{lede}</p>}
+      {tabs ? (
+        /**
+         * THE THREE-ZONE ROW: tabs | title | actions, and the middle one is
+         * an `auto` column between two EQUAL `1fr` tracks — the grid trick
+         * for a title that sits in the true centre of the row no matter how
+         * wide the tab strip or the actions are, rather than merely centred
+         * in whatever space `justify-content: center` happens to leave over.
+         *
+         * `min-w-0` on the side columns is the same fix `actions` always
+         * needed below: a grid track defaults to `min-width: auto`, which
+         * refuses to shrink below its content's own width — the same bug
+         * that once pushed a 520px period track into horizontal page scroll,
+         * and a grid column inherits the identical failure mode.
+         *
+         * Base layout stacks (title, then tabs, then actions) below `sm`,
+         * where three side-by-side zones have no room left to be zones.
+         */
+        <div
+          className={cn(
+            "flex flex-col items-center gap-3 sm:grid sm:grid-cols-[1fr_auto_1fr] sm:items-center sm:gap-x-4",
+            back && "mt-3",
+          )}
+        >
+          <div className="flex min-w-0 items-center">{tabs}</div>
+          <div className="flex flex-col items-center gap-2 text-center">
+            <h1 className="text-display-xs font-semibold tracking-[0.07px] text-heading">{title}</h1>
+            {lede && <p className="max-w-2xl text-sm font-normal leading-5 text-muted-foreground">{lede}</p>}
+          </div>
+          {actions && (
+            <div className="flex min-w-0 flex-wrap items-center justify-center gap-2 sm:justify-end">{actions}</div>
+          )}
         </div>
-        {/* THE RIGHT SLOT, AND IT CENTRES NOW.
-            It was `items-start` because a wrapping row put buttons half a line
-            below a title whenever the lede made the left column taller — the
-            right fix when the right slot held page ACTIONS, which read as
-            hanging off the title's own line. What sits here on the board is a
-            40px segmented track, and a control that tall pinned to the top of a
-            52px title block sits visibly high of the block it belongs to. The
-            row centres; `flex-wrap` still drops the slot onto its own line
-            before anything can be squeezed.
-
-            AND IT CAN SHRINK NOW — `min-w-0`, where it was `shrink-0`.
-            `shrink-0` was free while this slot held only buttons, because
-            `buttonVariants`' own base is already `shrink-0`: the buttons were
-            never going to compress whatever the wrapper said, so removing it
-            changes nothing for the five pages that put buttons here.
-
-            It is NOT free for the board, whose period control is a ~520px
-            track of six pills. `shrink-0` pins a flex item at its max-content
-            width even after `flex-wrap` has dropped it onto a line of its own,
-            so on a 390px viewport that track pushed the WHOLE PAGE into
-            horizontal scroll — the one failure the track's own internal
-            scroller (`min-w-0 overflow-x-auto`) exists to prevent, and which
-            it cannot prevent from inside a parent that refuses to narrow. */}
-        {actions && <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">{actions}</div>}
-      </div>
+      ) : (
+        <div className={cn("flex flex-wrap items-center justify-between gap-x-4 gap-y-3", back && "mt-3")}>
+          <div className="flex flex-col items-start gap-2">
+            <h1 className="text-display-xs font-semibold tracking-[0.07px] text-heading">{title}</h1>
+            {lede && <p className="max-w-2xl text-sm font-normal leading-5 text-muted-foreground">{lede}</p>}
+          </div>
+          {actions && <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">{actions}</div>}
+        </div>
+      )}
     </header>
   );
 }
