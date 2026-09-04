@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Bell, LayoutDashboard, PanelLeftClose, PanelLeftOpen, Plug, Plus, Radio, Search, Settings, Workflow } from "lucide-react";
+import { Bell, ChevronDown, LayoutDashboard, PanelLeftClose, PanelLeftOpen, Plug, Plus, Radio, Search, Settings, Workflow } from "lucide-react";
 import { Fragment, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { viewStrip, type BoardView } from "@/lib/board/types";
 import { GROUP_COLOR_KEYS, groupBadge, groupInk } from "@/components/flow/node-accent";
@@ -106,10 +107,6 @@ import { GROUP_COLOR_KEYS, groupBadge, groupInk } from "@/components/flow/node-a
  *   annotation.
  * · THE THEME TOGGLE. GONE, with the second theme it switched between.
  */
-
-/** The product's name: the mark's accessible name, and the wordmark the open
- *  panel shows beside it. One literal, because it is one fact. */
-const PRODUCT = "Namzilabs";
 
 /**
  * The two groups, in order. `section` is what splits them: the first block is
@@ -361,22 +358,26 @@ export function Sidebar({
    * worth reintroducing it. `AppShell` reads the cookie; this only toggles it.
    */
   pinned: initialPinned = false,
+  workspace,
+  account,
 }: {
   hide?: string[];
   views?: BoardView[];
   pinned?: boolean;
   /**
-   * The active workspace's name and the signed-in account — accepted here
-   * now, unused until the next commit. `AppFrame` hands both down because the
-   * rail's head block is about to become the workspace switcher; splitting
-   * the prop-plumbing commit from the rendering one keeps each one small
-   * enough to read in one sitting.
+   * The active workspace's name and the signed-in account. `AppFrame` hands
+   * both down for the rail's own head block, which is the workspace switcher
+   * now — see the block below.
    */
   workspace?: string;
   account?: { initials: string; avatarUrl?: string | null; panel: ReactNode };
 }) {
   const pathname = usePathname();
   const params = useSearchParams();
+  // The workspace's initial for the switcher's square. `.trim()` first: an
+  // org named " Acme" would otherwise render a blank blue square — the same
+  // guard the old top-bar identity used.
+  const initial = (workspace ?? "").trim().charAt(0).toUpperCase() || "W";
   /**
    * "Show all" is the only state in this rail, and it is deliberately not
    * persisted. The rail opens on hover and closes again; a fold the customer set
@@ -611,59 +612,79 @@ export function Sidebar({
            on the wrong side of the `group/rail` that reads it. */
         data-pinned={pinned}
       >
-        {/* THE TOP BLOCK IS THE TOP BAR'S OWN HEIGHT, AND THAT IS THE POINT.
-            56px with the bar's hairline landing exactly at its foot means the
-            rail's rule and the bar's rule meet at ONE corner rather than
-            crossing at two — which is the difference between chrome that reads
-            as a single frame and chrome that reads as two components bolted
-            together. Pinned to the bar's height by tests/page-width.test.ts.
+        {/* THE SWITCHER IS HERE NOW; THE MARK MOVED TO THE BAR.
+            One wordmark in the chrome is enough, and the bar carries it full
+            width now — this block used to be that mark, and it is the
+            workspace switcher instead, which is where the Figma puts it: the
+            head of the column you use to move between the things a
+            WORKSPACE has, not the product's own name.
 
-            56 = the reference's 40px content row plus its 8px of padding top
-            and bottom. The reference's own rail head is 48px, because nothing
-            over there requires the two to line up; here the corner does.
+            THE SQUARE IS A FLAT BLUE TINT, NOT `WorkspaceChip`'s PER-WORKSPACE
+            HUE. `WorkspaceChip` (below, and in `org-switcher.tsx`) draws a
+            LIST, where colour is what tells several workspaces apart at a
+            glance. This draws the ONE workspace you are already in, so the
+            export's flat brand tint is the right answer — reusing
+            `WorkspaceChip` here would answer a question ( "which of several" )
+            that this row never asks.
 
-            THE MARK IS HERE NOW rather than in the bar, because the bar carries
-            the WORKSPACE — its avatar, its name, the setup ring — and a band
-            that says "Namzilabs" in one corner and shows the workspace in the
-            other is answering two different questions in two different places,
-            which is right. A band that said the product's name twice would not.
+            IT OPENS THE SAME PANEL THE BAR'S OLD IDENTITY CONTROL DID —
+            `account.panel`, built once in `app-shell.tsx` and unchanged by
+            this move: only the trigger relocated, not the workspace list, the
+            identity band or the way out inside it.
 
-            It is a LINK HOME, which is what a mark in this position is
-            everywhere else, and it is a RINGED DISC rather than a filled tile:
-            the reference draws its mark as a 2px brand ring around a glyph on
-            the bare ground, which is the one place in this rail that a stroke
-            says "brand" without also saying "press me". A filled brand square
-            here would be the second filled object in a column whose only filled
-            object is the "+" in the foot.
+            THE CHEVRON IS A PROMISE, so it only appears when there is a panel
+            to open — the same rule the bar's own identity control followed:
+            `account` present draws the dropdown, its absence draws plain
+            text with no chevron pointing at nothing.
 
-            THE ONE ROW THAT KEEPS AN `aria-label`, because its name is not its
-            label: the accessible name says where the link GOES ("— dashboard"),
-            which the wordmark beside it cannot. Both are built from `PRODUCT`,
-            so there is still only one literal, and the visible string is
-            contained in the announced one, which is what WCAG's Label in Name
-            actually asks for. The "NA" tile is `aria-hidden` — without that the
-            name would open with two letters nobody says out loud. */}
+            THE INITIAL IS `text-xs font-semibold` — 13px at 600, which is what
+            the kit's top weight is. The export draws it at 700; this is one of
+            the several 700s the kit does not follow, because "a badge is not
+            prose" would let every badge in the product past the weight lock
+            and 600 already reads as a badge at 13px. `.wordmark` stays the ONE
+            exception above 600 (see globals.css), and it needs no gate change
+            because its weight is declared in CSS. */}
         <div className="flex h-[60px] shrink-0 items-center px-3.5">
-          <Link href="/dashboard" aria-label={`${PRODUCT} — dashboard`} className={SLOT}>
-            <span className={ICON_COL}>
-              <span
-                aria-hidden
-                className="flex size-8 items-center justify-center rounded-full border-2 border-marker text-xs font-semibold text-marker transition-colors duration-(--duration-fast) ease-(--ease-standard) group-hover:bg-brand-soft"
-              >
-                NA
+          {workspace &&
+            (account ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    className={cn(SLOT, "hover:bg-transparent active:bg-transparent")}
+                    aria-label={`${workspace} — workspace and account`}
+                  >
+                    <span className={ICON_COL}>
+                      <span
+                        aria-hidden
+                        className="flex size-7 shrink-0 items-center justify-center rounded-control bg-brand-500/75 text-xs font-semibold text-white"
+                      >
+                        {initial}
+                      </span>
+                    </span>
+                    <span className={cn("flex min-w-0 flex-1 items-center gap-1", REVEAL)}>
+                      <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{workspace}</span>
+                      <ChevronDown aria-hidden className="size-3 shrink-0 text-muted-foreground" />
+                    </span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" side="right" className="w-64 p-0">
+                  {account.panel}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <span className={SLOT}>
+                <span className={ICON_COL}>
+                  <span
+                    aria-hidden
+                    className="flex size-7 shrink-0 items-center justify-center rounded-control bg-brand-500/75 text-xs font-semibold text-white"
+                  >
+                    {initial}
+                  </span>
+                </span>
+                <RailLabel className="font-semibold text-foreground">{workspace}</RailLabel>
               </span>
-            </span>
-            <RailLabel className="font-semibold text-foreground">{PRODUCT}</RailLabel>
-          </Link>
-          {/* THE PIN, AND IT ONLY EXISTS ONCE THE PANEL IS OPEN.
-              Calendly's rail is the reference: a chevron at the head that keeps
-              the column out rather than letting it fall shut. It rides `REVEAL`
-              like every other label, so at 56px it is not in the way of the
-              mark — and it is the one control here whose job is the rail
-              itself, which is why it sits with the mark rather than in the foot
-              with the acts.
-              `ml-auto` pushes it to the panel's right edge, where a disclosure
-              belongs; at 56px it is clipped along with everything else. */}
+            ))}
         </div>
 
         {/* `aria-label` because a strip of icons is only "the navigation" to
@@ -733,16 +754,18 @@ export function Sidebar({
                   chip. The ghost's own wash is switched OFF — the CHIP is what
                   lights on hover, and a second wash behind it would draw a
                   210px bar that no other row in the rail has. */}
+              {/* THE FIELD LOOK IS THE WHOLE ROW'S NOW, NOT A HOVER STATE OF
+                  IT — a bordered, filled box the way an actual search field
+                  is drawn everywhere else in the kit, since this is a field
+                  wearing a button's behaviour rather than a nav row. */}
               <Button
                 variant="ghost"
                 size="iconSm"
                 aria-keyshortcuts="Meta+K"
-                className={cn(SLOT, "hover:bg-transparent active:bg-transparent")}
+                className={cn(SLOT, "border border-border bg-control hover:bg-control active:bg-control")}
               >
                 <span className={ICON_COL}>
-                  <RailChip tone="rest">
-                    <Search />
-                  </RailChip>
+                  <Search aria-hidden className="size-[18px] text-muted-foreground" />
                 </span>
                 <RailLabel className="text-muted-foreground group-hover:text-foreground">Search</RailLabel>
                 <span
@@ -755,6 +778,18 @@ export function Sidebar({
                   ⌘K
                 </span>
               </Button>
+              {/* THE CAPS LABEL IS BACK, ON THE FIGMA'S OWN TERMS THIS TIME.
+                  It was removed because a heading reserved at 70px pushed
+                  every row below it down while the pointer was still moving
+                  onto one of them. `REVEAL` fades OPACITY rather than height,
+                  so the label costs the same fixed slice of the column
+                  whether it is visible or not — nothing moves under the
+                  cursor, which is the fix, not a re-litigation of the old
+                  argument (the row it labels simply always reserves the
+                  space now, seen or not). */}
+              <p className={cn("px-1 pb-1 pt-3 text-xs font-semibold uppercase tracking-wide text-faint", REVEAL)}>
+                Main Menu
+              </p>
               {items
                 .map(({ label, href, icon: Icon }) => {
                   const active = pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
@@ -834,12 +869,12 @@ export function Sidebar({
             className={cn(
               SLOT,
               "transition-colors duration-(--duration-fast) ease-(--ease-standard)",
-              "group-hover/rail:-mx-1 group-hover/rail:w-[calc(100%+0.5rem)] group-hover/rail:justify-center group-hover/rail:rounded-full group-hover/rail:bg-primary group-hover/rail:px-1",
-              "group-focus-within/rail:-mx-1 group-focus-within/rail:w-[calc(100%+0.5rem)] group-focus-within/rail:justify-center group-focus-within/rail:rounded-full group-focus-within/rail:bg-primary group-focus-within/rail:px-1",
+              "group-hover/rail:-mx-1 group-hover/rail:w-[calc(100%+0.5rem)] group-hover/rail:justify-center group-hover/rail:rounded-control group-hover/rail:bg-primary group-hover/rail:px-1",
+              "group-focus-within/rail:-mx-1 group-focus-within/rail:w-[calc(100%+0.5rem)] group-focus-within/rail:justify-center group-focus-within/rail:rounded-control group-focus-within/rail:bg-primary group-focus-within/rail:px-1",
               // PINNED IS THE THIRD STATE, and every reveal in this file has to
               // name it. A rail held open by choice that still showed a bare
               // "+" chip and a collapsed view list was open in width only.
-              "group-data-[pinned=true]/rail:-mx-1 group-data-[pinned=true]/rail:w-[calc(100%+0.5rem)] group-data-[pinned=true]/rail:justify-center group-data-[pinned=true]/rail:rounded-full group-data-[pinned=true]/rail:bg-primary group-data-[pinned=true]/rail:px-1",
+              "group-data-[pinned=true]/rail:-mx-1 group-data-[pinned=true]/rail:w-[calc(100%+0.5rem)] group-data-[pinned=true]/rail:justify-center group-data-[pinned=true]/rail:rounded-control group-data-[pinned=true]/rail:bg-primary group-data-[pinned=true]/rail:px-1",
             )}
           >
             <span
@@ -871,55 +906,21 @@ export function Sidebar({
             <RailLabel className="font-semibold text-primary-foreground">New flow</RailLabel>
           </Link>
 
-          {/* THE BELL, AND ITS DOT IS A PROMISE THIS COMMIT CANNOT KEEP.
-              Notifications have no store yet, so the control is inert — the same
-              standing the search field had for a commit, and comment-marked for
-              the same reason. The 8px dot is drawn because the export draws it;
-              it says PRESENCE ("there is something") rather than a count, and it
-              is `--primary` now, and being `--primary` is what makes it right
-              rather than merely convenient. It used to have a token of its own
-              specifically so it would not borrow `--success`, because the
-              success trio means a row SUCCEEDED and a dot wearing it turns a
-              notification into a result. For one re-theme that distinction was
-              moot, because success and the brand WERE the same green; they are
-              not any more (the brand is cyan, success kept the green), so the
-              separation this note argues for is real again and `--primary` is
-              on the correct side of it. What stops the dot reading as a status
-              is that a bare dot is not a status pill, which is the
-              quiet-when-fine rule the rest of the product already runs on.
-
-              When notifications land, the dot takes a prop and the button takes
-              a handler. Until then this note is the honest record that the dot
-              is decoration. */}
-          {/* The ghost's own wash is switched off and re-drawn on the ICON
-              COLUMN, which is the same 40px square it used to be. Left on the
-              button it would paint the whole 210px row on hover — the one shape
-              nothing else in this rail draws. */}
-          <Button
-            variant="ghost"
-            size="iconSm"
-            className={cn(SLOT, "text-foreground hover:bg-transparent active:bg-transparent")}
+          {/* GET FREE ACCESS — the upsell row the old bell placeholder becomes.
+              That control had no store behind it to read and nothing to do
+              when pressed; this is the row the export actually draws at the
+              foot of the rail, and it goes to the same place the dropped plan
+              card used to: Settings, where billing lives. */}
+          <Link
+            href="/dashboard/settings"
+            className={cn(SLOT, "text-muted-foreground hover:bg-accent hover:text-foreground")}
           >
-            <span
-              className={cn(
-                ICON_COL,
-                "relative rounded-control transition-colors duration-(--duration-fast) ease-(--ease-standard) group-hover:bg-accent",
-              )}
-            >
-              <Bell />
-              {/* Measured off the ICON COLUMN, not the row and not the glyph:
-                  the row is 32px wide at rest and 228px open, so a dot pinned to
-                  its right edge would fly across the panel as it opens.
-                  MEASURED OFF THE GLYPH, NOT THE BOX. It was `-top-0.5
-                  -right-0.5`, which sat 2px OUTSIDE a 24px column and landed on
-                  the bell's corner. The column is 32px now around an 18px glyph,
-                  so the same offset put the dot ~9px clear of the bell, floating
-                  in the gutter with nothing under it. `top-1 right-1` is the
-                  glyph's own corner again. */}
-              <span aria-hidden className="absolute top-1 right-1 size-2 rounded-full bg-primary" />
+            <span className={cn(ICON_COL, "relative")}>
+              <Bell className="size-[18px]" />
+              <span aria-hidden className="absolute top-1 right-1 size-2 rounded-full bg-brand-500" />
             </span>
-            <RailLabel className="text-muted-foreground group-hover:text-foreground">Notifications</RailLabel>
-          </Button>
+            <RailLabel className="text-muted-foreground group-hover:text-foreground">Get Free Access</RailLabel>
+          </Link>
         </div>
       </div>
       {/* IT FOLLOWS THE PANEL'S EDGE, NOT THE FOOTPRINT'S.
@@ -954,7 +955,7 @@ export function Sidebar({
              the middle of the rail's own head block and reads as an object
              floating beside the mark rather than as the joint between two
              surfaces. A disclosure at an edge belongs where the edges meet. */
-          "absolute top-12 z-10 -translate-x-1/2 rounded-full border border-border bg-card text-muted-foreground shadow-card transition-[left] duration-(--duration-base) ease-(--ease-standard) hover:bg-accent hover:text-foreground",
+          "absolute top-12 z-10 -translate-x-1/2 rounded-control border border-border bg-card text-muted-foreground shadow-card transition-[left] duration-(--duration-base) ease-(--ease-standard) hover:bg-accent hover:text-foreground",
           pinned ? "left-65" : "left-14 peer-hover:left-65 peer-focus-within:left-65",
         )}
       >

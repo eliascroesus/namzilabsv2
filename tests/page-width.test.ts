@@ -492,3 +492,51 @@ describe("the frame's new shape — a full-width bar over [rail | panel]", () =>
     }
   });
 });
+
+describe("the rail's re-dress — a workspace switcher, Main Menu, a search field, Get Free Access", () => {
+  it("builds its switcher from workspace and account, not a per-workspace hue", () => {
+    expect(sidebar).toMatch(/workspace\?:\s*string/);
+    expect(sidebar).toMatch(/bg-brand-500\/75/);
+    expect(sidebar).not.toMatch(/const PRODUCT = "Namzilabs"/);
+  });
+
+  it("sets the switcher's initial at 600, the kit's top weight, not the export's 700", () => {
+    // THE WEIGHT LOCK HAS EXACTLY ONE EXCEPTION AND THIS IS NOT IT.
+    // `.wordmark` is 900, declared in CSS. Everything else in the product,
+    // this badge included, tops out at `font-semibold` — and a badge is
+    // precisely where "it is not really prose" would be argued next, so the
+    // rule is pinned at the one call site most likely to bend it.
+    expect(sidebar).toMatch(/rounded-control bg-brand-500\/75 text-xs font-semibold text-white/);
+    expect(sidebar, "no heavy weight anywhere in the rail").not.toMatch(/\bfont-(?:bold|black)\b/);
+  });
+
+  it("leaves WorkspaceChip exactly as it was", () => {
+    // Regression: the switcher must not reuse or edit the pinned component.
+    const chip = sidebar.match(/export function WorkspaceChip[\s\S]*?\n}/)?.[0] ?? "";
+    expect(chip).toMatch(/style=\{\{\s*background: groupBadge\(key\),\s*color: groupInk\(key\)\s*\}\}/);
+  });
+
+  it("labels the nav list in the faint role, only", () => {
+    expect(sidebar).toMatch(/text-faint/);
+    expect(sidebar).toMatch(/Main Menu/);
+  });
+
+  it("dresses the search row as a bordered field, not a nav row", () => {
+    const code = sidebar.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    expect(code).toMatch(/aria-keyshortcuts="Meta\+K"[\s\S]{0,200}border border-border bg-control/);
+  });
+
+  it("replaces the inert bell row with Get Free Access", () => {
+    expect(sidebar).toMatch(/Get Free Access/);
+    expect(sidebar).not.toMatch(/Notifications/);
+  });
+
+  it("keeps both rail columns 8px apart", () => {
+    // Regression for console-theme.test.ts's own pin — not this file's test,
+    // but broken by exactly the kind of edit this task makes if the wrapper
+    // gap classes are touched.
+    const gaps = [...sidebar.matchAll(/flex[^"]*\bflex-col\b[^"]*\bgap-(\S+)/g)].map((m) => m[1]);
+    expect(gaps.length).toBeGreaterThanOrEqual(2);
+    for (const g of gaps) expect(g).toBe("2");
+  });
+});

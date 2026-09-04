@@ -95,14 +95,18 @@ export function OrgSwitcher({
         ) : (
           <form key={o.id} action={switchOrgAction}>
             <input type="hidden" name="organizationId" value={o.id} />
-            {/* A Button, wearing the menu's row shape rather than the kit's
-                pill: `rounded-full` is what `buttonVariants` opens with, and
-                the ARBITRARY spelling of the control radius is the one that
-                displaces it — `rounded-control` is not a radius tailwind-merge
-                knows, so the two would both survive `cn()` and the pill would
-                win on stylesheet order alone. Hover takes the menu's own
-                `accent` wash, not the ghost button's neutral one, so a row here
-                highlights exactly like a row in any other panel. */}
+            {/* A Button, wearing the menu's row shape. This used to displace a
+                pill: `buttonVariants` opened with `rounded-full`, and `ROW`'s
+                `rounded-[var(--radius-control)]` was the arbitrary spelling
+                that could out-order it through `cn()`. The 4 Sep 2026 Figma is
+                the shape rule's last word — `buttonVariants` opens with
+                `rounded-control` itself now, no pills anywhere in the kit —
+                so `ROW`'s radius is no longer overriding anything; it stays
+                for the row's own shape to read from one place rather than
+                trusting the button's base to keep agreeing with it. Hover
+                takes the menu's own `accent` wash, not the ghost button's
+                neutral one, so a row here highlights exactly like a row in
+                any other panel. */}
             <Button
               type="submit"
               variant="ghost"
