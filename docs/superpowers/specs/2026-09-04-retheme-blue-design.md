@@ -1,0 +1,233 @@
+# Re-theme: the blue console (dark and light), from the 4 September 2026 Figma
+
+Design specification. Approved by Elias on 4 September 2026 in chat (decisions
+1–6 below). Source of truth for values: the two Figma exports Elias pasted
+(dark, then light); where a Figma value fails a readability bar the spec says so
+and records the substitute, per Elias's "I trust you if it is the Figma design".
+
+## Summary
+
+The console moves from the cyan-on-`#1B191A` one-surface theme of 2 September
+to the Figma's blue theme: three dark surfaces (page `#0F1011`, chrome
+`#111111`, panel `#181818`), `#343434` hairlines, `#007BFF` as the brand, 8px
+corners on every control (no pills), a full-width 60px top bar carrying the
+wordmark, a re-dressed hover rail, a 28px Inter headline number on tiles, and a
+matching light theme (white chrome, `#E1E1E1` hairlines, `#F7F8F9` page and
+panel). The brand kit, the root `DESIGN.md` and the `/design` page are rewritten
+to match. The flow builder's canvas stays frozen.
+
+## Decisions (Elias, 4 Sep 2026)
+
+1. Brand blue `#007BFF` replaces the cyan everywhere.
+2. Three dark surfaces instead of one (page, chrome, panel), as the Figma shows.
+3. The sidebar STAYS a hover rail (56px at rest, 260px expanded). Only its
+   dressing changes; the expanded state follows the Figma sidebar.
+4. Tile headline numeral: 28px (from 36px), Inter 600.
+5. Contrast substitutions are accepted where a Figma grey fails 4.5:1 for text.
+6. Light theme values come from the Figma light export.
+
+## Goals and non-goals
+
+Goals: every route in both themes renders in the new vocabulary with no
+hard-coded hex in components; the brand kit, `DESIGN.md` and `/design` agree
+with the tokens; `check:ui`, `design-swatches`, `page-width`, `chrome-band` and
+`console-theme` tests are updated to pin the NEW rules, never silenced.
+
+Non-goals: the flow builder canvas and its node accents (`src/components/flow/*`,
+`--canvas-*`, `GROUP_ACCENT`) — untouched (Elias: "tidy and fix, never
+redesign"); a fixed sidebar (decision 3); a 12px caption step (captions stay
+13px, the closed type scale's nearest step); Poppins for the workspace name (a
+Figma artefact — it is set in the UI face at 15px/600).
+
+## Tokens (`src/app/globals.css`)
+
+### Brand ramp (replaces the cyan ramp)
+
+| Step | Hex | Role | Measured |
+|---|---|---|---|
+| 50 | `#E6F2FF` | wash on light | — |
+| 100 | `#CCE5FF` | | — |
+| 200 | `#99CBFF` | | — |
+| 300 | `#66B2FF` | | 8.51:1 on `#0F1011` |
+| 400 | `#3D9BFF` | THE DARK STROKE (`--marker` in `.dark`): links, focus ring, active tab rule, selected edge | 6.65:1 on `#0F1011`, 6.59:1 on `#111111`, 6.20:1 on `#181818` |
+| 500 | `#007BFF` | THE BRAND: hover of the fill, the workspace initial tint (`rgb(0 123 255 / .75)`), decorative dots, chart series default | 4.79:1 as a stroke on `#0F1011` |
+| 600 | `#0070E8` | THE FILL (`--primary`, both themes) under WHITE ink | 4.68:1 white-on-fill; the Figma's `#007BFF` measures 3.98:1 under white, under the 4.5 a 15px label owes — one step deeper, indistinguishable beside it |
+| 700 | `#0069D9` | pressed | 5.22:1 under white |
+| 800 | `#0062CC` | THE LIGHT STROKE (`--marker` in `:root`): links, ring, active rule on white | 5.80:1 on white |
+| 900 | `#0056B3` | reserved (light hover of a stroke) | 7.04:1 on white |
+
+`--primary-foreground` becomes `#FFFFFF` in both themes (was near-black under
+cyan). `--brand-soft` = `rgb(0 123 255 / 0.10)`, `--brand-soft-line` =
+`rgb(0 123 255 / 0.25)` (dark) / `0.30` (light). Hover still walks UP on dark
+(600 → 500) and DOWN on light (600 → 700).
+
+### Neutral ramp (dark), re-cut for `#0F1011`
+
+| Step | Hex | Role |
+|---|---|---|
+| 950 | `#0F1011` | `--background` — THE PAGE ground |
+| 925 (new) | `#111111` | `--chrome` — top bar, rail, AND `--card` |
+| 900 | `#181818` | `--panel` — the content area under the top bar |
+| 850 (new) | `#202020` | `--control` — fields, the search box, the active nav row |
+| 800 | `#333333` | `--secondary` — grey buttons; `--accent` hover step |
+| 700 | `#3A3A3A` | avatar / icon circles (`--avatar`) |
+| 600 | `#343434` | `--border` — EVERY hairline |
+| 500 | `#4A4A4A` | `--rule` (heavier control edge); the Figma's "Main Menu" grey is NOT text-safe (2.13:1) |
+| 450 (new) | `#6E6E6E` | `--faint` — the caps section label only ("Main Menu"), 3.70:1 on `#111111`; never body copy |
+| 400 | `#858585` | `--muted-foreground` — the Figma's `#7E7E7E` measures 4.37:1 on the panel; `#858585` is 4.81:1 there and 5.12:1 on a card |
+| 200 | `#FFFFFF` | `--foreground`, `--heading`, `--card-foreground` — the Figma sets body AND titles in white |
+
+Step numbers are labels for the ladder; the file keeps its surface-half /
+ink-half rule: 500 is the last LINE step, 450 is a caps-label-only step, 400 is
+the first TEXT step.
+
+Shadows: `--shadow-card` = `0 1px 2px rgb(0 0 0 / .20), 0 0 3px rgb(0 0 0 / .10)`
+(the Figma card shadow, both themes). Card radius stays 10px; controls 8px;
+`--radius-frame` becomes 8px (the panel's top-right corner under the top bar,
+top-left when the rail is collapsed does not round — see Layout).
+
+### Light theme (`:root`), from the Figma light export
+
+| Role | Hex | Measured |
+|---|---|---|
+| `--background` (page) and `--panel` | `#F7F8F9` | — |
+| `--chrome` (top bar, rail) and `--card` | `#FFFFFF` | — |
+| `--border` (hairline) | `#E1E1E1` | — |
+| control outline (`--input`) | `#E4E4E4` | — |
+| `--control` (search box, active nav row) | `#F4F4F4` | — |
+| `--secondary` | `#FFFFFF` with a `--input` outline (the Figma's grey buttons are white with an `#E4E4E4` edge) | — |
+| `--foreground` / `--heading` | `#000000` / `#313131` (page title, workspace name) | — |
+| `--muted-foreground` | `#6B6B6B` — the Figma's `#8E8E8E` measures 3.28:1 on white; `#6B6B6B` is 5.33:1 on white and 5.01:1 on `#F7F8F9` | |
+| `--faint` (caps label) | `#8E8E8E` (the Figma's `#BABABA` is 1.94:1) | 3.28:1, caps label only |
+| icon ink on grey buttons | `#4A4A4A` | 8.4:1 |
+| `--primary` / `--marker` | `#0070E8` / `#0062CC` | see the ramp |
+| `--success` etc. | unchanged (`#00734B` trio) | |
+| `--freshness-dot` | `#34C759` on `rgb(0 212 146 / .15)` | 8.51:1 on `#111111`; on white the dot keeps its halo |
+
+### State
+
+`--success`, `--warn`, `--danger` trios are unchanged in both themes. A new
+`--freshness-dot: #34C759` (both themes) and `--freshness-halo: rgb(0 212 146 /
+0.15)` replace the tile's re-use of `--success`/`--success-soft` for the
+"healthy" dot; the state vocabulary stays separate from the brand.
+
+## Shape
+
+Buttons, chips' containers, inputs, selects, tabs, nav rows, the period
+switch: `rounded-control` (8px). Cards, popovers, menus: 10px. Circles only for
+avatars, the bell badge, the freshness dot and the "active count" numeral. The
+`rounded-full` in `ui/button.tsx`'s base class and in `ui/page.tsx`'s
+`PERIOD_TRACK`/`PERIOD_PILL` go; `tests/console-theme.test.ts`'s pin flips to
+assert `rounded-control`. This is recorded in the brand kit as the final word
+on the shape rule, with the Figma as the reference.
+
+## Type
+
+`--font-sans`/`--font-display` unchanged (system UI first, Inter fallback — SF
+Pro renders on Apple hardware). Body 15/22, captions 13, page title 26/600 stay.
+Changes: the tile numeral (`.stat-numeral`, `--text-display-md`) becomes 28px /
+40px line, Inter 600 (`font-family: var(--font-inter, "Inter"), var(--font-sans)`
+— Inter explicitly, since the numeral is the one place the Figma names it);
+the wordmark "Namzilabs" is a new `.wordmark` class: Inter, 24px, weight 900,
+22px line — the ONLY weight above 600 in the kit, allow-listed in
+`scripts/check-ui.ts` for that class alone. Secondary button labels in the
+Figma's top bar are 15/500; the header's "+ Add / Today / Refresh All" are
+12px/550 Inter — mapped to the kit's `xs` button size (13px), not a new step.
+
+## Layout and the shell
+
+Every fractional Figma measurement is rounded to a whole pixel (Elias, 4 Sep):
+35.99 → 36, 27.99 → 28, 23.99 → 24, 15.99 → 16, 12.11 → 12, 5.99 → 6,
+1.11 → 1, 0.11 → 0. Nothing in the kit is ever set to a fraction of a pixel.
+
+- **Top bar**: full width, 60px (`--spacing-topbar` 44 + 8 + 8 = 60, unchanged
+  arithmetic), `--chrome` fill, `--border` bottom rule. Left: the wordmark
+  (moves out of the rail). Centre: "Welcome back{, name}!". Right: Invite
+  members and New flow as `secondary` 32px buttons with 16px icons, the bell
+  (32px circle `--avatar`, badge count), the avatar circle (initials, 13/600).
+  The `#topbar-slot` / `#topbar-status` portals the flow builder uses stay.
+- **Rail**: stays the hover rail (decision 3). At rest 56px of icons on
+  `--chrome`. Expanded (260px), top to bottom: the workspace switcher row (28px
+  `rounded-control` square tinted `rgb(0 123 255 / .75)` with the initial in
+  white 13/700 — the one 700 the kit allows, on a badge — the name 15/600, a
+  chevron), a search FIELD-styled control (`--control` fill, `--border`
+  outline, magnifier, "Search", ⌘K) that opens the same palette, a "Main Menu"
+  caps label in `--faint` 12px, nav rows 36px with 18px icons (active row
+  `--control` fill), Dashboard's sub-items 32px indented with a 8px dash
+  marker, and at the foot a full-width `primary` "New flow" and a "Get Free
+  Access" row (bell icon with a blue dot, muted text). The wordmark leaves the
+  rail. The collapse/pin cookie behaviour is unchanged.
+- **Frame**: `AppFrame` renders the top bar ABOVE a row of [rail | panel]. The
+  panel is `--panel` with an 8px top-left corner (the Figma shows the corner
+  where the panel meets the top bar beside the rail). `shell-skeleton.tsx`
+  mirrors the new geometry; `tests/page-width.test.ts` is updated to pin it.
+- **Page header** (`ui/page.tsx` PageHeader): tab strip left (active tab
+  15/600 in `--heading` with a 1px `--muted-foreground` bottom rule and a "…"
+  menu; inactive 15/500 muted; a 28px `secondary` "+" square), title centred
+  26/600 with the pencil, actions right ("+ Add" `primary` xs; "Today" and
+  "Refresh All" `secondary` xs with 16px icons). "Refresh All" leaves the
+  `accent` variant — blue is for "+ Add" and "New flow" only.
+
+## Tiles and charts
+
+- Metric card: label 15/400 muted; freshness dot (`--freshness-dot` in the
+  halo) + "1 hr ago" 13 muted; numeral 28/40 Inter 600 `--heading`; chart
+  below with 13px muted axis labels; the per-column coloured edge strip
+  (`--tile-edge`) is removed from the default board (the Figma has none) but
+  the token stays for the canvas board.
+- Chart series default: `--color-brand-500` (`#007BFF`); area fill
+  `rgb(0 123 255 / .12)`; bars `#007BFF`; comparison series (yesterday) the
+  brand's 300 step. `GROUP_ACCENT` untouched.
+- Delta chips ("+50% vs compared"): success/danger soft washes, 8px corners.
+
+## Components (`src/components/ui`)
+
+- `button.tsx`: base radius `rounded-control`; `secondary` uses
+  `bg-secondary text-secondary-foreground` with a `--input` outline in the
+  light theme; `accent`/`primary` fills use `--primary` with white ink; sizes
+  unchanged (32px default).
+- `card.tsx`: `--card` fill, `--border` edge, `--shadow-card`.
+- `tabs.tsx` line variant: active rule uses `--heading`'s companion
+  `--rule`; corners 8px.
+- `avatar.tsx`: fallback and group-count fills both `--avatar`.
+- `input.tsx`: textarea takes `rounded-control` (the comment/code mismatch is
+  resolved toward 8px); stale "9999px" comments corrected.
+- `page.tsx`: PERIOD track/pill 8px; PageHeader centred title.
+
+## Docs and enforcement
+
+- `docs/BRAND_KIT.md`: §1 principle 1 rewritten ("three darks, one hairline"),
+  §2 ramps and state tables replaced with the values above and their
+  measurements, §3 type (numeral 28, wordmark), §4 shape (8px, no pills — final,
+  with the Figma named), §5 layout (top bar carries the wordmark; rail
+  dressing), §6 components, §9 chart colours, §11 retired-token table gains
+  the cyan ramp and `rounded-full`-on-buttons.
+- Root `DESIGN.md`: frontmatter and §2/§5/§6 rewritten in lockstep; the
+  self-contradictory `--canvas-bg` sentence in §10 fixed.
+- `/design` page: swatch arrays and captions updated (`design-swatches` test
+  pins them); the RADII/DIRECTION contradiction resolved.
+- `scripts/check-ui.ts`: retired-token list gains the cyan names; the
+  `font-bold` ban gains an allowance for `.wordmark` only; the radius set
+  keeps `full` (avatars, badges).
+- Tests updated to pin the new rules: `console-theme` (8px buttons, blue
+  tokens), `page-width` (new frame geometry), `design-swatches`, `chrome-band`
+  (unchanged values, re-verified).
+
+## Rollout
+
+One branch (`retheme-blue`), one PR to main after: `pnpm typecheck`, full
+`vitest`, `pnpm build`, `check:orphans`, `check:ui`, and a screenshot sweep of
+every authenticated route in both themes at 1440 and 1920 wide (Playwright is
+not in the repo; the sweep is `pnpm dev` + manual capture by the final
+reviewer, with the Figma beside it).
+
+## Risks
+
+- `text-muted-foreground` has 94 consumers and `bg-card` 46: the value changes
+  are global by design; the sweep is the net.
+- The one-surface thesis was the previous re-theme's central idea; reversing
+  it is deliberate and documented here so nobody "restores" it.
+- The button shape rule has flipped before; this spec names the Figma as the
+  reference so the next flip needs a new design, not a comment.
+- White ink on the fill sits at 4.68:1 — passes, but only at 600; anything
+  lighter than `#0070E8` as a fill under white text fails.
