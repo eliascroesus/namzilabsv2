@@ -540,3 +540,23 @@ describe("the rail's re-dress — a workspace switcher, Main Menu, a search fiel
     for (const g of gaps) expect(g).toBe("2");
   });
 });
+
+describe("the skeleton mirrors the frame's new order", () => {
+  it("holds the bar above the row, not beside it", () => {
+    const code = skeleton.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    expect(code).toMatch(/className="flex h-dvh flex-col bg-background"/);
+    // The bar's ghost precedes the rail's ghost in the DOM now.
+    expect(code.indexOf("border-b border-border")).toBeLessThan(code.indexOf("border-r border-border"));
+  });
+
+  it("gives its content ghost the panel's own surface and corner", () => {
+    expect(skeleton).toMatch(/rounded-tr-frame bg-panel/);
+    expect(skeleton, "the mirror must not keep a corner the frame dropped").not.toMatch(/rounded-tl-frame/);
+  });
+
+  it("puts the two chrome ghosts on --chrome, matching the real bar and rail", () => {
+    const code = skeleton.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    expect(code).toMatch(/h-\[60px\][^"]*bg-chrome/);
+    expect(code).toMatch(/w-\[56px\][^"]*bg-chrome/);
+  });
+});
