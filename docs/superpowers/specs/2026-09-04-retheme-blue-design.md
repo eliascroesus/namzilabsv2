@@ -69,7 +69,8 @@ cyan). `--brand-soft` = `rgb(0 123 255 / 0.10)`, `--brand-soft-line` =
 | 925 (new) | `#111111` | `--chrome` — top bar, rail, AND `--card` |
 | 900 | `#181818` | `--panel` — the content area under the top bar |
 | 850 (new) | `#202020` | `--control` — fields, the search box, the active nav row |
-| 800 | `#333333` | `--secondary` — grey buttons; `--accent` hover step |
+| 800 | `#333333` | `--secondary` — grey buttons |
+| 700 | `#3A3A3A` | `--accent` — the hover/press step above a grey button (amended 5 Sep); also `--avatar` |
 | 700 | `#3A3A3A` | avatar / icon circles (`--avatar`) |
 | 600 | `#343434` | `--border` — EVERY hairline |
 | 500 | `#4A4A4A` | `--rule` (heavier control edge); the Figma's "Main Menu" grey is NOT text-safe (2.13:1) |
@@ -115,7 +116,7 @@ Shadows: `--shadow-card` = `0 1px 2px rgb(0 0 0 / .20), 0 0 3px rgb(0 0 0 / .10)
 | `--faint` (caps label) | `#8E8E8E` (the Figma's `#BABABA` is 1.94:1) | 3.28:1, caps label only |
 | `--avatar` (bell and avatar circles) | `#FFFFFF` with the `--input` (`#E4E4E4`) outline | — |
 | `--muted` (fill) | `#F4F4F4` (light) / `#181818` (dark) | — |
-| `--accent` (hover) | `#ECECEC` (light — a step darker than `--control`) / `#333333` (dark) | — |
+| `--accent` (hover) | `#ECECEC` (light — a step darker than `--control`) / `#3A3A3A` (dark — amended 5 Sep after the token review: at `#333333` it equalled `--secondary` and a grey button's hover vanished; `#3A3A3A` is the step above, shared with `--avatar` as a value, not as a role) | — |
 | `--rule` (heavier control edge) | `#CFCFCF` (light) / `#4A4A4A` (dark) | — |
 | `--input` (control outline) | `#E4E4E4` (light) / `= --border` (dark) | — |
 | `--popover` / `--popover-foreground` | `= --card` / `= --card-foreground`, in BOTH themes | — |
@@ -213,6 +214,38 @@ Every fractional Figma measurement is rounded to a whole pixel (Elias, 4 Sep):
     spent on "+ Add" and "New flow" only.
   `xs` ships `[&_svg]:size-3.5`, so each of the three passes `[&_svg]:size-4`
   to reach the Figma's 16px glyph.
+
+## Mobile (phones, below `md` = 768px) — added 5 Sep 2026 at Elias's request
+
+Today the shell has no phone layout at all (no breakpoint in `app-frame`,
+`sidebar` or `app-shell`; the rail expands on hover, which a touch screen
+cannot do). The re-theme ships one.
+
+- **Shell.** Below `md` the rail is not rendered. The top bar becomes: a 32px
+  menu button (`--avatar` circle, hamburger glyph) then the wordmark on the
+  left, the avatar circle on the right; the greeting is hidden below `sm`;
+  Invite members and New flow leave the bar. The menu button opens a left
+  **drawer** built on the kit's `ui/sheet.tsx` (`side="left"`, 280px wide,
+  `--chrome` fill, `--border` edge) holding exactly the rail's expanded
+  content: workspace switcher, search (opens ⌘K), "Main Menu", the nav with
+  Dashboard's sub-items, and the foot (New flow, Get Free Access, plus Invite
+  members). Any navigation closes the drawer. The drawer is the same
+  component tree as the expanded rail, not a copy.
+- **Content.** Below `md` the panel drops its rounded corner and side inset;
+  the page header stacks: the tab strip scrolls horizontally inside its own
+  `overflow-x-auto` container, the title sits on its own line left-aligned,
+  the actions row wraps with 8px gaps ("+ Add" keeps its label; "Refresh
+  All" and "Today" keep theirs at `xs`). Tiles render in ONE column at full
+  width in placement order (the board grid's column count is 1 below `md`);
+  charts fit their container width; tables scroll inside their own container.
+  No horizontal page scroll at 390px wide on any authenticated route.
+- **Touch.** Nav rows and drawer rows are at least 44px tall below `md`
+  (`min-h-11`); buttons keep 32px with at least 8px between them; the
+  freshness dot and delta chips are unchanged.
+- **Verification.** Render tests with a 390px-wide jsdom viewport pin: the
+  rail is absent and the menu button present below `md`; the drawer opens
+  and closes on navigation; the board renders one column. The manual pass is
+  Elias on the Vercel preview on a phone, both themes.
 
 ## Tiles and charts
 
