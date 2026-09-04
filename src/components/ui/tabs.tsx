@@ -26,14 +26,16 @@ function Tabs({
 }
 
 /**
- * THE TRACK IS A PILL, AND SO IS THE TAB INSIDE IT.
+ * THE TRACK IS AN 8px RECTANGLE, AND SO IS THE TAB INSIDE IT.
  *
  * `p-[3px]` became `p-1`. Three pixels is not a step on the 4px grid; it was
  * there so a squarish `rounded-surface` tab could sit inside a squarish
- * `rounded-surface` track without the two corners fighting. At `--radius-control`'s
- * 9999px both are lozenges and the inset is simply breathing room, so it can be
- * a real grid step — which is what puts the active pill's edge on the same
- * rhythm as everything else in the row.
+ * `rounded-surface` track without the two corners fighting. `--radius-control`
+ * is 8px, not the fully round capsule this comment used to claim, so both
+ * track and tab are ordinary rounded rectangles and the inset is simply
+ * breathing room — which is what puts the active tab's edge on the same
+ * rhythm as everything else in the row, whether it is filled (`default`) or
+ * bare (`line`).
  *
  * The `line` variant keeps its padding at zero: it has no track to inset from,
  * and 4px there pushed the underline 4px clear of the text it underlines.

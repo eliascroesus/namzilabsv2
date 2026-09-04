@@ -46,18 +46,19 @@ function AvatarFallback({
     <AvatarPrimitive.Fallback
       data-slot="avatar-fallback"
       className={cn(
-        // Initials on the marker's own wash, not on grey. The fallback is what
-        // most avatars in this product actually render — almost nobody uploads
-        // a picture to an internal analytics tool — so treating it as the
-        // degraded case left the app's people looking like missing images.
+        // Initials on `--avatar`, THE ONE FILL FOR EVERY AVATAR-SHAPED
+        // CIRCLE — this fallback disc and `AvatarGroupCount`'s "+N" disc
+        // share it, per the 4 Sep 2026 Figma naming both "avatar / icon
+        // circles". The fallback is what most avatars in this product
+        // actually render — almost nobody uploads a picture to an internal
+        // analytics tool — so treating it as the degraded case left the
+        // app's people looking like missing images.
         //
-        // The MARKER's tint pair rather than the brand's, and the initials are
-        // the reason: they are TEXT, `accent` over `accent-foreground` is the
-        // violet pair that is safe for text (6.79:1), and yellow has no such
-        // pair — it carries near-black or it carries nothing, and near-black
-        // initials on a yellow disc read as a button. Identity is also the one
-        // job the rebrand deliberately left violet; see `--chrome-avatar`.
-        "flex size-full items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-foreground group-data-[size=sm]/avatar:text-xs",
+        // `--foreground` carries the initials: `--avatar` is a plain
+        // near-black neutral fill, not a tint with a matching text pair, so
+        // the ink is the kit's ordinary white body colour rather than a
+        // role built for this one fill.
+        "flex size-full items-center justify-center rounded-full bg-avatar text-sm font-semibold text-foreground group-data-[size=sm]/avatar:text-xs",
         className
       )}
       {...props}
@@ -109,7 +110,10 @@ function AvatarGroupCount({
     <div
       data-slot="avatar-group-count"
       className={cn(
-        "relative flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-sm text-muted-foreground ring-2 ring-background group-has-data-[size=lg]/avatar-group:size-10 group-has-data-[size=sm]/avatar-group:size-6 [&>svg]:size-4 group-has-data-[size=lg]/avatar-group:[&>svg]:size-5 group-has-data-[size=sm]/avatar-group:[&>svg]:size-3",
+        // Same `--avatar` fill as `AvatarFallback` — one neutral circle for
+        // every avatar-shaped thing the kit draws, per the shape rule's
+        // "circles only for avatars/badges" clause.
+        "relative flex size-8 shrink-0 items-center justify-center rounded-full bg-avatar text-sm text-foreground ring-2 ring-background group-has-data-[size=lg]/avatar-group:size-10 group-has-data-[size=sm]/avatar-group:size-6 [&>svg]:size-4 group-has-data-[size=lg]/avatar-group:[&>svg]:size-5 group-has-data-[size=sm]/avatar-group:[&>svg]:size-3",
         className
       )}
       {...props}

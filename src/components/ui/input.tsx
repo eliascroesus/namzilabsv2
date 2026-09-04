@@ -34,11 +34,17 @@ const FIELD_BASE =
   "w-full border border-input bg-control text-sm text-foreground transition-colors duration-(--duration-fast) placeholder:text-muted-foreground hover:border-rule focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 aria-invalid:border-destructive disabled:pointer-events-none disabled:opacity-50 disabled:bg-muted";
 
 /**
- * THE SHEET IS PILL-FIRST, so a single-line field is fully round — the same
- * `rounded-control` (9999px) the button beside it takes. That is also why the
- * padding below is px-4 where a rounded rectangle wanted px-3: a pill's corner
- * curve reaches much further into the box, and text set tight against it reads
- * as though it is sliding out of one end.
+ * A SINGLE-LINE FIELD IS AN 8px RECTANGLE, THE SAME AS THE BUTTON BESIDE IT.
+ *
+ * `--radius-control` was a fully round capsule value for one commit; this
+ * comment used to describe that experiment rather than the token that
+ * actually ships, and it was wrong the whole time this file's
+ * `rounded-control` was 8px. The 4 Sep 2026 Figma
+ * (docs/superpowers/specs/2026-09-04-retheme-blue-design.md) makes it the
+ * final word regardless: buttons, chips, inputs, selects, tabs and the period
+ * switch are all `rounded-control`, and none of them is ever a pill again.
+ * Padding is `px-3`, the same rectangle a button wants — there is no curved
+ * corner here to clear.
  */
 const FIELD = `${FIELD_BASE} rounded-control`;
 
@@ -127,13 +133,16 @@ export function Input({ className, autoComplete, spellCheck, type, ...props }: R
 }
 
 /**
- * THE MULTI-LINE FIELD, AND THE ONE PLACE THE PILL STOPS.
+ * THE MULTI-LINE FIELD, AND `rounded-control` THE WHOLE WAY DOWN.
  *
- * `rounded-control` is 9999px, which on an 80px-tall box is not a pill but a
- * stadium — the corner curve arcs across the first and last line of whatever
- * was typed. The sheet draws BUTTONS, INPUTS AND MENU ROWS round, and a
- * paragraph box is none of the three, so it takes the card radius instead.
- * It keeps the field's px-4 so that a form of stacked fields still has one
+ * This used to argue for the CARD radius here — reasoning that `rounded-
+ * control` was a fully round capsule on an 80px box, whose curve would arc
+ * across the first and last typed line, and that a paragraph box being none
+ * of BUTTON/INPUT/MENU-ROW should take 10px instead. The token was never a
+ * capsule when this shipped, so the argument never matched the code below
+ * it, which has always been `rounded-control` at 8px — an ordinary rectangle
+ * a multi-line box has no more reason to avoid than a single-line one does.
+ * It keeps the field's `px-3` so that a form of stacked fields still has one
  * left edge down the whole column.
  */
 export function Textarea({ className, autoComplete, ...props }: React.ComponentProps<"textarea">) {
