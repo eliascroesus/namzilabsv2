@@ -14,7 +14,7 @@
 
 - Colours live only in `src/app/globals.css`; no hex literal in any `.tsx` (`scripts/check-ui.ts` fails the build on one). New roles: `--chrome`, `--panel`, `--avatar`, `--faint`, `--freshness-dot`, `--freshness-halo`; every role is bridged to a utility (`bg-chrome`, `bg-panel`, `bg-avatar`, `text-faint`, `bg-freshness-dot`, `bg-freshness-halo`).
 - Brand ramp (spec table): 400 `#3D9BFF` dark stroke, 500 `#007BFF` the brand, 600 `#0070E8` THE FILL under white ink, 700 `#0069D9` pressed, 800 `#0062CC` light stroke. `--primary-foreground` is `#FFFFFF` in both themes.
-- Dark surfaces: page `#0F1011`, chrome and cards `#111111`, panel `#181818`, control `#202020`, secondary `#333333`, avatar `#3A3A3A`, hairline `#343434`, rule `#4A4A4A`, faint `#6E6E6E`, muted `#858585`, text `#FFFFFF`; `--muted` fill `#181818`, `--accent` hover `#333333`, `--input` = `--border`. Light: page and panel `#F7F8F9`, chrome and cards `#FFFFFF`, hairline `#E1E1E1`, input outline `#E4E4E4`, control `#F4F4F4`, muted `#6B6B6B`, faint `#8E8E8E`, text `#000000`, heading `#313131`, `--secondary-foreground` `#303030` (icons that set their own ink use `#4A4A4A`, 8.86:1 on white), `--avatar` `#FFFFFF` with the `--input` outline, `--muted` `#F4F4F4`, `--accent` `#ECECEC`, `--rule` `#CFCFCF`. `--popover` = `--card` in BOTH themes.
+- Dark surfaces: page `#0F1011`, chrome and cards `#111111`, panel `#181818`, control `#202020`, secondary `#333333`, avatar `#3A3A3A`, hairline `#343434`, rule `#4A4A4A`, faint `#6E6E6E`, muted `#858585`, text `#FFFFFF`; `--muted` fill `#181818`, `--accent` hover `#3A3A3A` (amended 5 Sep: at `#333333` it equalled `--secondary` and a grey button's hover vanished), `--input` = `--border`. Light: page and panel `#F7F8F9`, chrome and cards `#FFFFFF`, hairline `#E1E1E1`, input outline `#E4E4E4`, control `#F4F4F4`, muted `#6B6B6B`, faint `#8E8E8E`, text `#000000`, heading `#313131`, `--secondary-foreground` `#303030` (icons that set their own ink use `#4A4A4A`, 8.86:1 on white), `--avatar` `#FFFFFF` with the `--input` outline, `--muted` `#F4F4F4`, `--accent` `#ECECEC`, `--rule` `#CFCFCF`. `--popover` = `--card` in BOTH themes.
 - Depth, stated honestly — "a control recesses" is retired: on dark, a field is a step UP from the chrome/card it sits on (`#202020` on `#111111`) and its hover a further step up (`#333333`); on light a field is a step DOWN (`#F4F4F4` on white) and its hover a further step down (`#ECECEC`). The directions mirror; neither is described as "recessed".
 - Neutral steps 300 / 100 / 50 stay DEFINED and are re-cut (`#B5B5B5`, `#E5E5E5`, `#FAFAFA`): `scroll-area.tsx`, `switch.tsx`, `button.tsx`'s `white` variant and the off-limits `node-meta.ts` spell them directly. Nothing here retires them.
 - Shape: `rounded-control` (8px) on everything pressable, typeable, tabs, nav rows and the period switch; cards 10px; circles only for avatars, badges, the freshness dot and the active-count numeral. `--radius-frame` = 8px. Card shadow `0 1px 2px rgb(0 0 0 / .20), 0 0 3px rgb(0 0 0 / .10)`.
@@ -6369,6 +6369,1560 @@ tolerated. Nothing in this task needs a new exemption and none is added.
   that are actually there, and the 450 step gets the caption it needs to
   not be read as body-text grey. STATE.md gets a dated line pointing at
   the approved spec.
+
+  Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+  EOF
+  )"
+  ```
+
+---
+
+### Task 19: Mobile shell — the rail becomes a left drawer below `md`
+
+**Runs after Task 9.** Every quotation below is of the code Tasks 7, 8 and 9
+PRODUCE, not of what is in the tree today: `app-frame.tsx`, `top-bar.tsx`,
+`sidebar.tsx` and `shell-skeleton.tsx` are all still pre-Task-7 as this is
+written, and starting here before the shell has turned would edit three files
+into a shape the next commit overwrites.
+
+**Files**
+- Modify: `src/components/sidebar.tsx` (extract `RailContent`; hide the rail below `md`; 44px rows)
+- Create: `src/components/mobile-drawer.tsx`
+- Modify: `src/components/top-bar.tsx` (a `menu` slot; the greeting and the two acts step aside below their breakpoints)
+- Modify: `src/components/app-frame.tsx` (build the drawer, hand it to the bar; the panel's corner is `md:` now)
+- Modify: `src/components/shell-skeleton.tsx` (mirror both)
+- Modify: `package.json` (`jsdom`, dev — see Step 1's note; it is the repo's first)
+- Test: `tests/page-width.test.ts` (two existing pins re-aimed at both layouts), `tests/mobile-shell.test.ts` (new), `tests/mobile-drawer.test.ts` (new, jsdom)
+
+**Interfaces**
+- Consumes: the post-Task-8 `Sidebar` body (`SLOT`, `ICON_COL`, `GUTTER`, `REVEAL`, `RailLabel`, `RailChip`, `ViewList`, the switcher, the search field, Main Menu, the foot); the post-Task-7 `<header>` in `top-bar.tsx`; `ui/sheet.tsx`'s `Sheet` / `SheetContent` / `SheetTrigger` / `SheetTitle` (vendored, unchanged by this task); `bg-avatar`, `bg-chrome`, `border-border` (Tasks 2–3).
+- Produces: `RailContent({ hide?, views?, workspace?, account?, invite? })` — a new **export of `sidebar.tsx`**, rendered by the rail's panel AND by the drawer, which is what the spec's "the same component tree, not a copy" means in code; `MobileDrawer({ hide?, views?, workspace?, account? })`; `TopBar({ account?, firstName?, unread?, menu? })` — one new optional `ReactNode` slot.
+- Does NOT produce a second nav data structure, a second `NAV` array, or a copy of any row's markup. The test in Step 1 asserts the drawer file contains none of the rail's strings.
+
+**Why the drawer needs no new "expanded" flag.** `REVEAL` (sidebar.tsx) is
+`opacity-0 … group-hover/rail:opacity-100 group-focus-within/rail:opacity-100
+group-data-[pinned=true]/rail:opacity-100`, and `ViewList` and the "New flow"
+fill read the same three. Rendered outside a `group/rail` every label in the
+tree would be invisible — which is exactly the trap a hand-copied drawer falls
+into. The drawer therefore wraps `RailContent` in `group/rail`
+`data-pinned="true"`: the third variant fires, every label, the keycap, the
+view list and the filled "New flow" row open together, and not one class in
+`sidebar.tsx` learns that a drawer exists.
+
+- [ ] **Step 1 — write the failing tests**
+
+  Two new files and two edits to an existing one.
+
+  **1a. `tests/mobile-shell.test.ts`** — the breakpoint contract, as source
+  pins. This is not laziness about rendering: a Tailwind breakpoint IS a class
+  in this codebase, jsdom applies no stylesheet at all, and `page-width.test.ts`
+  and `chrome-band.test.ts` already pin every other measurement in this shell
+  the same way.
+
+  ```ts
+  import { readFileSync } from "node:fs";
+  import { join } from "node:path";
+  import { describe, expect, it } from "vitest";
+
+  /**
+   * THE PHONE LAYOUT, PINNED WHERE IT ACTUALLY LIVES.
+   *
+   * Below `md` the rail is not rendered and a drawer carries it instead. Every
+   * half of that is a class — `hidden md:block` on the footprint, `md:hidden`
+   * on the trigger — so it is pinned as source, the way this shell's other
+   * geometry already is. The one thing that is genuinely BEHAVIOUR (the drawer
+   * opens, and closes when the route changes under it) is in
+   * `tests/mobile-drawer.test.ts`, which pays for a DOM.
+   */
+  const root = join(__dirname, "..");
+  const read = (p: string) => readFileSync(join(root, p), "utf8");
+  const code = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+
+  const sidebar = read("src/components/sidebar.tsx");
+  const drawer = read("src/components/mobile-drawer.tsx");
+  const bar = read("src/components/top-bar.tsx");
+  const frame = read("src/components/app-frame.tsx");
+  const skeleton = read("src/components/shell-skeleton.tsx");
+
+  describe("the rail below md", () => {
+    it("is not rendered at all — footprint, panel and toggle together", () => {
+      // The <aside> IS the footprint. Hiding the panel alone would leave a
+      // 56px column of nothing on the left of every phone screen.
+      expect(code(sidebar)).toMatch(/"relative z-20 hidden h-full shrink-0 md:block"/);
+    });
+
+    it("hands its content to a component both it and the drawer render", () => {
+      expect(sidebar).toMatch(/export function RailContent\(/);
+      expect(code(sidebar)).toMatch(/<RailContent hide=\{hide\} views=\{views\} workspace=\{workspace\} account=\{account\} \/>/);
+      expect(code(drawer)).toMatch(/<RailContent[\s\S]{0,160}invite/);
+    });
+
+    it("is not copied into the drawer, which is the whole point", () => {
+      /**
+       * THE FAILURE THIS EXISTS TO STOP is a drawer that reimplements the rail
+       * — two nav lists, two search rows, two answers to "which view am I on",
+       * drifting apart on the first change to either. If any of these strings
+       * appears in the drawer's own file, the tree was copied rather than
+       * rendered.
+       */
+      for (const literal of ["Main Menu", "Get Free Access", "aria-keyshortcuts", "LayoutDashboard"]) {
+        expect(drawer, `the drawer re-spells ${literal}`).not.toContain(literal);
+      }
+    });
+  });
+
+  describe("the drawer", () => {
+    it("is the kit's sheet, on the left, at the export's width and fill", () => {
+      expect(drawer).toContain('side="left"');
+      expect(drawer).toContain("w-[280px]");
+      expect(drawer).toContain("bg-chrome");
+      expect(drawer).toContain("border-border");
+    });
+
+    it("exists only below md, on the trigger AND on the panel", () => {
+      // Both, because a drawer left open across a resize past 768px would
+      // otherwise sit beside the rail it stands in for.
+      const trigger = drawer.slice(drawer.indexOf("SheetTrigger"), drawer.indexOf("SheetContent"));
+      expect(trigger).toContain("md:hidden");
+      expect(drawer.slice(drawer.indexOf("<SheetContent"))).toContain("md:hidden");
+    });
+
+    it("opens the rail's own tree by pinning it, not by re-styling it", () => {
+      // `REVEAL` fades on `group-data-[pinned=true]/rail`. No wrapper, no
+      // labels — this is the line that makes the reuse work.
+      expect(code(drawer)).toMatch(/group\/rail[^"]*"[\s\S]{0,120}data-pinned="true"/);
+    });
+
+    it("closes on navigation, and on a change of view", () => {
+      /**
+       * `usePathname` ALONE IS NOT ENOUGH, and this is the assertion that says
+       * why: the dashboard's views are `?view=` on one pathname, so a drawer
+       * keyed on the path only would stay open over the board it just changed.
+       * `sidebar.tsx` already calls `useSearchParams()` in this same tree, so
+       * the dynamic-rendering cost was paid before this task existed.
+       */
+      expect(drawer).toContain("usePathname");
+      expect(drawer).toContain("useSearchParams");
+      expect(code(drawer)).toMatch(/useEffect\([\s\S]{0,120}setOpen\(false\)[\s\S]{0,80}\[pathname, search\]\)/);
+    });
+
+    it("carries the two acts the bar sheds", () => {
+      expect(code(drawer)).toMatch(/invite\b/);
+      expect(code(sidebar)).toMatch(/\{invite && \(/);
+    });
+  });
+
+  describe("the top bar below md", () => {
+    it("takes a menu slot and draws it before the mark", () => {
+      const header = bar.slice(bar.indexOf("<header"));
+      expect(header.indexOf("{menu}")).toBeGreaterThan(-1);
+      expect(header.indexOf("{menu}")).toBeLessThan(header.indexOf("Namzilabs"));
+      expect(code(frame)).toMatch(/<TopBar[\s\S]{0,240}menu=\{<MobileDrawer/);
+    });
+
+    it("draws the menu button at 32px, on the avatar circle", () => {
+      const trigger = drawer.slice(drawer.indexOf("SheetTrigger"), drawer.indexOf("SheetContent"));
+      expect(trigger).toContain('size="icon"');
+      expect(trigger).toContain("rounded-full bg-avatar");
+    });
+
+    it("drops the greeting below sm and both acts below md", () => {
+      // One span carries both rules: `max-sm:hidden` for the phone and the
+      // pre-existing peer rule for the builder's portalled toolbar.
+      expect(code(bar)).toMatch(/max-sm:hidden[^"]*peer-\[:not\(:empty\)\]:hidden|peer-\[:not\(:empty\)\]:hidden[^"]*max-sm:hidden/);
+      // Exactly two controls step aside at `md` — Invite members and New flow.
+      // Counted over the CODE: the note above them names both by hand, and a
+      // rule that can read its own explanation counts to four.
+      expect(code(bar).match(/hidden md:inline-flex/g) ?? []).toHaveLength(2);
+      expect(code(bar)).toContain("Invite members");
+      expect(code(bar)).toContain("New flow");
+    });
+  });
+
+  describe("touch targets below md", () => {
+    it("gives every rail row 44px, and hands it back at md", () => {
+      expect(sidebar).toMatch(/const SLOT = "[^"]*\bmin-h-11\b[^"]*\bmd:min-h-0\b/);
+    });
+
+    it("gives the nested view rows the same, since they are nav rows too", () => {
+      // The view link and the "Show all" fold, between `ViewList` and the
+      // frame component below it. `SLOT` is a module constant above this
+      // region, so its own `min-h-11` cannot be what satisfies the count.
+      const list = sidebar.slice(sidebar.indexOf("const ViewList"), sidebar.indexOf("export function Sidebar"));
+      expect(list.match(/min-h-11[^"]*md:min-h-0/g) ?? []).toHaveLength(2);
+    });
+  });
+
+  describe("the skeleton mirrors the phone layout too", () => {
+    it("reserves no rail below md", () => {
+      expect(code(skeleton)).toMatch(/hidden w-\[56px\][^"]*md:block/);
+    });
+
+    it("drops the panel's corner below md, in both files", () => {
+      expect(code(skeleton)).toContain("md:rounded-tr-frame bg-panel");
+      expect(code(frame)).toContain("md:rounded-tr-frame bg-panel");
+    });
+  });
+  ```
+
+  **1b. `tests/mobile-drawer.test.ts`** — the one behaviour a source pin cannot
+  reach.
+
+  > **This is the repo's first jsdom test.** Verified before writing it:
+  > `grep -rn "jsdom\|@testing-library" tests/ package.json` returns exactly one
+  > hit, and it is a sentence in `tests/freshness-poller.test.ts` saying there
+  > isn't one. `vitest.config.ts` sets `environment: "node"` globally and
+  > `include: ["tests/**/*.test.ts"]` — so **the file must be `.ts`, not
+  > `.tsx`** (a `.test.tsx` is silently not collected, which is the worst
+  > possible failure for a new test), it uses `createElement` rather than JSX
+  > exactly as `tests/board-canvas-render.test.ts` does, and it opts into a DOM
+  > with a per-file pragma rather than by moving the suite's default. Run
+  > `pnpm add -D jsdom` first; nothing else is added — no `@testing-library`,
+  > because `react-dom/client` plus React's own `act` is the whole of what this
+  > needs.
+
+  ```ts
+  // @vitest-environment jsdom
+  import { act, createElement } from "react";
+  import { createRoot, type Root } from "react-dom/client";
+  import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+  /**
+   * THE DRAWER OPENS, AND SHUTS ITSELF WHEN THE ROUTE MOVES.
+   *
+   * The two facts in this file are the only ones in the phone layout that are
+   * not classes. Everything else — that the rail is absent below `md`, that
+   * the trigger is 32px on `--avatar`, that rows are 44px — is pinned as
+   * source in `tests/mobile-shell.test.ts`, and it has to be: jsdom loads no
+   * stylesheet, so a 390px viewport here proves nothing about a `md:` prefix.
+   * The width is set anyway, and stated as documentation rather than as a
+   * mechanism, so the next person does not mistake this file for a layout
+   * test.
+   */
+  let pathname = "/dashboard";
+  let search = "";
+
+  vi.mock("next/navigation", () => ({
+    usePathname: () => pathname,
+    useSearchParams: () => new URLSearchParams(search),
+    useRouter: () => ({ push: () => {}, refresh: () => {} }),
+  }));
+  // `next/link` wants the App Router context on the client; the rail is full of
+  // anchors and none of them is what this file is about.
+  vi.mock("next/link", async () => {
+    const { createElement: h } = await import("react");
+    return {
+      default: ({ children, href, ...rest }: { children?: unknown; href: string }) =>
+        h("a", { href, ...rest }, children as never),
+    };
+  });
+
+  const { MobileDrawer } = await import("@/components/mobile-drawer");
+
+  // React 19 refuses to run `act` without this.
+  (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+  let root: Root;
+  let host: HTMLDivElement;
+
+  const drawer = () => document.querySelector('[data-slot="sheet-content"]');
+  const trigger = () => document.querySelector<HTMLButtonElement>('button[aria-label="Open the navigation"]');
+
+  const draw = () =>
+    act(() => {
+      root.render(createElement(MobileDrawer, { workspace: "Acme", views: [], hide: [] }));
+    });
+
+  beforeEach(() => {
+    // A phone's viewport, stated. See the note above: jsdom applies no CSS, so
+    // this documents the case rather than producing it.
+    window.innerWidth = 390;
+    pathname = "/dashboard";
+    search = "";
+    host = document.createElement("div");
+    document.body.appendChild(host);
+    root = createRoot(host);
+    draw();
+  });
+
+  afterEach(() => {
+    act(() => root.unmount());
+    host.remove();
+  });
+
+  describe("the phone's navigation drawer", () => {
+    it("is shut until the menu button is pressed", () => {
+      expect(trigger(), "the bar's menu button").not.toBeNull();
+      expect(drawer()).toBeNull();
+    });
+
+    it("opens onto the rail's own content", () => {
+      act(() => trigger()!.click());
+      const panel = drawer();
+      expect(panel).not.toBeNull();
+      // The workspace switcher, the search field and the nav are the RAIL's,
+      // rendered here rather than rebuilt — so finding them proves the reuse.
+      expect(panel!.textContent).toContain("Acme");
+      expect(panel!.textContent).toContain("Main Menu");
+      expect(panel!.textContent).toContain("Dashboard");
+      // …including the two controls the top bar sheds on a phone.
+      expect(panel!.textContent).toContain("New flow");
+      expect(panel!.textContent).toContain("Invite members");
+    });
+
+    it("closes when the route changes under it", () => {
+      act(() => trigger()!.click());
+      expect(drawer()).not.toBeNull();
+      pathname = "/dashboard/flows";
+      draw();
+      expect(drawer(), "a drawer left open over the page it just navigated to").toBeNull();
+    });
+
+    it("closes when only the view changes, which is a search param", () => {
+      // The dashboard's views are `?view=` on one pathname. A drawer keyed on
+      // the pathname alone stays open over the board it just switched.
+      act(() => trigger()!.click());
+      search = "view=v2";
+      draw();
+      expect(drawer()).toBeNull();
+    });
+  });
+  ```
+
+  **1c. `tests/page-width.test.ts`** — two existing pins describe a rail that is
+  now desktop-only. Both are RE-AIMED at both layouts rather than deleted, which
+  is this branch's rule for every test that pinned the previous design.
+
+  Replace:
+
+  ```ts
+    // The <aside>'s OWN class carries no group — a negative match against the
+    // element would always fail, because the panel that DOES carry it is a
+    // descendant. This is the aside's class string, asserted whole.
+    expect(code).toMatch(/"relative z-20 h-full shrink-0"/);
+  ```
+
+  with:
+
+  ```ts
+    // The <aside>'s OWN class carries no group — a negative match against the
+    // element would always fail, because the panel that DOES carry it is a
+    // descendant. This is the aside's class string, asserted whole — and it
+    // now also carries the phone layout, because the FOOTPRINT is what has to
+    // go below `md`: hiding the panel alone would leave a 56px column of
+    // nothing down the left of every phone screen.
+    expect(code).toMatch(/"relative z-20 hidden h-full shrink-0 md:block"/);
+  ```
+
+  And in the skeleton's hairline assertion, replace:
+
+  ```ts
+    expect(code(skeleton)).toMatch(/w-\[56px\][^"]*border-r border-border/);
+  ```
+
+  with:
+
+  ```ts
+    // `hidden` precedes the width now — the ghost mirrors the rail's absence
+    // below `md` as well as its 56px above it, or the skeleton reserves a
+    // column the real chrome will not draw.
+    expect(code(skeleton)).toMatch(/hidden w-\[56px\][^"]*border-r border-border/);
+  ```
+
+- [ ] **Step 2 — run them, confirm they fail**
+
+  ```bash
+  pnpm add -D jsdom
+  pnpm vitest run tests/mobile-shell.test.ts tests/mobile-drawer.test.ts tests/page-width.test.ts
+  ```
+
+  Expected: `mobile-shell.test.ts` and `mobile-drawer.test.ts` fail to even
+  resolve `@/components/mobile-drawer` (the file does not exist); the two
+  re-aimed assertions in `page-width.test.ts` fail because the `<aside>` is
+  still `"relative z-20 h-full shrink-0"` and the skeleton's ghost still opens
+  with `w-[56px]`. Everything else in `page-width.test.ts` — the gutter pair,
+  the caps, the rail/bar height mirror, Tasks 7–9's own blocks — stays green.
+
+- [ ] **Step 3 — implement: `src/components/sidebar.tsx`**
+
+  **3a. One import.** The drawer's foot draws "Invite members", and the row's
+  markup belongs here with `SLOT`, `ICON_COL` and `RailLabel` rather than in the
+  drawer, which would have to import three module-private constants to spell it.
+  After Task 8 the line reads:
+
+  ```tsx
+  import { Bell, ChevronDown, LayoutDashboard, PanelLeftClose, PanelLeftOpen, Plug, Plus, Radio, Search, Settings, Workflow } from "lucide-react";
+  ```
+
+  Replace with:
+
+  ```tsx
+  import { Bell, ChevronDown, LayoutDashboard, PanelLeftClose, PanelLeftOpen, Plug, Plus, Radio, Search, Settings, UserPlus, Workflow } from "lucide-react";
+  ```
+
+  **3b. 44px rows.** Three constants and one button carry the rail's row
+  heights. `min-h-11` rather than `h-11`, so the 36px `h-9` stays the desktop
+  answer and `md:min-h-0` hands it back — a second height would be a second
+  decision to keep in step. Replace:
+
+  ```tsx
+  const SLOT = "group flex h-9 w-full shrink-0 items-center justify-start gap-2.5 rounded-control";
+  ```
+
+  with:
+
+  ```tsx
+  /**
+   * 44px BELOW `md`, AND IT IS THE SAME ROW, NOT A SECOND ONE.
+   *
+   * `h-9` is 36 — over WCAG 2.2's 24px minimum and right for a pointer, and
+   * four pixels under what a finger asks for. `min-h-11` raises the computed
+   * height to 44 on a phone without touching `h-9`, and `md:min-h-0` stands
+   * down again above the breakpoint, so the rail keeps its density and the
+   * drawer keeps its targets from one string.
+   */
+  const SLOT = "group flex h-9 min-h-11 w-full shrink-0 items-center justify-start gap-2.5 rounded-control md:min-h-0";
+  ```
+
+  In `ViewList`, the nested view row is a nav row too. Replace:
+
+  ```tsx
+                "flex h-8 items-center rounded-control pl-4 pr-2 text-sm transition-colors duration-(--duration-fast)",
+  ```
+
+  with:
+
+  ```tsx
+                "flex h-8 min-h-11 items-center rounded-control pl-4 pr-2 text-sm transition-colors duration-(--duration-fast) md:min-h-0",
+  ```
+
+  and, on the "Show all" button in the same block, replace:
+
+  ```tsx
+            className="h-8 w-full justify-start rounded-control pl-8 pr-2 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground active:bg-accent"
+  ```
+
+  with:
+
+  ```tsx
+            className="h-8 min-h-11 w-full justify-start rounded-control pl-8 pr-2 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground active:bg-accent md:min-h-0"
+  ```
+
+  **3c. Split the component in two.** Everything from the state the rows read
+  down to the foot becomes `RailContent`; `Sidebar` keeps the pin, the
+  footprint, the panel and the toggle. Nothing inside the moved region is
+  rewritten — the head block, the search field, "Main Menu", the nav, `ViewList`
+  and the foot all move verbatim, with `min-h-11` from 3b already on them.
+
+  Replace the opening of the export, which after Tasks 7 and 8 reads:
+
+  ```tsx
+  export function Sidebar({
+    hide,
+    views = [],
+    /**
+     * PINNED OPEN, READ ON THE SERVER FROM A COOKIE.
+     * …
+     */
+    pinned: initialPinned = false,
+    workspace,
+    account,
+  }: {
+    hide?: string[];
+    views?: BoardView[];
+    pinned?: boolean;
+    /**
+     * The active workspace's name and the signed-in account — …
+     */
+    workspace?: string;
+    account?: { initials: string; avatarUrl?: string | null; panel: ReactNode };
+  }) {
+    const pathname = usePathname();
+  ```
+
+  with — keeping the `PINNED OPEN` docblock, which moves down to `Sidebar`
+  below:
+
+  ```tsx
+  /**
+   * THE RAIL'S CONTENT — one tree, rendered in two places.
+   *
+   * The phone has no hover, so it cannot have a hover rail; below `md` the
+   * column is not rendered at all and a drawer carries the same rows (see
+   * `mobile-drawer.tsx`). The thing that must not happen is the obvious one:
+   * a second nav list, a second search row, a second answer to "which view am
+   * I on", drifting apart on the first change to either. So this is the whole
+   * of what the rail SAYS, and the rail and the drawer are two frames around
+   * it — one 56px and hover-driven, one 280px and pressed open.
+   *
+   * IT NEEDS NO "EXPANDED" PROP, AND THAT IS THE POINT OF THE SPLIT. Every
+   * label in here rides `REVEAL`, which fades on `group-hover/rail`,
+   * `group-focus-within/rail` and `group-data-[pinned=true]/rail`. The drawer
+   * wraps this in a `group/rail` carrying `data-pinned="true"`, so the third
+   * variant fires and the labels, the keycap, the view list and the filled
+   * "New flow" row all open exactly as they do in a pinned rail. Not one class
+   * below knows a drawer exists.
+   */
+  export function RailContent({
+    hide,
+    views = [],
+    workspace,
+    account,
+    invite = false,
+  }: {
+    hide?: string[];
+    views?: BoardView[];
+    workspace?: string;
+    account?: { initials: string; avatarUrl?: string | null; panel: ReactNode };
+    /**
+     * Draw "Invite members" in the foot. The DRAWER sets it and the rail does
+     * not, because this is where that control lands when the top bar sheds it
+     * below `md` — above `md` it is still in the bar, and a second copy here
+     * would be two routes to one settings page a centimetre apart.
+     */
+    invite?: boolean;
+  }) {
+    const pathname = usePathname();
+  ```
+
+  Everything from that `const pathname` line down to the END of the foot block
+  stays exactly where it is, with three exceptions:
+
+  1. Delete the `pinned`/`togglePin` block, which belongs to the frame rather
+     than to the content — the four lines beginning `const [pinned, setPinned] =
+     useState(initialPinned);` through the closing `};` of `togglePin`, plus the
+     `/** Local state as well as the cookie, so the press is instant. … */`
+     comment above them. (`useState` is still imported and still used by
+     `allViews` here and by `pinned` in `Sidebar` below.)
+  2. Replace the whole return, from the `// THE FOOTPRINT, AND ONLY THE
+     FOOTPRINT.` comment and its `<aside …>` down to the `<div …>` that opens
+     the panel, with a bare fragment:
+
+     ```tsx
+     return (
+       <>
+     ```
+
+  3. At the end of the foot, replace the panel's and the aside's closing tags
+     and the toggle button between them — everything from the foot block's own
+     closing `</div>` down to `</aside>\n  );\n}` — with:
+
+     ```tsx
+           {/* INVITE MEMBERS, WHICH IS A GUEST OF THIS FOOT RATHER THAN A
+               RESIDENT. It is a top-bar control; below `md` the bar has room
+               for a menu button, the mark and your avatar and nothing else, so
+               it comes here with "New flow" rather than being dropped. The rail
+               never sets `invite`, because up there the bar still carries it. */}
+           {invite && (
+             <Link
+               href="/dashboard/settings"
+               className={cn(SLOT, "text-muted-foreground hover:bg-accent hover:text-foreground")}
+             >
+               <span className={ICON_COL}>
+                 <UserPlus className="size-[18px]" />
+               </span>
+               <RailLabel className="text-muted-foreground group-hover:text-foreground">Invite members</RailLabel>
+             </Link>
+           )}
+         </div>
+       </>
+     );
+   }
+     ```
+
+     (The `</div>` above `</>` is the foot block's own closing tag, kept.)
+
+  Then add `Sidebar` back, below `RailContent`, as the frame it now is:
+
+  ```tsx
+  /**
+   * THE HOVER RAIL — the frame around `RailContent`, and nothing else.
+   *
+   * What is left here is the geometry the CONTENT does not care about: the
+   * footprint the page is laid out against, the panel that overlays rather
+   * than pushes, the pin cookie, and the toggle straddling the hairline. The
+   * rows, the search field and the foot are all `RailContent`, which the
+   * phone's drawer renders too.
+   *
+   * IT IS NOT RENDERED BELOW `md`. A hover rail on a touch screen is a column
+   * of unlabelled glyphs that can never open — the panel's whole vocabulary is
+   * `hover` and `focus-within`, and a finger produces neither. `hidden
+   * md:block` on the FOOTPRINT rather than on the panel: hiding the panel
+   * alone would leave 56px of empty column down the left of every phone
+   * screen, laid out and painted, holding nothing.
+   */
+  export function Sidebar({
+    hide,
+    views = [],
+    /**
+     * PINNED OPEN, READ ON THE SERVER FROM A COOKIE.
+     *
+     * It arrives as a prop rather than being read here because the alternative
+     * is a layout jump on every cold load: `localStorage` is not knowable
+     * during render, so a pinned rail would paint at 56px and snap to 260px a
+     * frame later — dragging the top bar and the whole page with it. That is
+     * the exact failure `tests/page-width.test.ts` exists for, and a preference
+     * is not worth reintroducing it. `AppShell` reads the cookie; this only
+     * toggles it.
+     */
+    pinned: initialPinned = false,
+    workspace,
+    account,
+  }: {
+    hide?: string[];
+    views?: BoardView[];
+    pinned?: boolean;
+    workspace?: string;
+    account?: { initials: string; avatarUrl?: string | null; panel: ReactNode };
+  }) {
+    /**
+     * Local state as well as the cookie, so the press is instant. The cookie is
+     * for the NEXT page load; this is for this one. Writing only the cookie
+     * would mean the rail did nothing until you navigated.
+     */
+    const [pinned, setPinned] = useState(initialPinned);
+    const togglePin = () => {
+      const next = !pinned;
+      setPinned(next);
+      // A year, path-wide, Lax: it is a display preference, so it wants to
+      // survive a restart and does not want to ride on cross-site requests.
+      document.cookie = `rail=${next ? "pinned" : "hover"}; path=/; max-age=31536000; samesite=lax`;
+    };
+
+    return (
+      <aside className={cn("relative z-20 hidden h-full shrink-0 md:block", pinned ? "w-65" : "w-[56px]")}>
+        {/* THE PANEL — the whole rail, floated out of the layout. The hairline
+            travels with it: the rail and the panel beside it are two surfaces
+            now, and `border-r` is where one stops. `group/rail` is HERE and not
+            on the <aside>, which is what stops the toggle's own focus holding
+            the column open — see the note on the toggle below. */}
+        <div
+          className={cn(
+            "peer group/rail absolute inset-y-0 left-0 flex flex-col overflow-hidden border-r border-border bg-chrome transition-[width] duration-(--duration-base) ease-(--ease-standard)",
+            pinned ? "w-65" : "w-[56px] hover:w-65 focus-within:w-65",
+          )}
+          /* Read by `REVEAL` through `group-data-[pinned=true]/rail:`, so every
+             label, the keycap, the view list and the "New flow" fill open
+             together without any of them taking a prop. The drawer sets the
+             same attribute by hand for exactly that reason. */
+          data-pinned={pinned}
+        >
+          <RailContent hide={hide} views={views} workspace={workspace} account={account} />
+        </div>
+        {/* THE TOGGLE FOLLOWS THE PANEL'S EDGE, NOT THE FOOTPRINT'S, and it is
+            a sibling of the panel rather than a child: pressing it FOCUSES it,
+            and while it sat inside `group/rail` that focus held the panel open
+            after a collapse. `top-12` centres it on y=60, the corner where the
+            bar's bottom rule meets the rail's right one. */}
+        <Button
+          variant="ghost"
+          size="iconXs"
+          onClick={togglePin}
+          aria-pressed={pinned}
+          aria-label={pinned ? "Collapse the navigation" : "Keep the navigation open"}
+          className={cn(
+            "absolute top-12 z-10 -translate-x-1/2 rounded-full border border-border bg-card text-muted-foreground shadow-card transition-[left] duration-(--duration-base) ease-(--ease-standard) hover:bg-accent hover:text-foreground",
+            pinned ? "left-65" : "left-14 peer-hover:left-65 peer-focus-within:left-65",
+          )}
+        >
+          {pinned ? <PanelLeftClose /> : <PanelLeftOpen />}
+        </Button>
+      </aside>
+    );
+  }
+  ```
+
+  > **One value changed inside a class string I was rewriting anyway, and it is
+  > flagged rather than smuggled.** The panel's fill above is `bg-chrome`, where
+  > today it is `bg-background`. Task 9 paints the skeleton's rail ghost
+  > `bg-chrome` and no task in this plan moves the real one, so as written the
+  > branch would ship a `#0F1011` rail behind a `#111111` ghost — the exact
+  > class-for-class drift `page-width.test.ts` exists to catch, and the spec is
+  > unambiguous ("Rail: … at rest 56px of icons on `--chrome`"). **If Task 8 or
+  > 9 has already made this change, leave it alone and keep the rest of this
+  > block.**
+
+- [ ] **Step 4 — implement: `src/components/mobile-drawer.tsx` (new)**
+
+  ```tsx
+  "use client";
+
+  import { Menu } from "lucide-react";
+  import { usePathname, useSearchParams } from "next/navigation";
+  import { useEffect, useState, type ReactNode } from "react";
+  import { Button } from "@/components/ui/button";
+  import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+  import { RailContent } from "@/components/sidebar";
+  import type { BoardView } from "@/lib/board/types";
+
+  /**
+   * THE PHONE'S NAVIGATION — the rail's own tree, in a drawer.
+   *
+   * A HOVER RAIL CANNOT SURVIVE A TOUCH SCREEN. Its 56px state is unlabelled
+   * glyphs and everything that names them is `hover:` or `focus-within:`, so on
+   * a phone it is a column you cannot read and cannot open. Below `md` the rail
+   * is not rendered (see `Sidebar`) and this stands in: the bar grows a menu
+   * button, and pressing it slides the same rows in from the left.
+   *
+   * THE SAME COMPONENT TREE, NOT A COPY. `RailContent` is one export rendered
+   * in two frames. A hand-built drawer is the obvious alternative and it is
+   * wrong in a way that only shows up months later — two nav lists, two search
+   * rows, two active-row rules, and a change to one of them landing on half the
+   * product.
+   *
+   * `data-pinned="true"` ON A `group/rail` IS WHAT OPENS IT. Every label in
+   * that tree rides `REVEAL`, which fades on hover, focus-within, or a pinned
+   * rail. There is no hover here, so the wrapper claims the third: a drawer IS
+   * a rail held open, which is what the attribute already means.
+   *
+   * IT CLOSES ON NAVIGATION, INCLUDING A CHANGE OF VIEW. `usePathname` alone
+   * would leave it standing over the board it just switched, because the
+   * dashboard's views are `?view=` on one path. `sidebar.tsx` already calls
+   * `useSearchParams()` in this same tree, so reading it here costs nothing
+   * that was not already being paid.
+   */
+  export function MobileDrawer({
+    hide,
+    views = [],
+    workspace,
+    account,
+  }: {
+    hide?: string[];
+    views?: BoardView[];
+    workspace?: string;
+    account?: { initials: string; avatarUrl?: string | null; panel: ReactNode };
+  }) {
+    const [open, setOpen] = useState(false);
+    const pathname = usePathname();
+    const search = useSearchParams().toString();
+    useEffect(() => {
+      setOpen(false);
+    }, [pathname, search]);
+
+    return (
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetTrigger asChild>
+          {/* 32px on the avatar circle, which is what the bell and the account
+              chip beside it wear — three round objects at one size, so the bar
+              reads as one row rather than as a button and two blobs. It is the
+              only control on this bar that is not there above `md`. */}
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Open the navigation"
+            className="shrink-0 rounded-full bg-avatar text-foreground hover:bg-accent active:bg-accent md:hidden"
+          >
+            <Menu />
+          </Button>
+        </SheetTrigger>
+        {/* `md:hidden` HERE TOO, and it is not belt-and-braces: a drawer left
+            open while the window widens past 768px would otherwise sit over the
+            page beside the rail it stands in for.
+
+            280px, `--chrome`, `--border` — the export's own drawer. `p-0` and
+            `gap-0` because the sheet's padded, gapped default is for a form and
+            this is a navigation column that brings its own gutter. The close X
+            is off: at `top-4 right-4` it lands exactly on the workspace
+            switcher's chevron, and the drawer already closes on the overlay, on
+            Escape, and on any navigation. */}
+        <SheetContent
+          side="left"
+          showCloseButton={false}
+          aria-describedby={undefined}
+          className="w-[280px] gap-0 border-border bg-chrome p-0 md:hidden"
+        >
+          {/* Radix names the dialog from this; the drawer's own head is the
+              workspace switcher, which is a name for the WORKSPACE rather than
+              for the panel. */}
+          <SheetTitle className="sr-only">Navigation</SheetTitle>
+          <div className="group/rail flex h-full min-h-0 flex-col overflow-y-auto" data-pinned="true">
+            <RailContent hide={hide} views={views} workspace={workspace} account={account} invite />
+          </div>
+        </SheetContent>
+      </Sheet>
+    );
+  }
+  ```
+
+- [ ] **Step 5 — implement: `src/components/top-bar.tsx`**
+
+  Three edits, all inside the `<header>` Task 7 produced.
+
+  **5a. The slot.** In the signature Task 7 leaves as:
+
+  ```tsx
+  export function TopBar({
+    account,
+    firstName,
+    unread = 1,
+  }: {
+    account?: { initials: string; avatarUrl?: string | null; panel: ReactNode };
+  ```
+
+  add `menu` to both halves:
+
+  ```tsx
+  export function TopBar({
+    account,
+    firstName,
+    menu,
+    unread = 1,
+  }: {
+    account?: { initials: string; avatarUrl?: string | null; panel: ReactNode };
+    /**
+     * The phone's way into the navigation — `MobileDrawer`, built by
+     * `AppFrame` and handed down as a node.
+     *
+     * A NODE RATHER THAN FOUR PROPS. The drawer needs the workspace, the
+     * account, the view list and the hidden-items list; this bar needs none of
+     * them and has just finished giving two of them back (see the file note).
+     * Passing the built control keeps the bar's signature about the BAR, which
+     * is the same reason `account.panel` arrives as a node rather than as a
+     * workspace list.
+     */
+    menu?: ReactNode;
+  ```
+
+  **5b. The mark, with the menu button before it.** Replace:
+
+  ```tsx
+        {/* ── THE MARK ─────────────────────────────────────────────────────── */}
+        <Link href="/dashboard" className="wordmark shrink-0 text-foreground">
+          Namzilabs
+        </Link>
+  ```
+
+  with:
+
+  ```tsx
+        {/* ── THE WAY IN, THEN THE MARK ────────────────────────────────────
+            The menu button exists only below `md`, where there is no rail to
+            the left of this bar — it is the phone's whole navigation, so it
+            takes the reading edge and the mark steps right by 40px. Above
+            `md` it is not rendered and this group is the wordmark alone,
+            exactly where it was. */}
+        <div className="flex shrink-0 items-center gap-2">
+          {menu}
+          <Link href="/dashboard" className="wordmark shrink-0 text-foreground">
+            Namzilabs
+          </Link>
+        </div>
+  ```
+
+  **5c. What steps aside, and where it goes.** The greeting first — replace:
+
+  ```tsx
+          <span className="truncate text-sm font-medium text-foreground peer-[:not(:empty)]:hidden">{greeting}</span>
+  ```
+
+  with:
+
+  ```tsx
+          {/* `max-sm:hidden`, NOT `hidden sm:block`, AND THE DIFFERENCE IS A
+              BUG AVOIDED. This span already carries `peer-[:not(:empty)]:hidden`
+              — the rule that gets out of the builder's way when its toolbar
+              portals into the slot beside it. A base `hidden` plus `sm:block`
+              would put a responsive variant into a fight with that peer rule
+              that is settled by Tailwind's own emission order rather than by
+              anything written here, and the losing case is a greeting sitting
+              on top of the builder's toolbar. One `max-` variant hides it below
+              `sm` and leaves the peer rule the only thing deciding anything at
+              `sm` and above. */}
+          <span className="truncate text-sm font-medium text-foreground max-sm:hidden peer-[:not(:empty)]:hidden">
+            {greeting}
+          </span>
+  ```
+
+  Then the two acts. Replace:
+
+  ```tsx
+          <Link
+            href="/dashboard/settings"
+            className={cn(buttonVariants({ variant: "secondary" }), "[&_svg]:size-4")}
+            title="Invite someone to this workspace"
+          >
+            <UserPlus />
+            <span className="hidden sm:inline">Invite members</span>
+          </Link>
+          <Link href="/dashboard/flows" className={cn(buttonVariants({ variant: "secondary" }), "[&_svg]:size-4")}>
+            <Plus />
+            <span>New flow</span>
+          </Link>
+  ```
+
+  with:
+
+  ```tsx
+          {/* BOTH ACTS LEAVE THE BAR BELOW `md`, AND NEITHER IS LOST. They are
+              in the drawer's foot — "New flow" is the rail's own filled row and
+              has always been there, and "Invite members" is a guest of that
+              foot for exactly as long as this bar has no room for it. What is
+              left up here on a phone is the menu, the mark and you, which is
+              the export's own phone bar.
+              The label's `hidden sm:inline` goes with the move: it was the
+              narrow-viewport accommodation this replaces, and a control that is
+              not rendered below `md` cannot need one. */}
+          <Link
+            href="/dashboard/settings"
+            className={cn(buttonVariants({ variant: "secondary" }), "hidden md:inline-flex [&_svg]:size-4")}
+            title="Invite someone to this workspace"
+          >
+            <UserPlus />
+            <span>Invite members</span>
+          </Link>
+          <Link
+            href="/dashboard/flows"
+            className={cn(buttonVariants({ variant: "secondary" }), "hidden md:inline-flex [&_svg]:size-4")}
+          >
+            <Plus />
+            <span>New flow</span>
+          </Link>
+  ```
+
+  The bell and the avatar stay at every width. The spec's phone bar names the
+  menu, the mark and the avatar; it says only that *Invite members and New flow*
+  leave, and those two are the two with somewhere to land. A bell dropped here
+  would be reachable nowhere on a phone, which is a product decision this
+  re-theme was not asked to make. Their `gap-4` is 16px, over the spec's 8px
+  minimum between controls.
+
+- [ ] **Step 6 — implement: `src/components/app-frame.tsx` and `shell-skeleton.tsx`**
+
+  **6a.** In `app-frame.tsx`, add the import beside the other two:
+
+  ```tsx
+  import { MobileDrawer } from "./mobile-drawer";
+  ```
+
+  Replace the panel's class line Task 7 produced:
+
+  ```tsx
+    const className = cn("relative min-w-0 flex-1 rounded-tr-frame bg-panel", surface);
+  ```
+
+  with:
+
+  ```tsx
+    /**
+     * THE CORNER IS A DESKTOP FACT. It reveals the page behind the panel where
+     * the bar's rule ends and the rail's begins — and below `md` there is no
+     * rail, so the panel runs the full width of the viewport and the only thing
+     * an 8px notch could reveal is the 8px of `--background` outside it. A
+     * rounded corner against the edge of a phone screen reads as a rendering
+     * fault, which is the same argument that took the notch off when the
+     * surfaces were one colour, in a different axis.
+     *
+     * `md:rounded-tr-frame bg-panel` in that order on purpose: the pair is
+     * matched as a literal by `tests/page-width.test.ts`, on both sides of the
+     * frame/skeleton mirror.
+     */
+    const className = cn("relative min-w-0 flex-1 md:rounded-tr-frame bg-panel", surface);
+  ```
+
+  And hand the bar its menu — replace:
+
+  ```tsx
+        <TopBar account={account} firstName={firstName} />
+  ```
+
+  with:
+
+  ```tsx
+        {/* THE DRAWER IS BUILT HERE BECAUSE THIS IS WHERE THE NAVIGATION DATA
+            IS. `AppFrame` already holds the workspace, the account, the view
+            list and `hide` for the rail beside it; the bar holds none of them
+            and should not start. Below `md` this is the only way into any of
+            it — the rail is not rendered at all. */}
+        <TopBar
+          account={account}
+          firstName={firstName}
+          menu={<MobileDrawer hide={hide} views={views} workspace={workspace} account={account} />}
+        />
+  ```
+
+  **6b.** In `shell-skeleton.tsx`, mirror both. Replace the rail ghost Task 9
+  produced:
+
+  ```tsx
+          <div className="w-[56px] shrink-0 border-r border-border bg-chrome" />
+  ```
+
+  with:
+
+  ```tsx
+          {/* NOTHING IS RESERVED FOR THE RAIL BELOW `md`, because nothing is
+              drawn there — see `Sidebar`. A ghost the real chrome will not
+              replace is 57px of content jumping left when the route lands,
+              which is the one failure this file exists to prevent. */}
+          <div className="hidden w-[56px] shrink-0 border-r border-border bg-chrome md:block" />
+  ```
+
+  and the panel ghost:
+
+  ```tsx
+            <div className="flex-1 overflow-y-auto rounded-tr-frame bg-panel">
+  ```
+
+  with:
+
+  ```tsx
+            <div className="flex-1 overflow-y-auto md:rounded-tr-frame bg-panel">
+  ```
+
+  The bar's ghost is unchanged and stays empty: the real bar's phone contents —
+  a menu button, the mark, an avatar — are all things that appear instantly and
+  never move, which is the same reason the ghost draws none of the desktop ones.
+
+- [ ] **Step 7 — run it green**
+
+  ```bash
+  pnpm vitest run tests/mobile-shell.test.ts tests/mobile-drawer.test.ts tests/page-width.test.ts tests/vendored-primitives.test.ts tests/console-theme.test.ts
+  ```
+
+  All five pass. `vendored-primitives.test.ts` because `WorkspaceChip` lives in
+  `sidebar.tsx` and this task moves code around it (the chip itself is not
+  touched, and it is not inside `RailContent`); `console-theme.test.ts` because
+  it reads the same file's shape.
+
+  If the jsdom file fails for a reason inside Radix rather than inside this
+  code — a portal that will not mount, a missing DOM API — **report it and stop
+  rather than deleting the file**: the open/close contract is also pinned as
+  source in `mobile-shell.test.ts`, so the branch is not blind, but a first
+  jsdom test that was quietly removed is a capability the next task will
+  re-litigate from scratch.
+
+- [ ] **Step 8 — gate**
+
+  ```bash
+  pnpm typecheck && pnpm vitest run tests/mobile-shell.test.ts tests/mobile-drawer.test.ts tests/page-width.test.ts tests/chrome-band.test.ts && pnpm check:ui
+  ```
+
+  `typecheck` is the real gate on the split: `noUnusedLocals` and
+  `noUnusedParameters` are both on, so a prop left behind on `Sidebar` or a
+  constant orphaned by the move fails the build rather than lingering.
+  `chrome-band.test.ts` is a regression run — it is entirely about the flow
+  builder's `FlowToolbar.tsx`/`ConfigPanel.tsx`, which this task does not open,
+  and it is here to prove that. `check:ui` passes: no raw `<button>` (the
+  trigger is `Button`), no hex, no `dark:` variant, `bg-avatar`/`bg-chrome` are
+  the sanctioned spellings Task 7 already cleared, and `rounded-full` is in
+  `RADIUS_OK` for exactly this kind of circle.
+
+- [ ] **Step 9 — commit**
+
+  ```bash
+  git add package.json pnpm-lock.yaml src/components/sidebar.tsx src/components/mobile-drawer.tsx src/components/top-bar.tsx src/components/app-frame.tsx src/components/shell-skeleton.tsx tests/mobile-shell.test.ts tests/mobile-drawer.test.ts tests/page-width.test.ts
+  git commit -m "$(cat <<'EOF'
+  Give the phone a drawer, and stop drawing a hover rail it cannot open
+
+  Below md the rail is not rendered: its panel is opened by hover and by
+  focus-within, neither of which a finger produces, so on a phone it was a
+  column of unlabelled glyphs with no way in. The rail's content is now one
+  exported component that both the 56px column and a 280px left sheet render
+  — the same tree, not a copy, opened in the drawer by the data-pinned
+  attribute REVEAL already reads. The bar grows a 32px menu button on the
+  avatar circle before the mark, drops the greeting below sm and both acts
+  below md (they land in the drawer's foot beside New flow), rows are 44px
+  under the breakpoint, and the panel's top-right corner and the skeleton's
+  rail ghost both stand down where there is no rail to sit beside.
+
+  Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+  EOF
+  )"
+  ```
+
+---
+
+### Task 20: Mobile content — one column, a stacking header, and no sideways scroll
+
+**Runs after Tasks 14 and 19.** Task 14 is what puts a tab strip in
+`PageHeader`'s `tabs` slot at all, so the stacking rules below have nothing to
+stack until it lands; Task 19 establishes `md` as the shell's own breakpoint,
+and a header that stacked at `sm` while the rail disappeared at `md` would give
+the 640–768px band a three-zone row with no rail beside it.
+
+**Files**
+- Modify: `src/components/ui/page.tsx` (`PageHeader`'s three-zone branch; `BOARD_GRID`'s first rung)
+- Modify: `src/app/dashboard/board-controls.tsx` (`ViewStrip` stops wrapping below `md`, so the header's scroller has something to scroll)
+- Test: `tests/page-header.test.ts` and `tests/page-width.test.ts` and `tests/board-canvas-render.test.ts` (existing pins re-aimed at both layouts), `tests/mobile-content.test.ts` (new)
+
+> **`ui/page.tsx` was being edited by another worker while this was written.**
+> Every quotation of it below is of the file as it stood after commit `d97cff4`
+> ("Give PageHeader a third zone, and centre the title in it") — Tasks 1–6 in,
+> Task 7 onward not. The two blocks quoted are `BOARD_GRID` and the `tabs ? (`
+> branch of `PageHeader`, neither of which any later task in this plan touches.
+> If either has moved under you, re-read before editing and say so.
+
+**Interfaces**
+- Consumes: `PageHeaderProps.tabs` (Task 5), the dashboard passing it (Task 14), `md` as the shell's breakpoint (Task 19), `.quiet-scroll` (globals.css).
+- Produces: `BOARD_GRID = "grid gap-6 md:grid-cols-2 xl:grid-cols-3"` — the same three-rung decision, with its first rung moved from 640px to 768px; a `PageHeader` three-zone row that stacks below `md` with the title left-aligned and the tab strip in its own horizontal scroller.
+- Removes: nothing.
+
+**What was checked and needs no change, which is a finding rather than an
+omission.** The spec asks for tiles at full width, charts fitting their
+container and tables scrolling inside their own. Three of the four were already
+true and are pinned rather than rewritten:
+
+- **The custom canvas is already one column below `md`.** `src/lib/board/grid.ts`
+  computes all three renderings per cell (`canvasCells` → `--c12`/`--c6`/`--c1`)
+  and `globals.css` picks between them at `min-width: 768px` and `1024px`, with
+  the ONE-column geometry as the base case. Nothing in this task changes that;
+  Step 1 pins it, because a media query someone "tidies" from 768 to 640 would
+  silently put two columns on a phone and no test would say so.
+- **Charts fit by construction.** `board-charts/cartesian.tsx` draws into a
+  stretched `viewBox` with the labels in HTML outside it — its own note explains
+  why — and every width in that directory is a percentage or a slot computed
+  from the point count. There is no fixed pixel width in any mark.
+- **Tables and lanes already scroll inside their own containers.**
+  `ui/table.tsx` is `overflow-x-auto`; the groups board's two lane scrollers
+  (`board-layout.tsx`) are `overflow-x-auto` around `COLUMN_W` = `w-[310px]`
+  columns, which is under 390 and inside a scroller besides; the calendar's
+  sheet is a `min-w-[640px]` grid inside an `overflow-x-auto` card, which is the
+  deliberate arrangement its own comment describes.
+- **Not fixed here, recorded so the next pass does not re-find it:**
+  `SCROLLER_BLEED` (`board-shape.ts`) is `-mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8
+  lg:px-8` against a page gutter that stopped stepping and is a flat `p-6`. At
+  `lg` the bleed is 32px against 24px of padding, so between 1024px and ~1152px
+  — where the container has no spare margin — the lane scrollers overhang their
+  container by 8px a side. That is a DESKTOP overflow, it predates this spec, and
+  fixing it means re-deciding the bleed against the flat gutter, which is a
+  different change from a phone layout.
+- **The panel has no side inset to drop.** The spec's "below `md` the panel
+  drops its rounded corner and side inset" has one half with code behind it —
+  the corner, which Task 19 moves to `md:rounded-tr-frame`. `AppFrame` sets no
+  side inset at all beyond `env(safe-area-inset-*)`, and the 24px that looks
+  like one is `PageContainer`'s flat `p-6`, which `page-width.test.ts` pins as a
+  PAIR with the skeleton and whose own note argues at length for not stepping
+  with the viewport (the top bar's inset cannot step, so every rung is a width
+  at which the page's content and the bar's stand on two different lines). 24px
+  on a 390px screen leaves a 342px measure and no horizontal scroll, so the
+  gutter is left alone deliberately rather than by omission.
+
+- [ ] **Step 1 — write the failing tests**
+
+  **1a. `tests/mobile-content.test.ts`** (new):
+
+  ```ts
+  import { readdirSync, readFileSync, statSync } from "node:fs";
+  import { join, relative } from "node:path";
+  import { describe, expect, it } from "vitest";
+
+  /**
+   * THE PHONE'S CONTENT COLUMN: one board column, a header that stacks, and
+   * nothing on any authenticated route wider than the screen.
+   *
+   * Source pins, like `page-width.test.ts` beside it, and for the same reason:
+   * what is being asserted is a BREAKPOINT, which in this codebase is a class
+   * and a media query rather than a measurement any renderer here can take.
+   */
+  const root = join(__dirname, "..");
+  const read = (p: string) => readFileSync(join(root, p), "utf8");
+
+  const page = read("src/components/ui/page.tsx");
+  const css = read("src/app/globals.css");
+
+  describe("the board is one column below md", () => {
+    it("moves the grid's first rung from sm to md", () => {
+      /**
+       * `sm:grid-cols-2` put two tiles side by side from 640px — inside the
+       * band where the rail has already gone and the header has already
+       * stacked, on a screen that is a large phone. The rungs above it are
+       * unchanged: three columns is still what 1152px is for.
+       */
+      expect(page).toMatch(/BOARD_GRID = "grid gap-6 md:grid-cols-2 xl:grid-cols-3";/);
+      expect(page, "the sm rung must not come back").not.toMatch(/BOARD_GRID = "[^"]*sm:grid-cols-2/);
+    });
+
+    it("keeps the canvas's phone rendering at one column, and at 768", () => {
+      /**
+       * The custom board never had this bug — `grid.ts` computes a 1-column
+       * reflow and the stylesheet picks it as the BASE case. It is pinned
+       * because it is invisible: the geometry is in custom properties, so a
+       * media query edited from 768 to 640 would put six columns on a large
+       * phone and every render test would still pass.
+       */
+      expect(css).toMatch(/\.board-canvas\s*\{[^}]*grid-template-columns:\s*repeat\(1,/);
+      expect(css).toMatch(/@media \(min-width: 768px\)\s*\{\s*\.board-canvas\s*\{[^}]*repeat\(6,/);
+    });
+  });
+
+  describe("the page header stacks below md", () => {
+    const header = page.slice(page.indexOf("export function PageHeader"));
+
+    it("is a column below the breakpoint and a three-zone grid above it", () => {
+      expect(header).toContain("flex flex-col items-stretch gap-3 md:grid md:grid-cols-[1fr_auto_1fr]");
+      expect(header, "the sm rung belonged to a shell that broke at sm").not.toContain("sm:grid-cols-[1fr_auto_1fr]");
+    });
+
+    it("puts the tab strip in its own scroller, not on a second line", () => {
+      expect(header).toMatch(/quiet-scroll[^"]*overflow-x-auto[^"]*md:overflow-visible/);
+      // …and the strip inside it has to stop wrapping, or it wraps INSIDE the
+      // scroller and the scroller never has anything to scroll.
+      expect(read("src/app/dashboard/board-controls.tsx")).toMatch(/flex flex-nowrap items-center gap-6 px-1 py-1 md:flex-wrap/);
+    });
+
+    it("left-aligns the title on its own line, and centres it only at md", () => {
+      expect(header).toContain("items-start gap-2 text-left md:items-center md:text-center");
+    });
+
+    it("wraps the actions at 8px", () => {
+      expect(header).toContain("flex-wrap items-center justify-start gap-2 md:justify-end");
+    });
+  });
+
+  /**
+   * NOTHING ON AN AUTHENTICATED ROUTE IS WIDER THAN THE SCREEN.
+   *
+   * A 390px viewport is the narrowest phone this product has to open on, and
+   * one fixed width over it anywhere in a page's own tree pushes the WHOLE
+   * document sideways — which is worse than a clipped element, because it
+   * moves the chrome too and there is no scroll position that reads correctly.
+   *
+   * `max-w-[…]` is not a fixed width and is excluded by the lookbehind; a
+   * scroller's own inner track is not one either, which is what the allow-list
+   * is for. The scan is px-only: this codebase spells every fixed chrome
+   * measurement in pixels (56, 60, 280, 310, 640), and a rem width would be a
+   * new habit rather than a hole in this rule.
+   *
+   * `src/components/flow/*` is out of scope by the spec's own non-goals — the
+   * builder's canvas is frozen for this re-theme, and it is a panning surface
+   * with its own viewport besides.
+   */
+  describe("no authenticated page is wider than a phone", () => {
+    const ALLOWED: Record<string, string[]> = {
+      // The month sheet: seven columns of a readable width need ~640px, so it
+      // scrolls INSIDE its own card (`overflow-x-auto p-3 sm:p-4`) rather than
+      // squeezing a number into 40px. The container, not the page, scrolls.
+      "src/components/calendar/calendar-board.tsx": ["min-w-[640px]"],
+      // Two kit specimens on /design, both `w-[452px] max-w-full` — a panel
+      // drawn at its real size on a wide screen and told to shrink below it.
+      "src/app/design/page.tsx": ["w-[452px]"],
+    };
+
+    const FIXED = /(?<!max-)\b(?:min-w|w)-\[(\d+)px\]/g;
+
+    function tsx(dir: string, out: string[] = []): string[] {
+      for (const entry of readdirSync(dir)) {
+        const full = join(dir, entry);
+        if (statSync(full).isDirectory()) {
+          if (full.endsWith(join("components", "flow"))) continue;
+          tsx(full, out);
+        } else if (entry.endsWith(".tsx")) out.push(full);
+      }
+      return out;
+    }
+
+    it("sets no fixed width over 390px outside the allow-list", () => {
+      const offenders: string[] = [];
+      for (const file of [...tsx(join(root, "src/app")), ...tsx(join(root, "src/components"))]) {
+        const rel = relative(root, file);
+        const allowed = ALLOWED[rel] ?? [];
+        for (const [cls, px] of readFileSync(file, "utf8").matchAll(FIXED)) {
+          if (Number(px) <= 390 || allowed.includes(cls)) continue;
+          offenders.push(`${rel}: ${cls}`);
+        }
+      }
+      expect(offenders).toEqual([]);
+    });
+  });
+  ```
+
+  **1b. `tests/page-header.test.ts`** — the pins Task 5 wrote describe a header
+  that only ever had a desktop shape. They are re-aimed at both, not deleted.
+  Replace:
+
+  ```ts
+      expect(html).toMatch(/grid-cols-\[1fr_auto_1fr\]/);
+      expect(html).toMatch(/text-center/);
+  ```
+
+  with:
+
+  ```ts
+      // BOTH LAYOUTS, FROM ONE RENDER. The three-zone grid is a `md:` fact
+      // now — below the breakpoint this same markup is a column with the title
+      // left-aligned, which is a phone's only honest reading of a row that
+      // wants a tab strip, a centred name and three buttons on it.
+      expect(html).toMatch(/md:grid-cols-\[1fr_auto_1fr\]/);
+      expect(html).toMatch(/md:text-center/);
+      expect(html).toMatch(/flex flex-col items-stretch/);
+  ```
+
+  and add a third `it` to the same `describe`:
+
+  ```ts
+    it("stacks below md: a scrolling tab strip, a left title, wrapping actions", () => {
+      const html = renderToStaticMarkup(
+        createElement(PageHeader, {
+          title: "Dashboard",
+          tabs: createElement("nav", null, "Views"),
+          actions: createElement("button", null, "+ Add"),
+        }),
+      );
+      // The strip scrolls sideways inside its own box rather than pushing the
+      // page — the failure a ~520px control in this row used to cause.
+      expect(html).toMatch(/overflow-x-auto/);
+      expect(html).toMatch(/text-left/);
+      // 8px between actions, wrapping rather than overflowing.
+      expect(html).toMatch(/flex-wrap[^"]*gap-2/);
+    });
+  ```
+
+  **1c. `tests/page-width.test.ts`** — two pins name the grid's old first rung.
+  Replace:
+
+  ```ts
+        .filter((f) => readFileSync(f, "utf8").includes("sm:grid-cols-2 xl:grid-cols-3"));
+  ```
+
+  with:
+
+  ```ts
+        .filter((f) => readFileSync(f, "utf8").includes("md:grid-cols-2 xl:grid-cols-3"));
+  ```
+
+  and replace:
+
+  ```ts
+      expect(page).toMatch(/BOARD_GRID = "grid gap-6 sm:grid-cols-2 xl:grid-cols-3";/);
+  ```
+
+  with:
+
+  ```ts
+      // The first rung is `md` since the 4 September re-theme: below it the
+      // rail is not rendered and the header has stacked, so two tiles abreast
+      // there is a phone layout pretending to be a tablet one.
+      expect(page).toMatch(/BOARD_GRID = "grid gap-6 md:grid-cols-2 xl:grid-cols-3";/);
+  ```
+
+  (The `it` above the first one says the rule "bans the exact old board literal,
+  not `sm:grid-cols-2` in general". That stays true and stays as written — the
+  literal it bans is simply the current one. `tests/board-render.test.ts` needs
+  no edit at all: it asserts `expect(html).toContain(BOARD_GRID)` against the
+  imported constant, so it follows this change by construction, which is why the
+  constant is imported there rather than typed.)
+
+  **1d. `tests/board-canvas-render.test.ts`** — it already proves every cell
+  carries all three renderings; it has never said what the phone's one is. Add,
+  after `it("gives every cell all three renderings", …)`:
+
+  ```ts
+    it("renders the phone at ONE column, in the desktop reading order", () => {
+      /**
+       * `--c1` is what the stylesheet picks below 768px. Two tiles side by side
+       * at twelve columns must both come back full width and stacked here —
+       * `reflow(tiles, 1)` packs left to right and wraps when the next tile
+       * will not fit, which at one column is every time.
+       *
+       * The ORDER is the desktop reading order, which is the only order a
+       * phone can honestly present: the cells are placed on explicit lines, so
+       * the DOM order is the same at every width and this decides tab order.
+       */
+      const html = render([tile("a"), tile("b", { x: 3 })]);
+      expect(html.match(/--c1:1 \/ span 1/g) ?? []).toHaveLength(2);
+      expect(html).toContain("--r1:1 / span 4");
+      expect(html).toContain("--r1:5 / span 4");
+      expect(html.indexOf("Metric a")).toBeLessThan(html.indexOf("Metric b"));
+    });
+  ```
+
+- [ ] **Step 2 — run them, confirm they fail**
+
+  ```bash
+  pnpm vitest run tests/mobile-content.test.ts tests/page-header.test.ts tests/page-width.test.ts tests/board-canvas-render.test.ts
+  ```
+
+  Expected: in `mobile-content.test.ts` the grid pin fails (`BOARD_GRID` still
+  says `sm:`), all four header pins fail (the branch is still `sm:grid`,
+  `items-center`, `text-center`, `justify-center sm:justify-end`, with no
+  scroller), and the strip pin fails (`ViewStrip` is still `flex-wrap`); the
+  canvas and fixed-width blocks PASS from the first run and are regression
+  guards rather than red steps — that is the point of writing them. In
+  `page-header.test.ts` the two re-aimed assertions and the new `it` fail; in
+  `page-width.test.ts` the `BOARD_GRID` literal fails; in
+  `board-canvas-render.test.ts` the new `it` passes immediately, for the reason
+  its own docblock gives.
+
+- [ ] **Step 3 — implement: `src/components/ui/page.tsx`**
+
+  **3a. The grid's first rung.** Replace:
+
+  ```tsx
+  export const BOARD_GRID = "grid gap-6 sm:grid-cols-2 xl:grid-cols-3";
+  ```
+
+  with:
+
+  ```tsx
+  /**
+   * THE FIRST RUNG IS `md`, NOT `sm`, SINCE THE 4 SEPTEMBER RE-THEME.
+   *
+   * `sm:grid-cols-2` put two tiles abreast from 640px — inside the band where
+   * the rail is no longer rendered and this page's own header has already
+   * stacked, on a screen that is a large phone held sideways. Two 300px tiles
+   * there are narrower than the 28px numeral they are built around, and the
+   * board stops being readable exactly where the shell has just admitted it is
+   * on a phone. One decision, one breakpoint: below `md` the console is a
+   * single column of everything.
+   */
+  export const BOARD_GRID = "grid gap-6 md:grid-cols-2 xl:grid-cols-3";
+  ```
+
+  **3b. The header's three zones become three lines.** Replace the `tabs ? (`
+  branch's wrapper, title cell and actions cell — the block Task 5 produced,
+  which reads:
+
+  ```tsx
+        <div
+          className={cn(
+            "flex flex-col items-center gap-3 sm:grid sm:grid-cols-[1fr_auto_1fr] sm:items-center sm:gap-x-4",
+            back && "mt-3",
+          )}
+        >
+          <div className="flex min-w-0 items-center">{tabs}</div>
+          <div className="flex flex-col items-center gap-2 text-center">
+            <h1 className="text-display-xs font-semibold tracking-[0.07px] text-heading">{title}</h1>
+            {lede && <p className="max-w-2xl text-sm font-normal leading-5 text-muted-foreground">{lede}</p>}
+          </div>
+          {actions && (
+            <div className="flex min-w-0 flex-wrap items-center justify-center gap-2 sm:justify-end">{actions}</div>
+          )}
+        </div>
+  ```
+
+  with:
+
+  ```tsx
+        <div
+          className={cn(
+            /**
+             * IT BREAKS AT `md`, WHICH IS WHERE THE SHELL BREAKS. This stacked
+             * at `sm` when it was written, on the reasonable-sounding rule that
+             * three side-by-side zones need ~640px to be zones. The rail leaves
+             * at 768 (see `Sidebar`), so between the two the page had a
+             * three-zone header, no rail, and a board still trying for two
+             * columns — one layout in three minds. One breakpoint for the whole
+             * console is worth more than a header that is right on its own.
+             *
+             * `items-stretch`, NOT `items-center`, below the breakpoint: these
+             * three are full-width rows on a phone, and centring them makes the
+             * tab strip's scroller as narrow as its content, which is the one
+             * shape a scroller must never take.
+             */
+            "flex flex-col items-stretch gap-3 md:grid md:grid-cols-[1fr_auto_1fr] md:items-center md:gap-x-4",
+            back && "mt-3",
+          )}
+        >
+          {/* THE STRIP SCROLLS RATHER THAN WRAPPING. A view bar is a horizontal
+              object — the order is meaningful and draggable — and a phone with
+              six views would otherwise turn the top of the board into three
+              lines of tabs above the title they belong to. `quiet-scroll` is
+              the same scrollbar the board's own lane scrollers wear.
+              `md:overflow-visible` hands the focus ring its room back above the
+              breakpoint, where nothing needs to scroll. */}
+          <div className="quiet-scroll flex min-w-0 max-w-full items-center overflow-x-auto md:overflow-visible">
+            {tabs}
+          </div>
+          {/* LEFT ON A PHONE, CENTRED ABOVE `md`. A centred title is what the
+              Figma draws BETWEEN two zones; on its own line with nothing either
+              side of it, centring is just a heading that has come loose from
+              the page's own reading edge. */}
+          <div className="flex flex-col items-start gap-2 text-left md:items-center md:text-center">
+            <h1 className="text-display-xs font-semibold tracking-[0.07px] text-heading">{title}</h1>
+            {lede && <p className="max-w-2xl text-sm font-normal leading-5 text-muted-foreground">{lede}</p>}
+          </div>
+          {actions && (
+            /* WRAPS AT 8px, ALIGNED TO THE READING EDGE BELOW `md`. "+ Add",
+               "Refresh All" and "Today ▾" are ~260px of `xs` controls: they fit
+               on one line at 390px and wrap to two the moment a label grows,
+               which is what `flex-wrap` is for and why none of them is
+               `shrink-0`. */
+            <div className="flex min-w-0 flex-wrap items-center justify-start gap-2 md:justify-end">{actions}</div>
+          )}
+        </div>
+  ```
+
+  And correct the last paragraph of the docblock above that branch, which
+  describes the arrangement wrongly in two ways — it names `sm` and it lists the
+  stacked order as "title, then tabs, then actions" when the DOM order has
+  always been tabs, title, actions. Replace:
+
+  ```tsx
+         * Base layout stacks (title, then tabs, then actions) below `sm`,
+         * where three side-by-side zones have no room left to be zones.
+  ```
+
+  with:
+
+  ```tsx
+         * Base layout stacks below `md` — the tab strip in its own scroller,
+         * then the title on its own line at the reading edge, then the actions
+         * wrapping — in DOM order, which is the order the grid places them in
+         * left to right above the breakpoint. `md` rather than `sm` because
+         * that is where the shell's rail goes; see the row's own note.
+  ```
+
+- [ ] **Step 4 — implement: `src/app/dashboard/board-controls.tsx`**
+
+  One class, and it is what makes the header's scroller a scroller. Replace:
+
+  ```tsx
+      <div ref={strip} className="-mx-1 flex flex-wrap items-center gap-6 px-1 py-1">
+  ```
+
+  with:
+
+  ```tsx
+      /* `flex-nowrap` BELOW `md`, AND THE HEADER SCROLLS IT. A wrapping strip
+         inside an `overflow-x-auto` box never scrolls — it just gets taller,
+         which on a phone is three lines of tabs above the title they name. It
+         also fixes the drag on a narrow screen for free: the reorder finds its
+         target by comparing `clientX` against each tab's rect, and a wrapped
+         row has several tabs at the same x. Above `md` there is room for the
+         row and wrapping stays the right answer. */
+      <div ref={strip} className="-mx-1 flex flex-nowrap items-center gap-6 px-1 py-1 md:flex-wrap">
+  ```
+
+- [ ] **Step 5 — run it green**
+
+  ```bash
+  pnpm vitest run tests/mobile-content.test.ts tests/page-header.test.ts tests/page-width.test.ts tests/board-canvas-render.test.ts tests/board-render.test.ts tests/board-shape.test.ts tests/board-controls.test.ts tests/calendar-view.test.ts tests/dashboard-page-header.test.ts tests/dashboard-empty.test.ts
+  ```
+
+  All ten pass. The last six are regression runs against this task's two real
+  risks: `board-render`/`board-shape`/`calendar-view`/`dashboard-page-header`
+  all read `BOARD_GRID` or the header's arrangement, and
+  `board-controls`/`dashboard-empty` cover the strip whose wrap rule just
+  changed (`dashboard-empty.test.ts` pins a `sm:grid-cols-2` on the METRIC
+  PICKER, which is a different grid and is deliberately not touched here).
+
+- [ ] **Step 6 — gate**
+
+  ```bash
+  pnpm typecheck && pnpm vitest run tests/mobile-content.test.ts tests/page-header.test.ts tests/board-canvas-render.test.ts tests/page-width.test.ts tests/chrome-band.test.ts && pnpm check:ui
+  ```
+
+  `check:ui` passes: nothing here is a colour, a radius, a weight or a
+  hand-rolled control — `quiet-scroll` is a globals.css class the board's own
+  scrollers already wear, and `md:` on an existing utility is not a new
+  spelling of anything.
+
+- [ ] **Step 7 — commit**
+
+  ```bash
+  git add src/components/ui/page.tsx src/app/dashboard/board-controls.tsx tests/mobile-content.test.ts tests/page-header.test.ts tests/page-width.test.ts tests/board-canvas-render.test.ts
+  git commit -m "$(cat <<'EOF'
+  Stack the page header on a phone, and hold the board to one column under md
+
+  The three-zone header now breaks where the shell breaks: below md the tab
+  strip scrolls sideways in its own container, the title sits on its own line
+  at the reading edge instead of centred between two zones that are no longer
+  beside it, and the actions wrap at 8px. The board's grid moves its first
+  rung from sm to md, so 640-768px stops being a band with no rail, a stacked
+  header and two 300px tiles in it; the custom canvas was already one column
+  there and is now pinned as such. A new scan fails the build on any fixed
+  width over 390px outside two allow-listed scrollers, which is the rule that
+  keeps a phone from scrolling sideways.
 
   Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
   EOF
