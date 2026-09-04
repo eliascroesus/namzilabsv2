@@ -14,13 +14,16 @@
 
 - Colours live only in `src/app/globals.css`; no hex literal in any `.tsx` (`scripts/check-ui.ts` fails the build on one). New roles: `--chrome`, `--panel`, `--avatar`, `--faint`, `--freshness-dot`, `--freshness-halo`; every role is bridged to a utility (`bg-chrome`, `bg-panel`, `bg-avatar`, `text-faint`, `bg-freshness-dot`, `bg-freshness-halo`).
 - Brand ramp (spec table): 400 `#3D9BFF` dark stroke, 500 `#007BFF` the brand, 600 `#0070E8` THE FILL under white ink, 700 `#0069D9` pressed, 800 `#0062CC` light stroke. `--primary-foreground` is `#FFFFFF` in both themes.
-- Dark surfaces: page `#0F1011`, chrome and cards `#111111`, panel `#181818`, control `#202020`, secondary `#333333`, avatar `#3A3A3A`, hairline `#343434`, rule `#4A4A4A`, faint `#6E6E6E`, muted `#858585`, text `#FFFFFF`. Light: page and panel `#F7F8F9`, chrome and cards `#FFFFFF`, hairline `#E1E1E1`, input outline `#E4E4E4`, control `#F4F4F4`, muted `#6B6B6B`, faint `#8E8E8E`, text `#000000`, heading `#313131`.
+- Dark surfaces: page `#0F1011`, chrome and cards `#111111`, panel `#181818`, control `#202020`, secondary `#333333`, avatar `#3A3A3A`, hairline `#343434`, rule `#4A4A4A`, faint `#6E6E6E`, muted `#858585`, text `#FFFFFF`; `--muted` fill `#181818`, `--accent` hover `#333333`, `--input` = `--border`. Light: page and panel `#F7F8F9`, chrome and cards `#FFFFFF`, hairline `#E1E1E1`, input outline `#E4E4E4`, control `#F4F4F4`, muted `#6B6B6B`, faint `#8E8E8E`, text `#000000`, heading `#313131`, `--secondary-foreground` `#303030` (icons that set their own ink use `#4A4A4A`, 8.86:1 on white), `--avatar` `#FFFFFF` with the `--input` outline, `--muted` `#F4F4F4`, `--accent` `#ECECEC`, `--rule` `#CFCFCF`. `--popover` = `--card` in BOTH themes.
+- Depth, stated honestly — "a control recesses" is retired: on dark, a field is a step UP from the chrome/card it sits on (`#202020` on `#111111`) and its hover a further step up (`#333333`); on light a field is a step DOWN (`#F4F4F4` on white) and its hover a further step down (`#ECECEC`). The directions mirror; neither is described as "recessed".
+- Neutral steps 300 / 100 / 50 stay DEFINED and are re-cut (`#B5B5B5`, `#E5E5E5`, `#FAFAFA`): `scroll-area.tsx`, `switch.tsx`, `button.tsx`'s `white` variant and the off-limits `node-meta.ts` spell them directly. Nothing here retires them.
 - Shape: `rounded-control` (8px) on everything pressable, typeable, tabs, nav rows and the period switch; cards 10px; circles only for avatars, badges, the freshness dot and the active-count numeral. `--radius-frame` = 8px. Card shadow `0 1px 2px rgb(0 0 0 / .20), 0 0 3px rgb(0 0 0 / .10)`.
-- Type: body 15/22, captions 13, page title 26/600 unchanged; tile numeral 28px/40px Inter 600 (`.stat-numeral`); `.wordmark` Inter 900 24px/22px, the only weight above 600, allow-listed in check-ui for that class alone. No Poppins.
-- Layout: 60px full-width top bar above [rail | panel]; the rail stays a hover rail (56px rest, 260px expanded, pin cookie and REVEAL unchanged); the panel has an 8px top-left corner; `#topbar-slot` and `#topbar-status` portals stay.
+- Type: body 15/22, captions 13, page title 26/600 unchanged; tile numeral 28px/40px Inter 600 (`.stat-numeral`); `.wordmark` Inter 900 24px/22px, the only weight above 600 — declared in the CSS class, never as a `font-black` utility, so `scripts/check-ui.ts` (which scans `.tsx` only) needs no allow-list and gets none. The rail's workspace-switcher initial is 13/**600** (`font-semibold`), not 700. No Poppins.
+- Layout: 60px full-width top bar above [rail | panel]; the rail stays a hover rail (56px rest, 260px expanded, pin cookie and REVEAL unchanged); the panel rounds its **top-right** corner (`rounded-tr-frame`, 8px) under the bar and stays square on the left beside the rail; `#topbar-slot` and `#topbar-status` portals stay; the top bar carries NO metrics-setup ring.
+- Dashboard header actions: a `secondary` `xs` "Today ▾" dropdown (16px calendar icon, the selected `RANGE_OPTIONS` label, a chevron) in place of the six-pill period track; "+ Add" on the brand fill (`variant="accent"` — the kit has no variant literally named `primary`) at `xs`; "Refresh All" `secondary` `xs`. All three pass `[&_svg]:size-4`, because `xs` ships `[&_svg]:size-3.5`.
 - Every fractional Figma pixel is rounded to a whole pixel.
 - OFF-LIMITS: `src/components/flow/*`, `--canvas-*`, `GROUP_ACCENT` (node-accent.ts).
-- Tests that pin the old design are UPDATED to pin the new rule (console-theme, page-width, chrome-band, design-swatches, vendored-primitives), never deleted or skipped.
+- Tests that pin the old design are UPDATED to pin the new rule (console-theme, page-width, design-swatches, calendar-view, tile-config, board-chart-marks; chrome-band and vendored-primitives are re-verified unchanged), never deleted or skipped.
 - Per-task gate: `pnpm typecheck && pnpm vitest run <task test files> && pnpm check:ui`. Branch gate (last task): full `pnpm vitest run --maxWorkers=2`, `pnpm build`, `pnpm check:orphans`, `pnpm check:ui`, then a screenshot sweep of every authenticated route in both themes.
 - Commit subjects are narrative sentences; every commit body ends with the trailer line exactly: `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`.
 
@@ -368,8 +371,8 @@ EOF
 - Test: `tests/design-swatches.test.ts`
 
 **Interfaces**
-- Consumes: `--color-neutral-{950,900,800,700,600,500,400,200}` (the `@theme` ramp); `--background` / `--card` / `--control` / `--secondary` / `--accent` / `--border` / `--rule` / `--muted-foreground` / `--foreground` / `--heading` (role vars, both blocks); `--canvas-bg` (frozen, read-only here).
-- Produces: three new ramp steps `--color-neutral-925` / `-850` / `-450`; six new roles `--chrome` / `--panel` / `--avatar` / `--faint` / `--freshness-dot` / `--freshness-halo` declared in **both** `:root` and `.dark`; every role named above re-pointed to its new value; `SURFACE` / `INK` arrays in `design/page.tsx` re-captioned; `src/app/layout.tsx`'s dark `themeColor` literal moved to `#0f1011`.
+- Consumes: `--color-neutral-{950,900,800,700,600,500,400,300,200,100,50}` (the `@theme` ramp); `--background` / `--card` / `--popover` / `--control` / `--secondary` / `--secondary-foreground` / `--muted` / `--accent` / `--border` / `--input` / `--rule` / `--muted-foreground` / `--foreground` / `--heading` (role vars, both blocks); `--canvas-bg` (frozen, read-only here).
+- Produces: three new ramp steps `--color-neutral-925` / `-850` / `-450`, and re-cut values for `-300` / `-100` / `-50` (which stay DEFINED — `scroll-area.tsx`, `switch.tsx`, `button.tsx`'s `white` variant and the off-limits `node-meta.ts` spell them directly); six new roles `--chrome` / `--panel` / `--avatar` / `--faint` / `--freshness-dot` / `--freshness-halo` declared in **both** `:root` and `.dark`; every role named above re-pointed to its new value — including **`--secondary-foreground`**, which `button.tsx`'s `secondary` variant consumes by name in a later task (`#FFFFFF` in dark via `neutral-200`, `#303030` in light) — and `--popover` pointed at `--card` in both blocks; `SURFACE` / `INK` arrays in `design/page.tsx` re-captioned; `src/app/layout.tsx`'s two `themeColor` literals pinned to the new `--background` values (`#f7f8f9` light, `#0f1011` dark).
 
 #### Step 1 — write the failing tests
 
@@ -581,13 +584,31 @@ with:
    * one count lighter than the panel. A `900` still means "recessed"; only the
    * HEX under it moved.
    *
-   * THE SURFACE HALF (950 → 500) and THE INK HALF (450 → 200) are still
+   * THE SURFACE HALF (950 → 500) and THE INK HALF (450 → 50) are still
    * separated on purpose. `500` is the last step a LINE may be drawn in
    * (`--rule`); `450` is a caps-label-only step (`--faint`, "Main Menu" and
    * nothing that reads as a sentence); `400` is the first step body TEXT may be
    * set in (`--muted-foreground`). The Figma's own "Main Menu" grey — #4A4A4A —
    * is not text-safe at 2.13:1 on the chrome, which is exactly the gap this
    * rule exists to catch; the caption gets a lighter, tested step instead.
+   *
+   * 300, 100 AND 50 STAY DEFINED, RE-CUT RATHER THAN RETIRED. No ROLE reads
+   * them once `--muted-foreground` moves to `400`, but four files still spell
+   * them directly — `ui/scroll-area.tsx` (the thumb), `ui/switch.tsx` (the off
+   * track), `ui/button.tsx`'s `white` variant (`hover:bg-neutral-100`) and the
+   * off-limits `flow/node-meta.ts` — and deleting a colour token out from
+   * under a live class is the exact "renders with no colour at all" failure
+   * `check-ui.ts`'s retired-token rule exists to punish. They are re-cut for
+   * the new near-neutral cast instead of being carried over from the warm
+   * ramp, so nothing in the product mixes a warm grey into a neutral one.
+   *
+   * DEPTH, STATED HONESTLY. This file used to say "a control recesses from a
+   * card". That is not what either theme does now and the sentence is gone:
+   * here, on the #111111 chrome and cards, a field is a step UP (850) and its
+   * hover a further step up (800); in `:root`, on white, a field is a step
+   * DOWN (#F4F4F4) and its hover a further step down (#ECECEC). The two
+   * directions MIRROR each other, which is the invariant that actually holds —
+   * "raised" and "recessed" do not survive the mirror and are not used.
    */
   --color-neutral-950: #0f1011; /* THE PAGE — the ground beneath everything */
   --color-neutral-925: #111111; /* THE CHROME — top bar, rail, AND the card fill */
@@ -599,9 +620,9 @@ with:
   --color-neutral-500: #4a4a4a; /* the heavier rule: switch track, table divider, ring track */
   --color-neutral-450: #6e6e6e; /* THE FAINT LABEL — "Main Menu" and nothing else; 3.70:1 on the chrome, never body copy */
   --color-neutral-400: #858585; /* the dimmest INK — 4.81:1 on the panel, 5.12:1 on a card */
-  --color-neutral-300: #b0a9ae; /* no longer read by a role since `--muted-foreground` moved to `400`; kept for the handful of call sites that still spell it directly */
+  --color-neutral-300: #b5b5b5; /* no role reads it since `--muted-foreground` moved to `400`; scroll-area's thumb, switch's off track and node-meta's untested dot still spell it */
   --color-neutral-200: #ffffff; /* body, headings and card titles — the Figma sets both in white */
-  --color-neutral-100: #eceaeb;
+  --color-neutral-100: #e5e5e5; /* button.tsx's `white` variant hovers here */
   --color-neutral-50: #fafafa;
 ```
 
@@ -647,20 +668,25 @@ with:
   --chrome: var(--color-neutral-925); /* #111111 */
   --card: var(--chrome);
   --card-foreground: var(--color-neutral-200);
-  --popover: var(--chrome);
-  --popover-foreground: var(--color-neutral-200);
+  /* A MENU IS A CARD THAT FLOATS. Pointed at `--card` rather than at
+     `--chrome` directly, in both themes, so the two can never drift apart by
+     one of them being re-pointed and the other forgotten. */
+  --popover: var(--card);
+  --popover-foreground: var(--card-foreground);
 
   /* THE PANEL — the content area under the top bar, one step lighter again
      than the chrome. Three surfaces, three steps: page, chrome, panel. */
   --panel: var(--color-neutral-900); /* #181818 */
 
-  /* THE CONTROL SURFACE — one step LIGHTER than the panel it sits in, not
-     darker. That inverts the old scheme's rule ("a control recesses from a
-     card") and this file's own "directions are mirrored" invariant above — the
-     Figma's fields, search box and active nav row measure lighter than the
-     panel around them, not shadowed into it. Kept as supplied rather than
-     forced back into the old shape. */
-  --control: var(--color-neutral-850); /* #202020 */
+  /* THE CONTROL SURFACE, AND THE DEPTH RULE STATED HONESTLY.
+     A field on this theme's chrome and cards (#111111) is a step UP: #202020,
+     with its hover a further step up at #333333 (`--accent`). On white it is
+     the mirror — a step DOWN to #F4F4F4, hovering a further step down to
+     #ECECEC. That is the invariant this file actually holds: the two themes
+     MIRROR each other. What it no longer says is "a control recesses from a
+     card", which was a sentence about one theme pretending to be a rule about
+     both, and which the Figma contradicts on the dark side outright. */
+  --control: var(--color-neutral-850); /* #202020 — a step UP from #111111 */
 
   /* ---- Brand ------------------------------------------------------------- */
   /* THE FILL. #0070E8 under WHITE ink at 4.68:1 — white rather than
@@ -708,7 +734,8 @@ with:
    * `--secondary` (#333333 — every hover and every selected row in the
    * product). `--card` sits at `--chrome` (#111111) between them, so a hover
    * still reads as coming forward and a disabled fill still reads as sinking
-   * back.
+   * back. `:root` mirrors this exactly: #F4F4F4 muted, #ECECEC accent, one
+   * step down and then a further step down from the white card between them.
    */
   --muted: var(--color-neutral-900); /* #181818 */
   --muted-foreground: var(--color-neutral-400); /* #858585 — 4.81:1 on the panel, 5.12:1 on a card */
@@ -832,16 +859,20 @@ with:
   --chrome: #ffffff;
   --card: var(--chrome);
   --card-foreground: #000000;
-  --popover: var(--chrome);
-  --popover-foreground: #000000;
+  /* A MENU IS A CARD THAT FLOATS — see the note in `.dark`. Same pointer, so
+     the two cannot drift apart by one being re-pointed and the other missed. */
+  --popover: var(--card);
+  --popover-foreground: var(--card-foreground);
 
   /* THE PANEL — the content area under the top bar. Same value as the page in
      this theme: the light Figma's panel and ground are both `#F7F8F9`, so the
      top bar's white is the only surface that steps away from it. */
   --panel: var(--background);
 
-  /* RECESSED, exactly as in dark. A field on a white card is a slot cut into
-     it; white-on-white would make a row of them read as a stack of panels. */
+  /* THE CONTROL SURFACE — a step DOWN from the white card it sits on, which is
+     the MIRROR of the dark theme's step UP rather than a copy of it. See the
+     depth note in `.dark`: the invariant is that the two directions mirror,
+     not that either one is "recessed". */
   --control: #f4f4f4;
 
   /* ---- Brand ------------------------------------------------------------- */
@@ -858,18 +889,26 @@ with:
   /* Both white with a `--input` outline — the Figma's grey buttons are white
      with a hairline edge, not a filled grey. */
   --secondary: #ffffff;
-  --secondary-foreground: #4a4a4a; /* icon ink on a grey/white button — 8.4:1 */
+  /* THE BUTTON'S TEXT, WHICH IS NOT THE SAME QUESTION AS ITS ICON'S INK.
+     #303030 is the label colour the Figma's own grey buttons carry — 13.2:1 on
+     white. The export ALSO sets a few icons in #4A4A4A (8.86:1 measured, not
+     the 8.4:1 the export rounds it to); those are set where they are drawn,
+     never through this role, so a label and its glyph are two decisions and
+     this token holds the one it is named for. */
+  --secondary-foreground: #303030;
 
-  /* No distinct value in the light Figma export — the control fill stands in
-     until a dedicated one is supplied. */
-  --avatar: var(--control);
+  /* AVATAR AND ICON CIRCLES — white, found by the `--input` outline the bell
+     and the avatar wear in the light export rather than by a fill. The dark
+     theme's #3A3A3A is a fill because there is nothing lighter to outline
+     against; here the outline is the whole device. */
+  --avatar: #ffffff;
 
-  --muted: #f1f3f5;
+  --muted: #f4f4f4; /* the same step as `--control` — a fill one down from white */
   --muted-foreground: #6b6b6b; /* 5.33:1 on white, 5.01:1 on the page/panel */
 
-  /* RAISED. On white, coming forward means getting DARKER — the mirror of the
-     dark theme's step, not a copy of it. */
-  --accent: #ebeef1;
+  /* THE HOVER STEP — one further DOWN from `--control`, mirroring the dark
+     theme's one further UP. See the depth note in `.dark`. */
+  --accent: #ececec;
   --accent-foreground: #000000;
 
   /* THE FAINT LABEL — see the role's note in `.dark`. The Figma's own caps-
@@ -891,9 +930,11 @@ with:
   --ring: var(--marker);
 
   /* The heavier rule a control owes 3:1 for — a switch track, a checkbox at
-     rest, a table divider, a chart's zero line. Unchanged by this re-theme:
-     the Figma's light export does not name a value for it. */
-  --rule: #c9ced5;
+     rest, a table divider, a chart's zero line. #CFCFCF: one clear step darker
+     than `--border` (#E1E1E1), the same relationship `--rule` (#4A4A4A) has to
+     the hairline (#343434) in dark. The old #C9CED5 was cut on a blue-grey
+     cast the rest of this theme no longer has. */
+  --rule: #cfcfcf;
 
   --radius: 0.5rem;
 
@@ -1010,7 +1051,10 @@ const INK: Array<{ step: string; cls: string; hex: string }> = [
 ];
 ```
 
-**3h. `src/app/layout.tsx`.** Replace:
+**3h. `src/app/layout.tsx`.** Both literals are checked against the new
+`--background` values, because `design-swatches.test.ts` pins BOTH: the light
+one is already `#f7f8f9` and stays (the Figma's light page did not move), and
+the dark one moves. Replace:
 ```tsx
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#f7f8f9" },
@@ -1020,6 +1064,9 @@ const INK: Array<{ step: string; cls: string; hex: string }> = [
 with:
 ```tsx
   themeColor: [
+    // Pinned to `--background` by tests/design-swatches.test.ts, in both
+    // themes: Next evaluates this at build time and cannot read a custom
+    // property, so a re-theme that misses it leaves a grey band above the app.
     { media: "(prefers-color-scheme: light)", color: "#f7f8f9" },
     { media: "(prefers-color-scheme: dark)", color: "#0f1011" },
   ],
@@ -1228,8 +1275,14 @@ with:
  *
  * The Figma sets it in Inter at 900/24px/22px line — a real exception to the
  * "never 700" weight lock the rest of the type system holds, not an
- * oversight. `scripts/check-ui.ts`'s `font-bold` ban is allow-listed for this
- * class alone; nowhere else may reach for 900 or spell `font-bold`.
+ * oversight.
+ *
+ * THE WEIGHT IS DECLARED HERE, IN CSS, AND THAT IS WHAT KEEPS IT THE ONLY ONE.
+ * A call site writes `className="wordmark"` and never `font-black`, so
+ * `scripts/check-ui.ts` — which reads `.tsx` and never `.css` — still fails
+ * the build on any heavy-weight UTILITY anywhere in the app, with no
+ * allow-list entry to widen and no spelling convention for a consumer to get
+ * wrong. The exception lives in exactly one rule in one file.
  */
 .wordmark {
   font-family: var(--font-inter, "Inter"), var(--font-sans);
@@ -1408,11 +1461,13 @@ EOF
 **Files**
 - Modify: `src/components/ui/button.tsx`
 - Modify: `src/components/ui/page.tsx` (only the `PERIOD_TRACK`/`PERIOD_PILL` block, lines ~112–171 — `PageHeader` below it is a separate task)
+- Modify: `src/components/calendar/calendar-board.tsx` (the month stepper's two `rounded-full` overrides only)
+- Read-only check: `src/components/ui/select.tsx`
 - Test: `tests/console-theme.test.ts`
 
 **Interfaces**
-- Consumes: `--secondary`, `--secondary-foreground`, `--input` (roles defined in `src/app/globals.css` by the tokens task — by name only, never a hex literal in these `.tsx` files, per `scripts/check-ui.ts`'s hex-literal rule).
-- Produces: `buttonVariants()`'s base class at `rounded-control` (was `rounded-full`); `secondary` variant reading `bg-secondary text-secondary-foreground border-input`; `PERIOD_TRACK`/`PERIOD_PILL` (unchanged export names, consumed by `src/app/dashboard/page.tsx`, `src/components/theme.tsx`, `src/components/calendar/calendar-board.tsx`) at `rounded-control`.
+- Consumes: `--secondary`, `--secondary-foreground` (`#FFFFFF` dark / `#303030` light), `--input` (roles defined in `src/app/globals.css` by Task 2 — by name only, never a hex literal in these `.tsx` files, per `scripts/check-ui.ts`'s hex-literal rule).
+- Produces: `buttonVariants()`'s base class at `rounded-control` (was `rounded-full`); `secondary` variant reading `bg-secondary text-secondary-foreground border-input`; `PERIOD_TRACK`/`PERIOD_PILL` (unchanged export names, consumed by `src/app/dashboard/page.tsx`, `src/components/theme.tsx`, `src/components/calendar/calendar-board.tsx`) at `rounded-control`; `calendar-board.tsx`'s two month-arrow buttons inheriting the base 8px instead of overriding to a circle.
 
 This is the third flip of the button-shape rule (the file's own header comment says so) and the spec (`docs/superpowers/specs/2026-09-04-retheme-blue-design.md`, "Shape" section) is recorded as the reference so a fourth flip needs a new design, not a comment.
 
@@ -1464,16 +1519,40 @@ This is the third flip of the button-shape rule (the file's own header comment s
     expect(track).toMatch(/\brounded-control\b/);
     expect(track, "the pill must not come back").not.toMatch(/\brounded-full\b/);
   });
+
+  it("leaves the month stepper's arrows the same 8px as every other button", () => {
+    // A SOURCE PIN, because the offence is an OVERRIDE rather than a default.
+    // `calendar-board.tsx`'s two month arrows spelled `rounded-full` on top of
+    // `buttonVariants`' base, so flipping the base alone would have left two
+    // circles sitting inside an 8px groove — the one place in the product
+    // where the old shape could survive this pass unnoticed.
+    const calendar = read("src/components/calendar/calendar-board.tsx");
+    expect(calendar, "the month arrows must not re-spell a pill").not.toMatch(
+      /className="rounded-full text-muted-foreground/,
+    );
+  });
+
+  it("confirms Select already draws at the control radius — verified, not changed", () => {
+    // The spec's Shape bullet names SELECTS alongside buttons, inputs, tabs
+    // and nav rows. `select.tsx` was already `rounded-control` on both its
+    // trigger and its items and needs no edit; this asserts that rather than
+    // leaving "presumably fine" as the plan's answer.
+    const select = read("src/components/ui/select.tsx");
+    expect(select).toMatch(/rounded-control border border-input bg-control/);
+    expect(select, "the trigger must not go back to a pill").not.toMatch(/rounded-full/);
+  });
 ```
 
-(Leave the other two `it()` blocks in the `describe` — `"fills with #00c0e8 and grounds on #1b191a"` and `"keeps the canvas and the chrome on one colour"` — untouched; those pin hex values and belong to the tokens task's own edit of this same file. Expect a merge/rebase against that task's changes.)
+(`read(p)` is the file's own helper, defined at the top beside `root` — reuse it rather than adding a second `readFileSync` import.)
+
+(Leave the file's other `it()` blocks in the `describe` alone — after Tasks 1 and 2 those are `"fills with #0070e8"`, `"grounds on #0f1011"` and `"keeps the canvas frozen even though the ground moved on without it"`. They pin hex values and belong to the tokens tasks' own edits of this same file; this task's two rewrites and two additions sit in disjoint blocks, so landing second is a rebase rather than a conflict.)
 
 #### Step 2 — run it, expect failure
 
 ```bash
 pnpm vitest run tests/console-theme.test.ts
 ```
-Expected failure: both new `it()` blocks fail — the first because `button.tsx` and `page.tsx` still contain `rounded-full`, not `rounded-control`; the second on its final two assertions for the same reason on `PERIOD_TRACK`.
+Expected failure: three of the four blocks fail — the first because `button.tsx` and `page.tsx` still contain `rounded-full`, not `rounded-control`; the second on its final two assertions for the same reason on `PERIOD_TRACK`; the month-stepper block because `calendar-board.tsx` still spells `rounded-full` on both arrows. The Select block PASSES from the start and is meant to: it records a fact about a file this pass does not change, so that "selects are 8px too" stops being an assumption.
 
 #### Step 3 — implement: button.tsx
 
@@ -1627,31 +1706,59 @@ export const PERIOD_PILL =
   "inline-flex h-full shrink-0 items-center rounded-control px-3 text-sm font-medium transition-colors duration-(--duration-fast)";
 ```
 
-#### Step 5 — run it, expect green
+#### Step 5 — implement: calendar-board.tsx (the month stepper's two arrows)
+
+The two arrows inside `PERIOD_TRACK` override the base radius to a circle. With
+the base at 8px that override is the last pill left in a groove that is now a
+rectangle, so it comes off — the buttons inherit `rounded-control` like every
+other button in the product, and keep every other class they had.
+
+There are exactly two occurrences of this line in the file (the previous-month
+button at ~line 430 and the next-month button at ~line 451). Replace BOTH:
+
+```tsx
+              className="rounded-full text-muted-foreground hover:bg-accent hover:text-foreground"
+```
+
+with:
+
+```tsx
+              className="text-muted-foreground hover:bg-accent hover:text-foreground"
+```
+
+(Nothing else in this file changes. The `rounded-full` on the day-cell count
+badge (~line 384), the "This month" chip (~line 484), the legend chip (~line
+704) and the tally badge (~line 814) all STAY: those are badges and counts, and
+circles are still exactly what the shape rule reserves for them.)
+
+#### Step 6 — run it, expect green
 
 ```bash
 pnpm vitest run tests/console-theme.test.ts
 ```
-Both rewritten tests pass; the two untouched hex-pin tests in the same file still run (they may separately fail/pass depending on whether the tokens task has landed in this working tree yet — not this task's concern).
+All four blocks pass; the three untouched hex-pin tests in the same file still run (they may separately fail or pass depending on whether the tokens tasks have landed in this working tree yet — not this task's concern).
 
-#### Step 6 — gate
+#### Step 7 — gate
 
 ```bash
 pnpm typecheck && pnpm vitest run tests/console-theme.test.ts tests/cn-merge.test.ts tests/calendar-view.test.ts && pnpm check:ui
 ```
 (`cn-merge.test.ts` and `calendar-view.test.ts` are run alongside because they import `buttonVariants`/reference the period groove and must not regress.)
 
-#### Step 7 — commit
+#### Step 8 — commit
 
 ```bash
-git add src/components/ui/button.tsx src/components/ui/page.tsx tests/console-theme.test.ts
+git add src/components/ui/button.tsx src/components/ui/page.tsx src/components/calendar/calendar-board.tsx tests/console-theme.test.ts
 git commit -m "$(cat <<'EOF'
-Take the pill off the button and the period groove
+Take the pill off the button, the period groove and the month arrows
 
 The 4 Sep 2026 Figma settles the shape rule for good: 8px rectangles on
-every button and the period switch, no pills anywhere in the kit. Also
-gives the secondary button its own --secondary/--input pair instead of
-borrowing the field's --control surface.
+every button and the period switch, no pills anywhere in the kit. The
+calendar's two month arrows drop the rounded-full override that would
+otherwise have left two circles inside a rectangular groove, and Select is
+pinned as already-compliant rather than assumed to be. Also gives the
+secondary button its own --secondary/--input pair instead of borrowing the
+field's --control surface.
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
 EOF
@@ -1669,7 +1776,7 @@ EOF
 **Interfaces**
 - Produces: `PageHeaderProps.tabs?: React.ReactNode` (new, optional). Every existing call site (17 per the codebase map: settings, connectors, flows, etc.) omits it and is unaffected — the component's existing two-zone branch is left byte-identical. Only a caller that passes `tabs` gets the new three-zone centred-title row.
 - Consumes: nothing new — this is a pure layout change inside one component, no new globals.css roles.
-- Downstream note: the dashboard's own view tab strip is rendered separately today (`ViewStrip`, inline in `src/app/dashboard/page.tsx`, outside this area's files) and is NOT wired into the new `tabs` prop by this task — that integration belongs to whichever task owns the dashboard board header.
+- Downstream note: the dashboard's own view tab strip is rendered separately today (`ViewStrip`, inline in `src/app/dashboard/page.tsx`, outside this area's files) and is NOT wired into the new `tabs` prop by this task. **Task 14 does that**, and is what turns this prop from plumbing into the Figma's actual header — nothing here ships a visible change on its own.
 
 ---
 
@@ -1758,6 +1865,18 @@ export type PageHeaderProps = {
 
 export function PageHeader({ title, lede, actions, tabs, back, className }: PageHeaderProps) {
   return (
+    /**
+     * NO RULE UNDER THE HEADER ANY MORE — the spacing survives, the hairline
+     * does not.
+     *
+     * It was `border-b border-border`, drawn when the header was the only
+     * thing between the page title and the content. On the board that rule now
+     * lands one line above the tab strip's own 2px underline, so the top of the
+     * page reads as two horizontal rules eight pixels apart, and the one that
+     * MEANS something — which tab you are on — is the fainter of the two. The
+     * `pb-4` stays: it is what stops a title touching the thing beneath it, and
+     * dropping both would have been a different change.
+     */
     <header className={cn("pb-6", className)}>
       {back && (
         <Link
@@ -1816,6 +1935,13 @@ export function PageHeader({ title, lede, actions, tabs, back, className }: Page
 
 (The `else` branch is byte-identical to the pre-existing markup — same classes, same historical reasoning already documented earlier in this file's own comments about `min-w-0`, `items-start` and the hover-wash fix; nothing there is stale, so nothing there needs new prose.)
 
+(The `<header>` doc comment above is carried across VERBATIM rather than
+rewritten, and it has to be: `tests/calendar-view.test.ts` asserts
+`readFileSync("src/components/ui/page.tsx").toMatch(/pb-4/)` — the string only
+exists in that comment — as its proof that the header, and not the board's own
+control row, owns the 16px under the title. Dropping the block would fail a
+test in a file this task never opens.)
+
 #### Step 4 — run it, expect green
 
 ```bash
@@ -1856,7 +1982,7 @@ EOF
 - Test: `tests/avatar-theme.test.ts` (new)
 
 **Interfaces**
-- Consumes: `--avatar` / the `bg-avatar` utility — a new neutral role (`#3A3A3A` per the spec's re-cut dark ramp, "avatar / icon circles") that the tokens task registers in `globals.css` (`--avatar` custom property plus `--color-avatar` so Tailwind emits `bg-avatar`). **Sequencing note**: `pnpm typecheck`, `pnpm vitest` and `pnpm check:ui` all pass on this task's own diff whether or not the tokens task has landed yet (an unregistered `bg-avatar` is a legal, if inert, class name — the same silent-no-color failure mode `check-ui.ts`'s own "retired token" rule documents) — but the avatar circles are only visually correct once the token exists. Land this after, or in the same PR as, the tokens task.
+- Consumes: `--avatar` / the `bg-avatar` utility — a new neutral role (`#3A3A3A` per the spec's re-cut dark ramp, "avatar / icon circles") that Task 2 declares in `globals.css` (`--avatar`) and Task 3 bridges (`--color-avatar`, so Tailwind emits `bg-avatar`). **Sequencing note**: `pnpm typecheck`, `pnpm vitest` and `pnpm check:ui` all pass on this task's own diff whether or not Tasks 2 and 3 have landed yet (an unregistered `bg-avatar` is a legal, if inert, class name — the same silent-no-color failure mode `check-ui.ts`'s own "retired token" rule documents) — but the avatar circles are only visually correct once the token exists. Land this after Tasks 2 and 3, or in the same PR as them.
 - Produces: `AvatarFallback` and `AvatarGroupCount` (from `src/components/ui/avatar.tsx`, single consumer today per the codebase map: `src/app/design/gallery.tsx`) both fill with `bg-avatar text-foreground` — previously `bg-accent text-accent-foreground` and `bg-muted text-muted-foreground` respectively, two different pairs for what the spec treats as one thing.
 
 ---
@@ -2112,193 +2238,21 @@ EOF
 
 ---
 
-### Task 7: Let `.wordmark` be the one weight above 600, and fix the kit gate's cyan-era math
-
-**Files**
-- Modify: `scripts/check-ui.ts`
-
-**Interfaces**
-- Consumes: the literal class name `wordmark`. The exemption below is scoped to that CLASS NAME appearing on the same source line as the weight utility, not to a file path — so it needs no coordination with whichever area ends up actually rendering the "Namzilabs" wordmark (the spec puts it in the top bar's left slot, `src/components/top-bar.tsx`, which is outside this area's files). Whoever builds it just has to spell the weight alongside a class literally containing `wordmark` (e.g. `className="wordmark font-black"`, or via the `.wordmark` CSS class itself if that file also happens to reference the word `wordmark` in a nearby Tailwind class — see the rule's own comment for the exact contract).
-- Produces: the `"font-bold"` rule's `find` now flags `font-bold` OR `font-black` anywhere in the app, with a single content-scoped exception (no `allow` map entry needed).
-
-This is a script with top-level side effects (`process.exit`), so it is exercised directly rather than imported into a vitest test — the RED/GREEN loop below uses a throwaway probe file that never gets committed.
-
----
-
-#### Step 1 — write the failing test (a throwaway probe, run through the real gate)
-
-Create a scratch probe (not committed — deleted in Step 5):
-
-```bash
-cat > src/components/ui/__wordmark_probe.tsx <<'EOF'
-export function Probe() {
-  return <span className="font-black">Namzilabs</span>;
-}
-
-export function WordmarkProbe() {
-  return <span className="wordmark font-black">Namzilabs</span>;
-}
-EOF
-```
-
-#### Step 2 — run it, expect failure (the gap: font-black isn't caught at all yet)
-
-```bash
-pnpm tsx scripts/check-ui.ts
-```
-Expected (current, RED): `PASS` — exit 0. Neither `Probe`'s bare `font-black` nor `WordmarkProbe`'s is flagged, because the rule only matches `font-bold` today. This is the wrong outcome: `Probe`'s line should fail once font-black is banned, and it doesn't yet.
-
-#### Step 3 — implement
-
-Replace the `"font-bold"` rule (current lines 141–152) —
-
-old:
-```ts
-  {
-    name: "font-bold",
-    why: "the kit runs 400 / medium / semibold; 700 is a fourth weight nothing else in the product uses",
-    /**
-     * Added because the NEWEST surface broke it. `top-bar.tsx` — shipped in the
-     * chrome rebuild — set the workspace name, the avatar initial and the
-     * greeting in `font-bold`, three of them, while every other heading in the
-     * app is `font-semibold`. Nothing failed, because this rule did not exist:
-     * §3 of the kit said "Never `font-bold`" and only prose was enforcing it.
-     */
-    find: (line) => (/\bfont-bold\b/.test(line) ? "font-bold" : null),
-  },
-```
-
-new:
-```ts
-  {
-    name: "font-bold",
-    why: "the kit runs 400 / 500 / 600, plus exactly one named exception; a bare font-bold or font-black anywhere else is a weight nothing else in the product uses",
-    /**
-     * Added because the NEWEST surface broke it. `top-bar.tsx` — shipped in the
-     * chrome rebuild — set the workspace name, the avatar initial and the
-     * greeting in `font-bold`, three of them, while every other heading in the
-     * app is `font-semibold`. Nothing failed, because this rule did not exist:
-     * §3 of the kit said "Never `font-bold`" and only prose was enforcing it.
-     *
-     * THE ONE EXCEPTION, ADDED WITH THE 4 SEP 2026 FIGMA: the "Namzilabs"
-     * wordmark is Inter, weight 900 — the only step above 600 the kit allows.
-     * `font-black` (Tailwind's 900) is banned here for the same reason
-     * `font-bold` (700) already was, so nothing ELSE in the product can reach
-     * for a heavy weight the same way. The exemption is scoped to the CLASS,
-     * not to a file: a line is let through only when it also carries the
-     * literal word `wordmark`, so nothing else sharing a file with the
-     * wordmark inherits the exemption by being next to it.
-     */
-    find: (line) => {
-      const hit = line.match(/\bfont-(?:bold|black)\b/)?.[0];
-      if (!hit) return null;
-      if (/\bwordmark\b/.test(line)) return null;
-      return hit;
-    },
-  },
-```
-
-Then replace the stale cyan-era measurement inside the `"yellow-as-stroke" IS RETIRED` comment block (current lines 240–245) —
-
-old:
-```ts
-   * The measurement it was built on is gone. `--primary` is #00c0e8 and
-   * `--marker` is #00cdf5, both cyan, and on #1b191a the stroke step is 9.20:1
-   * — past what a line owes AND past what body text owes. The split it enforced
-   * has nothing left to keep apart, and the exemption it carried (top-bar.tsx's
-   * ring arc, "the one surface where the brand strokes at 8.77:1") is now every
-   * surface in the product.
-```
-
-new:
-```ts
-   * The measurement it was built on is gone twice over now: cyan (`--primary`
-   * #00c0e8, `--marker` #00cdf5) gave way to the 4 Sep 2026 Figma's blue
-   * (`--primary` #0070E8, `--marker` #3D9BFF in the dark theme), and the split
-   * this rule enforced has nothing left to keep apart either way — on the new
-   * ground (#0F1011) the stroke step measures 6.65:1, still past what a line
-   * owes AND past what body text owes. The exemption it carried (top-bar.tsx's
-   * ring arc, "the one surface where the brand strokes clearly") is now every
-   * surface in the product.
-```
-
-Then extend the `RADIUS_OK` doc comment (current lines 99–100) —
-
-old:
-```ts
-/** Radius suffixes the kit owns. Anything else — including bare `rounded`. */
-const RADIUS_OK = /^(xs|sm|md|lg|xl|2xl|3xl|4xl|control|card|surface|frame|full|none)$/;
-```
-
-new:
-```ts
-/**
- * Radius suffixes the kit owns. Anything else — including bare `rounded`.
- *
- * `full` STAYS, EVEN THOUGH THE BUTTON BASE NO LONGER USES IT. The 4 Sep 2026
- * Figma takes the pill off every button and the period switch, but circles are
- * still the shape of an avatar, a badge dot, a freshness dot and the active-
- * count numeral — this rule was never "no pills anywhere", only "no fifth
- * radius", and a circle spelled `rounded-full` is the kit's own spelling for
- * those, not a fifth one.
- */
-const RADIUS_OK = /^(xs|sm|md|lg|xl|2xl|3xl|4xl|control|card|surface|frame|full|none)$/;
-```
-
-#### Step 4 — run it, expect green (on the probe)
-
-```bash
-pnpm tsx scripts/check-ui.ts
-```
-Expected: `FAIL` — exactly one violation under `font-bold`, pointing at `src/components/ui/__wordmark_probe.tsx`'s `Probe` function (the bare `font-black` line). `WordmarkProbe`'s line must NOT appear in the output — it carries `wordmark` and is exempted.
-
-#### Step 5 — delete the probe, confirm the real repo is clean
-
-```bash
-rm src/components/ui/__wordmark_probe.tsx
-pnpm tsx scripts/check-ui.ts
-```
-Expected: `PASS` — exit 0, no violations, nothing left behind (`git status` shows only `scripts/check-ui.ts` modified).
-
-#### Step 6 — gate
-
-```bash
-pnpm typecheck && pnpm check:ui
-```
-(No new vitest file — this task's verification is the script itself, exercised in Steps 2–5. `pnpm vitest run` on the full suite is unaffected since no other file changed.)
-
-#### Step 7 — commit
-
-```bash
-git add scripts/check-ui.ts
-git commit -m "$(cat <<'EOF'
-Give the wordmark its one weight above 600, fix the gate's cyan math
-
-check-ui.ts's font-bold rule now also bans font-black app-wide, with a
-single content-scoped exception for a line carrying the literal class
-`wordmark` — the Inter 900 the 4 Sep 2026 Figma names for "Namzilabs"
-and nothing else. Also corrects the rule's own retired-cyan-era hex
-comment to the new blue values, and documents why `full` still belongs
-in the radius allowlist now that buttons no longer use it.
-
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
-EOF
-)"
-```
-
----
-
-### Task 8: Turn the frame: a full-width top bar over the rail and the panel
+### Task 7: Turn the frame: a full-width top bar over the rail and the panel
 
 **Files**
 - Modify: `src/components/app-frame.tsx`
 - Modify: `src/components/top-bar.tsx`
-- Modify: `src/components/sidebar.tsx` (type-only: two new optional props on the signature; no behaviour change yet — Task 2 wires them up)
+- Modify: `src/components/app-shell.tsx` (the `metricCount` pass-through only)
+- Modify: `src/app/dashboard/page.tsx` (the `metricCount` computation and the prop that carried it)
+- Modify: `src/lib/board/nav-views.ts` (comment-only: it cites `metricCount` as its worked example)
+- Modify: `src/components/sidebar.tsx` (type-only: two new optional props on the signature; no behaviour change yet — Task 8 wires them up)
 - Test: `tests/page-width.test.ts`
 
 **Interfaces**
-- Consumes: `Sidebar({ hide?, views?, pinned?, workspace?: string, account?: { initials: string; avatarUrl?: string | null; panel: ReactNode } })`
-- Produces: `AppFrame`'s new tree (`TopBar` full-width, then a row of `Sidebar` + panel); `TopBar({ account?, firstName?, metricCount? })` (no `workspace`); the `.wordmark` class in the bar; the ring's guard is now `tracked != null` alone.
+- Consumes: `Sidebar({ hide?, views?, pinned?, workspace?: string, account?: { initials: string; avatarUrl?: string | null; panel: ReactNode } })`; `.wordmark` and the `bg-chrome` / `bg-panel` / `bg-avatar` utilities (Tasks 2 and 3).
+- Produces: `AppFrame`'s new tree (`TopBar` full-width, then a row of `Sidebar` + panel), with the panel rounding its **top-right** corner (`rounded-tr-frame`); `TopBar({ account?, firstName?, unread? })` — no `workspace`, and **no `metricCount`**; the `.wordmark` class in the bar.
+- Removes, in one commit because each link dies with the one below it: the metrics-setup ring's markup, `RING_RADIUS` / `RING_CIRCUMFERENCE` / `METRIC_GOAL` / `tracked` / `arc` / `ringMessage` and the `Tooltip` import in `top-bar.tsx`; `metricCount` from `TopBar`, `AppFrame` and `AppShell`; and the `const metricCount = …` computation in `src/app/dashboard/page.tsx`. `noUnusedLocals`/`noUnusedParameters` are on (see `tsconfig.json`), so a half-done removal does not typecheck — that is why the chain is one task. No test asserts on the ring or the count anywhere in `tests/`, so nothing is deleted alongside it.
 
 #### Step 1 — write the failing test
 
@@ -2316,8 +2270,14 @@ describe("the frame's new shape — a full-width bar over [rail | panel]", () =>
     expect(code.indexOf("<Sidebar")).toBeGreaterThan(code.indexOf("<TopBar"));
   });
 
-  it("gives the panel its own surface and a top-left corner", () => {
-    expect(frame).toMatch(/rounded-tl-frame bg-panel/);
+  it("gives the panel its own surface and a top-RIGHT corner", () => {
+    // THE FIGMA ROUNDS THE FAR CORNER, NOT THE NEAR ONE. The panel meets the
+    // rail on its left with a hairline and butts square against it; the corner
+    // the export softens is the one under the bar at the opposite end. This
+    // reverses the shell's own historical `rounded-tl-frame` convention, which
+    // is exactly why it is pinned rather than left to a comment.
+    expect(frame).toMatch(/rounded-tr-frame bg-panel/);
+    expect(frame, "the old top-left notch must not come back").not.toMatch(/rounded-tl-frame/);
   });
 
   it("hands the rail the workspace and the account it will need for its own switcher", () => {
@@ -2342,10 +2302,21 @@ describe("the frame's new shape — a full-width bar over [rail | panel]", () =>
     expect(bar).not.toMatch(/ChevronDown/);
   });
 
-  it("keeps the setup ring, gated on the count alone", () => {
-    const code = bar.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
-    expect(code).toMatch(/\{tracked != null && \(/);
-    expect(code).toMatch(/aria-label=\{`\$\{tracked\} of \$\{METRIC_GOAL\} metrics tracked`\}/);
+  it("drops the metrics-setup ring, and the whole chain that fed it", () => {
+    /**
+     * THE FIGMA'S BAR HAS NO RING, and the progress it reported has a better
+     * home already: the dashboard's own setup checklist says the same thing
+     * with room to say what to do about it. So it goes — and with it the
+     * four-file pass-through nobody else was reading, because a prop chain
+     * whose only consumer has been deleted is dead weight that still costs a
+     * render and still reads as a feature to the next person.
+     */
+    expect(bar, "the ring's arc is gone").not.toMatch(/METRIC_GOAL/);
+    expect(bar, "and its geometry with it").not.toMatch(/RING_RADIUS/);
+    expect(bar, "the bar no longer takes a count").not.toMatch(/metricCount/);
+    for (const p of ["src/components/app-frame.tsx", "src/components/app-shell.tsx", "src/app/dashboard/page.tsx"]) {
+      expect(read(p), `${p} still threads metricCount`).not.toMatch(/metricCount/);
+    }
   });
 });
 ```
@@ -2356,7 +2327,7 @@ describe("the frame's new shape — a full-width bar over [rail | panel]", () =>
 pnpm vitest run tests/page-width.test.ts
 ```
 
-Expected failure: the new `describe` block's `it`s fail — `app-frame.tsx` still renders `<Sidebar>` before a column containing `<TopBar>`, the panel wrapper is still `bg-background` with no `rounded-tl-frame`, `Sidebar`'s type has no `workspace`, and `top-bar.tsx` still imports `DropdownMenu`/`ChevronDown` and destructures `workspace`. (The rest of the file's existing tests keep passing — this task does not touch the `<aside>`, the rail's pin machinery, or the bar's height/hairline.)
+Expected failure: the new `describe` block's `it`s fail — `app-frame.tsx` still renders `<Sidebar>` before a column containing `<TopBar>`, the panel wrapper is still `bg-background` with no `rounded-tr-frame`, `Sidebar`'s type has no `workspace`, `top-bar.tsx` still imports `DropdownMenu`/`ChevronDown` and destructures `workspace`, and all four files still spell `metricCount`. (The rest of the file's existing tests keep passing — this task does not touch the `<aside>`, the rail's pin machinery, or the bar's height/hairline.)
 
 #### Step 3 — implement
 
@@ -2376,19 +2347,49 @@ Expected failure: the new `describe` block's `it`s fail — `app-frame.tsx` stil
  * the rail hanging beneath its left end, which is what this file now does.
  *
  * THREE SURFACES, NOT ONE. The bar and the rail are `--chrome`; the panel
- * under them is `--panel`, its own material, which is why it can carry a
- * corner (`rounded-tl-frame`) where the rail's right edge and the bar's
- * bottom edge would otherwise cross at a T instead of closing one frame.
+ * under them is `--panel`, its own material, which is what gives a corner
+ * something to reveal again after two days at `--radius-frame: 0`.
+ *
+ * IT IS THE TOP-RIGHT CORNER, AND THAT REVERSES THIS FILE'S OWN HISTORY.
+ * Every previous era cut the panel's TOP-LEFT — the corner nearest the rail —
+ * because the rail was a different material and the notch was how the page
+ * wrapped around it. The 4 September Figma does not: the panel butts square
+ * against the rail behind a hairline, and the corner it softens is the far
+ * one, under the bar at the opposite end of the row. Followed literally
+ * rather than corrected toward the old convention, and pinned in
+ * `tests/page-width.test.ts` so the convention cannot quietly reassert itself.
  *
  * `surface` is still the caller's, because the pages genuinely disagree about
  * SCROLLING: list pages scroll, the builder does not.
  */
 ```
 
-Then replace the render (from `const className = cn("relative min-w-0 flex-1 bg-background", surface);` through the final `</div>\n  );\n}`):
+Then remove `metricCount` from the signature — the destructured name AND its
+whole doc-commented type entry (`/** How many metrics this workspace has, for
+the top bar's ring. … */ metricCount?: number;`), since the ring it fed is
+being deleted below and `noUnusedLocals` will not tolerate the leftover
+binding. Everything else in the signature — `account`, `workspace`,
+`firstName`, `views`, `surface`, `hide`, `railPinned`, `ownsMain`, `children`
+— is unchanged.
+
+Then replace the block that runs from the comment opening `* THE NOTCH IS GONE, AND `--radius-frame` IS 0 TO SAY SO.` (its `/**` line) through the file's final `</div>\n  );\n}` — the comment goes with the code because it argues for a token that has been 8px since Task 2:
 
 ```tsx
-  const className = cn("relative min-w-0 flex-1 rounded-tl-frame bg-panel", surface);
+  /**
+   * THE NOTCH IS BACK, ON THE OTHER SIDE.
+   *
+   * `--radius-frame` went to 0 when the rail, the bar and the page became one
+   * #1B191A: a radius reveals whatever is BEHIND the element it is cut into,
+   * and cutting a corner out of a colour to reveal the same colour draws
+   * nothing at the cost of a gap the bar's hairline then has to stop short of.
+   * There are three surfaces again — the panel is `--panel`, the bar and rail
+   * `--chrome` — so there is something behind it, and the token is 8px.
+   *
+   * WHICH corner is the part that changed. Every previous notch was TOP-LEFT,
+   * nearest the rail. The 4 September Figma cuts the TOP-RIGHT instead and
+   * leaves the rail-side corner square, so that is what this spells.
+   */
+  const className = cn("relative min-w-0 flex-1 rounded-tr-frame bg-panel", surface);
 
   return (
     // `h-dvh`, not `h-screen` — see the safe-area note below; unchanged.
@@ -2400,11 +2401,14 @@ Then replace the render (from `const className = cn("relative min-w-0 flex-1 bg-
       }}
     >
       {/* THE BAR SPANS EVERYTHING, ABOVE THE RAIL RATHER THAN BESIDE IT.
-          It no longer receives `workspace` — the wordmark and the setup ring
-          are the only things it draws on its own account now; the workspace
-          switcher moved into the rail's own head block, and it needs
-          `workspace`/`account` for that, not the bar. */}
-      <TopBar account={account} firstName={firstName} metricCount={metricCount} />
+          It no longer receives `workspace` — the workspace switcher moved into
+          the rail's own head block, and it needs `workspace`/`account` for
+          that, not the bar — and it no longer receives `metricCount`, because
+          the setup ring that was the only reader of it is gone (the Figma has
+          no ring; the dashboard's checklist reports the same progress). What
+          the bar draws on its own account is the wordmark, the greeting and
+          the right-hand cluster. */}
+      <TopBar account={account} firstName={firstName} />
       {/* THE ROW BELOW THE BAR — the rail, then the panel. `min-h-0` is load
           bearing: without it a flex row with a scrolling child never shrinks
           past its content's natural height, and the panel's own
@@ -2453,7 +2457,7 @@ replace with:
 }) {
 ```
 
-(Do not destructure `workspace`/`account` in this task — they stay unread on the type only, which is legal TypeScript and keeps `noUnusedLocals` quiet until Task 2 uses them.)
+(Do not destructure `workspace`/`account` in this task — they stay unread on the type only, which is legal TypeScript and keeps `noUnusedLocals` quiet until Task 8 uses them.)
 
 **`src/components/top-bar.tsx`**
 
@@ -2462,12 +2466,15 @@ replace with:
 import { Bell, ChevronDown, Plus, UserPlus } from "lucide-react";
 import type { ReactNode } from "react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 ```
 with:
 ```tsx
 import { Bell, Plus, UserPlus } from "lucide-react";
 import type { ReactNode } from "react";
 ```
+(`Tooltip` goes with the ring — it was the ring's bubble and nothing else in
+this file opened one.)
 
 2. Replace the whole top doc comment (the `/** THE TOP BAR — who you are... */` block, lines 11–59) with:
 ```tsx
@@ -2483,14 +2490,21 @@ import type { ReactNode } from "react";
  * workspace" at all, so the mark has somewhere to go that isn't a second
  * corner saying the same word.
  *
- * THE RING CAME WITH IT, ALONE. The old identity group — workspace avatar,
- * name, chevron, the dropdown that opened the account panel — is gone from
- * here entirely; that dropdown's TRIGGER is the rail's switcher row now, and
- * `account.panel` is passed straight through to `Sidebar` rather than read
- * here. The metrics ring never depended on that group for its own meaning
- * (its `aria-label` already spells out what it counts), so it keeps its own
- * guard — `tracked != null`, i.e. `metricCount` supplied — independent of
- * `account` or `workspace`, in the bar's right-hand cluster.
+ * THE OLD IDENTITY GROUP IS GONE — workspace avatar, name, chevron, and the
+ * dropdown that opened the account panel. That dropdown's TRIGGER is the
+ * rail's switcher row now, and `account.panel` is passed straight through to
+ * `Sidebar` rather than read here.
+ *
+ * SO IS THE METRICS-SETUP RING, AND THAT IS A DELETION RATHER THAN A MOVE.
+ * The Figma's bar has no ring. The fact it reported — how many of six metrics
+ * a workspace has built — is already on the dashboard's own setup checklist,
+ * where there is room to say what to do about it instead of only how far
+ * along you are; a 24px arc in the chrome was the same claim with no room for
+ * the second half. Everything behind it goes in the same commit: this file's
+ * `RING_RADIUS`/`RING_CIRCUMFERENCE`/`METRIC_GOAL`, the `tracked`/`arc`/
+ * `ringMessage` derivations, and `metricCount` off `TopBar`, `AppFrame`,
+ * `AppShell` and the dashboard page that computed it. A prop chain whose only
+ * consumer has been deleted still reads as a feature to whoever finds it next.
  *
  * 60px, `--chrome` fill, `--border` bottom rule — the bar, the rail beside
  * it and the page below the panel are three different surfaces now, so this
@@ -2500,7 +2514,15 @@ import type { ReactNode } from "react";
 
 3. Remove the `identity` const entirely — delete the block that begins `const identity = (` and ends at its closing `);` (the avatar span, workspace name span, and `ChevronDown`).
 
-4. In the `TopBar` export's signature, remove the `workspace` parameter, its doc comment, and the `initial` computation. Change:
+4. Remove the ring's two constant blocks near the top of the file — the
+`/** The ring: r=9 in a 24px box… */` pair (`RING_RADIUS`, `RING_CIRCUMFERENCE`)
+and the whole `/** WHERE THE RING STOPS ASKING — six metrics… */` block with
+`const METRIC_GOAL = 6;`. Nothing else in the file or the app reads either
+name (`grep -rn "METRIC_GOAL\|RING_RADIUS" src tests` returns only this file).
+
+5. In the `TopBar` export's signature, remove BOTH the `workspace` and the
+`metricCount` parameters together with their doc comments, and remove the
+`initial` computation. Change:
 ```tsx
 export function TopBar({
   account,
@@ -2521,12 +2543,13 @@ to:
 export function TopBar({
   account,
   firstName,
-  metricCount,
   unread = 1,
 }: {
   account?: { initials: string; avatarUrl?: string | null; panel: ReactNode };
 ```
-(keep every other doc comment/param — `firstName`, `metricCount`, `unread` — unchanged.)
+and delete the `metricCount?: number;` entry lower in the same type, along with
+the long `/** How many metrics this workspace has … */` comment above it.
+(`firstName` and `unread` keep their own doc comments unchanged.)
 
 And remove:
 ```tsx
@@ -2538,7 +2561,12 @@ replacing with just:
   const greeting = firstName ? `Welcome back, ${firstName}!` : "Welcome back!";
 ```
 
-5. Replace the entire `<header>...</header>` body with:
+Then delete the three derivations the ring owned and the comment blocks above
+each: `const tracked = …`, `const arc = …` and `const ringMessage = …`. After
+this the component body between the signature and the `return` is a single
+`greeting` line.
+
+6. Replace the entire `<header>...</header>` body with:
 ```tsx
     <header className="flex h-[60px] shrink-0 items-center justify-between gap-4 border-b border-border bg-chrome px-6 py-2">
       {/* ── THE MARK ─────────────────────────────────────────────────────── */}
@@ -2552,45 +2580,13 @@ replacing with just:
         <span className="truncate text-sm font-medium text-foreground peer-[:not(:empty)]:hidden">{greeting}</span>
       </div>
 
-      {/* ── HOW MUCH IS MEASURED, THEN WHAT YOU CAN START ────────────────── */}
+      {/* ── WHAT YOU CAN START ───────────────────────────────────────────
+          NO RING HERE ANY MORE. This cluster used to open with a 24px arc
+          counting metrics towards six; the Figma has none, and the dashboard's
+          setup checklist already carries the same number with somewhere to put
+          the next step. See the file note above for what went with it. */}
       <div className="flex shrink-0 items-center gap-4">
         <div id="topbar-status" className="flex shrink-0 items-center empty:hidden" />
-
-        {tracked != null && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span
-                tabIndex={0}
-                role="img"
-                aria-label={`${tracked} of ${METRIC_GOAL} metrics tracked`}
-                className="flex shrink-0 items-center gap-2 rounded-control"
-              >
-                <span className="relative flex size-6 items-center justify-center">
-                  <svg aria-hidden viewBox="0 0 24 24" className="absolute inset-0 size-6 -rotate-90">
-                    <circle cx="12" cy="12" r={RING_RADIUS} fill="none" strokeWidth="3" className="stroke-rule" />
-                    {arc > 0 && (
-                      <circle
-                        cx="12"
-                        cy="12"
-                        r={RING_RADIUS}
-                        fill="none"
-                        strokeWidth="3"
-                        strokeLinecap="round"
-                        strokeDasharray={RING_CIRCUMFERENCE}
-                        strokeDashoffset={RING_CIRCUMFERENCE - arc}
-                        className="stroke-marker"
-                      />
-                    )}
-                  </svg>
-                </span>
-                <span className="text-sm font-medium text-foreground">
-                  {tracked}/{METRIC_GOAL}
-                </span>
-              </span>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">{ringMessage}</TooltipContent>
-          </Tooltip>
-        )}
 
         <Link
           href="/dashboard/settings"
@@ -2640,7 +2636,54 @@ replacing with just:
     </header>
 ```
 
-6. Delete the trailing `SubBar`-history comment block at the end of the file only if it still reads true after this edit — it does (it documents an unrelated, already-removed second band); leave it as is.
+7. Delete the trailing `SubBar`-history comment block at the end of the file only if it still reads true after this edit — it does (it documents an unrelated, already-removed second band); leave it as is.
+
+**`src/components/app-shell.tsx`** — the middle link of the dead chain.
+Remove `metricCount` from the destructuring list in `AppShell({ … })`, remove
+its type entry `metricCount?: number;` together with the long `/** HOW MANY
+METRICS THIS WORKSPACE HAS — supplied by the PAGE … */` comment above it, and
+remove the `metricCount={metricCount}` line from the `<AppFrame …>` call.
+
+**`src/app/dashboard/page.tsx`** — the source of the number. Delete the whole
+`/** WHAT THE TOP BAR'S RING COUNTS, AND WHY IT COSTS NOTHING. … */` comment
+block and the line under it:
+```tsx
+  const metricCount = loadError ? undefined : metrics.length + flowTiles.length;
+```
+and change:
+```tsx
+    <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email} metricCount={metricCount}>
+```
+to:
+```tsx
+    <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email}>
+```
+Then fix the one comment further up the file that names it as a landmark —
+replace:
+```
+   * miss a change). Awaited beside `metricCount`, right before the return —
+   * nothing between here and there reads it.
+```
+with:
+```
+   * miss a change). Awaited right before the return — nothing between here and
+   * there reads it.
+```
+
+**`src/lib/board/nav-views.ts`** — comment only. Its argument for `cache()`
+cites the deleted prop as the contrasting example. Replace:
+```
+ * every open tab. `metricCount` is passed down from the page for precisely this
+ * reason. A view list cannot be — the whole feature is jumping to a view from
+ * somewhere that is not the dashboard.
+```
+with:
+```
+ * every open tab. The top bar's metric count used to be passed down from the
+ * page for precisely this reason, until the ring that read it was deleted with
+ * the 4 September re-theme. A view list cannot be passed down that way — the
+ * whole feature is jumping to a view from somewhere that is not the dashboard.
+```
 
 #### Step 4 — run the tests green
 
@@ -2652,23 +2695,27 @@ All assertions — the new block and every pre-existing one (the gutter/caps pai
 #### Step 5 — gate
 
 ```
-pnpm typecheck && pnpm vitest run tests/page-width.test.ts && pnpm check:ui
+pnpm typecheck && pnpm vitest run tests/page-width.test.ts tests/calendar-view.test.ts tests/dashboard-tiles.test.ts && pnpm check:ui
 ```
-`check:ui` passes: `bg-chrome`, `bg-panel`, `bg-avatar`, `rounded-tl-frame`, `rounded-control`, `bg-brand-500` and `rounded-full` on the bell/avatar are all sanctioned spellings (the retired-token rule only bans `chrome-<word>` compounds, not bare `chrome`; `RADIUS_OK` already lists `frame`, `control` and `full`). Until the tokens area lands `--color-chrome`/`--color-panel`/`--color-avatar` in `globals.css`, these utilities compile to no rule rather than failing the build — see the area's open questions.
+`typecheck` is the real gate on the `metricCount` removal: `noUnusedLocals` and `noUnusedParameters` are both on, so a link left behind anywhere in the chain fails the build rather than lingering. `check:ui` passes: `bg-chrome`, `bg-panel`, `bg-avatar`, `rounded-tr-frame`, `rounded-control` and `rounded-full` on the bell/avatar are all sanctioned spellings (the retired-token rule only bans `chrome-<word>` compounds, not bare `chrome`; `RADIUS_OK` already lists `frame`, `control` and `full`). Until Tasks 2 and 3 land `--color-chrome`/`--color-panel`/`--color-avatar` in `globals.css`, these utilities compile to no rule rather than failing the build — which is why the tokens tasks come first.
 
 #### Step 6 — commit
 
 ```
-git add src/components/app-frame.tsx src/components/top-bar.tsx src/components/sidebar.tsx tests/page-width.test.ts
+git add src/components/app-frame.tsx src/components/top-bar.tsx src/components/app-shell.tsx src/components/sidebar.tsx src/app/dashboard/page.tsx src/lib/board/nav-views.ts tests/page-width.test.ts
 git commit -m "$(cat <<'EOF'
-Span the top bar full width, and move the wordmark into it
+Span the top bar full width, move the wordmark in, and drop the setup ring
 
 The bar now sits above a row of [rail | panel] instead of beside the rail,
 the wordmark moves from the rail's head block into the bar's left edge, and
 the old workspace-identity dropdown (avatar, name, chevron) is gone from the
 bar — its trigger becomes the rail's own switcher row in the next commit.
-The metrics ring keeps working, relocated into the bar's right-hand cluster
-and gated on the count alone.
+The metrics-setup ring goes entirely: the Figma has none and the dashboard's
+setup checklist already reports the same progress, so the arc and the whole
+metricCount chain behind it (TopBar, AppFrame, AppShell, the dashboard page's
+own computation) come out together — a half-removal would not typecheck.
+The panel rounds its top-RIGHT corner, per the export, where every previous
+era of this shell cut the top-left.
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
 EOF
@@ -2677,14 +2724,14 @@ EOF
 
 ---
 
-### Task 9: Move the workspace switcher into the rail, and give it Main Menu, a field-styled search, and Get Free Access
+### Task 8: Move the workspace switcher into the rail, and give it Main Menu, a field-styled search, and Get Free Access
 
 **Files**
 - Modify: `src/components/sidebar.tsx`
 - Test: `tests/page-width.test.ts`
 
 **Interfaces**
-- Consumes: `workspace?: string`, `account?: { initials, avatarUrl, panel }` (typed in Task 1, destructured here).
+- Consumes: `workspace?: string`, `account?: { initials, avatarUrl, panel }` (typed in Task 7, destructured here).
 - Produces: the rail's re-dressed head block, nav caption, search field and foot row described above. `WorkspaceChip` (exported from this same file, pinned by `tests/vendored-primitives.test.ts` and `tests/console-theme.test.ts`) is untouched — the switcher's square is a new, separate element, not a `WorkspaceChip` reuse.
 
 #### Step 1 — write the failing test
@@ -2697,6 +2744,16 @@ describe("the rail's re-dress — a workspace switcher, Main Menu, a search fiel
     expect(sidebar).toMatch(/workspace\?:\s*string/);
     expect(sidebar).toMatch(/bg-brand-500\/75/);
     expect(sidebar).not.toMatch(/const PRODUCT = "Namzilabs"/);
+  });
+
+  it("sets the switcher's initial at 600, the kit's top weight, not the export's 700", () => {
+    // THE WEIGHT LOCK HAS EXACTLY ONE EXCEPTION AND THIS IS NOT IT.
+    // `.wordmark` is 900, declared in CSS. Everything else in the product,
+    // this badge included, tops out at `font-semibold` — and a badge is
+    // precisely where "it is not really prose" would be argued next, so the
+    // rule is pinned at the one call site most likely to bend it.
+    expect(sidebar).toMatch(/rounded-control bg-brand-500\/75 text-xs font-semibold text-white/);
+    expect(sidebar, "no heavy weight anywhere in the rail").not.toMatch(/\bfont-(?:bold|black)\b/);
   });
 
   it("leaves WorkspaceChip exactly as it was", () => {
@@ -2736,7 +2793,7 @@ describe("the rail's re-dress — a workspace switcher, Main Menu, a search fiel
 ```
 pnpm vitest run tests/page-width.test.ts
 ```
-Expected failure: `sidebar.tsx` still declares `const PRODUCT = "Namzilabs"`, has no `bg-brand-500/75`, no `text-faint`/`Main Menu`, the search button has no `border-border bg-control`, and the foot still says "Notifications" rather than "Get Free Access". (`WorkspaceChip` and the gap-2 assertions already pass and stay green — they guard against this task's own risk of collateral damage.)
+Expected failure: `sidebar.tsx` still declares `const PRODUCT = "Namzilabs"`, has no `bg-brand-500/75` (so the switcher and weight blocks both fail), no `text-faint`/`Main Menu`, the search button has no `border-border bg-control`, and the foot still says "Notifications" rather than "Get Free Access". (`WorkspaceChip` and the gap-2 assertions already pass and stay green — they guard against this task's own risk of collateral damage.)
 
 #### Step 3 — implement
 
@@ -2760,7 +2817,7 @@ export function Sidebar({
   account,
 }: {
 ```
-(the type block already carries `workspace?`/`account?` from Task 1 — leave it as is, just add the two names to the destructuring list above it).
+(the type block already carries `workspace?`/`account?` from Task 7 — leave it as is, just add the two names to the destructuring list above it).
 
 After the existing `const pathname = usePathname();` / `const params = useSearchParams();` lines, add:
 ```tsx
@@ -2832,7 +2889,15 @@ with:
             THE CHEVRON IS A PROMISE, so it only appears when there is a panel
             to open — the same rule the bar's own identity control followed:
             `account` present draws the dropdown, its absence draws plain
-            text with no chevron pointing at nothing. */}
+            text with no chevron pointing at nothing.
+
+            THE INITIAL IS `text-xs font-semibold` — 13px at 600, which is what
+            the kit's top weight is. The export draws it at 700; this is one of
+            the several 700s the kit does not follow, because "a badge is not
+            prose" would let every badge in the product past the weight lock
+            and 600 already reads as a badge at 13px. `.wordmark` stays the ONE
+            exception above 600 (see globals.css), and it needs no gate change
+            because its weight is declared in CSS. */}
         <div className="flex h-[60px] shrink-0 items-center px-3.5">
           {workspace &&
             (account ? (
@@ -2995,7 +3060,7 @@ pnpm vitest run tests/page-width.test.ts
 ```
 pnpm typecheck && pnpm vitest run tests/page-width.test.ts && pnpm check:ui
 ```
-`check:ui`'s "hand-rolled button" rule is unaffected (no raw `<button>` introduced); the new `<DropdownMenu>`/`<Link>` usages are ordinary kit primitives. `bg-brand-500/75`, `bg-control`, `text-faint` all pass the same way Task 1's `bg-chrome`/`bg-panel` did.
+`check:ui`'s "hand-rolled button" rule is unaffected (no raw `<button>` introduced); the new `<DropdownMenu>`/`<Link>` usages are ordinary kit primitives. `bg-brand-500/75`, `bg-control`, `text-faint` all pass the same way Task 7's `bg-chrome`/`bg-panel` did.
 
 #### Step 6 — commit
 
@@ -3019,7 +3084,7 @@ EOF
 
 ---
 
-### Task 10: Mirror the new geometry in the loading skeleton and close out the shell's tests
+### Task 9: Mirror the new geometry in the loading skeleton and close out the shell's tests
 
 **Files**
 - Modify: `src/components/shell-skeleton.tsx`
@@ -3042,7 +3107,8 @@ describe("the skeleton mirrors the frame's new order", () => {
   });
 
   it("gives its content ghost the panel's own surface and corner", () => {
-    expect(skeleton).toMatch(/rounded-tl-frame bg-panel/);
+    expect(skeleton).toMatch(/rounded-tr-frame bg-panel/);
+    expect(skeleton, "the mirror must not keep a corner the frame dropped").not.toMatch(/rounded-tl-frame/);
   });
 
   it("puts the two chrome ghosts on --chrome, matching the real bar and rail", () => {
@@ -3058,7 +3124,7 @@ describe("the skeleton mirrors the frame's new order", () => {
 ```
 pnpm vitest run tests/page-width.test.ts
 ```
-Expected failure: the skeleton still opens `flex h-dvh bg-background` (no `flex-col`), the rail ghost still precedes the bar ghost, and both chrome ghosts are still `bg-background` rather than `bg-chrome`; the content ghost has no `rounded-tl-frame bg-panel`.
+Expected failure: the skeleton still opens `flex h-dvh bg-background` (no `flex-col`), the rail ghost still precedes the bar ghost, and both chrome ghosts are still `bg-background` rather than `bg-chrome`; the content ghost has no `rounded-tr-frame bg-panel`.
 
 #### Step 3 — implement
 
@@ -3097,8 +3163,10 @@ Then replace the return block, from `<div className="flex h-dvh bg-background">`
         <div className="w-[56px] shrink-0 border-r border-border bg-chrome" />
         <div className="flex min-w-0 flex-1 flex-col">
           {/* THE PANEL'S GHOST — its own surface (`--panel`) and the same
-              top-left corner the real content column carries under the bar. */}
-          <div className="flex-1 overflow-y-auto rounded-tl-frame bg-panel">
+              top-RIGHT corner the real content column carries under the bar.
+              The rail side stays square in both, which is the export's own
+              geometry and the reverse of every earlier notch this shell had. */}
+          <div className="flex-1 overflow-y-auto rounded-tr-frame bg-panel">
             {/* Not <main>: PageContainer renders the page's one main landmark. */}
             <div className={`mx-auto w-full p-6 ${width === "narrow" ? "max-w-3xl" : "max-w-6xl"}`}>
               <Skeleton className="h-8 w-48" />
@@ -3133,7 +3201,7 @@ Mirror the frame's new geometry in the loading skeleton
 ShellSkeleton now opens with the bar's ghost above a row of the rail's ghost
 and the panel's, matching AppFrame's column-first tree from two commits ago,
 with both chrome ghosts on --chrome and the content ghost on --panel with
-its own top-left corner. Closes out the shell area's own test files.
+its own top-right corner. Closes out the shell area's own test files.
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
 EOF
@@ -3142,7 +3210,7 @@ EOF
 
 ---
 
-### Task 11: Mute the tile's title again, and drop its edge on the default board
+### Task 10: Mute the tile's title again, and drop its edge on the default board
 
 **Files**
 - Modify: `src/components/metric-card.tsx`
@@ -3150,7 +3218,7 @@ EOF
 
 **Interfaces**
 - Consumes: `Card` (`@/components/ui/card`), `cn` (`@/lib/utils`) — unchanged.
-- Produces: `MetricCard`'s rendered `<h3>` carries `text-muted-foreground` and no longer `font-medium`; `MetricCard`'s rendered markup no longer contains `--tile-edge` anywhere. The `--tile-edge` CSS custom property and `board-column.tsx`'s per-lane setter are untouched (kept for the canvas board, per spec).
+- Produces: `MetricCard`'s rendered `<h3>` carries `text-muted-foreground` and no longer `font-medium`; the headline numeral's `<p>` carries `text-heading` explicitly; `MetricCard`'s rendered markup no longer contains `--tile-edge` anywhere. The `--tile-edge` CSS custom property and `board-column.tsx`'s per-lane setter are untouched (kept for the canvas board, per spec).
 
 - [ ] **Step 1 — write the failing test**
 
@@ -3181,6 +3249,20 @@ EOF
       const html = renderToStaticMarkup(createElement(MetricCard, { title: "Speed To Lead", headline: "44" }));
       expect(html, "the Figma's default board has no per-column edge on the tile").not.toContain("--tile-edge");
     });
+
+    it("inks the numeral with --heading, which is not --foreground in light", () => {
+      /**
+       * THE ONE PLACE THE TWO ROLES DIVERGE. In dark they are the same white,
+       * so an unset numeral inheriting `--card-foreground` looks correct and
+       * nothing catches it. In light `--heading` is #313131 and `--foreground`
+       * is pure #000000 — the spec's "numeral 28/40 Inter 600 `--heading`" is
+       * a real choice, and inheritance is the wrong answer to it.
+       */
+      const html = renderToStaticMarkup(createElement(MetricCard, { title: "Speed To Lead", headline: "44" }));
+      const numeral = html.match(/<p[^>]*class="([^"]*stat-numeral[^"]*)"/)?.[1] ?? "";
+      expect(numeral, "the numeral element was found").not.toBe("");
+      expect(numeral).toContain("text-heading");
+    });
   });
   ```
 
@@ -3190,7 +3272,7 @@ EOF
   pnpm vitest run tests/metric-card-shape.test.ts
   ```
 
-  Expected failure: both assertions fail against the current source — the title still renders `class="...text-sm font-medium text-foreground"` (contains `font-medium`, no `text-muted-foreground`), and the markup still contains `style="background:var(--tile-edge, var(--border))"`.
+  Expected failure: all three assertions fail against the current source — the title still renders `class="...text-sm font-medium text-foreground"` (contains `font-medium`, no `text-muted-foreground`), the markup still contains `style="background:var(--tile-edge, var(--border))"`, and the numeral's class list is `stat-numeral text-display-md leading-none` with no ink class at all.
 
 - [ ] **Step 3 — implement**
 
@@ -3302,6 +3384,26 @@ EOF
               <h3 className="flex min-w-0 flex-1 items-baseline text-sm font-normal text-muted-foreground">
   ```
 
+  Finally the numeral, which has been inheriting its ink rather than naming it
+  (currently):
+
+  ```tsx
+                <p className={cn("stat-numeral text-display-md leading-none", headline == null && "text-muted-foreground")}>
+  ```
+
+  becomes:
+
+  ```tsx
+                {/* `text-heading`, SAID OUT LOUD. It used to inherit
+                    `--card-foreground` and looked right, because in the dark
+                    theme `--heading` and `--foreground` are the same white. In
+                    light they are not — #313131 against #000000 — and the spec
+                    asks for the heading step. `cn` still lets the em-dash case
+                    win: tailwind-merge drops `text-heading` when
+                    `text-muted-foreground` is appended for a null headline. */}
+                <p className={cn("stat-numeral text-display-md leading-none text-heading", headline == null && "text-muted-foreground")}>
+  ```
+
 - [ ] **Step 4 — run it green**
 
   ```bash
@@ -3325,7 +3427,9 @@ EOF
   full-ink font-medium the previous pass gave it, and shows no per-column
   colour strip on any tile on the default board. --tile-edge stays defined
   (board-column.tsx still sets it per lane) for the canvas board; this shell
-  just stops reading it.
+  just stops reading it. The headline numeral now names --heading instead of
+  inheriting the card's ink, which is the same white in dark and a different
+  grey in light.
 
   Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
   EOF
@@ -3334,14 +3438,14 @@ EOF
 
 ---
 
-### Task 12: Give the freshness dot its own colour, out from under success
+### Task 11: Give the freshness dot its own colour, out from under success
 
 **Files**
 - Modify: `src/components/flow-tile.tsx`
 - Create: `tests/freshness-dot.test.ts`
 
 **Interfaces**
-- Consumes: `--freshness-dot` / `--freshness-halo` tokens (`src/app/globals.css`) — these land via this branch's tokens task; this task only reads the `bg-freshness-dot` / `bg-freshness-halo` utility classes they generate. If this task runs before the tokens task lands, `pnpm check:ui`'s unresolved-utility check (or a visual check) will flag the two classes as unresolved — sequence this task after the tokens task, or land the two token lines first.
+- Consumes: `--freshness-dot` / `--freshness-halo` (declared in both role blocks by Task 2, bridged to utilities by Task 3); this task only reads the `bg-freshness-dot` / `bg-freshness-halo` classes they generate. If this task runs before those land, `pnpm check:ui`'s unresolved-utility check (or a visual check) will flag the two classes as unresolved — sequence this task after Tasks 2 and 3, or land those two token lines first.
 - Produces: `Freshness({status: "fresh"})`'s healthy-dot markup now reads `bg-freshness-halo` (the 16px wash) wrapping `bg-freshness-dot` (the 6px dot), never `bg-success`/`bg-success/15`. `--success`, `--success-soft`, and every other reader of them (`TargetBar`'s met state in `charts.tsx`, `GoalBar` in `board-charts/scorecard.tsx`, `StatusPill`'s success tone in `badge.tsx`) are untouched — this is a new, separate pair of tokens, not a repoint of `--success`.
 
 - [ ] **Step 1 — write the failing test**
@@ -3467,7 +3571,7 @@ EOF
 
 ---
 
-### Task 13: Point every default chart mark at the brand's 500, not the marker
+### Task 12: Point every default chart mark at the brand's 500, not the marker
 
 **Files**
 - Modify: `src/lib/board/tile-config.ts`
@@ -3476,8 +3580,8 @@ EOF
 - Modify: `tests/board-chart-marks.test.ts` (updates an existing byte-identical hash pin)
 
 **Interfaces**
-- Consumes: `--color-brand-500` — the existing `@theme` token; a separate tokens task on this branch repoints its hex to `#007BFF` (dark) per the ramp table, this task only changes which token NAME the default accent and the legacy series read.
-- Produces: `accentOf(color?)` (`src/lib/board/tile-config.ts`) returns `"var(--color-brand-500)"` for any tile with no (or an unpalatable) `GROUP_ACCENT` colour — was `"var(--color-brand-600)"`. `BREAKDOWN_ACCENTS[0]`, `Sparkbars`' wash/axis-rule and its bars (`src/components/charts.tsx`) read `bg-brand-500`/`border-brand-500` — were `bg-marker`/`border-marker`. `GROUP_ACCENT` (`flow/node-accent.ts`), `--marker` itself, `TargetBar`'s neutral/success states, and `board-charts/scorecard.tsx`'s `GoalBar` are all untouched.
+- Consumes: `--color-brand-500` — the existing `@theme` token, whose hex Task 1 repoints to `#007BFF` per the ramp table. This task only changes which token NAME the default accent and the legacy series read.
+- Produces: `accentOf(color?)` (`src/lib/board/tile-config.ts`) returns `"var(--color-brand-500)"` for any tile with no (or an unpalatable) `GROUP_ACCENT` colour — was `"var(--color-brand-600)"`. `BREAKDOWN_ACCENTS[0]`, `Sparkbars`' wash/axis-rule and its bars (`src/components/charts.tsx`) read `bg-brand-500`/`border-brand-500` — were `bg-marker`/`border-marker` — with the wash raised from `/5` to `/12`, the spec's `rgb(0 123 255 / .12)`. `GROUP_ACCENT` (`flow/node-accent.ts`), `--marker` itself, `TargetBar`'s neutral/success states, and `board-charts/scorecard.tsx`'s `GoalBar` are all untouched.
 
 - [ ] **Step 1 — write the failing tests**
 
@@ -3517,17 +3621,21 @@ EOF
      */
   ```
 
-  and change the hash literal (currently):
+  Leave the hash literal (currently):
 
   ```ts
     expect(hash).toBe("49fae91cb1e4bc260c958a910bbf0a26c2fe6dc7fec70f714f8fa907ba036203");
   ```
 
-  to the hash of `charts.tsx` AFTER Step 3's edit below (computed ahead of time against the exact diff this task makes):
+  **exactly as it is for now.** It is the hash of the file BEFORE this task's
+  edit, so it is what makes Step 2 fail for the right reason.
 
-  ```ts
-    expect(hash).toBe("1bc249c1d7cbb6345eb3f70df52215d01d483d2e19873f582bd9e18cdf2baf29");
-  ```
+  **Do not write a new hash by hand, and do not accept one written for you.**
+  A SHA-256 of a file cannot be predicted from a diff; a literal that arrives
+  in a plan is either copied from a real run or wrong, and a wrong one costs
+  the next reader a debugging session on a test that is doing its job. The new
+  value is computed from the real post-edit file in Step 4, below, and pasted
+  in then.
 
 - [ ] **Step 2 — run it, confirm it fails**
 
@@ -3535,7 +3643,7 @@ EOF
   pnpm vitest run tests/tile-config.test.ts tests/board-chart-marks.test.ts
   ```
 
-  Expected failure: `tile-config.test.ts`'s four `accentOf` assertions fail (the function still returns `brand-600`); `board-chart-marks.test.ts`'s hash assertion fails (`charts.tsx` is still byte-identical to its old self, so its hash is still `49fae91c...`, not `1bc249c1...`).
+  Expected failure: `tile-config.test.ts`'s four `accentOf` assertions fail (the function still returns `brand-600`). `board-chart-marks.test.ts` still PASSES at this point — its hash pin is the pre-edit value and `charts.tsx` has not moved yet. It turns red in Step 3 and is made green again in Step 4 by recomputing, which is the only honest order for a byte-identical pin.
 
 - [ ] **Step 3 — implement**
 
@@ -3635,10 +3743,12 @@ EOF
       className={cn("mt-3 flex items-end gap-1 rounded-t-sm border-b border-marker/25 bg-marker/5", className)}
   ```
 
-  becomes:
+  becomes — note the wash goes to **12%**, which is the spec's own
+  `rgb(0 123 255 / .12)` and not the 5% this class happened to inherit from
+  the era when the wash sat under a yellow; the 25% border is unchanged:
 
   ```tsx
-      className={cn("mt-3 flex items-end gap-1 rounded-t-sm border-b border-brand-500/25 bg-brand-500/5", className)}
+      className={cn("mt-3 flex items-end gap-1 rounded-t-sm border-b border-brand-500/25 bg-brand-500/12", className)}
   ```
 
   and each bar's class (currently):
@@ -3655,13 +3765,29 @@ EOF
 
   (this is the sole occurrence of the bare string `"bg-marker",` on its own line in the file — the one inside the `cn(...)` call for each bar in `Sparkbars`).
 
-- [ ] **Step 4 — run it green**
+- [ ] **Step 4 — re-pin the hash from the real file, then run it green**
+
+  First confirm the diff is exactly the five changes above and nothing else:
+
+  ```bash
+  git diff src/components/charts.tsx
+  ```
+
+  Then compute the hash of the file as it now stands and paste THAT value into
+  `tests/board-chart-marks.test.ts`, replacing the pre-edit literal:
+
+  ```bash
+  shasum -a 256 src/components/charts.tsx
+  ```
+
+  The pin is byte-identical by design — its whole job is to make an
+  unannounced edit to this file fail — so the only correct way to move it is
+  to move it to a value the file actually has. Never invent, guess or carry
+  over a hash literal.
 
   ```bash
   pnpm vitest run tests/tile-config.test.ts tests/board-chart-marks.test.ts
   ```
-
-  If the hash still mismatches, the edit differs from what Step 1's literal assumed — diff against `git diff src/components/charts.tsx` and either fix the edit to match exactly the five changes above, or recompute the hash with `shasum -a 256 src/components/charts.tsx` and use that value (only after confirming the diff is exactly the five changes listed, nothing else).
 
 - [ ] **Step 5 — gate**
 
@@ -3691,17 +3817,17 @@ EOF
 
 ---
 
-### Task 14: Let Refresh all go quiet — grey is the header's default now
+### Task 13: Let Refresh all go quiet — grey is the header's default now
 
 **Files**
 - Modify: `src/app/dashboard/page.tsx`
 - Create: `tests/dashboard-header-actions.test.ts`
 
 **Interfaces**
-- Consumes: `SubmitButton`'s `variant` prop (`@/components/ui/submit-button`), which forwards to `Button`'s existing `"secondary"` variant (`@/components/ui/button.tsx`) — no change to either component.
-- Produces: the dashboard's "Refresh all" form (`boardActions` in `src/app/dashboard/page.tsx`) renders `<SubmitButton variant="secondary" size="sm">` — was `variant="accent" size="sm" className="px-5"`.
+- Consumes: `SubmitButton`'s `variant`/`size`/`className` props (`@/components/ui/submit-button`, which spreads them onto `Button`), `Button`'s existing `"secondary"` variant and `xs` size (`@/components/ui/button.tsx`) — no change to either component. `RefreshCw` from `lucide-react`.
+- Produces: the dashboard's "Refresh all" form (`boardActions` in `src/app/dashboard/page.tsx`) renders `<SubmitButton variant="secondary" size="xs" className="[&_svg]:size-4">` with a `<RefreshCw />` in front of the label — was `variant="accent" size="sm" className="px-5"` with no icon.
 
-**A scoping note carried into openQuestions, not solved by this task**: the spec's Page Header section (`docs/superpowers/specs/2026-09-04-retheme-blue-design.md`, "Layout and the shell") describes a redesigned actions row — "+ Add" primary, "Today" and "Refresh All" secondary, all `xs` with 16px icons — that does not match today's dashboard header. Today's header's right-hand slot is the six-pill period track (`RANGE_OPTIONS`/`PERIOD_TRACK` in `ui/page.tsx`, a shared app-wide chrome primitive), and the tile-adding "+ Add" button lives in `src/app/dashboard/custom-board.tsx` (not a file this area owns) as `<Button variant="white" size="sm"><Plus />Add</Button>`. This task only touches the one control that both exists today AND is unambiguous — "Refresh all", already a real `variant="accent"` button. It does not invent a "Today" button or move "+ Add" out of `custom-board.tsx`; see openQuestions.
+**Scope**: this task changes the ONE control the spec names that already exists as a real button — "Refresh all" — to the Figma's variant, size and icon. The other two thirds of the spec's actions row (the "Today ▾" dropdown that replaces the six-pill period track, and "+ Add" moving to the brand fill) are Task 14, which owns `PageHeader`'s wiring and `custom-board.tsx`. They are split because this one is a three-attribute change to a control in place, and that one restructures the header.
 
 - [ ] **Step 1 — write the failing test**
 
@@ -3725,9 +3851,15 @@ EOF
       const src = readFileSync(join(process.cwd(), "src/app/dashboard/page.tsx"), "utf8");
       const anchor = src.indexOf("action={refreshAllFlowsAction}");
       expect(anchor, "the Refresh all form was found").toBeGreaterThan(-1);
-      const block = src.slice(anchor, anchor + 400);
+      const block = src.slice(anchor, anchor + 500);
       expect(block, 'Refresh all reads variant="secondary"').toContain('variant="secondary"');
       expect(block, 'Refresh all no longer reads variant="accent"').not.toContain('variant="accent"');
+      // The Figma's header buttons are the kit's `xs` rung, and its glyphs are
+      // 16px — which `xs` does not give for free (`[&_svg]:size-3.5`), so the
+      // override is part of the spelling rather than decoration.
+      expect(block, "Refresh all is the header's xs rung").toContain('size="xs"');
+      expect(block, "and carries a 16px icon").toContain("[&_svg]:size-4");
+      expect(block, "which is the refresh glyph").toContain("<RefreshCw />");
     });
   });
   ```
@@ -3738,11 +3870,24 @@ EOF
   pnpm vitest run tests/dashboard-header-actions.test.ts
   ```
 
-  Expected failure: the sliced block contains `variant="accent"`, not `variant="secondary"` — both assertions fail.
+  Expected failure: the sliced block contains `variant="accent"` and `size="sm"`, no `[&_svg]:size-4` and no icon — all five assertions fail.
 
 - [ ] **Step 3 — implement**
 
-  In `src/app/dashboard/page.tsx`, the comment and button (currently):
+  In `src/app/dashboard/page.tsx`, first add the icon to the lucide import.
+  Replace:
+
+  ```tsx
+  import { X } from "lucide-react";
+  ```
+
+  with:
+
+  ```tsx
+  import { RefreshCw, X } from "lucide-react";
+  ```
+
+  Then the comment and button (currently):
 
   ```tsx
         {/* Recompute every published metric.
@@ -3791,19 +3936,32 @@ EOF
             kit's ordinary grey button (see `ui/button.tsx`). Acting is no
             longer the test; being one of exactly two adds-something verbs is.
             `px-5`'s argument went with the fill: a `secondary` button reaches
-            for no more attention than its neighbours, so it takes
-            `size="sm"`'s own 14px like they do. */}
+            for no more attention than its neighbours.
+            `xs`, NOT `sm`, AND AN ICON. The Figma's header actions are its
+            smallest button rung with a 16px glyph in front of the verb, and
+            all three of them agree — this one, "+ Add" and the "Today"
+            dropdown. `xs` ships `[&_svg]:size-3.5` (14px), which is the rung's
+            default and not what this row draws, so the 16 is spelled here;
+            the override is on the button rather than the icon because the
+            size variant's own descendant rule would win over a class on the
+            svg no matter which order they were written in. */}
         <form action={refreshAllFlowsAction} className="shrink-0">
           <SubmitButton
             variant="secondary"
-            size="sm"
+            size="xs"
+            className="[&_svg]:size-4"
             pendingLabel="Refreshing…"
             title="Recompute every published metric now"
           >
+            <RefreshCw />
             Refresh all
           </SubmitButton>
         </form>
   ```
+
+  (`SubmitButton` spreads `size` and `className` straight onto `Button`, and
+  renders `children` after its own spinner — so the glyph sits where the
+  spinner will replace the label, exactly as the builder's toolbar buttons do.)
 
 - [ ] **Step 4 — run it green**
 
@@ -3828,14 +3986,680 @@ EOF
   something (+ Add, New flow); every other header action takes the kit's
   ordinary secondary button. Refresh all was the one place variant="accent"
   survived on this page from the yellow-brand era's fill/stroke argument --
-  it goes grey, and the width override that argument justified goes with it.
+  it goes grey, drops to the header's xs rung and gains the 16px refresh
+  glyph the export draws in front of the verb.
 
   Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
   EOF
   )"
   ```
 
-  (Last task in this area's slice — if this is also the last task of the WHOLE branch plan, the branch-level gate replaces Step 5's per-task gate: `pnpm typecheck && pnpm vitest run && pnpm build && pnpm check:orphans && pnpm check:ui`. Confirm with the orchestrating plan before running the branch-level gate here — this area was not told whether it is last.)
+---
+
+### Task 14: Wire the dashboard's header — tabs beside a centred title, a "Today" dropdown, and the brand on "+ Add"
+
+**Files**
+- Modify: `src/app/dashboard/board-controls.tsx` (adds `RangeMenu`)
+- Modify: `src/app/dashboard/page.tsx`
+- Modify: `src/app/dashboard/board-layout.tsx`
+- Modify: `src/app/dashboard/custom-board.tsx`
+- Modify: `tests/calendar-view.test.ts` (two existing assertions re-pinned to the new arrangement)
+- Create: `tests/dashboard-page-header.test.ts`
+
+**Interfaces**
+- Consumes: `PageHeaderProps.tabs` (produced by Task 5 — this is the task that finally passes it); `Button`'s `xs` size, its `accent` and `secondary` variants and the `rounded-control` base (Task 4); `DropdownMenu` / `DropdownMenuTrigger` / `DropdownMenuContent` / `DropdownMenuRadioGroup` / `DropdownMenuRadioItem` (existing kit primitives); `useBoard()`'s `go`/`pending`/`picked` inside `board-controls.tsx`; `RANGE_OPTIONS` and `resolveRange` (`@/lib/metrics/range`, unchanged).
+- Produces: `RangeMenu` (a new client export of `src/app/dashboard/board-controls.tsx`); the dashboard route rendering `<PageHeader tabs={viewStrip} … actions={…<RangeMenu/>}>`; `BoardLayout` and `CustomBoard` without a `viewStrip` prop; `custom-board.tsx`'s "+ Add" on the brand fill at `xs`.
+- Removes: the six-pill period track from `src/app/dashboard/page.tsx` (its `PERIOD_TRACK`/`PERIOD_PILL`/`RangeLink` imports go with it). `ui/page.tsx` keeps exporting all three — `calendar-board.tsx` and `theme.tsx` still spell the groove, and `RangeLink` is still `board-controls.tsx`'s own.
+
+**Why this is one task and not three**: the tab strip cannot be in two places at once. Passing `tabs` to `PageHeader` while `BoardLayout`/`CustomBoard` still render `{viewStrip}` draws it twice, and taking it out of them is what makes the three-zone header the real header rather than a second one. The "Today" dropdown lands here for the same reason — it is the third zone's other occupant, and the row it replaces is the thing `tabs` displaces.
+
+- [ ] **Step 1 — write the failing tests**
+
+  Create `tests/dashboard-page-header.test.ts`:
+
+  ```ts
+  import { readFileSync } from "node:fs";
+  import { join } from "node:path";
+  import { describe, expect, it } from "vitest";
+
+  /**
+   * THE FIGMA'S HEADER, ASSEMBLED — and the reason this is a source pin
+   * rather than a render.
+   *
+   * `dashboard/page.tsx` is an async server component that awaits the
+   * database, the session and a WorkOS membership list before it returns any
+   * markup, so rendering it here would test the fixtures rather than the
+   * layout. What is being asserted is an ARRANGEMENT — which node goes in
+   * which slot — and that is a fact about the source. `PageHeader`'s own
+   * three-zone behaviour is render-tested separately in
+   * `tests/page-header.test.ts`; this file pins that the dashboard actually
+   * asks for it.
+   */
+  const root = join(__dirname, "..");
+  const read = (p: string) => readFileSync(join(root, p), "utf8");
+
+  describe("the dashboard's page header, 4 Sep 2026 blue retheme", () => {
+    const page = read("src/app/dashboard/page.tsx");
+
+    it("puts the view strip in the header's tab slot", () => {
+      const header = page.slice(page.indexOf("<PageHeader"), page.indexOf("<PageHeader") + 1200);
+      expect(header, "the PageHeader call was found").not.toBe("");
+      expect(header).toContain("tabs={viewStrip}");
+    });
+
+    it("renders the strip once, not once per board", () => {
+      // The bug this exists to stop: `tabs` passed AND the boards still
+      // rendering their own copy, which draws two tab strips on every view.
+      for (const p of ["src/app/dashboard/board-layout.tsx", "src/app/dashboard/custom-board.tsx"]) {
+        expect(read(p), `${p} still renders its own view strip`).not.toMatch(/viewStrip/);
+      }
+      const calendarBranch = page.slice(page.indexOf('{!emptyWorkspace && activeKind === "calendar" ? ('));
+      expect(calendarBranch.slice(0, calendarBranch.indexOf("<CalendarBoard"))).not.toMatch(/\{viewStrip\}/);
+    });
+
+    it("answers 'what span' with the Figma's dropdown, not six pills", () => {
+      expect(page).toContain("<RangeMenu");
+      expect(page, "the six-pill track is gone from this page").not.toMatch(/className=\{PERIOD_TRACK\}/);
+      expect(page, "and so are its imports").not.toMatch(/PERIOD_PILL/);
+    });
+
+    it("dresses that dropdown as a secondary xs control with a 16px calendar glyph", () => {
+      const controls = read("src/app/dashboard/board-controls.tsx");
+      const menu = controls.slice(controls.indexOf("export function RangeMenu"));
+      expect(menu, "RangeMenu was found").not.toBe("");
+      expect(menu).toContain('variant="secondary"');
+      expect(menu).toContain('size="xs"');
+      expect(menu).toContain("[&_svg]:size-4");
+      expect(menu).toContain("<CalendarDays");
+      expect(menu).toContain("<ChevronDown");
+      // The presets are the same six, and they still select through the URL.
+      expect(menu).toContain("options.map");
+      expect(menu).toContain('dim: "range"');
+    });
+
+    it("promotes + Add to the brand fill at the header's own size", () => {
+      const custom = read("src/app/dashboard/custom-board.tsx");
+      const add = custom.slice(custom.indexOf("function AddChartMenu"));
+      expect(add).toContain('variant="accent"');
+      expect(add).toContain('size="xs"');
+      expect(add).toContain("[&_svg]:size-4");
+      expect(add, "the white variant it borrowed is gone from this control").not.toContain('variant="white"');
+    });
+  });
+  ```
+
+  Then re-pin the two assertions in `tests/calendar-view.test.ts` that describe
+  the OLD arrangement. Both are correct today and become wrong under this task,
+  so they move rather than being deleted — the rule this branch holds for every
+  test that pins the previous design.
+
+  Replace:
+
+  ```ts
+    /**
+     * THE ONE THING THAT WOULD BREAK QUIETLY. `viewStrip` and `boardActions` are
+     * rendered by `BoardLayout`/`CustomBoard`, not by the page — so a branch
+     * that forgets them loses the tab strip and the `+`, and the only way back
+     * to another view is the browser's back button.
+     */
+    const branch = page.slice(page.indexOf('{!emptyWorkspace && activeKind === "calendar" ? ('));
+    const head = branch.slice(0, branch.indexOf("<CalendarBoard"));
+    expect(head).toMatch(/\{viewStrip\}/);
+    expect(head).toMatch(/\{boardActions\}/);
+  ```
+
+  with:
+
+  ```ts
+    /**
+     * THE ONE THING THAT WOULD BREAK QUIETLY, RE-AIMED. `boardActions` is
+     * still rendered by the BRANCH — so a branch that forgets it loses
+     * Refresh all. The view strip is no longer its job: it moved into
+     * `PageHeader`'s `tabs` slot with the 4 September re-theme, which is above
+     * every branch and therefore cannot be forgotten by one. What this asserts
+     * now is exactly that split.
+     */
+    const branch = page.slice(page.indexOf('{!emptyWorkspace && activeKind === "calendar" ? ('));
+    const head = branch.slice(0, branch.indexOf("<CalendarBoard"));
+    expect(head, "the strip belongs to the header now, not to this branch").not.toMatch(/\{viewStrip\}/);
+    expect(head).toMatch(/\{boardActions\}/);
+    expect(page).toMatch(/tabs=\{viewStrip\}/);
+  ```
+
+  And replace:
+
+  ```ts
+    expect(board).toMatch(/className=\{PERIOD_TRACK\}/);
+    expect(page).toMatch(/className=\{PERIOD_TRACK\}/);
+  ```
+
+  with:
+
+  ```ts
+    // THE GROOVE IS THE CALENDAR'S ALONE NOW. The board's own time control is
+    // still `PERIOD_TRACK` — a month stepper is a segmented control and reads
+    // as one — while the range control it used to line up with became the
+    // Figma's "Today" dropdown. The drift this guards is unchanged in kind:
+    // neither may re-spell what the other imports.
+    expect(board).toMatch(/className=\{PERIOD_TRACK\}/);
+    expect(page).toMatch(/<RangeMenu/);
+  ```
+
+  (The `it` above it is renamed from `"sits in the SAME groove the period pills
+  do, imported not re-spelled"` to `"keeps the month stepper in the imported
+  groove, beside the header's own dropdown"`, and its docblock's last sentence —
+  "`BOARD_GRID` is spelled once for the same reason one layout down." — is kept
+  as is.)
+
+- [ ] **Step 2 — run them, confirm they fail**
+
+  ```bash
+  pnpm vitest run tests/dashboard-page-header.test.ts tests/calendar-view.test.ts
+  ```
+
+  Expected failure: every `it` in the new file fails — `PageHeader` gets no
+  `tabs`, both boards still render `{viewStrip}`, the page still spells
+  `PERIOD_TRACK`, there is no `RangeMenu`, and `AddChartMenu` is still
+  `variant="white" size="sm"`. In `calendar-view.test.ts` the two re-pinned
+  assertions fail for the mirror-image reason: the calendar branch DOES still
+  render `{viewStrip}` and the page DOES still spell `className={PERIOD_TRACK}`.
+
+- [ ] **Step 3 — implement: `RangeMenu` in `board-controls.tsx`**
+
+  Add the icons and the menu primitives to the imports. Replace:
+
+  ```tsx
+  import { Copy as CopyIcon, MoreHorizontal, PenLine, Trash2 } from "lucide-react";
+  ```
+
+  with:
+
+  ```tsx
+  import { CalendarDays, ChevronDown, Copy as CopyIcon, MoreHorizontal, PenLine, Trash2 } from "lucide-react";
+  ```
+
+  and add, immediately after the existing `import { Button } from "@/components/ui/button";` line:
+
+  ```tsx
+  import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuRadioGroup,
+    DropdownMenuRadioItem,
+    DropdownMenuTrigger,
+  } from "@/components/ui/dropdown-menu";
+  ```
+
+  Then add `RangeMenu` immediately after the `RangeLink` function (which stays
+  exactly as it is — the calendar's own controls and any future segmented use
+  still want it):
+
+  ```tsx
+  /**
+   * THE PERIOD CONTROL, AS ONE DROPDOWN RATHER THAN SIX PILLS.
+   *
+   * The six were a segmented track sitting in the page header's right slot,
+   * and they were a ~520px control that could not wrap — it carried its own
+   * horizontal scroller specifically so a 390px viewport would not push the
+   * whole page sideways. The 4 September Figma draws the same six answers as
+   * a 24px-high dropdown reading "Today", which is the same information in a
+   * tenth of the width and takes the scroller's problem off the page rather
+   * than managing it.
+   *
+   * WHAT DID NOT CHANGE IS THE MECHANISM. The range still lives in the URL:
+   * each item pushes `?range=<key>` through `useBoard()`'s `go`, so the tiles
+   * still swap to skeletons on the press, the server still answers, and a
+   * link someone pastes into Slack still opens on the range it was copied
+   * from. Only the shape of the control moved.
+   *
+   * A RADIO GROUP, NOT A LIST OF ITEMS, because the six are mutually
+   * exclusive and exactly one of them is true — which is what a radio item
+   * says to a screen reader and what an ordinary menu item does not.
+   *
+   * `options` arrives as DATA rather than as a callback: this is a client
+   * component rendered by a server one, and a function prop does not cross
+   * that boundary. The page builds each `href` with its own `qs()` helper,
+   * which is where every other link on the board gets one.
+   */
+  export function RangeMenu({
+    options,
+    activeRange,
+  }: {
+    options: { key: string; label: string; href: string }[];
+    activeRange: string;
+  }) {
+    const { pending, go, picked } = useBoard();
+    // The optimistic answer is only trusted WHILE the transition is in
+    // flight, exactly as `RangeLink` does it — a failed or redirected
+    // navigation must not leave the trigger reading a range nobody is on.
+    const active = pending && picked?.dim === "range" ? picked.key : activeRange;
+    const label = options.find((o) => o.key === active)?.label ?? options[0].label;
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          {/* `xs` with the icons pushed to 16px: the rung ships
+              `[&_svg]:size-3.5`, and the export draws 16. The override is on
+              the button because the size variant's own descendant rule beats
+              a class on the svg whichever order they are written in. */}
+          <Button
+            variant="secondary"
+            size="xs"
+            className="[&_svg]:size-4"
+            aria-label={`Period — ${label}`}
+          >
+            <CalendarDays aria-hidden />
+            <span>{label}</span>
+            <ChevronDown aria-hidden />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-44">
+          <DropdownMenuRadioGroup
+            value={active}
+            onValueChange={(key) => {
+              const chosen = options.find((o) => o.key === key);
+              if (chosen) go(chosen.href, { dim: "range", key });
+            }}
+          >
+            {options.map((o) => (
+              <DropdownMenuRadioItem key={o.key} value={o.key}>
+                {o.label}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+  }
+  ```
+
+- [ ] **Step 4 — implement: `src/app/dashboard/page.tsx`**
+
+  **4a. Imports.** Replace:
+
+  ```tsx
+  import { PageContainer, PageHeader, PERIOD_PILL, PERIOD_TRACK } from "@/components/ui/page";
+  ```
+
+  with:
+
+  ```tsx
+  import { PageContainer, PageHeader } from "@/components/ui/page";
+  ```
+
+  and replace:
+
+  ```tsx
+  import { BoardControls, RangeLink, TileArea, ViewStrip, ViewTitle } from "./board-controls";
+  ```
+
+  with:
+
+  ```tsx
+  import { BoardControls, RangeMenu, TileArea, ViewStrip, ViewTitle } from "./board-controls";
+  ```
+
+  **4b. The orphaned track prose.** The block that argued for the segmented
+  control has no code under it any more. Replace the whole doc comment that
+  begins:
+
+  ```tsx
+  /**
+   * The range control, worn by links — range lives in the URL, so these stay
+   * anchors rather than becoming the Chip button.
+  ```
+
+  and ends:
+
+  ```tsx
+   * The classes themselves now live on the `RangeLink` call below, because the
+   * ACTIVE one is decided per press rather than per render — see
+   * board-controls.tsx.
+   */
+  ```
+
+  with:
+
+  ```tsx
+  /**
+   * THE RANGE CONTROL IS A DROPDOWN NOW — see `RangeMenu` in
+   * board-controls.tsx, which is where its markup and its argument both live.
+   *
+   * What stood here was the case for a SEGMENTED TRACK: eleven free-floating
+   * chips across two filter dimensions had wrapped onto a second line and
+   * orphaned the last two sources, so sitting the ranges in one groove made
+   * them read as one control with one answer. That was right against loose
+   * chips and it is not what the 4 September Figma draws — six pills is a
+   * ~520px object in a header slot, carrying its own horizontal scroller so a
+   * narrow viewport would not push the page sideways, and a dropdown answers
+   * the same question in a tenth of the width with no scroller to carry.
+   *
+   * The range still lives in the URL; the source filter is still gone; the
+   * press still lands optimistically through `BoardControls`. Only the shape
+   * changed.
+   */
+  ```
+
+  **4c. The header itself.** Add the `tabs` slot and swap the actions. Replace:
+
+  ```tsx
+        <PageHeader
+          title={
+  ```
+
+  with:
+
+  ```tsx
+        <PageHeader
+          /* THE THIRD ZONE, AND THE WHOLE REASON THE TITLE CENTRES.
+             The view strip used to be the first thing inside the BOARD, one
+             row below this header, which meant the top of the page read as a
+             title band and then a tab band. The Figma draws one row: tabs
+             left, the view's name centred, the actions right. `PageHeader`
+             grew a `tabs` slot for exactly this, and passing it is what
+             switches the component into its three-zone grid — no other route
+             passes it, and every other route is untouched. */
+          tabs={viewStrip}
+          title={
+  ```
+
+  and replace the entire non-calendar branch of the `actions` value — from:
+
+  ```tsx
+            /* ── THE PERIOD CONTROL ────────────────────────────────────────
+  ```
+
+  through the end of that branch:
+
+  ```tsx
+            <div className="-mx-1 min-w-0 overflow-x-auto px-1">
+              {/* The groove is `PERIOD_TRACK` now, imported rather than spelled:
+                  the calendar's month stepper sits in the same slot and has to
+                  be the same object, not a second one that looks like it. */}
+              <div className={PERIOD_TRACK}>
+                {RANGE_OPTIONS.map((r) => (
+                  // The press lands NOW: the pill lights and the tiles become
+                  // skeletons while this page re-renders, instead of a second
+                  // of nothing over numbers that answer the old range.
+                  <RangeLink
+                    key={r.key}
+                    href={qs({ range: r.key })}
+                    rangeKey={r.key}
+                    activeRange={rangeKey}
+                    className={PERIOD_PILL}
+                    activeClassName="bg-primary text-primary-foreground"
+                    /* Hover reaches for `--ground-ink`, which is the page's own
+                       ink at both exposures — white on the dark group, near-
+                       black on the white one. `--foreground` would have been
+                       wrong in exactly one theme, which is the kind of bug that
+                       ships. */
+                    idleClassName="text-muted-foreground hover:text-foreground"
+                  >
+                    {r.label}
+                  </RangeLink>
+                ))}
+              </div>
+            </div>
+            )
+  ```
+
+  with:
+
+  ```tsx
+            /* ── THE PERIOD CONTROL ────────────────────────────────────────
+               ONE DROPDOWN, SIX ANSWERS, AND THE SAME URL UNDERNEATH. The
+               track that stood here is gone (see the note above `boardActions`
+               for why); what replaces it says the current range on its face
+               and opens the other five. `RANGE_OPTIONS` is still the list, and
+               each `href` is still `qs()`'s, so nothing about which numbers a
+               link opens on has changed.
+
+               The scroller went with it, and that is the point rather than a
+               side effect: a ~520px control in this slot could only survive a
+               390px viewport by scrolling inside itself, and the header's
+               right column had to stop being `shrink-0` to let it. A 24px
+               dropdown needs neither. */
+            <RangeMenu
+              activeRange={rangeKey}
+              options={RANGE_OPTIONS.map((r) => ({ key: r.key, label: r.label, href: qs({ range: r.key }) }))}
+            />
+            )
+  ```
+
+  **4d. The calendar branch's own row**, which no longer holds the strip.
+  Replace:
+
+  ```tsx
+            <div className="flex items-center justify-between gap-4">
+              {viewStrip}
+  ```
+
+  with:
+
+  ```tsx
+            {/* `justify-end`, not `justify-between`: the left half of this row
+                was the view strip, and the strip is in the page header now. */}
+            <div className="flex items-center justify-end gap-4">
+  ```
+
+  **4e. The empty-workspace note**, which names where the strip renders.
+  Replace:
+
+  ```
+            Most of that is free: `viewStrip` and `boardActions` are rendered
+            INSIDE `BoardLayout`/`CustomBoard`, which live inside `TileArea`, so
+            not taking that branch already removes the strip, the `+`, New group,
+            All sources and Refresh all. `PageHeader` is the only chrome that
+            survived the old empty path, and this is what removes it.
+            `BoardControls` is skipped with it. It is a context provider that
+            emits no DOM, and nothing here calls `useBoard()` — `RangeLink`,
+            `ViewTab` and `TileArea` are its only consumers now and
+            none of them render in this branch.
+  ```
+
+  with:
+
+  ```
+            Most of that is free: `boardActions` is rendered INSIDE
+            `BoardLayout`/`CustomBoard`, which live inside `TileArea`, so not
+            taking that branch already removes the `+`, New group and Refresh
+            all. `PageHeader` carries the view strip and the period dropdown,
+            and skipping the header is what removes those two.
+            `BoardControls` is skipped with it. It is a context provider that
+            emits no DOM, and nothing here calls `useBoard()` — `RangeMenu`,
+            `ViewTab` and `TileArea` are its only consumers now and
+            none of them render in this branch.
+  ```
+
+- [ ] **Step 5 — implement: the two boards stop drawing the strip**
+
+  **`src/app/dashboard/board-layout.tsx`.** Remove `viewStrip` from the
+  destructuring list (the bare `  viewStrip,` line between `viewId,` and
+  `boardActions,`), and remove its type entry together with the doc comment
+  above it — the block from `   * The view tabs, rendered on the SERVER and
+  passed through` down to and including `  viewStrip?: ReactNode;`.
+
+  In the `boardActions` doc comment that follows, replace:
+
+  ```
+   * They arrive as a node for exactly the reason `viewStrip` does: the source
+  ```
+
+  with:
+
+  ```
+   * They arrive as a node for the reason the tiles do: the source
+  ```
+
+  Replace the row's opening argument:
+
+  ```
+          WHICH VIEW on the left, WHAT IS ON IT on the right, and everything
+          here is about THIS BOARD. The one question that is not — over what
+          period — moved up to the page header, where it sits beside the title
+          as the pill group. One question per row, which is what lets a reader
+          stop looking for the third control.
+  ```
+
+  with:
+
+  ```
+          WHAT IS ON THIS BOARD, and nothing else. Both of the other questions
+          moved up to the page header with the 4 September re-theme: WHICH VIEW
+          is the tab strip in the header's own `tabs` slot, and OVER WHAT PERIOD
+          is the "Today" dropdown in its actions. What is left here acts on the
+          board in front of you — New group, Refresh all — which is one question
+          per row taken to its end rather than abandoned.
+  ```
+
+  Replace the guard:
+
+  ```tsx
+      {(viewStrip || boardActions || canEdit) && (
+  ```
+
+  with:
+
+  ```tsx
+      {(boardActions || canEdit) && (
+  ```
+
+  and replace the strip's own cell:
+
+  ```tsx
+          <div className="min-w-0 flex-1">{viewStrip}</div>
+  ```
+
+  with:
+
+  ```tsx
+          {/* THE LEFT HALF IS EMPTY ON PURPOSE, and it is a spacer rather than
+              a deletion: `justify-between` needs something to push against, and
+              a flexible cell here keeps the actions on the right edge whether
+              or not they wrap. The tabs it used to hold are in the page header. */}
+          <div className="min-w-0 flex-1" />
+  ```
+
+  **`src/app/dashboard/custom-board.tsx`.** The same three removals. Take
+  `  viewStrip,` out of the destructuring list, and delete its type entry with
+  the comment above it — the block from `   * The same tabs the groups board
+  wears.` down to and including `  viewStrip?: ReactNode;`. In the
+  `boardActions` comment below it, replace:
+
+  ```
+   * The source picker and Refresh all — the same pair the groups board wears,
+   * for the same reason the strip above is shared: a view's promise is that
+   * moving between kinds does not move the furniture. Server markup, passed
+   * through; see the note on `boardActions` in board-layout.tsx.
+  ```
+
+  with:
+
+  ```
+   * The source picker and Refresh all — the same pair the groups board wears.
+   * A view's promise is that moving between kinds does not move the furniture,
+   * and the tabs that promise is mostly about now live in the page header,
+   * above both boards. Server markup, passed through; see the note on
+   * `boardActions` in board-layout.tsx.
+  ```
+
+  Replace the row's opening comment:
+
+  ```
+      {/* The tab / action row, in the same place and shape the groups board
+          puts it: the view strip on the left, the board's own controls on the
+          right. On a canvas the arrangement door reads "Add" rather than "New
+          group", and it takes the same first position in the right-hand group
+          — arrangement, then filter, then the yellow act on the outside edge.
+  ```
+
+  with:
+
+  ```
+      {/* The action row, in the same place and shape the groups board puts it:
+          the board's own controls on the right, the left half a spacer since
+          the view strip moved into the page header. On a canvas the
+          arrangement door reads "Add" rather than "New group", and it takes
+          the same first position in the right-hand group.
+  ```
+
+  and replace the strip's cell:
+
+  ```tsx
+        <div className="min-w-0 flex-1">{viewStrip}</div>
+  ```
+
+  with:
+
+  ```tsx
+        {/* Empty spacer — see the same note in board-layout.tsx. */}
+        <div className="min-w-0 flex-1" />
+  ```
+
+  Finally, promote the Add button. Replace:
+
+  ```tsx
+          <Button variant="white" size="sm" onClick={() => setOpen(!open)} disabled={busy} aria-haspopup="menu" aria-expanded={open}>
+  ```
+
+  with:
+
+  ```tsx
+          {/* THE BRAND IS SPENT HERE, AND ON "New flow", AND NOWHERE ELSE.
+              `variant="white"` was a bordered chip from the light-page era —
+              on three near-black surfaces it is a white slab beside two grey
+              buttons. The Figma fills this one: it is the control that ADDS
+              something, which is the whole of the rule the re-theme replaced
+              "at most one yellow per screen" with. `accent` IS the brand fill
+              (`bg-primary` under `text-primary-foreground`); the kit has no
+              variant literally named `primary`. `xs` with a 16px glyph, the
+              same rung and the same override as "Refresh all" beside it. */}
+          <Button variant="accent" size="xs" className="[&_svg]:size-4" onClick={() => setOpen(!open)} disabled={busy} aria-haspopup="menu" aria-expanded={open}>
+  ```
+
+- [ ] **Step 6 — run it green**
+
+  ```bash
+  pnpm vitest run tests/dashboard-page-header.test.ts tests/calendar-view.test.ts tests/page-header.test.ts tests/board-controls.test.ts
+  ```
+
+  All four pass. `page-header.test.ts` (Task 5's) is re-run because this is the
+  first caller of the `tabs` prop it defined; `board-controls.test.ts` because
+  `RangeMenu` lands in the file it imports from and `RangeLink` must still be
+  exported and behave exactly as it did.
+
+- [ ] **Step 7 — gate**
+
+  ```bash
+  pnpm typecheck && pnpm vitest run tests/dashboard-page-header.test.ts tests/calendar-view.test.ts tests/page-header.test.ts tests/board-controls.test.ts tests/board-canvas-render.test.ts tests/board-shape.test.ts tests/dashboard-empty.test.ts && pnpm check:ui
+  ```
+
+  `typecheck` is what catches a half-removed prop: `noUnusedLocals` fails on a
+  destructured `viewStrip` nothing reads, and the two boards' call sites in
+  `page.tsx` fail on a prop their types no longer declare. `check:ui` passes —
+  `RangeMenu` uses kit primitives and no raw `<button>`, and `[&_svg]:size-4`
+  is a size utility rather than a radius or a colour.
+
+- [ ] **Step 8 — commit**
+
+  ```bash
+  git add src/app/dashboard/board-controls.tsx src/app/dashboard/page.tsx src/app/dashboard/board-layout.tsx src/app/dashboard/custom-board.tsx tests/dashboard-page-header.test.ts tests/calendar-view.test.ts
+  git commit -m "$(cat <<'EOF'
+  Assemble the dashboard's header: tabs, a centred title, and a Today menu
+
+  PageHeader's `tabs` slot has had no caller since it was added; this is it.
+  The view strip moves out of BoardLayout and CustomBoard into the header,
+  which switches the component into the Figma's three-zone row — strip left,
+  the view's own name centred, the actions right. The six-pill period track
+  becomes a secondary xs "Today" dropdown listing the same six presets and
+  selecting them the same way, through ?range= in the URL, which also takes
+  a 520px control and its horizontal scroller off a 390px viewport. "+ Add"
+  moves from the light-era white chip to the brand fill at the same xs rung
+  as Refresh all beside it.
+
+  Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+  EOF
+  )"
+  ```
 
 ---
 
@@ -4015,21 +4839,36 @@ EOF
   Step numbers stay labels for the ladder, not a promise of visual distance —
   **925 on 950 measures 1.01:1** and **900 on 950 measures 1.07:1**, both
   tighter than the single 1.14:1 step the cyan console ran between its one
-  surface and its cards. `neutral-300` — the fourth ink step, "descriptions,
-  captions" — is no longer named as a role: the Figma's own ink ramp is two
-  values, not four, and carrying a third would be inventing a distinction the
-  source does not draw (see the retired-token table below). **500 is still the
-  last step a LINE may be drawn in and 450 a caps-label-only step; 400 is the
-  first that TEXT may be set in.** The gap that used to run 500→400 now runs
-  500→450→400, and 450 is deliberately narrow: a section label reads at it, a
-  sentence must not.
+  surface and its cards. **500 is still the last step a LINE may be drawn in
+  and 450 a caps-label-only step; 400 is the first that TEXT may be set in.**
+  The gap that used to run 500→400 now runs 500→450→400, and 450 is
+  deliberately narrow: a section label reads at it, a sentence must not.
+
+  `neutral-300` (`#B5B5B5`), `neutral-100` (`#E5E5E5`) and `neutral-50`
+  (`#FAFAFA`) keep their definitions and are re-cut with the rest of the
+  ladder. No ROLE reads them any more — the Figma's own ink is two values, so
+  `--muted-foreground` sits at 400 and nothing needs a third — but four files
+  still spell them directly: `ui/scroll-area.tsx`'s thumb, `ui/switch.tsx`'s off
+  track, `ui/button.tsx`'s `white` variant, and the flow builder's
+  `node-meta.ts`, which is out of scope. Deleting a colour token out from under
+  a live class is the "renders with no colour at all" failure §11's retired-token
+  rule exists to punish, so they stay — orphaned by the roles, not retired.
+
+  **Depth, and the sentence this kit no longer says.** "A control recesses from
+  a card" was true of one theme and stated as a rule about both. What actually
+  holds is that the two directions MIRROR: on dark, a field on the `#111111`
+  chrome is a step UP (`--control` `#202020`) and its hover a further step up
+  (`--accent` `#333333`); on light a field on white is a step DOWN (`#F4F4F4`)
+  and its hover a further step down (`#ECECEC`). Neither is "recessed", and the
+  Figma contradicts the old wording outright on the dark side.
 
   Shadows: `--shadow-card` is `0 1px 2px rgb(0 0 0 / .20), 0 0 3px rgb(0 0 0 /
   .10)` — the Figma's own card shadow, unchanged by theme. Card radius stays
   10px; controls 8px (§4); `--radius-frame` comes back at 8px — the panel's
-  top-left corner meets the top bar beside a rail whose chrome is a genuinely
-  different colour again, which is exactly the condition the frame token
-  existed for and lost two days ago when the whole shell became one surface.
+  top-RIGHT corner, under the top bar at the end of the row away from the rail,
+  now that the panel and the chrome are genuinely different colours again,
+  which is exactly the condition the frame token existed for and lost two days
+  ago when the whole shell became one surface.
 
   ### The light theme (`:root`), from the Figma's light export
 
@@ -4041,10 +4880,16 @@ EOF
   | control outline (`--input`) | `#E4E4E4` | — |
   | `--control` (search box, active nav row) | `#F4F4F4` | — |
   | `--secondary` | `#FFFFFF` with a `--input` outline — the Figma's own grey buttons are white with an `#E4E4E4` edge | — |
+  | `--secondary-foreground` (that button's TEXT) | `#303030` | **13.2:1** on white |
+  | icon ink, where a glyph sets its own | `#4A4A4A` | **8.86:1** on white, measured directly — the Figma export's own figure of 8.4:1 is a hair off, most likely a rounding pass on their side. It is a per-glyph choice, not the `--secondary-foreground` role: a label and its icon are two decisions and the export makes them differently |
   | `--foreground` / `--heading` | `#000000` / `#313131` (page title, workspace name) | — |
   | `--muted-foreground` | `#6B6B6B` — the Figma's own `#8E8E8E` measures **3.28:1** on white, short of the 4.5:1 body text owes; `#6B6B6B` clears **5.33:1** on white and **5.01:1** on `#F7F8F9` |
   | `--faint` (caps label) | `#8E8E8E` — the Figma's own `#BABABA` measures **1.94:1**, unreadable at any size | 3.28:1, caps label only |
-  | icon ink on grey buttons | `#4A4A4A` | **8.86:1** on white, measured directly — the Figma export's own figure of 8.4:1 is a hair off, most likely a rounding pass on their side |
+  | `--avatar` (the bell and avatar circles) | `#FFFFFF` with the `--input` outline — the light export finds these by their edge, where dark finds them by a `#3A3A3A` fill | — |
+  | `--muted` (fill) | `#F4F4F4` — the same step as `--control` | — |
+  | `--accent` (hover) | `#ECECEC` — one further step down; see the depth note above | — |
+  | `--rule` (heavier control edge) | `#CFCFCF` — one clear step darker than `--border`, the relationship `#4A4A4A` has to `#343434` in dark | — |
+  | `--popover` / `--popover-foreground` | `= --card` / `= --card-foreground`, in BOTH themes — a menu is a card that floats, and pointing rather than repeating is what stops the two drifting | — |
   | `--primary` / `--marker` | `#0070E8` / `#0062CC` | see the brand ramp above |
   | `--success` etc. | unchanged (`#00734B` trio) | 5.91:1 on white |
   | `--freshness-dot` | `#34C759` on `rgb(0 212 146 / .15)` | 8.51:1 on `#111111`; on white the dot keeps its halo — flat `#34C759` alone measures **2.22:1** on white, so the halo is load-bearing there, not decorative |
@@ -4069,7 +4914,12 @@ EOF
   | `.focus-ring-light` | the global ring | the product's ring was invisible on the one dark surface |
   | cyan `brand-500`/`brand-600` (`#00CDF5`/`#00C0E8`) | `brand-500`/`brand-600` at `#007BFF`/`#0070E8` | **not a dead class** — the 4 September 2026 Figma named a different blue two days after this ramp last moved. Recorded here anyway because a class surviving under a new value is the "plausible and wrong" case this table exists to catch in the DOCS, not the code |
   | `rounded-full` on `buttonVariants`'s base class | `rounded-control` | **not a dead class either** — the shape rule flipped to a pill and back for the second time (§4); `rounded-full` still compiles on purpose (avatars, the bell badge, the freshness dot, the active-count numeral), so this row is a paper trail for the next flip rather than a dead-class warning |
-  | `neutral-300` as a named role ("descriptions, captions") | `neutral-400` (muted text) or `neutral-200` (body/heading) | the Figma draws two ink greys, not four; carrying a third was inventing a distinction the source does not |
+
+  `neutral-300`, `neutral-100` and `neutral-50` are deliberately NOT in that
+  table. No role reads them any longer, which is a different thing from being
+  retired: four files still spell them as classes, so the tokens keep their
+  definitions and were re-cut with the rest of the ladder. A row here would
+  invite exactly the deletion §11 exists to prevent.
 
   ### State
 
@@ -4127,11 +4977,12 @@ EOF
 
 **Files**
 - Modify: `docs/BRAND_KIT.md`
+- Modify: `scripts/check-ui.ts` (one stale comment; **no rule changes** — see Step 9)
 - Modify: `tests/retheme-blue-docs.test.ts`
 
 **Interfaces**
 - Consumes: `docs/BRAND_KIT.md` §2 as rewritten by the prior task (for the surface/ramp facts these sections reference); the spec's Type, Shape, Layout, Components, Tiles-and-charts and Docs-and-enforcement sections.
-- Produces: §3 (numeral 28px, `.wordmark`), §4 (8px/no-pill, final), §5 (top bar wordmark, rail dressing), §6 (component-level token facts), §9 (brand-series chart colours, tile edge removed from default board), §11 (retired-token additions narrated).
+- Produces: §3 (numeral 28px, `.wordmark`, one weight exception and not two), §4 (8px/no-pill, final; the frame's top-right corner), §5 (top bar wordmark and no setup ring, rail dressing), §6 (component-level token facts, and the header's three actions), §9 (brand-series chart colours, the 12% wash, the tile edge removed from the default board), §11 (the cyan and `rounded-full` rows narrated, and the finding that `check-ui.ts` itself needs no rule change).
 
 - [ ] **Step 1 — extend the failing test**
 
@@ -4235,9 +5086,12 @@ EOF
   above 600 anywhere in the kit, and it earns the exemption for one reason —
   the Figma names Inter 900 for exactly one string in the whole export, and a
   kit that has never bent its own never-700 rule does not get to bend it
-  quietly now. `scripts/check-ui.ts`'s `font-bold` ban allow-lists `.wordmark`
-  by name. It sits in the top bar's left slot now — the rail's mark moved out
-  with it (§5).
+  quietly now. The weight is declared in the CSS class, never as a
+  `font-black` utility at a call site, which is what keeps the exception
+  contained: `scripts/check-ui.ts` reads `.tsx` and never `.css`, so its
+  `font-bold` ban still fails the build on any heavy weight anywhere in the
+  app and needs no allow-list entry — one rule, one file, no widening. It sits
+  in the top bar's left slot now; the rail's mark moved out with it (§5).
 
   **No new caption step.** The Figma's header actions ("+ Add", "Today",
   "Refresh All") set 12px/550, and its own body copy's inspector reports
@@ -4256,13 +5110,15 @@ EOF
   ```
   NEW:
   ```
-  **One name per size**, enforced (§11). Weights are **400 / 500 / 600 — plus,
-  now, two named exceptions and nothing else.** `.wordmark` is one, at 900
-  (above). The rail's workspace-switcher badge is the other: its initial sets
-  at 13px/**700**, because a one-character badge is not prose and the rule
-  this file has never bent was always about text. Every other request for 700
-  or 900 either Figma export made — and both made several — shipped at 500 or
-  600 regardless.
+  **One name per size**, enforced (§11). Weights are **400 / 500 / 600 — plus
+  exactly ONE named exception.** `.wordmark` is it, at 900 (above), and it is
+  one because the Figma names a face and a weight for that single string and
+  for nothing else. The rail's workspace-switcher badge was considered as a
+  second and refused: its initial ships at 13px/**600** (`font-semibold`),
+  because "a one-character badge is not prose" is an argument that would let
+  every badge in the product off, and the kit's top weight already reads as a
+  badge at 13px. Every other request for 700 or 900 either Figma export made —
+  and both made several — ships at 500 or 600 regardless.
   ```
 
 - [ ] **Step 4 — implement: §4 Shape & elevation, full rewrite**
@@ -4300,9 +5156,12 @@ EOF
   nothing, which was true of a single-surface shell. The panel this Figma
   draws is `#181818`, meeting a top bar and a rail that are genuinely
   `#111111` — a real, if narrow, colour change — so the frame token has
-  somewhere to point again. It rounds the panel's top-left corner — the one
-  nearest the rail — regardless of whether the rail is at rest or open;
-  nothing about the top bar's own corners changes. See Layout (§5).
+  somewhere to point again. It rounds the panel's **top-RIGHT** corner, under
+  the bar at the end of the row away from the rail; the rail-side corner stays
+  square, and nothing about the top bar's own corners changes. That reverses
+  the convention every earlier era of this shell used (`rounded-tl-frame`, the
+  corner nearest the rail) and it is the export read literally rather than
+  corrected toward habit. See Layout (§5).
 
   **Shadows barely exist here, still.** `--shadow-card` is now the Figma's
   own card shadow — `0 1px 2px rgb(0 0 0 / .20), 0 0 3px rgb(0 0 0 / .10)` —
@@ -4329,16 +5188,23 @@ EOF
   Centre: "Welcome back{, name}!". Right: Invite members and New flow as
   `secondary` 32px buttons with 16px icons, the bell (a 32px `--avatar`
   circle with its badge count), the avatar circle (initials, 13px/600).
-  `#topbar-slot` and `#topbar-status` — the two portals the flow builder's
-  own chrome uses — are unchanged; the builder's toolbar still lands in the
-  same bar, it is just a bluer, three-surfaced bar underneath it now.
+  **No metrics-setup ring.** The export has none, and the progress it
+  reported is already on the dashboard's own setup checklist with room to say
+  what to do next — a 24px arc in the chrome was the same claim with no room
+  for the second half. The arc, its `METRIC_GOAL` cap and the whole
+  `metricCount` chain that fed it (page → `AppShell` → `AppFrame` → `TopBar`)
+  came out together. `#topbar-slot` and `#topbar-status` — the two portals the
+  flow builder's own chrome uses — are unchanged; the builder's toolbar still
+  lands in the same bar, it is just a bluer, three-surfaced bar underneath it
+  now.
 
   **The rail's dressing changed; its behaviour did not (decision 3).** It is
   still a hover rail: 56px of icons at rest on `--chrome`, opening in place
   to 260px. What used to be a bare icon column now expands into, top to
   bottom: a workspace switcher row (a 28px `rounded-control` square tinted
-  `rgb(0 123 255 / .75)` carrying the initial in white at 13px/700 — the
-  exception §3 names — the workspace name at 15px/600, and a chevron), a
+  `rgb(0 123 255 / .75)` carrying the initial in white at 13px/**600** — the
+  kit's own top weight; the export's 700 here is one of the several §3 does
+  not follow — the workspace name at 15px/600, and a chevron), a
   search field styled exactly like a real `Input` (`--control` fill,
   `--border` outline, a magnifier, "Search", a ⌘K hint) that opens the same
   command palette a real search box would, a "Main Menu" caps label in
@@ -4353,11 +5219,13 @@ EOF
 
   **The panel takes the corner, not the frame.** `AppFrame` renders the top
   bar above a row of `[rail | panel]`; the panel is `--panel` with an 8px
-  top-left corner where it meets the top bar beside the rail — the one
-  corner in the shell where three different surfaces (bar, rail, panel)
-  meet at once. `shell-skeleton.tsx` mirrors the geometry by hand, same as
-  it always has, and `tests/page-width.test.ts` is the pin that keeps the
-  mirror honest.
+  **top-right** corner under the bar, and a square top-left where it butts
+  against the rail behind a hairline. Every earlier era cut the rail-side
+  corner instead; this one follows the export, which softens the far end.
+  `shell-skeleton.tsx` mirrors the geometry by hand, same as it always has,
+  and `tests/page-width.test.ts` is the pin that keeps the mirror honest —
+  including a negative assertion on `rounded-tl-frame`, because a convention
+  that old comes back on its own otherwise.
   ```
 
 - [ ] **Step 6 — implement: §6 Components, append token-level facts**
@@ -4371,29 +5239,42 @@ EOF
   **What this pass actually touches in these files, without changing what any
   of them mean:** `Button`'s base class carries `rounded-control` rather than
   `rounded-full` (§4); its `secondary` variant paints `bg-secondary
-  text-secondary-foreground` and, in the light theme only, adds an `--input`
-  outline — the Figma's own grey buttons are white with a hairline edge, not
-  a filled grey; `accent` and `primary` both fill with `--primary` under
-  white ink. Sizes are untouched — 32px is still the default height, in both
-  themes, for every one of the eleven variants. `Card` fills with `--card`,
-  edges with `--border`, and floats on `--shadow-card`, all three carrying
-  new values from §2 without a line of the component changing. `Tabs`' line
-  variant draws its active rule from `--rule` — the heavier control-edge
-  step, not the hairline itself — and keeps 8px corners. `Avatar`'s fallback
-  initials and its group-count overflow chip both fill with `--avatar` now,
-  the same token, so a stack of avatars and the "+3" that follows it are one
-  material. `Input`'s `Textarea` takes `rounded-control` — the comment above
-  it used to say 8px while the class read something else, resolved toward
-  the comment — and its two stale `9999px` comments (left over from the
+  text-secondary-foreground` with an `--input` outline — the Figma's own grey
+  buttons are white with a hairline edge in light, a `#333333` fill in dark,
+  and `--input` aliases `--border` there so the one spelling covers both. The
+  brand fill is the `accent` variant (`bg-primary` under
+  `text-primary-foreground`); there is no variant literally named `primary`,
+  and prose that says "primary button" means this one. Sizes are untouched —
+  32px is still the default height in both themes — and `xs` (24px, 13px
+  type, 14px glyphs) is the header row's rung, with a `[&_svg]:size-4`
+  override wherever the export draws 16px icons on it. `Card` fills with
+  `--card`, edges with `--border`, and floats on `--shadow-card`, all three
+  carrying new values from §2 without a line of the component changing.
+  `Tabs`' line variant draws its active rule from `--rule` — the heavier
+  control-edge step, not the hairline itself — and keeps 8px corners.
+  `Avatar`'s fallback initials and its group-count overflow chip both fill
+  with `--avatar` now, the same token, so a stack of avatars and the "+3"
+  that follows it are one material. `Input`'s `Textarea` takes
+  `rounded-control`, and its two stale `9999px` comments (left over from the
   pill era before this one) are corrected to say what the class actually
   renders. `ui/page.tsx`'s `PERIOD_TRACK` and `PERIOD_PILL` both move to 8px
-  corners, and `PageHeader`'s title is centred — tab strip left (an active
-  tab at 15px/600 in `--heading` with a 1px `--muted-foreground` bottom rule
-  and a "…" menu; inactive tabs 15px/500, muted; a 28px `secondary` "+"
-  square), the title itself centred at 26px/600 with its pencil, and actions
-  on the right (a `primary` `xs` "+ Add"; `secondary` `xs` "Today" and
-  "Refresh All" with 16px icons — "Refresh All" keeps the `accent` variant it
-  already had, because blue is spent on "+ Add" and "New flow" only).
+  corners — the calendar's month stepper is what still wears them, and its
+  two arrows drop the `rounded-full` override that would have left circles
+  inside a rectangle. `Select` was already `rounded-control` on both its
+  trigger and its items: verified, not changed.
+
+  `PageHeader`'s title is centred whenever a caller passes the new `tabs`
+  slot — tab strip left (an active tab at 15px/600 in `--heading` with a 1px
+  `--muted-foreground` bottom rule and a "…" menu; inactive tabs 15px/500,
+  muted; a 28px `secondary` "+" square), the title itself centred at 26px/600
+  with its pencil, and the actions right. The dashboard is the one caller,
+  and its three actions are the export's: a **"Today" dropdown** (`secondary`
+  `xs`, a 16px calendar glyph, the selected preset's label, a chevron) in
+  place of the six-pill period track — same six presets, same `?range=` in
+  the URL, a tenth of the width and no horizontal scroller; **"+ Add"** on
+  the brand fill at `xs` with a 16px plus; and **"Refresh All"** `secondary`
+  `xs` with a 16px refresh glyph. Blue is spent on "+ Add" and "New flow",
+  and on nothing else in the header.
   ```
 
 - [ ] **Step 7 — implement: §9 Data visualization**
@@ -4412,13 +5293,20 @@ EOF
   **Marks are the BRAND now, not the marker.** The Figma's own chart draws
   its series in the same blue as its buttons: `--color-brand-500` (`#007BFF`)
   is the default series colour, an area fill under a line is `rgb(0 123 255 /
-  .12)`, a bar is `#007BFF` flat, and a comparison series (yesterday's line
-  beside today's) steps down to the ramp's 300 (`#66B2FF`) rather than a
-  second hue — "today vs yesterday" reads as one series at two strengths, not
-  two things competing for attention. Target-met stays `success`; bottleneck
-  stays `danger`; tracks stay `bg-muted`. Headline numbers per §3 — 28px now,
-  not 36. One `Sparkbars`/`TargetBar`/`GroupBars`/`Delta` implementation in
+  .12)` — which `Sparkbars` spells `bg-brand-500/12`, up from the 5% it had
+  inherited, keeping its 25% border — and a bar is `#007BFF` flat. Target-met
+  stays `success`; bottleneck stays `danger`; tracks stay `bg-muted`.
+  Headline numbers per §3 — 28px now, not 36, and inked with `--heading`
+  rather than inherited, which is the same white in dark and `#313131` in
+  light. One `Sparkbars`/`TargetBar`/`GroupBars`/`Delta` implementation in
   `src/components/charts.tsx`, shared by every tile.
+
+  **A comparison series steps down to the ramp's 300 (`#66B2FF`)** — one
+  series at two strengths, not two hues competing. *This row is documentation
+  and nothing else today*: nothing in the product plots a second series, so
+  there is no consumer to point at the token and none was invented to give
+  the line something to do. It is written here so the first chart that needs
+  one does not pick a colour.
 
   *Why the series left the marker.* The marker argument two days ago was
   that a bar is a shape read by its edge, with no ink of its own to carry
@@ -4501,9 +5389,57 @@ EOF
   The row exists because this is the shape rule's second flip (§4), and a
   rule that has flipped twice with no paper trail is a rule a third flip will
   not bother explaining either.
+
+  **AND `scripts/check-ui.ts` GAINS NOTHING, WHICH IS THE FINDING.** The
+  obvious move — "add the cyan names to the retired-token rule" — does not
+  apply, and it is worth writing down why so nobody adds them later. That rule
+  matches deleted TOKEN NAMES rendered as classes (`bg-ink-400`,
+  `text-marker-ink`), because an unresolved colour utility renders with no
+  colour at all and looks plausible. No name is retired here: `brand-500` and
+  `brand-600` both still exist and still compile — only their VALUES moved, and
+  a value cannot be caught by a rule that reads class names. The old cyan
+  HEXES, meanwhile, are already a build failure anywhere in a component under
+  the generic `hex literal` rule, which bans every `#xxxxxx` in `.tsx` outside
+  four named files. The `font-bold` ban needs no widening either: `.wordmark`
+  declares its 900 in CSS and `check-ui.ts` reads `.tsx` only (§3). The radius
+  set already keeps `full` for avatars, badges and dots (§4). So the cyan's
+  retirement is recorded in the table above — where a value that changed under
+  a name that did not actually belongs — and the gate is left alone.
   ```
 
-- [ ] **Step 9 — run it green**
+- [ ] **Step 9 — implement: one stale comment in `scripts/check-ui.ts`**
+
+  No rule changes, no allow-list entries, no new patterns. The file's retired
+  `yellow-as-stroke` block quotes the cyan hexes as the CURRENT brand, which
+  stops being true the moment Task 1 lands, and a gate that describes the
+  wrong palette is the same doc-rot this section is about.
+
+  Replace:
+
+  ```ts
+   * The measurement it was built on is gone. `--primary` is #00c0e8 and
+   * `--marker` is #00cdf5, both cyan, and on #1b191a the stroke step is 9.20:1
+   * — past what a line owes AND past what body text owes. The split it enforced
+   * has nothing left to keep apart, and the exemption it carried (top-bar.tsx's
+   * ring arc, "the one surface where the brand strokes at 8.77:1") is now every
+   * surface in the product.
+  ```
+
+  with:
+
+  ```ts
+   * The measurement it was built on is gone twice over now. Cyan (`--primary`
+   * #00c0e8, `--marker` #00cdf5) retired the rule on 2 September; the 4
+   * September Figma replaced the cyan itself, so `--primary` is #0070e8 and
+   * `--marker` is #3d9bff on dark and #0062cc on light. The split has nothing
+   * left to keep apart either way — the dark stroke step measures 6.65:1 on
+   * the page ground, past what a line owes AND past what body text owes. The
+   * exemption this rule carried (top-bar.tsx's ring arc, "the one surface
+   * where the brand strokes at 8.77:1") outlived it and then outlived the arc:
+   * the ring itself was deleted with the same re-theme.
+  ```
+
+- [ ] **Step 10 — run it green**
 
   ```bash
   pnpm vitest run tests/retheme-blue-docs.test.ts
@@ -4511,26 +5447,33 @@ EOF
 
   Expected: all eleven `it`s across both describe blocks pass.
 
-- [ ] **Step 10 — gate**
+- [ ] **Step 11 — gate**
 
   ```bash
   pnpm typecheck && pnpm vitest run tests/retheme-blue-docs.test.ts && pnpm check:ui
   ```
 
-- [ ] **Step 11 — commit**
+  `check:ui` is run here for the ordinary reason and one extra: this task edits
+  the gate's own source, so a typo in that comment block would surface as the
+  script failing to parse rather than as a violation.
+
+- [ ] **Step 12 — commit**
 
   ```bash
-  git add docs/BRAND_KIT.md tests/retheme-blue-docs.test.ts
+  git add docs/BRAND_KIT.md scripts/check-ui.ts tests/retheme-blue-docs.test.ts
   git commit -m "$(cat <<'EOF'
   Carry the blue re-theme through BRAND_KIT's type, shape, layout,
   components and enforcement sections
 
-  The tile numeral drops to 28px and gains a named wordmark exception;
-  every pressable control is 8px with no pill, named final against the
-  4 September 2026 Figma; the top bar now carries the wordmark and the
-  rail's dressing (not its hover behaviour) changes; charts default to
-  the brand rather than the marker; and the retired-token table records
-  the cyan ramp and rounded-full-on-buttons as two more rows.
+  The tile numeral drops to 28px and the wordmark is the kit's ONE weight
+  above 600 -- the rail's switcher badge ships at 600 rather than becoming
+  a second exception. Every pressable control is 8px with no pill, named
+  final against the 4 September 2026 Figma, and the frame's corner comes
+  back on the panel's top-RIGHT. The top bar carries the wordmark and no
+  setup ring; charts default to the brand rather than the marker at a 12%
+  wash. The retired-token table records the cyan ramp and
+  rounded-full-on-buttons, and §11 records why check-ui.ts needs no rule
+  change for either -- only one stale comment in it does.
 
   Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
   EOF
@@ -4733,13 +5676,16 @@ EOF
 
   **A badge is 4px. A card is 10px.**
 
-  **The frame is back.** `--radius-frame` was 0 two days ago because the
-  notch's whole argument — a radius reveals whatever sits behind it — had
-  nothing to reveal once the shell became one colour. It did not stay one
-  colour; see §2. The token is **8px** again, cutting the content panel's
-  top-left corner where it meets the top bar beside the rail, which is the
-  one place in the shell where three surfaces (bar, rail, panel) actually
-  meet.
+  **The frame is back, and on the other corner.** `--radius-frame` was 0 two
+  days ago because the notch's whole argument — a radius reveals whatever sits
+  behind it — had nothing to reveal once the shell became one colour. It did
+  not stay one colour; see §2. The token is **8px** again, cutting the content
+  panel's **top-right** corner under the top bar. Every earlier era cut the
+  top-LEFT, the corner nearest the rail, and the export does not: the panel
+  butts square against the rail behind a hairline and softens the far end
+  instead. Followed literally rather than corrected toward the older
+  convention, and pinned in `tests/page-width.test.ts` with a negative
+  assertion on `rounded-tl-frame` so the habit cannot return by itself.
 
   **Hairlines still carry structure; shadows still barely exist.** The card
   shadow is now the Figma's own value, `0 1px 2px rgb(0 0 0 / .20), 0 0 3px
@@ -4801,13 +5747,17 @@ EOF
   ```
   NEW:
   ```
-  Weights are 400 / 500 / 600 — plus, now, exactly two named exceptions.
-  `.wordmark` is one, at 900. The rail's workspace-switcher badge is the
-  other: its initial sets at 13px/700, because a one-character badge is not
-  prose and the rule this file has never bent was always about text. Every
-  other request for 700 or 900 either Figma export made shipped at 500 or
-  600 regardless — `check:ui` fails on `font-bold` for everything but these
-  two named classes.
+  Weights are 400 / 500 / 600 — plus exactly ONE named exception, and the
+  count matters more than the exception does. `.wordmark` is it, at 900,
+  because the Figma names a face and a weight for that one string and for
+  nothing else. The rail's workspace-switcher badge was the candidate for a
+  second and did not get it: its initial ships at 13px/600, since "a
+  one-character badge is not prose" would let every badge in the product
+  through and 600 already reads as a badge at that size. Every other request
+  for 700 or 900 either Figma export made ships at 500 or 600 regardless.
+  `check:ui` still fails on `font-bold` and needs no allow-list for the
+  wordmark: the 900 is declared in the CSS class, and the gate reads `.tsx`,
+  never `.css`.
   ```
 
 - [ ] **Step 7 — implement: §10, fix the canvas-bg sentence**
@@ -4873,7 +5823,7 @@ EOF
 
 ---
 
-### Task 18: /design page — rewrite the swatch, radius and direction specimens; log STATE.md
+### Task 18: /design page — the specimens the tokens moved under, and the prose that was already stale
 
 **Files**
 - Modify: `src/app/design/page.tsx`
@@ -4881,28 +5831,50 @@ EOF
 - Modify: `tests/retheme-blue-docs.test.ts`
 
 **Interfaces**
-- Consumes: `docs/BRAND_KIT.md` §2 (rewritten by task 1) for the exact hex/step names; the tokens-owning area's `globals.css` additions (`--color-neutral-925`, `--color-neutral-850`, `--color-neutral-450`, `--color-brand-800`, `--color-brand-900`, `--text-display-md` at 28px / 1.75rem) — `tests/design-swatches.test.ts` (pre-existing, unmodified by this task) only goes fully green once that area's tokens land; this task's own new assertions do not depend on it.
-- Produces: `src/app/design/page.tsx`'s `BRAND`/`SURFACE`/`INK` swatch arrays, the `TYPE` table's numeral row, the `RADII` array, and the four affected `DIRECTION` rows, all updated for the blue console; `STATE.md` gains a dated line recording the retheme.
+- Consumes: the POST-token state of `src/app/design/page.tsx`. Tasks 1, 2 and 3 already rewrote the `BRAND`, `SURFACE` and `INK` arrays and the `TYPE` table's numeral row in this file, because `tests/design-swatches.test.ts` cross-checks every `{ step, cls, hex }` row against `globals.css` and would have gone red the moment a token moved. **Every OLD quote below is that post-token text, not the pre-retheme file.** Also consumes `docs/BRAND_KIT.md` §2 (Task 15) for the wording the captions echo.
+- Produces: the `RADII` array at 8px with the frame on the panel's top-right; the four rewritten `DIRECTION` rows; the ramp captions above each swatch table, including the `450` footnote; and the page's remaining pre-retheme prose — the `note=` strings and JSX comments that still describe a charcoal band, an off-white page, a yellow brand and a one-surface console — brought up to the blue console. `STATE.md` gains a dated line.
+- Not produced here: the swatch arrays themselves. Re-writing them a second time is what the cross-area conflict this plan was corrected for actually was.
+
+**On hex literals in this file**: `scripts/check-ui.ts`'s `hex literal` rule
+carries an explicit allow-list entry — `"src/app/design/page.tsx": "the kit
+page prints hex VALUES as documentation labels"` — so the `hex:` fields in the
+swatch arrays and the `#111111` in the caption below are sanctioned, not
+tolerated. Nothing in this task needs a new exemption and none is added.
 
 - [ ] **Step 1 — extend the failing test**
 
   Add to `tests/retheme-blue-docs.test.ts`:
 
   ```ts
-  describe("/design's swatch and radius arrays reflect the blue re-theme", () => {
+  describe("/design's specimens and prose reflect the blue re-theme", () => {
     const page = () => readFileSync(join(root, "src/app/design/page.tsx"), "utf8");
 
-    it("the brand ramp includes the new blue steps", () => {
+    /**
+     * THE FIRST TWO ARE REGRESSION PINS, NOT THIS TASK'S OWN RED.
+     *
+     * The token-layer tasks rewrote the swatch arrays in this same file —
+     * they had to, because `design-swatches.test.ts` compares every row's
+     * hex against `globals.css` and would have failed the moment a token
+     * moved. These assert that they stayed rewritten, which is the thing a
+     * docs pass over the same file could plausibly undo.
+     */
+    it("the brand ramp still carries the new blue steps", () => {
       const src = page();
       expect(src).toMatch(/hex:\s*"#007bff"/);
       expect(src).toMatch(/hex:\s*"#0070e8"/);
     });
 
-    it("the surface ramp includes the three new dark steps", () => {
+    it("the ramps still carry the three new dark steps", () => {
       const src = page();
       expect(src).toMatch(/bg-neutral-925/);
       expect(src).toMatch(/bg-neutral-850/);
-      expect(src).toMatch(/bg-neutral-450|neutral-450/);
+      expect(src).toMatch(/bg-neutral-450/);
+    });
+
+    it("captions the 450 step where it is printed, since it is neither surface nor prose", () => {
+      // The one ink step with a job narrow enough to need saying out loud —
+      // and the one a reader would otherwise take for a body-text grey.
+      expect(page()).toContain("faint — the caps section label only, 3.70:1 on #111111");
     });
 
     it("RADII and DIRECTION agree: control is 8px, not a pill", () => {
@@ -4911,9 +5883,31 @@ EOF
       expect(src).toMatch(/control · 8px/);
     });
 
-    it("the headline numeral caption is 28px", () => {
+    it("draws the frame specimen on the panel's top-right corner", () => {
       const src = page();
-      expect(src).toMatch(/token:\s*"text-display-md"[^}]*?px:\s*"28px"/);
+      expect(src).toMatch(/rounded-tr-frame/);
+      expect(src, "the old rail-side notch is gone from the specimen too").not.toMatch(/rounded-tl-frame/);
+    });
+
+    it("the headline numeral caption is 28px", () => {
+      expect(page()).toMatch(/token:\s*"text-display-md"[^}]*?px:\s*"28px"/);
+    });
+
+    it("has no prose left from the charcoal band, the off-white page or the yellow brand", () => {
+      /**
+       * THE DOC-ROT THIS PAGE ACCUMULATED, PINNED SO IT CANNOT COME BACK.
+       *
+       * These strings are not near-misses: `#2E2E2E` was the charcoal band,
+       * `#F5F5F5` the light page under it, `ink-950` a ramp retired two
+       * re-themes ago, and "ONE GREEN, IN THREE SHAPES" a caption for a
+       * yellow-and-violet kit. Each described the product accurately at some
+       * point and none of them has for months, on the one page whose whole
+       * job is to be the reference.
+       */
+      const src = page();
+      for (const dead of ["#2E2E2E", "#F5F5F5", "ink-950", "ink-900", "ink-800", "ONE GREEN, IN THREE SHAPES", "Pill-first"]) {
+        expect(src, `"${dead}" is still on the kit page`).not.toContain(dead);
+      }
     });
   });
 
@@ -4932,221 +5926,55 @@ EOF
   pnpm vitest run tests/retheme-blue-docs.test.ts
   ```
 
-  Expected: all five new `it`s fail (no `#007bff`/`#0070e8` swatch rows yet, no `neutral-925`/`850`/`450` classes, `RADII` still says "control · pill", the numeral caption is still `36px`, and `STATE.md` has no 4 September line); all sixteen from the prior three tasks still pass.
+  Expected: the 450-caption, RADII, frame-corner, dead-prose and STATE.md
+  `it`s fail. The two ramp pins and the 28px caption PASS already — the
+  token-layer tasks put those rows in the file, and this task's job is to
+  keep them rather than to write them; they are here so a later edit to this
+  page cannot quietly undo them. All sixteen `it`s from the prior three docs
+  tasks still pass.
 
-- [ ] **Step 3 — implement: BRAND array and its comment**
+- [ ] **Step 3 — implement: the ramp captions, including the 450 footnote**
 
-  Replace the comment block and array (lines 67-95):
+  The three caption lines above the swatch tables still count the old ramps.
+  Replace:
 
-  OLD:
   ```tsx
-  /**
-   * THE BRAND RAMP IS ONE BLUE, AND IT NO LONGER NEEDS A SECOND COLOUR BESIDE
-   * IT.
-   *
-   * This table used to be printed next to a violet one, because the two were the
-   * halves of a single rule: `brand-*` was what a FILLED object is and `marker-*`
-   * was what a LINE is, and the split existed because #eecf00 measures 1.55:1 as
-   * a stroke on white and 11.24:1 as a fill. The brand could only ever safely do
-   * one of the two jobs.
-   *
-   * On #1b191a the blue is 9.20:1 as a stroke and 8.08:1 as a fill under
-   * near-black ink. Both clear their bar, so 500 DRAWS and 600 FILLS as two steps
-   * of one ramp rather than as two colours covering for each other.
-   *
-   * HOVER WALKS UP, NOT DOWN, and that inverted with the surface: on a light
-   * ground brightening the brand moved it toward the white behind it and the
-   * label's contrast fell at the moment of the press. On near-black, raised means
-   * lighter.
-   */
-  const BRAND: Array<{ step: string; cls: string; hex: string }> = [
-    { step: "50", cls: "bg-brand-50", hex: "#e0f7fd" },
-    { step: "100", cls: "bg-brand-100", hex: "#b5ecfa" },
-    { step: "200", cls: "bg-brand-200", hex: "#7fdff6" },
-    { step: "300", cls: "bg-brand-300", hex: "#45d2f2" },
-    { step: "400", cls: "bg-brand-400", hex: "#1ac9ed" },
-    { step: "500", cls: "bg-brand-500", hex: "#00cdf5" },
-    { step: "600", cls: "bg-brand-600", hex: "#00c0e8" },
-    { step: "700", cls: "bg-brand-700", hex: "#00a6c9" },
-  ];
-  ```
-  NEW:
-  ```tsx
-  /**
-   * THE BRAND RAMP IS ONE BLUE, DOING TWO JOBS — NOT THREE.
-   *
-   * The cyan console ran a ring for identity, a glyph for location, a fill for
-   * action. The 4 September 2026 Figma this pass builds from does not mark
-   * location with the brand at all — the rail's active row is a NEUTRAL
-   * `--control` fill now, not a coloured glyph — so colour is left doing
-   * exactly two things: drawing a STROKE (`--marker`) and painting a FILL
-   * (`--primary`).
-   *
-   * `#3D9BFF` (400) is the dark stroke, 6.65:1–6.20:1 across the three dark
-   * surfaces. `#0070E8` (600) is the fill under white ink, 4.68:1 — one step
-   * deeper than `#007BFF` (500, the brand's own hex), because the Figma's own
-   * blue measures 3.98:1 under white and a 15px label owes 4.5.
-   *
-   * HOVER STILL WALKS UP ON DARK, DOWN ON LIGHT: 600 fill → 500 on hover on
-   * dark, 600 → 700 on light, because brightening a fill under the pointer on
-   * a light page moves it toward the white behind it and the label's contrast
-   * falls at the moment of the press.
-   */
-  const BRAND: Array<{ step: string; cls: string; hex: string }> = [
-    { step: "50", cls: "bg-brand-50", hex: "#e6f2ff" },
-    { step: "100", cls: "bg-brand-100", hex: "#cce5ff" },
-    { step: "200", cls: "bg-brand-200", hex: "#99cbff" },
-    { step: "300", cls: "bg-brand-300", hex: "#66b2ff" },
-    { step: "400", cls: "bg-brand-400", hex: "#3d9bff" },
-    { step: "500", cls: "bg-brand-500", hex: "#007bff" },
-    { step: "600", cls: "bg-brand-600", hex: "#0070e8" },
-    { step: "700", cls: "bg-brand-700", hex: "#0069d9" },
-    { step: "800", cls: "bg-brand-800", hex: "#0062cc" },
-    { step: "900", cls: "bg-brand-900", hex: "#0056b3" },
-  ];
+          <p className="mb-2 mt-5 text-xs font-medium text-muted-foreground">
+            Surface — the five things the app is built out of, neutral-*
+          </p>
   ```
 
-- [ ] **Step 4 — implement: SURFACE array and its comment**
+  with:
 
-  Replace lines 96-117:
-
-  OLD:
   ```tsx
-  /**
-   * THE SURFACE HALF of the neutral ramp — the five steps the interface is built
-   * out of, and they are five because the product has five surfaces and not
-   * because five is a nice number.
-   *
-   * 950 is the GROUND, and the rail, the top bar and the page are all of it: one
-   * colour, with a 1px 600 hairline doing every separation in the product. 800 is
-   * a CARD, which is a 1.14:1 step off the ground — a step you can measure and
-   * not one you can see, which is why a card without its border is an invisible
-   * card rather than a flat one. 900 is a CONTROL, one step DOWN from a card, so
-   * a select reads as a recessed slot rather than a raised chip. 700 is RAISED —
-   * a hover, a menu row, the toast. 500 is the heavier rule a checkbox or a
-   * switch track owes.
-   */
-  const SURFACE: Array<{ step: string; cls: string; hex: string }> = [
-    { step: "950", cls: "bg-neutral-950", hex: "#1b191a" },
-    { step: "900", cls: "bg-neutral-900", hex: "#211f20" },
-    { step: "800", cls: "bg-neutral-800", hex: "#272426" },
-    { step: "700", cls: "bg-neutral-700", hex: "#332f31" },
-    { step: "600", cls: "bg-neutral-600", hex: "#3d393b" },
-    { step: "500", cls: "bg-neutral-500", hex: "#4d494b" },
-  ];
-  ```
-  NEW:
-  ```tsx
-  /**
-   * THE SURFACE HALF — eight steps now, not five, because the shell has three
-   * dark grounds instead of one.
-   *
-   * 950 is the PAGE. 925 and 900 are the two new steps this pass adds: 925 is
-   * the CHROME (top bar, rail, and every card) and 900 is the PANEL — the
-   * content area under the top bar, which the board and its tiles actually sit
-   * on. 850 is a third new step, the CONTROL (fields, the search box, the
-   * active nav row) — one step down from the surfaces around it, so a select
-   * still reads as a recessed slot. 800 is SECONDARY (grey buttons); 700 is
-   * AVATAR (icon and initials circles); 600 is the HAIRLINE; 500 is the
-   * heavier RULE a switch track or table divider owes.
-   *
-   * The three darkest steps sit within a hair of each other on purpose:
-   * 925-on-950 measures 1.01:1 and 900-on-950 measures 1.07:1, both tighter
-   * than the single 1.14:1 step the two-day-old console ran between its one
-   * ground and its cards. The border is not decoration on a surface you can
-   * already tell apart from its neighbour — it is the only thing that does.
-   */
-  const SURFACE: Array<{ step: string; cls: string; hex: string }> = [
-    { step: "950", cls: "bg-neutral-950", hex: "#0f1011" },
-    { step: "925", cls: "bg-neutral-925", hex: "#111111" },
-    { step: "900", cls: "bg-neutral-900", hex: "#181818" },
-    { step: "850", cls: "bg-neutral-850", hex: "#202020" },
-    { step: "800", cls: "bg-neutral-800", hex: "#333333" },
-    { step: "700", cls: "bg-neutral-700", hex: "#3a3a3a" },
-    { step: "600", cls: "bg-neutral-600", hex: "#343434" },
-    { step: "500", cls: "bg-neutral-500", hex: "#4a4a4a" },
-  ];
+          <p className="mb-2 mt-5 text-xs font-medium text-muted-foreground">
+            Surface — eight steps, three of them grounds: 950 page, 925 chrome and card, 900 panel, neutral-*
+          </p>
   ```
 
-- [ ] **Step 5 — implement: INK array and its comment**
+  and replace:
 
-  Replace lines 118-143:
-
-  OLD:
   ```tsx
-  /**
-   * THE INK HALF — four values, and the count is the point.
-   *
-   * The reference this interface is drawn from ships SEVEN greys for text:
-   * #ffffff, #e8e6e7, #e5e7eb, #a1a1a1, #b0a9ae, #99a1af and #6a7282. Three of
-   * those are within three counts of each other. That is the same failure the
-   * type scale was closed to prevent — twelve names over nine sizes — arriving in
-   * the colour layer, and it collapses here to one value per job.
-   *
-   * 400 IS NOT THE REFERENCE'S #6a7282, and this is the one measurement in the
-   * kit that overrules the source outright: that value is 3.56:1 on the #272426
-   * card the reference sets its own empty-state copy on, against the 4.5:1 body
-   * text owes. Raised four steps in the same hue to 4.75:1.
-   *
-   * There is a deliberate GAP between this half and the surface half above. 500
-   * is the last step a LINE may be drawn in and 400 the first that TEXT may be
-   * set in; the value that reads as a 1px rule and the value that reads as 12px
-   * copy are not the same value, and the product had been pretending they were.
-   */
-  const INK: Array<{ step: string; cls: string; hex: string }> = [
-    { step: "400", cls: "bg-neutral-400", hex: "#948d93" },
-    { step: "300", cls: "bg-neutral-300", hex: "#b0a9ae" },
-    { step: "200", cls: "bg-neutral-200", hex: "#e8e6e7" },
-    { step: "100", cls: "bg-neutral-100", hex: "#eceaeb" },
-    { step: "50", cls: "bg-neutral-50", hex: "#fafafa" },
-  ];
-  ```
-  NEW:
-  ```tsx
-  /**
-   * THE INK HALF — two values now, not four, because the Figma draws two.
-   *
-   * The previous ramp carried 400/300/200/white on the argument that seven
-   * greys for text was a "twelve names, nine sizes" failure arriving in
-   * colour. This Figma's own ink is simpler than that argument needed: a
-   * muted value and a body-and-heading white, nothing between them.
-   * `neutral-300` — the old "descriptions, captions" step — is not carried
-   * forward as a named role; see BRAND_KIT.md's retired-token table.
-   *
-   * 400 is `--muted-foreground`: the Figma's own `#7E7E7E` measures 4.37:1 on
-   * the panel, and this kit's `#858585` clears 4.81:1 there and 5.12:1 on a
-   * card. 200 is `--foreground` / `--heading` / `--card-foreground`, all one
-   * value — the Figma sets body AND titles in white, same as the console it
-   * replaces.
-   *
-   * `450` — `--faint`, `#6E6E6E` — sits BETWEEN this half and the surface half
-   * above and is deliberately not printed as a swatch here: it is a
-   * caps-label-only step (BRAND_KIT.md §2), never body text, and a ramp with a
-   * value that is neither surface nor prose is not one more swatch, it is a
-   * footnote.
-   */
-  const INK: Array<{ step: string; cls: string; hex: string }> = [
-    { step: "400", cls: "bg-neutral-400", hex: "#858585" },
-    { step: "200", cls: "bg-neutral-200", hex: "#ffffff" },
-  ];
+          <p className="mb-2 text-xs font-medium text-muted-foreground">Ink — four values, one per job, neutral-*</p>
   ```
 
-- [ ] **Step 6 — implement: TYPE array's numeral row**
+  with:
 
-  OLD (line 191):
   ```tsx
-    { token: "text-display-md", cls: "stat-numeral text-display-md", px: "36px", use: "Headline numbers, via formatMetricValue — the ledger numeral", sample: "1,204" },
-  ```
-  NEW:
-  ```tsx
-    { token: "text-display-md", cls: "stat-numeral text-display-md", px: "28px", use: "Headline numbers, via formatMetricValue — the ledger numeral, dropped from 36px this pass", sample: "1,204" },
+          <p className="mb-2 text-xs font-medium text-muted-foreground">
+            Ink — three values, one per job, neutral-* · 450 is faint — the caps section label only, 3.70:1 on #111111,
+            and never a sentence
+          </p>
   ```
 
-- [ ] **Step 7 — implement: RADII array**
+  (`#111111` as literal text is what this page is for, and is covered by
+  `check-ui.ts`'s own allow-list entry for this file — see the note above.)
 
-  Replace lines 207-218:
+- [ ] **Step 4 — implement: `RADII`**
 
-  OLD:
+  This array is untouched by the token tasks — it is captions, not rows — so
+  the OLD text below is the file as it stands today. Replace:
+
   ```tsx
   const RADII: Array<{ cls: string; label: string; body: string }> = [
     { cls: "rounded-control", label: "control · pill", body: "Buttons, inputs, menu rows" },
@@ -5161,34 +5989,41 @@ EOF
     { cls: "rounded-frame", label: "frame · 16px", body: "The ground's top-left corner, cut into the band" },
   ];
   ```
-  NEW:
+
+  with:
+
   ```tsx
   const RADII: Array<{ cls: string; label: string; body: string }> = [
     { cls: "rounded-control", label: "control · 8px", body: "Buttons, inputs, selects, tabs, nav rows, the period switch — no pill, final word" },
     { cls: "rounded-card", label: "card · 10px", body: "Tiles, list rows, board cards" },
-    { cls: "rounded-surface", label: "surface · 10px", body: "Panels, modals, tables, step cards — same radius as a card, a bigger object" },
-    /* THE FRAME IS BACK. It was 0 while the shell was one surface (--radius-frame
-       had nothing to reveal — see the Frame section below) and returns at 8px
-       now that the panel (#181818) sits under a top bar and beside a rail that
-       are a genuinely different colour (#111111). Applied to the PANEL'S
-       TOP-LEFT corner only — the one nearest the rail, regardless of whether
-       the rail is at rest or open. */
-    { cls: "rounded-frame", label: "frame · 8px", body: "The panel's top-left corner, cut where it meets the bar beside the rail" },
+    { cls: "rounded-surface", label: "surface · 10px", body: "Panels, modals, tables, step cards — the same radius as a card, on a bigger object" },
+    /* THE FRAME IS BACK, ON THE OTHER CORNER. It was 32px while the frame
+       painted a gradient behind a transparent rail, then 16px, then 0 when the
+       rail, the bar and the page became one surface and a notch had nothing
+       left to reveal. There are three surfaces again — the panel is #181818
+       under a bar and beside a rail that are #111111 — so 8px, half the old 16
+       because the step it reveals is a fraction of what the light page was.
+       Applied to the panel's TOP-RIGHT corner: every earlier era cut the
+       top-left, nearest the rail, and the 4 Sep 2026 Figma does not. The rail
+       side butts square behind a hairline. */
+    { cls: "rounded-frame", label: "frame · 8px", body: "The panel's top-right corner, under the bar away from the rail" },
   ];
   ```
 
-- [ ] **Step 8 — implement: DIRECTION array, four rows**
+- [ ] **Step 5 — implement: the four `DIRECTION` rows**
 
-  Replace the "One surface, and a hairline" row (lines 156-159):
+  Also untouched by the token tasks. Replace the "One surface, and a hairline"
+  row:
 
-  OLD:
   ```tsx
     {
       rule: "One surface, and a hairline",
       why: "The rail, the top bar and the page are ALL #1B191A, and every separation in the product is a 1px #3D393B rule. This is the reverse of the band that wrapped a light page, and the reversal is the whole re-theme: with one material there is no 40-point luminance step to find its own edge, so the hairline stops being trim and becomes the structure. A card is #272426 — a 1.14:1 step — so a card without its border is not a flatter card, it is an invisible one.",
     },
   ```
-  NEW:
+
+  with:
+
   ```tsx
     {
       rule: "Three darks, and a hairline",
@@ -5196,16 +6031,17 @@ EOF
     },
   ```
 
-  Replace the "Content floats on the ground" row (lines 160-163):
+  Replace the "Content floats on the ground" row:
 
-  OLD:
   ```tsx
     {
       rule: "Content floats on the ground",
       why: "Nothing sits flat on the page but a heading or a caption. Everything with content in it is an island with an EDGE, and the edge is the whole of it: a card is a 1.14:1 step off the page, so the border is not trim on a surface you can already see, it is the only thing making the surface visible at all.",
     },
   ```
-  NEW:
+
+  with:
+
   ```tsx
     {
       rule: "Content floats on the ground",
@@ -5213,41 +6049,252 @@ EOF
     },
   ```
 
-  Replace the "One blue, in three shapes" row (lines 164-167):
+  Replace the "One blue, in three shapes" row:
 
-  OLD:
   ```tsx
     {
       rule: "One blue, in three shapes",
       why: "The fill/stroke split existed because #EECF00 is 1.55:1 as a stroke on white and 11.24:1 as a fill — an absent line and a superb box, so the brand could only safely do one of the two jobs and a second colour had to hold the other. On #1B191A the blue is 9.20:1 drawn and 8.08:1 filled, so the split has nothing left to prevent and yellow-as-stroke retires with it. What replaces it is a rule about SHAPE, all three visible at once in the rail: a RING is identity (the mark), a GLYPH is location (the active row), a FILL is action (the +, every primary button). Success is NOT the brand: it kept the green the brand vacated, because a DONE badge and a New-flow button being one colour would put the loudest state and the loudest act in one vocabulary. Warn and danger are the other two state hues, and what stops any of them becoming wallpaper is that status is quiet when fine.",
     },
   ```
-  NEW:
+
+  with:
+
   ```tsx
     {
       rule: "One blue, two jobs",
-      why: "#007BFF replaces the cyan everywhere. It draws two jobs, not three: a STROKE (--marker: links, the focus ring, the active tab rule) at 6.65:1-6.20:1 across the three dark surfaces, and a FILL (--primary, one step deeper at #0070E8) at 4.68:1 white-on-fill. The 'glyph is location' job cyan carried is gone — the rail's active row is a neutral --control fill now, not a coloured icon, because that is what the Figma actually draws. Success is still NOT the brand: it keeps the green the brand vacated, because a DONE badge and a New-flow button being one colour puts the loudest state and the loudest act in one vocabulary. Warn and danger are the other two state hues, and status is still quiet when fine.",
+      why: "#007BFF replaces the cyan everywhere. It does two jobs, not three: a STROKE (--marker: links, the focus ring, the active tab rule) at 6.65:1 down to 6.20:1 across the three dark surfaces, and a FILL (--primary, one step deeper at #0070E8) at 4.68:1 under white ink. The 'glyph is location' job the cyan carried is gone — the rail's active row is a neutral --control fill now, not a coloured icon, because that is what the Figma draws. Success is still NOT the brand: it keeps the green the brand vacated, because a DONE badge and a New-flow button being one colour puts the loudest state and the loudest act in one vocabulary. Warn and danger are the other two state hues, and status is still quiet when fine.",
     },
   ```
 
-  Replace the "Ten contains, eight presses" row (lines 168-171):
+  Replace the "Ten contains, eight presses" row:
 
-  OLD:
   ```tsx
     {
       rule: "Ten contains, eight presses",
       why: "Everything that contains something is 10px — cards, panels, popovers, selects, the period track. Everything pressable is 8. A badge is 4. An avatar and a status dot are the only full radii left. This replaced 'everything pressable is a full pill', which needed an exception it could never justify: a control that WRAPS cannot be a pill, because a full radius on a two-line box renders as a circle around the words. There is no exception now.",
     },
   ```
-  NEW:
+
+  with:
+
   ```tsx
     {
       rule: "Ten contains, eight presses",
-      why: "Everything that contains something is 10px — cards, panels, popovers, selects, the period track. Everything pressable is 8: buttons, chips, inputs, selects, tabs, nav rows, the period switch. A badge is 4. Circles are reserved for four things that are never an action — an avatar, the bell's unread badge, the freshness dot, and the tile's active-count numeral. This replaced 'everything pressable is a full pill' for the second time now, and the 4 September 2026 Figma is named as the reference so a third flip needs a new design, not a comment.",
+      why: "Everything that contains something is 10px — cards, panels, popovers, selects, the period track. Everything pressable is 8: buttons, chips, inputs, selects, tabs, nav rows, the period switch. A badge is 4. Circles are reserved for four things that are never an action — an avatar, the bell's unread badge, the freshness dot, and the tile's active-count numeral. This replaced 'everything pressable is a full pill' for the second time, and the 4 September 2026 Figma is named as the reference so a third flip needs a new design rather than a preference.",
     },
   ```
 
-- [ ] **Step 9 — implement: STATE.md, add the dated line**
+- [ ] **Step 6 — implement: the `note=` strings that still describe an older product**
+
+  These are the page's own captions, and every one of them was wrong before
+  this re-theme started — they describe a charcoal band around an off-white
+  page, a yellow brand and a violet marker. The page whose job is to be the
+  reference is the last place that can carry them.
+
+  **6a. Brand sheet.** Replace:
+
+  ```tsx
+          note="The supplied sheets, rendered from the shipping components rather than drawn. Kept as the historical record of a language this kit no longer speaks: deep black doing the work, a yellow carrying the act, a violet drawing every line, and everything shaped as a full pill. What survived the re-theme is the argument rather than the palette — the workhorse is quiet and colour arrives only where it means something, which is now one blue in three shapes on a single near-black surface."
+  ```
+
+  with:
+
+  ```tsx
+          note="The supplied sheets, rendered from the shipping components rather than drawn. Kept as the historical record of a language this kit no longer speaks: deep black doing the work, a yellow carrying the act, a violet drawing every line, and everything shaped as a full pill. What survived is the argument rather than the palette — the workhorse is quiet and colour arrives only where it means something, which is now one blue doing a stroke's job and a fill's, across three near-black surfaces."
+  ```
+
+  **6b. Colour.** Replace:
+
+  ```tsx
+          note="ONE GREEN, IN THREE SHAPES. That is a measurement, not a preference: #EECF00 is 1.55:1 as a stroke or as text on white and 11.24:1 as a fill under #1A1A1A ink, so the brand is spent on filled objects — the mark, the active rail chip, primary buttons, the unread badge, step markers — and never on a rule, a ring, a border or a glyph standing on the page. Everything that draws is the marker's violet: focus rings, links, hover borders, selection rings, the active tab's rule. The one place yellow may stroke is a dark surface, where it measures 8.77:1 — which is why the top bar's progress arc is yellow and a link never is. check:ui's yellow-as-stroke rule fails the build the moment the primary is spelled as text, a border, a ring, a stroke, a fill or a divide, which is what makes this rule enforceable where 'yellow is the hero at most once per screen' never was — nothing could ever count the yellows on a screen. Beside the two sits a three-colour accent set (orange, pink, periwinkle) for surfaces that need to be identifiable rather than to mean something; success, warn and danger keep the job of meaning."
+  ```
+
+  with:
+
+  ```tsx
+          note="ONE BLUE, TWO JOBS, and both of them measured. #0070E8 FILLS, carrying white ink at 4.68:1 — one step deeper than the Figma's own #007BFF, which measures 3.98:1 under white and is under the 4.5 a 15px label owes. #3D9BFF DRAWS on dark (6.65:1 on the page, 6.20:1 on the panel) and #0062CC draws on light (5.80:1 on white), because a 1px rule owes more room than a button's own ink does. The 'yellow fills, violet draws' split is retired and so is the gate rule that policed it: two steps of one ramp need no rule to keep them apart. Beside them sits a three-colour accent set (orange, pink, periwinkle) for surfaces that need to be identifiable rather than to mean something; success, warn and danger keep the job of meaning, and the tile's freshness dot has its own #34C759 so retuning a status can never move it."
+  ```
+
+  **6c. Radius and elevation.** Replace:
+
+  ```tsx
+          note="Pill-first, the way the sheet draws it: every button, input and menu row is fully round, cards take 10px and panels 16px. One elevation ladder — hairline borders carry structure, shadows only say how far a surface floats."
+  ```
+
+  with:
+
+  ```tsx
+          note="8px-first, the way the 4 September 2026 Figma draws it: every button, input, select, tab, nav row and the period switch is an 8px rectangle, cards and panels take 10px, and circles are reserved for avatars, the bell badge, the freshness dot and the active-count numeral. One elevation ladder — hairline borders carry structure, shadows only say how far a surface floats, and --shadow-card is the export's own value in both themes."
+  ```
+
+  **6d. Rail.** Replace:
+
+  ```tsx
+          note="A 48px icon column in the SAME #1B191A as the page beside it, separated by one hairline. These tiles are a swatch — the real markup lives in src/components/sidebar.tsx and nowhere else, and it has moved on from what is drawn here: the active row is a brand GLYPH on a raised chip rather than a filled brand square, because the fill is spent once in this column and it is spent on the + in the foot, which is the one verb."
+  ```
+
+  with:
+
+  ```tsx
+          note="A 56px icon column on --chrome (#111111), one step off the #0F1011 page beside it and separated by one hairline. These tiles are a swatch — the real markup lives in src/components/sidebar.tsx and nowhere else, and it has moved on from what is drawn here: the rail opens to 260px on hover with a workspace switcher at its head, a Main Menu caption and a Get Free Access row at its foot. The active row is a neutral --control fill, not a coloured glyph: the brand's 'location' job retired with the cyan, and the fill is spent on the New flow button in the foot."
+  ```
+
+  **6e. Marks.** Replace:
+
+  ```tsx
+          note="What a dashboard tile is made of. The series is the MARKER — a series is a mark, and the fill step is reserved for things you press — the last bucket takes the ink (a positional fact, not a verdict), and a breakdown walks the marker plus the accent three. TargetBar drew met in --success and in-progress in --marker, which were the same green while success WAS the brand — so it rendered both states identically and stopped reporting the only thing it exists to report. That collision is gone (the brand is cyan, success is green), but the fix outlived it on its own merits: the unmet meter is greyscale and colour ARRIVES when the goal lands, which is the honest reading anyway — a bar at 40% is not good, it is 40%. Every value goes through formatMetricValue, so the tooltip and the headline say the same quantity the same way. A delta is never green or red: up is good for Booked Leads and bad for Speed to Lead, and nothing on a tile knows which — so it is coloured by WHETHER it moved, and the arrow alone carries direction."
+  ```
+
+  with:
+
+  ```tsx
+          note="What a dashboard tile is made of. The series is the BRAND — --color-brand-500 (#007BFF), the same blue as the buttons, with a 12% wash under it — because after the ramp split, --marker is the stroke step for links and rings and no longer the colour the product measures in. A breakdown walks that blue plus the accent three. TargetBar drew met in --success and in-progress in --marker, which were the same green while success WAS the brand — so it rendered both states identically and stopped reporting the only thing it exists to report. That collision is long gone, but the fix outlived it on its own merits: the unmet meter is greyscale and colour ARRIVES when the goal lands, which is the honest reading anyway — a bar at 40% is not good, it is 40%. Every value goes through formatMetricValue, so the tooltip and the headline say the same quantity the same way. A delta is never green or red: up is good for Booked Leads and bad for Speed to Lead, and nothing on a tile knows which — so it is coloured by WHETHER it moved, and the arrow alone carries direction."
+  ```
+
+- [ ] **Step 7 — implement: the specimens whose own markup went stale with them**
+
+  **7a. The toast swatch's comment**, which names a ramp retired two re-themes
+  ago. Replace:
+
+  ```tsx
+              {/* `ink-800` is the toast's rung — the ladder's "raised" step,
+                  which is what `ui/toast.tsx` actually paints. On a charcoal
+                  band raised means LIGHTER, so this now sits ABOVE ink-950
+                  rather than below it. */}
+  ```
+
+  with:
+
+  ```tsx
+              {/* `neutral-700` is the toast's rung — the ladder's "raised"
+                  step, which is what `ui/toast.tsx` actually paints. On a
+                  near-black surface raised means LIGHTER, so it sits above the
+                  page rather than below it. (The `ink-*` ramp this comment used
+                  to name was retired with the light theme.) */}
+  ```
+
+  **7b. The rail swatch's surface**, which paints the page's colour rather than
+  the rail's. Replace:
+
+  ```tsx
+            {/* `bg-background`, the band's own token, rather than `bg-rail`: that
+                role answers WHITE in the light theme (the 264px sidebar it was
+                named for became a recessed light column long ago) and painting
+                a swatch of the chrome with it would show white glyphs on white.
+                The band is the ink ladder's base and does not invert. */}
+            <div className="inline-flex items-start gap-3 rounded-card bg-background px-5 py-4">
+  ```
+
+  with:
+
+  ```tsx
+            {/* `bg-chrome`, which is what the real rail is painted. It was
+                `bg-background` while the rail, the bar and the page were one
+                colour and the distinction cost nothing; under three surfaces
+                that would draw the swatch on the PAGE's step and quietly
+                misreport the one thing this specimen exists to show. (`--rail`
+                itself is long retired — see the retired-token table.) */}
+            <div className="inline-flex items-start gap-3 rounded-card bg-chrome px-5 py-4">
+  ```
+
+  **7c. The rail swatch's ACTIVE chip**, which fills with the brand where the
+  Figma fills with the control step. Replace:
+
+  ```tsx
+                <span className="flex size-10 items-center justify-center rounded-control bg-primary text-primary-foreground">
+                  <LayoutDashboard size={24} />
+                </span>
+  ```
+
+  with:
+
+  ```tsx
+                {/* THE ACTIVE ROW IS NEUTRAL NOW. It was the brand, filled —
+                    the "glyph is location" job the cyan carried. The 4 Sep 2026
+                    Figma marks the active row with a `--control` fill and an
+                    ordinary ink glyph, which is what leaves the brand free to
+                    mean "this does something" everywhere else. */}
+                <span className="flex size-10 items-center justify-center rounded-control bg-control text-foreground">
+                  <LayoutDashboard size={24} />
+                </span>
+  ```
+
+  **7d. The rail's two prose paragraphs.** Replace:
+
+  ```tsx
+              <p>
+                The band is <code className="font-mono text-foreground">ink-950</code>{" "}#2E2E2E in both themes — flat,
+                not a gradient, and with no seam inside it: the rail&rsquo;s right edge and the top bar&rsquo;s underside
+                are one continuous shape, because a rule drawn where two different materials already meet is a rule
+                doing nothing.
+              </p>
+              <p>
+                REST IS NOTHING AT ALL. Every chip but one is a bare white glyph — on this charcoal a 16px white mark
+                measures 14.08:1, so it does not need a plate to be found, and seven pale squares down a 70px column were
+                the loudest thing in the chrome. Hover raises to <code className="font-mono text-foreground">ink-900</code>{" "}
+                and ACTIVE is the brand, filled, at 8.77:1 on the band — one yellow chip in the column, which is why the
+                other six do not have to compete to be seen.
+              </p>
+  ```
+
+  with:
+
+  ```tsx
+              <p>
+                The rail is <code className="font-mono text-foreground">--chrome</code> (#111111), the same step as the
+                top bar above it and every card on the page — one count off the #0F1011 ground and two off the #181818
+                panel, so its right edge is a real 1px hairline rather than a luminance step you could see unaided.
+              </p>
+              <p>
+                REST IS NOTHING AT ALL. Every chip but one is a bare glyph on the chrome — a white mark measures 18.1:1
+                there, so it does not need a plate to be found, and seven pale squares down the column were the loudest
+                thing in it. Hover raises to <code className="font-mono text-foreground">--accent</code> and ACTIVE takes
+                a <code className="font-mono text-foreground">--control</code> fill: neutral, not the brand, because
+                where you are is not something you press.
+              </p>
+  ```
+
+  **7e. The frame specimen**, which is the one place the corner is drawn.
+  Replace:
+
+  ```tsx
+          note="THE NOTCH IS GONE AND --radius-frame IS 0. It cut 16px out of the page's top-left so the band's charcoal showed through — the one corner where the page met both halves of the band at once. A radius reveals whatever is BEHIND the element it is cut into, and the thing behind the page is now the same #1B191A as the page: cutting a corner out of it to reveal it draws nothing, at the cost of a curved notch the top bar's hairline then has to stop short of. What frames the application now is the pair of rules, not a shape."
+        >
+          <div className="flex h-40 overflow-hidden rounded-card bg-background">
+            <div className="w-[100px] shrink-0" />
+            <div className="flex-1 rounded-tl-frame bg-background" />
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            A radius reveals whatever is BEHIND the element it is cut into, which is why the column holding the top bar
+            and the page is painted <code className="font-mono text-foreground">ink-950</code> rather than left at
+            `background`: at #F5F5F5 behind #F5F5F5 the notch was perfectly invisible. The page inside it is{" "}
+            <code className="font-mono text-foreground">--ground</code>, and content sits on it in islands, never flat.
+          </p>
+  ```
+
+  with:
+
+  ```tsx
+          note="THE NOTCH IS BACK AND --radius-frame IS 8px. It went to 0 when the rail, the bar and the page became one colour: a radius reveals whatever is BEHIND the element it is cut into, and cutting a corner out of a colour to reveal the same colour draws nothing. There are three surfaces again — the panel is #181818 under a bar and beside a rail that are #111111 — so there is something to reveal. It is the panel's TOP-RIGHT corner, under the bar at the end of the row away from the rail; every earlier era of this shell cut the top-left instead, and the 4 September 2026 Figma does not."
+        >
+          <div className="flex h-40 overflow-hidden rounded-card bg-chrome">
+            {/* The rail's width, holding the chrome's own colour — the panel
+                butts square against it, which is the half of this specimen
+                that is easy to miss. */}
+            <div className="w-[100px] shrink-0" />
+            <div className="flex-1 rounded-tr-frame bg-panel" />
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            A radius reveals whatever is BEHIND the element it is cut into, which is why this specimen paints the frame{" "}
+            <code className="font-mono text-foreground">--chrome</code> and the panel inside it{" "}
+            <code className="font-mono text-foreground">--panel</code>: with both the same colour the corner would be
+            perfectly invisible, which is exactly the argument that took the token to 0 two days ago. Content sits on the
+            panel in islands, never flat.
+          </p>
+  ```
+
+- [ ] **Step 8 — implement: `STATE.md`, add the dated line**
 
   Append a new dated section at the end of `STATE.md` (after its last
   paragraph, "**MCP Phase 1...**"):
@@ -5264,44 +6311,64 @@ EOF
   to three dark surfaces (`#0F1011` page, `#111111` chrome, `#181818`
   panel); every button, input, tab and nav row drops the pill for an 8px
   corner, named final against the 4 September 2026 Figma; the tile numeral
-  drops from 36px to 28px; and the top bar gains a wordmark the rail used
-  to carry. `docs/BRAND_KIT.md`, `DESIGN.md` and `/design` were rewritten in
-  lockstep — see `docs/superpowers/specs/2026-09-04-retheme-blue-design.md`
-  for the approved decisions and the measured contrast ratios behind them.
+  drops from 36px to 28px; the top bar gains a wordmark the rail used to
+  carry and loses the metrics-setup ring; and the dashboard's six-pill
+  period track becomes a "Today" dropdown beside a centred title.
+  `docs/BRAND_KIT.md`, `DESIGN.md` and `/design` were rewritten in lockstep
+  — see `docs/superpowers/specs/2026-09-04-retheme-blue-design.md` for the
+  approved decisions and the measured contrast ratios behind them.
   ```
 
-- [ ] **Step 10 — run it green**
+- [ ] **Step 9 — run it green**
 
   ```bash
   pnpm vitest run tests/retheme-blue-docs.test.ts
   ```
 
-  Expected: all twenty-one `it`s across all five describe blocks pass.
+  Expected: all twenty-four `it`s across all five describe blocks pass.
 
-- [ ] **Step 11 — gate**
+- [ ] **Step 10 — gate**
 
   ```bash
-  pnpm typecheck && pnpm vitest run tests/retheme-blue-docs.test.ts && pnpm check:ui
+  pnpm typecheck && pnpm vitest run tests/retheme-blue-docs.test.ts tests/design-swatches.test.ts tests/design-index.test.ts && pnpm check:ui
   ```
 
-  Note: `tests/design-swatches.test.ts` is not part of this task's gate — it
-  cross-checks `page.tsx` against `globals.css`, which the tokens-owning
-  area's task edits; run it (and the rest of the suite) at the branch-level
-  gate once all areas have landed.
+  `design-swatches.test.ts` IS in this gate, unlike the earlier docs tasks:
+  this task edits the same file it parses, and the guard that matters is its
+  "finds the ramps (a parse that silently matches nothing would pass
+  everything)" case — a caption edit that accidentally reformatted a swatch
+  row would turn that whole file green on zero assertions. `check:ui` passes
+  because this file is already on the `hex literal` rule's allow-list.
 
-- [ ] **Step 12 — commit**
+  **This is the last task on the branch, so the BRANCH gate runs here too**,
+  after the per-task one above:
+
+  ```bash
+  pnpm typecheck && pnpm vitest run --maxWorkers=2 && pnpm build && pnpm check:orphans && pnpm check:ui
+  ```
+
+  Then the screenshot sweep the spec's Rollout section describes: every
+  authenticated route, both themes, 1440 and 1920 wide, with the Figma beside
+  it. Playwright is not in the repo — it is `pnpm dev` and a manual capture by
+  the reviewer.
+
+- [ ] **Step 11 — commit**
 
   ```bash
   git add src/app/design/page.tsx STATE.md tests/retheme-blue-docs.test.ts
   git commit -m "$(cat <<'EOF'
-  Update the /design kit page's swatches and radius specimen for the
-  blue console, and log it in STATE.md
+  Bring the /design kit page's specimens and prose up to the blue console
 
-  BRAND/SURFACE/INK swatch arrays, the headline-numeral caption, the
-  RADII specimen and the four DIRECTION rows they used to contradict
-  now agree with the blue console: #007BFF, three dark surfaces, no
-  pill, 28px numeral. STATE.md gets a dated line pointing at the
-  approved spec.
+  The swatch arrays already moved with the tokens; what was left was the
+  page's own argument, and most of it had been wrong since before this
+  re-theme: notes describing a charcoal band, an off-white page, a yellow
+  brand and a violet marker, an ink-* ramp retired two re-themes ago, and
+  a frame specimen drawing a notch the token had been holding at 0. RADII
+  goes to 8px with the frame on the panel's top-right, the four DIRECTION
+  rows say three surfaces and two jobs, the ramp captions count the steps
+  that are actually there, and the 450 step gets the caption it needs to
+  not be read as body-text grey. STATE.md gets a dated line pointing at
+  the approved spec.
 
   Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
   EOF
