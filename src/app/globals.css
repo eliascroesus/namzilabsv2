@@ -236,7 +236,8 @@
    *
    * Re-cut for a near-black ground. The old three were mixed to sit on white
    * and every one of them landed under 4.5:1 here; these are the same hues
-   * lifted until they clear it on #272426.
+   * lifted until they clear it on #111111 (#FF8A5C 8.13:1, #FFB3B3 11.11:1,
+   * #A8A8F0 8.56:1).
    */
   --color-accent-orange: #ff8a5c;
   --color-accent-pink: #ffb3b3;
@@ -270,12 +271,13 @@
    * 300, 100 AND 50 STAY DEFINED, RE-CUT RATHER THAN RETIRED. No ROLE reads
    * them once `--muted-foreground` moves to `400`, but four files still spell
    * them directly — `ui/scroll-area.tsx` (the thumb), `ui/switch.tsx` (the off
-   * track), `ui/button.tsx`'s `white` variant (`hover:bg-neutral-100`) and the
-   * off-limits `flow/node-meta.ts` — and deleting a colour token out from
-   * under a live class is the exact "renders with no colour at all" failure
-   * `check-ui.ts`'s retired-token rule exists to punish. They are re-cut for
-   * the new near-neutral cast instead of being carried over from the warm
-   * ramp, so nothing in the product mixes a warm grey into a neutral one.
+   * track), `ui/button.tsx`'s `white` variant (`hover:bg-neutral-50`,
+   * `active:bg-neutral-100`) and the off-limits `flow/node-meta.ts` — and
+   * deleting a colour token out from under a live class is the exact "renders
+   * with no colour at all" failure `check-ui.ts`'s retired-token rule exists
+   * to punish. They are re-cut for the new near-neutral cast instead of being
+   * carried over from the warm ramp, so nothing in the product mixes a warm
+   * grey into a neutral one.
    *
    * DEPTH, STATED HONESTLY. This file used to say "a control recesses from a
    * card". That is not what either theme does now and the sentence is gone:
@@ -297,8 +299,8 @@
   --color-neutral-400: #858585; /* the dimmest INK — 4.81:1 on the panel, 5.12:1 on a card */
   --color-neutral-300: #b5b5b5; /* no role reads it since `--muted-foreground` moved to `400`; scroll-area's thumb, switch's off track and node-meta's untested dot still spell it */
   --color-neutral-200: #ffffff; /* body, headings and card titles — the Figma sets both in white */
-  --color-neutral-100: #e5e5e5; /* button.tsx's `white` variant hovers here */
-  --color-neutral-50: #fafafa;
+  --color-neutral-100: #e5e5e5; /* button.tsx's `white` variant presses here (`active:`) */
+  --color-neutral-50: #fafafa; /* button.tsx's `white` variant hovers here */
 
   /* The red ramp, re-cut for the dark surface. Only `ui/button.tsx` reaches for
      these directly (the destructive ghost's hover wash and the outline's
@@ -306,7 +308,7 @@
   --color-red-50: #2a1614;
   --color-red-100: #3d1c19;
   --color-red-200: #5a2621;
-  --color-red-600: #f0665c; /* 4.95:1 on a card */
+  --color-red-600: #f0665c; /* 6.08:1 on #111111 */
 
   /* --- Type scale ---------------------------------------------------------
    * UNTITLED UI'S PITCH, UNDER THE KIT'S DISCIPLINE.
@@ -576,11 +578,13 @@
  * 1. EVERY ROLE IS DECLARED IN BOTH BLOCKS. A role that exists in one and not
  *    the other inherits whatever the other left behind, which is how the metric
  *    tile once carried ink solved for the opposite surface.
- * 2. THE DIRECTIONS ARE MIRRORED, NOT COPIED. `--control` recesses from the
- *    card and `--accent` raises off it, in BOTH themes — which on near-black
- *    means darker/lighter and on white means the reverse. Getting that backwards
- *    is depth pointing the wrong way, and it is the single easiest thing to get
- *    wrong here.
+ * 2. THE DIRECTIONS ARE MIRRORED, NOT COPIED. On dark, `--control` (#202020)
+ *    and `--accent` (#3A3A3A) are both steps UP from the #111111 chrome and
+ *    card — lighter, not recessed — and `--muted` (#181818) is a step up too,
+ *    one below them, though it is never a hover. On light, `--control`
+ *    (#F4F4F4) and `--accent` (#ECECEC) are both steps DOWN from the white
+ *    card. Nothing "recesses" on dark; getting the direction backwards is the
+ *    single easiest thing to get wrong here.
  *
  * THE BRAND CANNOT BE ONE VALUE, AND THAT IS THE SAME TRAP THE YELLOW FELL IN.
  * #007BFF measures 3.98:1 white-on-fill — under the 4.5 a 15px label owes, in
@@ -739,8 +743,8 @@
 
   /* THE CONTROL SURFACE, AND THE DEPTH RULE STATED HONESTLY.
      A field on this theme's chrome and cards (#111111) is a step UP: #202020,
-     with its hover a further step up at #333333 (`--accent`). On white it is
-     the mirror — a step DOWN to #F4F4F4, hovering a further step down to
+     with `--accent` (#3A3A3A) a further step up again. On white it is the
+     mirror — a step DOWN to #F4F4F4, hovering a further step down to
      #ECECEC. That is the invariant this file actually holds: the two themes
      MIRROR each other. What it no longer says is "a control recesses from a
      card", which was a sentence about one theme pretending to be a rule about
@@ -777,8 +781,9 @@
   --avatar: var(--color-neutral-700); /* #3A3A3A */
 
   /**
-   * MUTED IS RECESSED; ACCENT IS RAISED. Two roles, two directions, and on this
-   * surface they must not be the same value.
+   * MUTED SITS ONE STEP DOWN FROM THE CARD; ACCENT SITS ONE STEP UP FROM A
+   * GREY BUTTON. Two different anchors, and on this surface they must not
+   * collide with `--secondary` or with each other.
    *
    * `--muted` was `neutral-800` for one draft, which is EXACTLY `--card` — so
    * `hover:bg-muted` on a card painted the card onto itself, and six call sites
@@ -787,19 +792,24 @@
    * the page were both #f5f5f5; it survived the re-theme by being re-introduced
    * rather than by being kept.
    *
-   * The three-surface recut moves both steps but keeps the shape: muted is now
-   * the SAME step as `--panel` (#181818 — a skeleton's track, a table's head, a
-   * disabled fill, and the content area itself) and accent is the same step as
-   * `--secondary` (#333333 — every hover and every selected row in the
-   * product). `--card` sits at `--chrome` (#111111) between them, so a hover
-   * still reads as coming forward and a disabled fill still reads as sinking
-   * back. `:root` mirrors this exactly: #F4F4F4 muted, #ECECEC accent, one
-   * step down and then a further step down from the white card between them.
+   * Muted is `--panel` (#181818 — a skeleton's track, a table's head, a
+   * disabled fill, and the content area itself), a step DOWN from the
+   * #111111 chrome and card.
+   *
+   * Accent used to share `--secondary`'s own step (#333333), which meant a
+   * grey button's `hover:bg-accent` / `active:bg-accent` repainted the exact
+   * colour the button already was — an invisible interaction state on the
+   * one control that most needs to say "you can press me". Accent is
+   * `neutral-700` (#3A3A3A) instead: a visible step UP from a grey button.
+   * It happens to be the SAME value `--avatar` uses — a different role, not
+   * a second name for one colour, since an avatar circle and a hovered grey
+   * button landing on the same step is a coincidence of the ramp, not a
+   * relationship between the two roles.
    */
   --muted: var(--color-neutral-900); /* #181818 */
   --muted-foreground: var(--color-neutral-400); /* #858585 — 4.81:1 on the panel, 5.12:1 on a card */
 
-  --accent: var(--color-neutral-800); /* #333333 — the same step as `--secondary` */
+  --accent: var(--color-neutral-700); /* #3A3A3A — a visible step up from --secondary (#333333); same value as --avatar, a different role */
   --accent-foreground: var(--color-neutral-200);
 
   /* THE FAINT LABEL — the one role beneath the ink floor, and it exists for a
@@ -815,12 +825,12 @@
   /* ---- The hairline ------------------------------------------------------
    * STILL THE STRUCTURE, ACROSS THREE SURFACES NOW INSTEAD OF ONE.
    *
-   * #0F1011, #111111 and #181818 are two to three counts of near-black apart
-   * at most — closer to each other than the old #1b191a/#272426 pair was, not
-   * further apart. Three surfaces did not buy this file a set of steps you can
-   * see without a border; it bought three steps you STILL cannot see without
-   * one. `--border` draws every one of those seams, exactly as it drew the
-   * one seam the one-surface theme had.
+   * #0F1011, #111111 and #181818 are up to seven counts of near-black apart
+   * (0x11 → 0x18, chrome to panel) — closer to each other than the old
+   * #1b191a/#272426 pair was, not further apart. Three surfaces did not buy
+   * this file a set of steps you can see without a border; it bought three
+   * steps you STILL cannot see without one. `--border` draws every one of
+   * those seams, exactly as it drew the one seam the one-surface theme had.
    */
   --border: var(--color-neutral-600); /* #343434 — EVERY hairline */
   --input: var(--border);
@@ -845,13 +855,14 @@
    * SUCCESS STAYS GREEN, SEPARATE FROM THE BRAND — a DONE badge and a New-flow
    * button being one colour would put the loudest state and the loudest act in
    * one vocabulary, and that was true when the brand was cyan and is equally
-   * true now that it is blue. The values are untouched by this re-theme: 9.02:1
-   * on the ground, 7.93:1 on a card, and #00647a at 5.91:1 on white in light.
+   * true now that it is blue. The value is untouched by this re-theme, only
+   * re-measured against the new grounds: #00D492 is 9.83:1 on #0F1011 and
+   * 9.74:1 on #111111; the light theme's own #00734B is 5.91:1 on white.
    *
    * STATUS IS QUIET WHEN FINE. A healthy thing carries a 6px dot; only a thing
    * that needs something wears a full pill.
    */
-  --success: #00d492; /* 9.02:1 on the ground, 7.93:1 on a card */
+  --success: #00d492; /* 9.83:1 on #0F1011, 9.74:1 on #111111 */
   --success-soft: rgb(0 212 146 / 0.1);
   --success-ink: #19d99c;
   --warn: #f5a524;

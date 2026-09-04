@@ -91,10 +91,10 @@ const BRAND: Array<{ step: string; cls: string; hex: string }> = [
  * THE SURFACE HALF of the neutral ramp — eight steps now, because the
  * interface is built out of THREE grounds instead of one: `950` is the page,
  * `925` is the chrome (the top bar and the rail, and the card fill), `900` is
- * the panel under the top bar, and `850` is a control recessed into the
- * panel. `800` and `700` are raised — a hover, a menu row, an avatar circle.
- * `600` is the hairline; `500` is the heavier rule a checkbox or a switch
- * track owes.
+ * the panel under the top bar, and `850` is a control, a step up from the
+ * panel and the card. `800` and `700` are raised further still — a grey
+ * button's hover, a menu row, an avatar circle. `600` is the hairline; `500`
+ * is the heavier rule a checkbox or a switch track owes.
  */
 const SURFACE: Array<{ step: string; cls: string; hex: string }> = [
   { step: "950", cls: "bg-neutral-950", hex: "#0f1011" },
@@ -107,16 +107,24 @@ const SURFACE: Array<{ step: string; cls: string; hex: string }> = [
   { step: "500", cls: "bg-neutral-500", hex: "#4a4a4a" },
 ];
 /**
- * THE INK HALF — three steps, and a deliberate gap before the surface half
- * above. `450` is a caps-label-only step ("Main Menu" and nothing that reads
- * as a sentence); `400` is the first step body TEXT may be set in
+ * THE INK HALF — three ROLE steps, and a deliberate gap before the surface
+ * half above. `450` is a caps-label-only step ("Main Menu" and nothing that
+ * reads as a sentence); `400` is the first step body TEXT may be set in
  * (`--muted-foreground`); `200` is body and headings both, since the Figma
  * sets both in white.
+ *
+ * `300`, `100` and `50` follow: no ROLE reads them any more, but
+ * `scroll-area.tsx`'s thumb, `switch.tsx`'s off track and `button.tsx`'s
+ * `white` variant (hover and active) still spell them directly, so their
+ * hexes stay pinned here too rather than falling out of this page's coverage.
  */
 const INK: Array<{ step: string; cls: string; hex: string }> = [
   { step: "450", cls: "bg-neutral-450", hex: "#6e6e6e" },
   { step: "400", cls: "bg-neutral-400", hex: "#858585" },
   { step: "200", cls: "bg-neutral-200", hex: "#ffffff" },
+  { step: "300", cls: "bg-neutral-300", hex: "#b5b5b5" },
+  { step: "100", cls: "bg-neutral-100", hex: "#e5e5e5" },
+  { step: "50", cls: "bg-neutral-50", hex: "#fafafa" },
 ];
 /**
  * THE DECISIONS THE TOKEN TABLES CANNOT HOLD.

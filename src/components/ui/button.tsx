@@ -138,7 +138,7 @@ const buttonVariants = cva(
          * all. On the console the border is invisible against the fill and
          * costs nothing.
          */
-        white: "border border-border bg-white text-neutral-950 shadow-xs hover:bg-neutral-100 active:bg-neutral-200",
+        white: "border border-border bg-white text-neutral-950 shadow-xs hover:bg-neutral-50 active:bg-neutral-100",
         /** THE REFERENCE'S OWN BADGE-AS-BUTTON: a 10% brand wash inside a 20%
          *  brand ring, carrying brand ink. On a light page this shape was
          *  impossible in the brand — a yellow wash under yellow ink needs

@@ -82,6 +82,16 @@ describe("the console's supplied constants", () => {
     expect(token("color-neutral-950")).not.toBe(darkToken("canvas-bg"));
   });
 
+  it("gives a grey button's hover and active a visible step, not a repaint", () => {
+    // `--secondary` and `--accent` both landed on #333333 for one draft, so a
+    // grey button's own `hover:bg-accent` / `active:bg-accent` repainted the
+    // same colour over itself — a completely invisible interaction state.
+    // `--accent` moves to neutral-700 (#3A3A3A, the same step `--avatar`
+    // uses, a different role) so the two roles can never collide again.
+    expect(darkToken("accent")).toBe("var(--color-neutral-700)");
+    expect(darkToken("accent")).not.toBe(darkToken("secondary"));
+  });
+
   it("draws every button and the period pill at the control radius — the shape rule's final word", () => {
     // THE 4 SEP 2026 FIGMA IS THE LAST WORD: 8px on every button, chip, input,
     // select, tab and the period switch, no pills anywhere in the kit. The
@@ -161,6 +171,17 @@ describe("the console's supplied constants", () => {
     // on the console — is #E8E6E7, four counts off.
     expect(button).toMatch(/white:\s*"[^"]*\bbg-white\b/);
     expect(read("src/app/dashboard/custom-board.tsx")).toMatch(/variant="white"[\s\S]{0,200}?>\s*<Plus \/>\s*Add\b/);
+  });
+
+  it("keeps the white button's active state off white-on-white", () => {
+    // `--color-neutral-200` is #ffffff now (the Figma sets body ink in
+    // white), so the `white` variant's old `active:bg-neutral-200` pressed to
+    // the exact colour the button already was. `hover` moves to neutral-50,
+    // `active` to neutral-100, so the button still has somewhere to go.
+    const white = button.match(/white:\s*"([^"]+)"/)?.[1] ?? "";
+    expect(white).toMatch(/\bhover:bg-neutral-50\b/);
+    expect(white).toMatch(/\bactive:bg-neutral-100\b/);
+    expect(white, "the old white-on-white active state must be gone").not.toMatch(/\bactive:bg-neutral-200\b/);
   });
 
   it("gives a workspace chip its fill and its ink from the same key", () => {
