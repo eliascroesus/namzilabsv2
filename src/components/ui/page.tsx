@@ -341,7 +341,8 @@ export function PageHeader({ title, lede, actions, tabs, back, className }: Page
             back && "mt-3",
           )}
         >
-          <div className="flex min-w-0 items-center overflow-x-auto">{tabs}</div>
+          {/* `-mx-1 px-1`: a bare `overflow-x-auto` clips the first and last tab's focus ring at both ends — the same compensation the period track already carries in `app/dashboard/page.tsx`. */}
+          <div className="flex min-w-0 items-center overflow-x-auto -mx-1 px-1">{tabs}</div>
           <HeaderTitle title={title} lede={lede} className="flex flex-col items-center gap-2 text-center" />
           {actions && (
             <div className="flex min-w-0 flex-wrap items-center justify-center gap-2 sm:justify-end">{actions}</div>

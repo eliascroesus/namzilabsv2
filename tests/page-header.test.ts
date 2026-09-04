@@ -52,13 +52,17 @@ describe("PageHeader's title, with and without a tab strip beside it", () => {
     expect(matches.length, "the h1 recipe must appear exactly once in the file").toBe(1);
   });
 
-  it("lets the tab strip scroll inside its own container instead of widening the page", () => {
+  it("lets the tab strip scroll inside its own container, with room for the focus ring at both ends", () => {
     // The spec's Mobile section requires the tab strip to scroll in its own
     // overflow container rather than push the page into horizontal scroll —
     // the same failure mode `actions`' own `min-w-0` note already guards
-    // against for the OTHER two columns of this row.
+    // against for the OTHER two columns of this row. `-mx-1`/`px-1` around
+    // the scroller is the same compensation `app/dashboard/page.tsx`'s period
+    // track already uses: a bare `overflow-x-auto` clips the first and last
+    // child's focus ring, so without it a keyboard user tabbing to the first
+    // or last tab loses its outline exactly when they reach it.
     const source = read("src/components/ui/page.tsx");
-    expect(source).toMatch(/flex min-w-0 items-center overflow-x-auto/);
+    expect(source).toMatch(/flex min-w-0 items-center overflow-x-auto -mx-1 px-1/);
   });
 
   it("never gives the title column its own min-w-0", () => {
