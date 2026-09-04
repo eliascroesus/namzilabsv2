@@ -68,8 +68,11 @@ export const viewport: Viewport = {
    * mismatched band above the app on mobile with nothing failing.
    */
   themeColor: [
+    // Pinned to `--background` by tests/design-swatches.test.ts, in both
+    // themes: Next evaluates this at build time and cannot read a custom
+    // property, so a re-theme that misses it leaves a grey band above the app.
     { media: "(prefers-color-scheme: light)", color: "#f7f8f9" },
-    { media: "(prefers-color-scheme: dark)", color: "#1b191a" },
+    { media: "(prefers-color-scheme: dark)", color: "#0f1011" },
   ],
   colorScheme: "light dark",
   viewportFit: "cover",

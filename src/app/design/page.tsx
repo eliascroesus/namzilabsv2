@@ -88,52 +88,35 @@ const BRAND: Array<{ step: string; cls: string; hex: string }> = [
   { step: "900", cls: "bg-brand-900", hex: "#0056b3" },
 ];
 /**
- * THE SURFACE HALF of the neutral ramp — the five steps the interface is built
- * out of, and they are five because the product has five surfaces and not
- * because five is a nice number.
- *
- * 950 is the GROUND, and the rail, the top bar and the page are all of it: one
- * colour, with a 1px 600 hairline doing every separation in the product. 800 is
- * a CARD, which is a 1.14:1 step off the ground — a step you can measure and
- * not one you can see, which is why a card without its border is an invisible
- * card rather than a flat one. 900 is a CONTROL, one step DOWN from a card, so
- * a select reads as a recessed slot rather than a raised chip. 700 is RAISED —
- * a hover, a menu row, the toast. 500 is the heavier rule a checkbox or a
- * switch track owes.
+ * THE SURFACE HALF of the neutral ramp — eight steps now, because the
+ * interface is built out of THREE grounds instead of one: `950` is the page,
+ * `925` is the chrome (the top bar and the rail, and the card fill), `900` is
+ * the panel under the top bar, and `850` is a control recessed into the
+ * panel. `800` and `700` are raised — a hover, a menu row, an avatar circle.
+ * `600` is the hairline; `500` is the heavier rule a checkbox or a switch
+ * track owes.
  */
 const SURFACE: Array<{ step: string; cls: string; hex: string }> = [
-  { step: "950", cls: "bg-neutral-950", hex: "#1b191a" },
-  { step: "900", cls: "bg-neutral-900", hex: "#211f20" },
-  { step: "800", cls: "bg-neutral-800", hex: "#272426" },
-  { step: "700", cls: "bg-neutral-700", hex: "#332f31" },
-  { step: "600", cls: "bg-neutral-600", hex: "#3d393b" },
-  { step: "500", cls: "bg-neutral-500", hex: "#4d494b" },
+  { step: "950", cls: "bg-neutral-950", hex: "#0f1011" },
+  { step: "925", cls: "bg-neutral-925", hex: "#111111" },
+  { step: "900", cls: "bg-neutral-900", hex: "#181818" },
+  { step: "850", cls: "bg-neutral-850", hex: "#202020" },
+  { step: "800", cls: "bg-neutral-800", hex: "#333333" },
+  { step: "700", cls: "bg-neutral-700", hex: "#3a3a3a" },
+  { step: "600", cls: "bg-neutral-600", hex: "#343434" },
+  { step: "500", cls: "bg-neutral-500", hex: "#4a4a4a" },
 ];
 /**
- * THE INK HALF — four values, and the count is the point.
- *
- * The reference this interface is drawn from ships SEVEN greys for text:
- * #ffffff, #e8e6e7, #e5e7eb, #a1a1a1, #b0a9ae, #99a1af and #6a7282. Three of
- * those are within three counts of each other. That is the same failure the
- * type scale was closed to prevent — twelve names over nine sizes — arriving in
- * the colour layer, and it collapses here to one value per job.
- *
- * 400 IS NOT THE REFERENCE'S #6a7282, and this is the one measurement in the
- * kit that overrules the source outright: that value is 3.56:1 on the #272426
- * card the reference sets its own empty-state copy on, against the 4.5:1 body
- * text owes. Raised four steps in the same hue to 4.75:1.
- *
- * There is a deliberate GAP between this half and the surface half above. 500
- * is the last step a LINE may be drawn in and 400 the first that TEXT may be
- * set in; the value that reads as a 1px rule and the value that reads as 12px
- * copy are not the same value, and the product had been pretending they were.
+ * THE INK HALF — three steps, and a deliberate gap before the surface half
+ * above. `450` is a caps-label-only step ("Main Menu" and nothing that reads
+ * as a sentence); `400` is the first step body TEXT may be set in
+ * (`--muted-foreground`); `200` is body and headings both, since the Figma
+ * sets both in white.
  */
 const INK: Array<{ step: string; cls: string; hex: string }> = [
-  { step: "400", cls: "bg-neutral-400", hex: "#948d93" },
-  { step: "300", cls: "bg-neutral-300", hex: "#b0a9ae" },
-  { step: "200", cls: "bg-neutral-200", hex: "#e8e6e7" },
-  { step: "100", cls: "bg-neutral-100", hex: "#eceaeb" },
-  { step: "50", cls: "bg-neutral-50", hex: "#fafafa" },
+  { step: "450", cls: "bg-neutral-450", hex: "#6e6e6e" },
+  { step: "400", cls: "bg-neutral-400", hex: "#858585" },
+  { step: "200", cls: "bg-neutral-200", hex: "#ffffff" },
 ];
 /**
  * THE DECISIONS THE TOKEN TABLES CANNOT HOLD.

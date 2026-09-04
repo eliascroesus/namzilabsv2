@@ -66,18 +66,20 @@ describe("the console's supplied constants", () => {
     expect(token("primary")).toBe("var(--color-brand-600)");
   });
 
-  it("grounds on #1b191a", () => {
-    // The ground every surface is cut from. Untouched by this task — the
-    // three-surface recut is a separate change.
-    expect(token("color-neutral-950")).toBe("#1b191a");
+  it("grounds on #0f1011", () => {
+    // The page ground under the blue re-theme's three-surface model.
+    expect(token("color-neutral-950")).toBe("#0f1011");
   });
 
-  it("keeps the canvas and the chrome on one colour", () => {
-    // Not decoration: the canvas was FROZEN at #1b191a while the chrome sat
-    // four counts off it, and globals.css carried a note admitting the gap.
-    // The ground moving to meet it is what closed that, so if the two ever
-    // diverge again the note above `--canvas-bg` is a lie.
-    expect(darkToken("canvas-bg")).toBe(token("color-neutral-950"));
+  it("keeps the canvas frozen even though the ground moved on without it", () => {
+    // The blue re-theme moves the ground to #0F1011. `--canvas-bg` stays
+    // #1b191a — the value the builder's canvas was frozen at during the
+    // PREVIOUS re-theme — because the canvas is out of scope here (flow
+    // builder: tidy and fix, never redesign). The two are allowed to diverge
+    // again; this protects the canvas from being "fixed" to match whatever
+    // the ground becomes next.
+    expect(darkToken("canvas-bg")).toBe("#1b191a");
+    expect(token("color-neutral-950")).not.toBe(darkToken("canvas-bg"));
   });
 
   it("draws every button and every period pill as a full capsule", () => {
