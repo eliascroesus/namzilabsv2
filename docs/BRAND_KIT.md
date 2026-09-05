@@ -6,9 +6,10 @@ living render of everything here is `/design`. If this document, the tokens,
 and `/design` ever disagree, the tokens win and the other two are bugs.
 
 Benchmarked against Linear, Stripe, Notion, Vercel, Miro and Zapier, and drawn
-from a VoltAgent-style observability console: **one surface separated entirely
-by hairlines**, one neutral ramp, one blue in three shapes, a 14px UI base, and
-a state for everything — hover, focus, empty, loading, error.
+from the 4 September 2026 Figma: **three dark surfaces meeting at one
+hairline**, one neutral ramp, one blue doing a stroke's job and a fill's,
+a 14px UI base, and a state for everything — hover, focus, empty, loading,
+error.
 
 **The thesis: quiet chrome, loud numbers.** This is a reconciliation product —
 six tools disagree and the app's job is to answer in one figure you can defend.
@@ -20,11 +21,17 @@ exhausting by 4pm.
 
 ## 1. Principles
 
-1. **One surface. The hairline is the structure.** The rail, the top bar and the
-   page are all `#1B191A`; every separation in the product is a 1px `#3D393B`
-   rule. A card is `#272426` — a **1.14:1** step, which exists in the numbers
-   and not in the eye — so a card without its border is not a flatter card, it
-   is an invisible one.
+1. **Three darks, one hairline.** The page is `#0F1011`; the top bar, the
+   rail and every card share `#111111`; the content panel under the top bar —
+   where the board and its tiles actually sit — is `#181818`. That is three
+   surfaces where the two-day-old console ran one, and they sit within a hair
+   of each other on purpose: `#111111` on `#0F1011` measures **1.01:1**,
+   `#181818` on `#0F1011` measures **1.07:1** — both TIGHTER than the 1.14:1
+   step the previous scheme ran between its one ground and its cards. `#343434`
+   is still the one hairline value that separates them anyway, because a
+   surface change nobody can see without its edge is not a flatter surface, it
+   is an invisible one — the same argument as two days ago, now covering three
+   surfaces instead of one.
 2. **Roles, not ramps.** Components say `bg-card`, `border-border`,
    `text-muted-foreground` — never `bg-neutral-800` or `border-neutral-600`.
    Roles are what make a surface change a one-file edit.
@@ -45,85 +52,116 @@ exhausting by 4pm.
 
 ## 2. Color
 
-### The rule that retired: yellow fills, violet draws
+### The brand ramp — one blue, two jobs
 
-The kit ran a fill/stroke split for one reason, and it is recorded here because
-the reason is gone rather than forgotten:
+Two days ago the kit ran cyan in three shapes: a ring for identity, a glyph
+for location, a fill for action. The Figma this pass builds from does not
+mark location with the brand at all — the rail's active row is a **neutral**
+`--control` fill with a `--border` edge, not a coloured glyph — so the "glyph
+is location" job retires with the cyan that carried it, and colour is left
+doing exactly two things: drawing a **stroke** and painting a **fill**.
 
-| `#EECF00` | on `#FFFFFF` | on the `#F5F5F5` ground | on the `#2E2E2E` band |
+| Step | Hex | Role | Measured |
 |---|---|---|---|
-| as a **stroke or text** | **1.55:1** | **1.42:1** | 8.77:1 |
-| as a **fill**, ink `#1A1A1A` | **11.24:1** | — | — |
+| 50 | `#E6F2FF` | wash on light | — |
+| 100 | `#CCE5FF` | | — |
+| 200 | `#99CBFF` | | — |
+| 300 | `#66B2FF` | | 8.51:1 on `#0F1011` |
+| 400 | `#3D9BFF` | **THE DARK STROKE** (`--marker` in `.dark`): links, focus ring, active tab rule, selected edge | 6.65:1 on `#0F1011`, 6.59:1 on `#111111`, 6.20:1 on `#181818` |
+| 500 | `#007BFF` | **THE BRAND**: hover of the fill, the workspace initial tint (`rgb(0 123 255 / .75)`), decorative dots, chart series default | 4.79:1 as a stroke on `#0F1011` |
+| 600 | `#0070E8` | **THE FILL** (`--primary`, both themes) under white ink | 4.68:1 white-on-fill — the Figma's own `#007BFF` measures 3.98:1 under white, short of the 4.5:1 a 15px label owes, so the fill sits one step deeper than the brand it is named after |
+| 700 | `#0069D9` | pressed | 5.22:1 under white |
+| 800 | `#0062CC` | **THE LIGHT STROKE** (`--marker` in `:root`): links, ring, active rule on white | 5.80:1 on white |
+| 900 | `#0056B3` | reserved — light hover of a stroke | 7.04:1 on white |
 
-An absent line and a superb box. The brand could only safely do one of the two
-jobs, so a second colour had to hold the other, and `check:ui` needed a rule to
-stop them swapping places.
+`--primary-foreground` is `#FFFFFF` in both themes now — it was near-black
+under cyan, because `#00C0E8` needed a dark ink to clear its bar and `#0070E8`
+needs a light one. `--brand-soft` is `rgb(0 123 255 / 0.10)`; `--brand-soft-line`
+is `rgb(0 123 255 / 0.25)` on dark and `0.30` on light — a 10% wash needs more
+ring on the lighter ground to keep an edge. **Hover still walks UP the ramp on
+dark** (600 fill → 500 on hover) **and DOWN on light** (600 → 700): brightening
+a fill under the pointer moves it toward the white page behind it on a light
+surface, and the label's contrast falls at the exact moment of the press.
 
-### The rule now: one blue, in three shapes
+### The neutral ramp (dark), re-cut for three surfaces
 
-| `#00CDF5` / `#00C0E8` | on the ground `#1B191A` | on a card `#272426` |
+| Token | Hex | Job |
 |---|---|---|
-| `#00CDF5` as a **stroke or text** | **9.20:1** | **8.49:1** |
-| `#00C0E8` as a **fill**, ink `#1B191A` | **8.08:1** | **8.08:1** |
+| `neutral-950` | `#0F1011` | `--background` — **the page ground** |
+| `neutral-925` (new) | `#111111` | `--chrome` — top bar, rail, **and** `--card` |
+| `neutral-900` | `#181818` | `--panel` — the content area under the top bar |
+| `neutral-850` (new) | `#202020` | `--control` — fields, the search box, the active nav row |
+| `neutral-800` | `#333333` | `--secondary` — grey buttons; `--accent` hover step |
+| `neutral-700` | `#3A3A3A` | avatar / icon circles (`--avatar`) |
+| `neutral-600` | `#343434` | `--border` — every hairline |
+| `neutral-500` | `#4A4A4A` | `--rule` — the heavier control edge (switch track, checkbox, table divider); the Figma's own "Main Menu" grey measures **2.13:1** here and is not text-safe |
+| `neutral-450` (new) | `#6E6E6E` | `--faint` — the caps section label only ("Main Menu"), **3.70:1** on `#111111`; never body copy |
+| `neutral-400` | `#858585` | `--muted-foreground` — the Figma's own `#7E7E7E` measures **4.37:1** on the panel; `#858585` clears **4.81:1** there and **5.12:1** on a card |
+| `neutral-200` | `#FFFFFF` | `--foreground`, `--heading`, `--card-foreground` — the Figma sets body *and* titles in white |
 
-Both clear their bar with room, so the split has nothing left to prevent.
-`--primary` fills and `--marker` draws as **two steps of one ramp**. What
-replaces the split is a rule about SHAPE, visible all at once in the rail:
+Step numbers stay labels for the ladder, not a promise of visual distance —
+**925 on 950 measures 1.01:1** and **900 on 950 measures 1.07:1**, both
+tighter than the single 1.14:1 step the cyan console ran between its one
+surface and its cards. **500 is still the last step a LINE may be drawn in
+and 450 a caps-label-only step; 400 is the first that TEXT may be set in.**
+The gap that used to run 500→400 now runs 500→450→400, and 450 is
+deliberately narrow: a section label reads at it, a sentence must not.
 
-| shape | job | where |
+`neutral-300` (`#B5B5B5`), `neutral-100` (`#E5E5E5`) and `neutral-50`
+(`#FAFAFA`) keep their definitions and are re-cut with the rest of the
+ladder. No ROLE reads them any more — the Figma's own ink is two values, so
+`--muted-foreground` sits at 400 and nothing needs a third — but four files
+still spell them directly: `ui/scroll-area.tsx`'s thumb, `ui/switch.tsx`'s off
+track, `ui/button.tsx`'s `white` variant, and the flow builder's
+`node-meta.ts`, which is out of scope. Deleting a colour token out from under
+a live class is the "renders with no colour at all" failure §11's retired-token
+rule exists to punish, so they stay — orphaned by the roles, not retired.
+
+**Depth, and the sentence this kit no longer says.** "A control recesses from
+a card" was true of one theme and stated as a rule about both. What actually
+holds is that the two directions MIRROR: on dark, a field on the `#111111`
+chrome is a step UP (`--control` `#202020`) and its hover a further step up
+(`--accent` `#333333`); on light a field on white is a step DOWN (`#F4F4F4`)
+and its hover a further step down (`#ECECEC`). Neither is "recessed", and the
+Figma contradicts the old wording outright on the dark side.
+
+Shadows: `--shadow-card` is `0 1px 2px rgb(0 0 0 / .20), 0 0 3px rgb(0 0 0 /
+.10)` — the Figma's own card shadow, unchanged by theme. Card radius stays
+10px; controls 8px (§4); `--radius-frame` comes back at 8px — the panel's
+top-RIGHT corner, under the top bar at the end of the row away from the rail,
+now that the panel and the chrome are genuinely different colours again,
+which is exactly the condition the frame token existed for and lost two days
+ago when the whole shell became one surface.
+
+### The light theme (`:root`), from the Figma's light export
+
+| Role | Hex | Measured |
 |---|---|---|
-| a **ring** | identity | the mark at the top of the rail |
-| a **glyph** | location | the active nav row (plus a raised chip — see §7) |
-| a **fill** | action | the `+` in the foot, every primary button, the active chip |
-
-| role | value | job |
-|---|---|---|
-| `--primary` | `brand-600` `#00c0e8` | every FILLED object: primary buttons, the active chip, the unread badge, the rail's `+` |
-| `--primary-foreground` | `#1b191a` | the ink ON that fill — a CONSTANT, not `--foreground`: the blue does not invert and neither may what is written on it |
-| `--marker` | `brand-500` `#00cdf5` | every LINE, RING and coloured GLYPH: the focus ring, the tab rule, the active nav glyph, the setup ring's arc, links |
-| `--brand-soft` | `rgb(0 192 232 / .10)` | the brand as a WASH — soft pills, selected banners |
-| `--brand-soft-line` | `rgb(0 188 125 / .20)` | the ring around that wash; a 10% wash on `#272426` has no edge without it |
-
-`--marker-ink` is **retired**. The violet needed a second step because 4.41:1
-clears the 3:1 a rule owes and falls short of the 4.5:1 a link does. The blue
-is 9.20:1 and clears both.
-
-### The neutral ramp — five surfaces, four inks, and a gap between them
-
-| token | value | job | on the ground |
-|---|---|---|---|
-| `neutral-950` | `#1b191a` | **the ground** — rail, top bar, page | — |
-| `neutral-900` | `#211F20` | **a control** — inputs, selects, the period track | 1.10:1 |
-| `neutral-800` | `#272426` | **a card** — and popovers | 1.14:1 |
-| `neutral-700` | `#332F31` | **raised** — hover, menu rows, the toast | 1.25:1 |
-| `neutral-600` | `#3d393b` | **the hairline** | 1.38:1 |
-| `neutral-500` | `#4d494b` | the heavier rule: switch track, checkbox, table divider | 2.40:1 |
-| `neutral-400` | `#948d93` | the dimmest **ink** | 5.41:1 |
-| `neutral-300` | `#b0a9ae` | descriptions, captions | 7.51:1 |
-| `neutral-200` | `#e8e6e7` | body, card titles — `--foreground` | 12.90:1 |
-| `neutral-50` | `#fafafa` | reserved; `#ffffff` is the page title |
-
-**500 is the last step a LINE may be drawn in and 400 the first that TEXT may be
-set in.** The gap is deliberate: the value that reads as a 1px rule and the value
-that reads as 12px copy are not the same value, and the product had been
-pretending they were.
-
-**`neutral-400` is NOT the reference's `#6a7282`.** That value measures
-**3.56:1** on the `#272426` card the reference sets its own empty-state copy on,
-against the 4.5:1 body text owes. Raised four steps in the same hue. This is the
-one place the kit overrules its source on a measurement, and §11 of DESIGN.md is
-where the principle lives.
-
-The reference ships **seven** greys for text — `#ffffff`, `#e8e6e7`, `#e5e7eb`,
-`#a1a1a1`, `#b0a9ae`, `#99a1af`, `#6a7282` — three of which sit within three
-counts of each other. That is the "twelve names over nine sizes" failure the
-type scale was closed to prevent, arriving in the colour layer. Four values, one
-per job.
+| `--background` (page) and `--panel` | `#F7F8F9` | — |
+| `--chrome` (top bar, rail) and `--card` | `#FFFFFF` | — |
+| `--border` (hairline) | `#E1E1E1` | — |
+| control outline (`--input`) | `#E4E4E4` | — |
+| `--control` (search box, active nav row) | `#F4F4F4` | — |
+| `--secondary` | `#FFFFFF` with a `--input` outline — the Figma's own grey buttons are white with an `#E4E4E4` edge | — |
+| `--secondary-foreground` (that button's TEXT) | `#303030` | **13.2:1** on white |
+| icon ink, where a glyph sets its own | `#4A4A4A` | **8.86:1** on white, measured directly — the Figma export's own figure of 8.4:1 is a hair off, most likely a rounding pass on their side. It is a per-glyph choice, not the `--secondary-foreground` role: a label and its icon are two decisions and the export makes them differently |
+| `--foreground` / `--heading` | `#000000` / `#313131` (page title, workspace name) | — |
+| `--muted-foreground` | `#6B6B6B` — the Figma's own `#8E8E8E` measures **3.28:1** on white, short of the 4.5:1 body text owes; `#6B6B6B` clears **5.33:1** on white and **5.01:1** on `#F7F8F9` |
+| `--faint` (caps label) | `#8E8E8E` — the Figma's own `#BABABA` measures **1.94:1**, unreadable at any size | 3.28:1, caps label only |
+| `--avatar` (the bell and avatar circles) | `#FFFFFF` with the `--input` outline — the light export finds these by their edge, where dark finds them by a `#3A3A3A` fill | — |
+| `--muted` (fill) | `#F4F4F4` — the same step as `--control` | — |
+| `--accent` (hover) | `#ECECEC` — one further step down; see the depth note above | — |
+| `--rule` (heavier control edge) | `#CFCFCF` — one clear step darker than `--border`, the relationship `#4A4A4A` has to `#343434` in dark | — |
+| `--popover` / `--popover-foreground` | `= --card` / `= --card-foreground`, in BOTH themes — a menu is a card that floats, and pointing rather than repeating is what stops the two drifting | — |
+| `--primary` / `--marker` | `#0070E8` / `#0062CC` | see the brand ramp above |
+| `--success` etc. | unchanged (`#00734B` trio) | 5.91:1 on white |
+| `--freshness-dot` | `#34C759` on `rgb(0 212 146 / .15)` | 8.51:1 on `#111111`; on white the dot keeps its halo — flat `#34C759` alone measures **2.22:1** on white, so the halo is load-bearing there, not decorative |
 
 ### Retired token families
 
-All of these still PARSE as classes and compile to NOTHING, which is why they
-are a build failure rather than a review comment (§11, `retired token`):
+All of these still PARSE as classes; most compile to NOTHING, which is why
+they are a build failure rather than a review comment (§11, `retired
+token`). The last three rows are a different case, flagged as such:
 
 | retired | use instead | why it existed |
 |---|---|---|
@@ -137,34 +175,31 @@ are a build failure rather than a review comment (§11, `retired token`):
 | `--rail`, `--sidebar`, `--sidebar-accent` | `background`, `neutral-700` | — |
 | `--accent-yellow` | `primary` | two yellows four counts apart under two names |
 | `.focus-ring-light` | the global ring | the product's ring was invisible on the one dark surface |
+| cyan `brand-500`/`brand-600` (`#00CDF5`/`#00C0E8`) | `brand-500`/`brand-600` at `#007BFF`/`#0070E8` | **not a dead class** — the 4 September 2026 Figma named a different blue two days after this ramp last moved. Recorded here anyway because a class surviving under a new value is the "plausible and wrong" case this table exists to catch in the DOCS, not the code |
+| `rounded-full` on `buttonVariants`'s base class | `rounded-control` | **not a dead class either** — the shape rule flipped to a pill and back for the second time (§4); `rounded-full` still compiles on purpose (avatars, the bell badge, the freshness dot, the active-count numeral), so this row is a paper trail for the next flip rather than a dead-class warning |
 
-### State trios, and the collision
+`neutral-300`, `neutral-100` and `neutral-50` are deliberately NOT in that
+table. No role reads them any longer, which is a different thing from being
+retired: four files still spell them as classes, so the tokens keep their
+definitions and were re-cut with the rest of the ladder. A row here would
+invite exactly the deletion §11 exists to prevent.
 
-`--success` / `--warn` / `--danger`, each with a `-soft` wash and an `-ink`, and
-each wash carrying a **20% ring of its own colour** — a 10% wash on `#272426` is
-quieter than the same wash was on white and reads as tinted text with no edge
-otherwise.
+### State
 
-**State is a separate vocabulary again.** While the brand was green it could not
-be: a success green four counts from the brand green is indistinguishable and
-guaranteed to drift, so the kit conceded the collision and ran "green means
-good-or-brand". The brand is cyan now, so the concession is not only unnecessary
-but wrong — a DONE badge and a New-flow button in one colour would put the
-loudest state and the loudest act in one vocabulary.
+`--success` / `--warn` / `--danger` are unchanged hex values in both themes,
+but they sit on new dark surfaces now and are re-measured rather than carried
+over on faith: `#00D492` clears **9.83:1** on the page, **9.74:1** on the
+chrome, **9.16:1** on the panel; `#F5A524` clears **9.33:1** / **9.25:1** /
+**8.70:1** across the same three; `#FB2C36` clears **5.00:1** / **4.96:1** /
+**4.66:1** — the tightest of the three, and still comfortably past 4.5.
+Light-theme success is unchanged at **5.91:1** on white.
 
-Success keeps the ramp the brand vacated (`#00d492` dark, `#00734b` light), which
-was already solved for this interface: 9.02:1 on the ground, 7.93:1 on a card,
-5.91:1 on white.
-
-> **Success is green, the brand is blue. Warn and danger are the other two state
-> hues.** **Status is quiet when fine:** a healthy thing carries a 6px dot; only
-> a thing that needs something wears a full pill.
-
-`TargetBar` is the component that paid for the collision: it drew "met" in
-`--success` and "in progress" in `--marker`, which became the same green. They
-are different colours again, but the fix outlived the bug — it draws the unmet
-meter in **greyscale** and lets colour ARRIVE when the goal lands, which is the
-honest reading regardless of palette: a bar at 40% is not good, it is 40%.
+A new `--freshness-dot: #34C759` (both themes) and `--freshness-halo:
+rgb(0 212 146 / 0.15)` replace the tile's re-use of `--success` /
+`--success-soft` for the "healthy" dot — the state vocabulary stays separate
+from a colour that used to double as the metric card's own "everything is
+fine" tint. `--success` itself keeps doing status work everywhere else
+(badges, pills); only the tile's freshness dot moves to its own pair.
 
 ## 3. Typography
 
