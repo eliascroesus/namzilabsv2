@@ -36,14 +36,14 @@ import { Card } from "@/components/ui/card";
  * and space already say. The card is one block of padding now, which is what
  * every other surface in the kit is.
  *
- * A LEADING EDGE IN THE GROUP'S COLOUR. The one new device, and borrowed rather
- * than invented: the builder's step card wears 4px of its own colour on exactly
- * this edge. A tile sits inside a coloured COLUMN whose tint it floated on
- * without ever referring to, so the board was throwing away the one fact the
- * arrangement encodes. It arrives as `--tile-edge`, set by the lane in
- * `board-column.tsx` — which means a card dragged into another column changes
- * allegiance with no prop threaded anywhere, and the ungrouped row above the
- * columns falls back to the ordinary hairline instead of claiming a group.
+ * NO LEADING EDGE, AS OF THE 4 SEP 2026 BLUE RETHEME. The card used to wear
+ * 4px of its group's colour on this edge, borrowed from the builder's step
+ * card — the one device that let a tile floating loose in a coloured COLUMN
+ * refer back to the tint it sat on. The Figma's default board draws no such
+ * edge on any tile, so the strip is gone from here. `--tile-edge` is not:
+ * the lane in `board-column.tsx` still sets it per group, unread by anything
+ * on this board now, kept alive for the canvas board this spec does not
+ * touch.
  *
  * ── THE SPLIT THAT KEEPS A ROW FROM READING AS A PILE ───────────────────────
  *
@@ -95,39 +95,39 @@ export function MetricCard({
   return (
     <Card variant="tile" padding="none" className={cn("lift flex flex-col overflow-hidden", className)} {...rest}>
       <div className="flex flex-1">
-        {/* THE EDGE. `--tile-edge` is the group's accent, set by the lane; the
-            fallback is the ordinary hairline, so an ungrouped tile keeps the
-            same geometry without borrowing a colour that would mean it belongs
-            somewhere. `aria-hidden` because it duplicates the group name the
-            column header already states. */}
-        <span
-          aria-hidden
-          className="w-1 shrink-0"
-          style={{ background: "var(--tile-edge, var(--border))" }}
-        />
+        {/* NO EDGE, AS OF THE 4 SEP 2026 BLUE RETHEME — see the file note
+            above. `--tile-edge` stays defined and `board-column.tsx` still
+            sets it per lane; nothing in this shell reads it any more. This
+            wrapper is a one-child flex div now — harmless, and left alone
+            rather than reflowing every line below it for a width the edge no
+            longer needs. */}
         <div className="flex min-w-0 flex-1 flex-col p-4">
           <div className="flex min-h-0 flex-1 flex-col justify-center">
             <div className="flex items-start justify-between gap-3">
-              {/* A CARD TITLE, NOT A MICRO-LABEL.
-                  This was 13px ALL-CAPS semibold muted, on the argument that a
-                  metric's name LABELS the figure under it and that caps-and-
-                  muted is what keeps the NUMBER the loud thing. The second half
-                  of that is right and survives: the name is `font-medium` at
-                  body size against a 36px numeral, which is a two-step gap —
-                  the number is in no danger.
-                  The first half was overcorrecting. Every tile on the board
-                  read as a caption with a graph under it, at a size two steps
-                  below the body text everywhere else in the product, and the
-                  reference sets a card's name at exactly the same 14px/500 as
-                  its body. The micro-label voice is for a STATUS or a column
-                  head — strings you scan — not for a name the customer wrote. */}
+              {/* A CARD TITLE, NOT A MICRO-LABEL — AND MUTED AGAIN AS OF THE
+                  4 SEP 2026 BLUE RETHEME. This was 13px ALL-CAPS semibold
+                  muted, on the argument that a metric's name LABELS the figure
+                  under it and that caps-and-muted is what keeps the NUMBER the
+                  loud thing. The size half of that overcorrected: every tile
+                  read as a caption with a graph under it, two steps below the
+                  body text everywhere else in the product, so the name moved
+                  up to body size (`text-sm`, 15px) against a 28px numeral —
+                  still a two-step gap, the number is in no danger.
+                  THE INK HALF CAME BACK MUTED. The body-size name briefly
+                  carried `font-medium text-foreground`, on the argument that a
+                  name the customer wrote earned full ink; the Figma draws it
+                  `text-muted-foreground` at body weight instead, so the
+                  numeral stays the one full-ink object the card has. The
+                  micro-label voice is still the wrong one here — it is for a
+                  STATUS or a column head, strings you scan, not a name someone
+                  wrote — the size argument above still holds at 15px muted. */}
               {/* `flex-1` IS WHAT MAKES `truncate` WORK. The h3 had `min-w-0`
                   and its span had `truncate`, and a long name still wrapped to
                   two lines — because without a flex basis the h3 sizes to its
                   CONTENT inside a `justify-between` row, so there is no width
                   for the ellipsis to trigger against. "Speed To Lead (Armaan)"
                   was the case that showed it. */}
-              <h3 className="flex min-w-0 flex-1 items-baseline text-sm font-medium text-foreground">
+              <h3 className="flex min-w-0 flex-1 items-baseline text-sm font-normal text-muted-foreground">
                 <span className="truncate">{title}</span>
                 {titleSuffix}
               </h3>
@@ -138,7 +138,14 @@ export function MetricCard({
 
             {headline !== undefined && (
               <div className="mt-2 flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
-                <p className={cn("stat-numeral text-display-md leading-none", headline == null && "text-muted-foreground")}>
+                {/* `text-heading`, SAID OUT LOUD. It used to inherit
+                    `--card-foreground` and looked right, because in the dark
+                    theme `--heading` and `--foreground` are the same white. In
+                    light they are not — #313131 against #000000 — and the spec
+                    asks for the heading step. `cn` still lets the em-dash case
+                    win: tailwind-merge drops `text-heading` when
+                    `text-muted-foreground` is appended for a null headline. */}
+                <p className={cn("stat-numeral text-display-md leading-none text-heading", headline == null && "text-muted-foreground")}>
                   {headline ?? "—"}
                 </p>
                 {delta}
