@@ -139,20 +139,20 @@ const DIRECTION: Array<{ rule: string; why: string }> = [
     why: "Six tools disagree and this app answers in one figure. The number is the only thing allowed to be loud; everything around it is furniture, and furniture that shouts is why most operational tools are exhausting by 4pm.",
   },
   {
-    rule: "One surface, and a hairline",
-    why: "The rail, the top bar and the page are ALL #1B191A, and every separation in the product is a 1px #3D393B rule. This is the reverse of the band that wrapped a light page, and the reversal is the whole re-theme: with one material there is no 40-point luminance step to find its own edge, so the hairline stops being trim and becomes the structure. A card is #272426 — a 1.14:1 step — so a card without its border is not a flatter card, it is an invisible one.",
+    rule: "Three darks, and a hairline",
+    why: "The page is #0F1011; the top bar, the rail and every card are #111111; the panel under the top bar is #181818 — three surfaces where the two-day-old console ran one. They sit within a hair of each other on purpose (#111111 on #0F1011 measures 1.01:1, tighter than the 1.14:1 step the last surface ran), so the 1px #343434 rule between them is doing more work than ever, not less: a surface change nobody can see without its edge is not a flatter surface, it is an invisible one.",
   },
   {
     rule: "Content floats on the ground",
-    why: "Nothing sits flat on the page but a heading or a caption. Everything with content in it is an island with an EDGE, and the edge is the whole of it: a card is a 1.14:1 step off the page, so the border is not trim on a surface you can already see, it is the only thing making the surface visible at all.",
+    why: "Nothing sits flat on the page but a heading or a caption. Everything with content in it is an island with an EDGE, and the edge is the whole of it: a card is #111111 on a #0F1011 page — 1.01:1, tighter than ever — so the border is not trim on a surface you can already see, it is the only thing making the surface visible at all.",
   },
   {
-    rule: "One blue, in three shapes",
-    why: "The fill/stroke split existed because #EECF00 is 1.55:1 as a stroke on white and 11.24:1 as a fill — an absent line and a superb box, so the brand could only safely do one of the two jobs and a second colour had to hold the other. On #1B191A the blue is 9.20:1 drawn and 8.08:1 filled, so the split has nothing left to prevent and yellow-as-stroke retires with it. What replaces it is a rule about SHAPE, all three visible at once in the rail: a RING is identity (the mark), a GLYPH is location (the active row), a FILL is action (the +, every primary button). Success is NOT the brand: it kept the green the brand vacated, because a DONE badge and a New-flow button being one colour would put the loudest state and the loudest act in one vocabulary. Warn and danger are the other two state hues, and what stops any of them becoming wallpaper is that status is quiet when fine.",
+    rule: "One blue, two jobs",
+    why: "#007BFF replaces the cyan everywhere. It does two jobs, not three: a STROKE (--marker: links, the focus ring, the active tab rule) at 6.65:1 down to 6.20:1 across the three dark surfaces, and a FILL (--primary, one step deeper at #0070E8) at 4.68:1 under white ink. The 'glyph is location' job the cyan carried is gone — the rail's active row is a neutral --control fill now, not a coloured icon, because that is what the Figma draws. Success is still NOT the brand: it keeps the green the brand vacated, because a DONE badge and a New-flow button being one colour puts the loudest state and the loudest act in one vocabulary. Warn and danger are the other two state hues, and status is still quiet when fine.",
   },
   {
     rule: "Ten contains, eight presses",
-    why: "Everything that contains something is 10px — cards, panels, popovers, selects, the period track. Everything pressable is 8. A badge is 4. An avatar and a status dot are the only full radii left. This replaced 'everything pressable is a full pill', which needed an exception it could never justify: a control that WRAPS cannot be a pill, because a full radius on a two-line box renders as a circle around the words. There is no exception now.",
+    why: "Everything that contains something is 10px — cards, panels, popovers, selects, the period track. Everything pressable is 8: buttons, chips, inputs, selects, tabs, nav rows, the period switch. A badge is 4. Circles are reserved for four things that are never an action — an avatar, the bell's unread badge, the freshness dot, and the tile's active-count numeral. This replaced 'everything pressable is a full pill' for the second time, and the 4 September 2026 Figma is named as the reference so a third flip needs a new design rather than a preference.",
   },
   {
     rule: "Three sizes do the work",
@@ -190,16 +190,19 @@ const TYPE: Array<{ token: string; cls: string; px: string; use: string; sample:
   },
 ];
 const RADII: Array<{ cls: string; label: string; body: string }> = [
-  { cls: "rounded-control", label: "control · pill", body: "Buttons, inputs, menu rows" },
-  { cls: "rounded-card", label: "card · 10px", body: "Tiles, list rows, rail tiles" },
-  { cls: "rounded-surface", label: "surface · 16px", body: "Panels, modals, tables, step cards" },
-  /* BACK FROM ZERO. It was 32px while the frame painted a gradient behind a
-     transparent rail, then 0 when the navigation briefly became a white column
-     and there was no wash left to cut into. There is again — the band is
-     charcoal and the ground is off-white — and 16px is what the export draws.
-     Applied TOP-LEFT ONLY: the one corner where the page meets both halves of
-     the band at once. */
-  { cls: "rounded-frame", label: "frame · 16px", body: "The ground's top-left corner, cut into the band" },
+  { cls: "rounded-control", label: "control · 8px", body: "Buttons, inputs, selects, tabs, nav rows, the period switch — no pill, final word" },
+  { cls: "rounded-card", label: "card · 10px", body: "Tiles, list rows, board cards" },
+  { cls: "rounded-surface", label: "surface · 10px", body: "Panels, modals, tables, step cards — the same radius as a card, on a bigger object" },
+  /* THE FRAME IS BACK, ON THE OTHER CORNER. It was 32px while the frame
+     painted a gradient behind a transparent rail, then 16px, then 0 when the
+     rail, the bar and the page became one surface and a notch had nothing
+     left to reveal. There are three surfaces again — the panel is #181818
+     under a bar and beside a rail that are #111111 — so 8px, half the old 16
+     because the step it reveals is a fraction of what the light page was.
+     Applied to the panel's TOP-RIGHT corner: every earlier era cut the
+     top-left, nearest the rail, and the 4 Sep 2026 Figma does not. The rail
+     side butts square behind a hairline. */
+  { cls: "rounded-frame", label: "frame · 8px", body: "The panel's top-right corner, under the bar away from the rail" },
 ];
 /**
  * SAMPLE DAYS FOR THE CALENDAR SECTION.
@@ -367,14 +370,14 @@ export default function DesignPage() {
 
         <Section
           title="Brand sheet"
-          note="The supplied sheets, rendered from the shipping components rather than drawn. Kept as the historical record of a language this kit no longer speaks: deep black doing the work, a yellow carrying the act, a violet drawing every line, and everything shaped as a full pill. What survived the re-theme is the argument rather than the palette — the workhorse is quiet and colour arrives only where it means something, which is now one blue in three shapes on a single near-black surface."
+          note="The supplied sheets, rendered from the shipping components rather than drawn. Kept as the historical record of a language this kit no longer speaks: deep black doing the work, a yellow carrying the act, a violet drawing every line, and everything shaped as a full pill. What survived is the argument rather than the palette — the workhorse is quiet and colour arrives only where it means something, which is now one blue doing a stroke's job and a fill's, across three near-black surfaces."
         >
           <BrandSheet />
         </Section>
 
         <Section
           title="Colour"
-          note="ONE GREEN, IN THREE SHAPES. That is a measurement, not a preference: #EECF00 is 1.55:1 as a stroke or as text on white and 11.24:1 as a fill under #1A1A1A ink, so the brand is spent on filled objects — the mark, the active rail chip, primary buttons, the unread badge, step markers — and never on a rule, a ring, a border or a glyph standing on the page. Everything that draws is the marker's violet: focus rings, links, hover borders, selection rings, the active tab's rule. The one place yellow may stroke is a dark surface, where it measures 8.77:1 — which is why the top bar's progress arc is yellow and a link never is. check:ui's yellow-as-stroke rule fails the build the moment the primary is spelled as text, a border, a ring, a stroke, a fill or a divide, which is what makes this rule enforceable where 'yellow is the hero at most once per screen' never was — nothing could ever count the yellows on a screen. Beside the two sits a three-colour accent set (orange, pink, periwinkle) for surfaces that need to be identifiable rather than to mean something; success, warn and danger keep the job of meaning."
+          note="ONE BLUE, TWO JOBS, and both of them measured. #0070E8 FILLS, carrying white ink at 4.68:1 — one step deeper than the Figma's own #007BFF, which measures 3.98:1 under white and is under the 4.5 a 15px label owes. #3D9BFF DRAWS on dark (6.65:1 on the page, 6.20:1 on the panel) and #0062CC draws on light (5.80:1 on white), because a 1px rule owes more room than a button's own ink does. The 'yellow fills, violet draws' split is retired and so is the gate rule that policed it: two steps of one ramp need no rule to keep them apart. Beside them sits a three-colour accent set (orange, pink, periwinkle) for surfaces that need to be identifiable rather than to mean something; success, warn and danger keep the job of meaning, and the tile's freshness dot has its own #34C759 so retuning a status can never move it."
         >
           <p className="mb-2 text-xs font-medium text-muted-foreground">Brand — 500 draws, 600 fills, brand-*</p>
           <div className="flex overflow-hidden rounded-card border border-border">
@@ -389,7 +392,7 @@ export default function DesignPage() {
             ))}
           </div>
           <p className="mb-2 mt-5 text-xs font-medium text-muted-foreground">
-            Surface — the five things the app is built out of, neutral-*
+            Surface — eight steps, three of them grounds: 950 page, 925 chrome and card, 900 panel, neutral-*
           </p>
           <div className="flex overflow-hidden rounded-card border border-border">
             {SURFACE.map((s) => (
@@ -402,7 +405,10 @@ export default function DesignPage() {
               </div>
             ))}
           </div>
-          <p className="mb-2 mt-5 text-xs font-medium text-muted-foreground">Ink — four values, one per job, neutral-*</p>
+          <p className="mb-2 mt-5 text-xs font-medium text-muted-foreground">
+            Ink — three values, one per job, neutral-* · 450 is faint — the caps section label only, 3.70:1 on #111111,
+            and never a sentence
+          </p>
           <div className="flex overflow-hidden rounded-card border border-border">
             {INK.map((s) => (
               <div key={s.step} className="min-w-0 flex-1">
@@ -462,7 +468,7 @@ export default function DesignPage() {
 
         <Section
           title="Radius and elevation"
-          note="Pill-first, the way the sheet draws it: every button, input and menu row is fully round, cards take 10px and panels 16px. One elevation ladder — hairline borders carry structure, shadows only say how far a surface floats."
+          note="8px-first, the way the 4 September 2026 Figma draws it: every button, input, select, tab, nav row and the period switch is an 8px rectangle, cards and panels take 10px, and circles are reserved for avatars, the bell badge, the freshness dot and the active-count numeral. One elevation ladder — hairline borders carry structure, shadows only say how far a surface floats, and --shadow-card is the export's own value in both themes."
         >
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {RADII.map((r) => (
@@ -688,10 +694,11 @@ export default function DesignPage() {
               </p>
             </div>
             <div>
-              {/* `ink-800` is the toast's rung — the ladder's "raised" step,
-                  which is what `ui/toast.tsx` actually paints. On a charcoal
-                  band raised means LIGHTER, so this now sits ABOVE ink-950
-                  rather than below it. */}
+              {/* `neutral-700` is the toast's rung — the ladder's "raised"
+                  step, which is what `ui/toast.tsx` actually paints. On a
+                  near-black surface raised means LIGHTER, so it sits above the
+                  page rather than below it. (The `ink-*` ramp this comment used
+                  to name was retired with the light theme.) */}
               <div className="inline-flex items-center gap-3 rounded-surface bg-neutral-700 px-4 py-2.5 text-sm text-foreground">
                 Flow published
               </div>
@@ -705,17 +712,23 @@ export default function DesignPage() {
 
         <Section
           title="Rail"
-          note="A 48px icon column in the SAME #1B191A as the page beside it, separated by one hairline. These tiles are a swatch — the real markup lives in src/components/sidebar.tsx and nowhere else, and it has moved on from what is drawn here: the active row is a brand GLYPH on a raised chip rather than a filled brand square, because the fill is spent once in this column and it is spent on the + in the foot, which is the one verb."
+          note="A 56px icon column on --chrome (#111111), one step off the #0F1011 page beside it and separated by one hairline. These tiles are a swatch — the real markup lives in src/components/sidebar.tsx and nowhere else, and it has moved on from what is drawn here: the rail opens to 260px on hover with a workspace switcher at its head, a Main Menu caption and a Get Free Access row at its foot. The active row is a neutral --control fill, not a coloured glyph: the brand's 'location' job retired with the cyan, and the fill is spent on the New flow button in the foot."
         >
           <div className="flex items-stretch gap-4">
-            {/* `bg-background`, the band's own token, rather than `bg-rail`: that
-                role answers WHITE in the light theme (the 264px sidebar it was
-                named for became a recessed light column long ago) and painting
-                a swatch of the chrome with it would show white glyphs on white.
-                The band is the ink ladder's base and does not invert. */}
-            <div className="inline-flex items-start gap-3 rounded-card bg-background px-5 py-4">
+            {/* `bg-chrome`, which is what the real rail is painted. It was
+                `bg-background` while the rail, the bar and the page were one
+                colour and the distinction cost nothing; under three surfaces
+                that would draw the swatch on the PAGE's step and quietly
+                misreport the one thing this specimen exists to show. (`--rail`
+                itself is long retired — see the retired-token table.) */}
+            <div className="inline-flex items-start gap-3 rounded-card bg-chrome px-5 py-4">
               <span className="flex w-14 flex-col items-center">
-                <span className="flex size-10 items-center justify-center rounded-control bg-primary text-primary-foreground">
+                {/* THE ACTIVE ROW IS NEUTRAL NOW. It was the brand, filled —
+                    the "glyph is location" job the cyan carried. The 4 Sep 2026
+                    Figma marks the active row with a `--control` fill and an
+                    ordinary ink glyph, which is what leaves the brand free to
+                    mean "this does something" everywhere else. */}
+                <span className="flex size-10 items-center justify-center rounded-control bg-control text-foreground">
                   <LayoutDashboard size={24} />
                 </span>
                 <span className="px-1 text-center text-xs font-medium leading-4 text-white">Active</span>
@@ -735,17 +748,16 @@ export default function DesignPage() {
             </div>
             <div className="flex flex-1 flex-col justify-center gap-1 text-xs text-muted-foreground">
               <p>
-                The band is <code className="font-mono text-foreground">ink-950</code>{" "}#2E2E2E in both themes — flat,
-                not a gradient, and with no seam inside it: the rail&rsquo;s right edge and the top bar&rsquo;s underside
-                are one continuous shape, because a rule drawn where two different materials already meet is a rule
-                doing nothing.
+                The rail is <code className="font-mono text-foreground">--chrome</code> (#111111), the same step as the
+                top bar above it and every card on the page — one count off the #0F1011 ground and two off the #181818
+                panel, so its right edge is a real 1px hairline rather than a luminance step you could see unaided.
               </p>
               <p>
-                REST IS NOTHING AT ALL. Every chip but one is a bare white glyph — on this charcoal a 16px white mark
-                measures 14.08:1, so it does not need a plate to be found, and seven pale squares down a 70px column were
-                the loudest thing in the chrome. Hover raises to <code className="font-mono text-foreground">ink-900</code>{" "}
-                and ACTIVE is the brand, filled, at 8.77:1 on the band — one yellow chip in the column, which is why the
-                other six do not have to compete to be seen.
+                REST IS NOTHING AT ALL. Every chip but one is a bare glyph on the chrome — a white mark measures 18.88:1
+                there, so it does not need a plate to be found, and seven pale squares down the column were the loudest
+                thing in it. Hover raises to <code className="font-mono text-foreground">--accent</code> and ACTIVE takes
+                a <code className="font-mono text-foreground">--control</code> fill: neutral, not the brand, because
+                where you are is not something you press.
               </p>
             </div>
           </div>
@@ -753,23 +765,27 @@ export default function DesignPage() {
 
         <Section
           title="Frame"
-          note="THE NOTCH IS GONE AND --radius-frame IS 0. It cut 16px out of the page's top-left so the band's charcoal showed through — the one corner where the page met both halves of the band at once. A radius reveals whatever is BEHIND the element it is cut into, and the thing behind the page is now the same #1B191A as the page: cutting a corner out of it to reveal it draws nothing, at the cost of a curved notch the top bar's hairline then has to stop short of. What frames the application now is the pair of rules, not a shape."
+          note="THE NOTCH IS BACK AND --radius-frame IS 8px. It went to 0 when the rail, the bar and the page became one colour: a radius reveals whatever is BEHIND the element it is cut into, and cutting a corner out of a colour to reveal the same colour draws nothing. There are three surfaces again — the panel is #181818 under a bar and beside a rail that are #111111 — so there is something to reveal. It is the panel's TOP-RIGHT corner, under the bar at the end of the row away from the rail; every earlier era of this shell cut the top-left instead, and the 4 September 2026 Figma does not."
         >
-          <div className="flex h-40 overflow-hidden rounded-card bg-background">
+          <div className="flex h-40 overflow-hidden rounded-card bg-chrome">
+            {/* The rail's width, holding the chrome's own colour — the panel
+                butts square against it, which is the half of this specimen
+                that is easy to miss. */}
             <div className="w-[100px] shrink-0" />
-            <div className="flex-1 rounded-tl-frame bg-background" />
+            <div className="flex-1 rounded-tr-frame bg-panel" />
           </div>
           <p className="mt-2 text-xs text-muted-foreground">
-            A radius reveals whatever is BEHIND the element it is cut into, which is why the column holding the top bar
-            and the page is painted <code className="font-mono text-foreground">ink-950</code> rather than left at
-            `background`: at #F5F5F5 behind #F5F5F5 the notch was perfectly invisible. The page inside it is{" "}
-            <code className="font-mono text-foreground">--ground</code>, and content sits on it in islands, never flat.
+            A radius reveals whatever is BEHIND the element it is cut into, which is why this specimen paints the frame{" "}
+            <code className="font-mono text-foreground">--chrome</code> and the panel inside it{" "}
+            <code className="font-mono text-foreground">--panel</code>: with both the same colour the corner would be
+            perfectly invisible, which is exactly the argument that took the token to 0 two days ago. Content sits on the
+            panel in islands, never flat.
           </p>
         </Section>
 
         <Section
           title="Marks"
-          note="What a dashboard tile is made of. The series is the MARKER — a series is a mark, and the fill step is reserved for things you press — the last bucket takes the ink (a positional fact, not a verdict), and a breakdown walks the marker plus the accent three. TargetBar drew met in --success and in-progress in --marker, which were the same green while success WAS the brand — so it rendered both states identically and stopped reporting the only thing it exists to report. That collision is gone (the brand is cyan, success is green), but the fix outlived it on its own merits: the unmet meter is greyscale and colour ARRIVES when the goal lands, which is the honest reading anyway — a bar at 40% is not good, it is 40%. Every value goes through formatMetricValue, so the tooltip and the headline say the same quantity the same way. A delta is never green or red: up is good for Booked Leads and bad for Speed to Lead, and nothing on a tile knows which — so it is coloured by WHETHER it moved, and the arrow alone carries direction."
+          note="What a dashboard tile is made of. The series is the BRAND — --color-brand-500 (#007BFF), the same blue as the buttons, with a 12% wash under it — because after the ramp split, --marker is the stroke step for links and rings and no longer the colour the product measures in. A breakdown walks that blue plus the accent three. TargetBar drew met in --success and in-progress in --marker, which were the same green while success WAS the brand — so it rendered both states identically and stopped reporting the only thing it exists to report. That collision is long gone, but the fix outlived it on its own merits: the unmet meter is greyscale and colour ARRIVES when the goal lands, which is the honest reading anyway — a bar at 40% is not good, it is 40%. Every value goes through formatMetricValue, so the tooltip and the headline say the same quantity the same way. A delta is never green or red: up is good for Booked Leads and bad for Speed to Lead, and nothing on a tile knows which — so it is coloured by WHETHER it moved, and the arrow alone carries direction."
         >
           <div className="grid gap-4 rounded-card bg-canvas-bg p-4 sm:grid-cols-2">
             <div className="rounded-surface border border-border bg-card p-5 shadow-card">

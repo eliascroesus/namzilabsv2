@@ -123,3 +123,76 @@ describe("DESIGN.md matches the blue re-theme in lockstep", () => {
     expect(doc).toMatch(/rather than moving to (this pass's )?`#0F1011`/);
   });
 });
+
+describe("/design's specimens and prose reflect the blue re-theme", () => {
+  const page = () => readFileSync(join(root, "src/app/design/page.tsx"), "utf8");
+
+  /**
+   * THE FIRST TWO ARE REGRESSION PINS, NOT THIS TASK'S OWN RED.
+   *
+   * The token-layer tasks rewrote the swatch arrays in this same file —
+   * they had to, because `design-swatches.test.ts` compares every row's
+   * hex against `globals.css` and would have failed the moment a token
+   * moved. These assert that they stayed rewritten, which is the thing a
+   * docs pass over the same file could plausibly undo.
+   */
+  it("the brand ramp still carries the new blue steps", () => {
+    const src = page();
+    expect(src).toMatch(/hex:\s*"#007bff"/);
+    expect(src).toMatch(/hex:\s*"#0070e8"/);
+  });
+
+  it("the ramps still carry the three new dark steps", () => {
+    const src = page();
+    expect(src).toMatch(/bg-neutral-925/);
+    expect(src).toMatch(/bg-neutral-850/);
+    expect(src).toMatch(/bg-neutral-450/);
+  });
+
+  it("captions the 450 step where it is printed, since it is neither surface nor prose", () => {
+    // The one ink step with a job narrow enough to need saying out loud —
+    // and the one a reader would otherwise take for a body-text grey.
+    expect(page()).toContain("faint — the caps section label only, 3.70:1 on #111111");
+  });
+
+  it("RADII and DIRECTION agree: control is 8px, not a pill", () => {
+    const src = page();
+    expect(src).not.toMatch(/control · pill/);
+    expect(src).toMatch(/control · 8px/);
+  });
+
+  it("draws the frame specimen on the panel's top-right corner", () => {
+    const src = page();
+    expect(src).toMatch(/rounded-tr-frame/);
+    expect(src, "the old rail-side notch is gone from the specimen too").not.toMatch(/rounded-tl-frame/);
+  });
+
+  it("the headline numeral caption is 28px", () => {
+    expect(page()).toMatch(/token:\s*"text-display-md"[^}]*?px:\s*"28px"/);
+  });
+
+  it("has no prose left from the charcoal band, the off-white page or the yellow brand", () => {
+    /**
+     * THE DOC-ROT THIS PAGE ACCUMULATED, PINNED SO IT CANNOT COME BACK.
+     *
+     * These strings are not near-misses: `#2E2E2E` was the charcoal band,
+     * `#F5F5F5` the light page under it, `ink-950` a ramp retired two
+     * re-themes ago, and "ONE GREEN, IN THREE SHAPES" a caption for a
+     * yellow-and-violet kit. Each described the product accurately at some
+     * point and none of them has for months, on the one page whose whole
+     * job is to be the reference.
+     */
+    const src = page();
+    for (const dead of ["#2E2E2E", "#F5F5F5", "ink-950", "ink-900", "ink-800", "ONE GREEN, IN THREE SHAPES", "Pill-first"]) {
+      expect(src, `"${dead}" is still on the kit page`).not.toContain(dead);
+    }
+  });
+});
+
+describe("STATE.md records the retheme", () => {
+  it("has a dated line about the blue console", () => {
+    const doc = readFileSync(join(root, "STATE.md"), "utf8");
+    expect(doc).toMatch(/4 September 2026/);
+    expect(doc).toMatch(/#007BFF/);
+  });
+});

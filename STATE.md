@@ -371,3 +371,20 @@ the same reason.) Nothing about 0030 has been pasted yet — do not treat this
 entry as a fix, only as the diagnosis.
 
 **MCP Phase 1 (the AI-assistant connection) shipped, behind `MCP_ENABLED`** — Claude or ChatGPT can connect to `/api/mcp` and read a workspace's metrics and data sources read-only, off by default until `MCP_ENABLED`, `WORKOS_AUTHKIT_DOMAIN` and WorkOS Connect are configured.
+
+---
+
+## Update — 4 September 2026
+
+**The blue re-theme shipped**, two days after the cyan console did.
+`#007BFF` replaces `#00C0E8`/`#00CDF5` everywhere; the one-surface thesis
+(`#1B191A` for the rail, the top bar and the page alike) is reversed back
+to three dark surfaces (`#0F1011` page, `#111111` chrome, `#181818`
+panel); every button, input, tab and nav row drops the pill for an 8px
+corner, named final against the 4 September 2026 Figma; the tile numeral
+drops from 36px to 28px; the top bar gains a wordmark the rail used to
+carry and loses the metrics-setup ring; and the dashboard's six-pill
+period track becomes a "Today" dropdown beside a centred title.
+`docs/BRAND_KIT.md`, `DESIGN.md` and `/design` were rewritten in lockstep
+— see `docs/superpowers/specs/2026-09-04-retheme-blue-design.md` for the
+approved decisions and the measured contrast ratios behind them.
