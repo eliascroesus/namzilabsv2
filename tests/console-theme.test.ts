@@ -165,12 +165,23 @@ describe("the console's supplied constants", () => {
     for (const g of gaps) expect(g, "a rail column that is not 8px apart").toBe("2");
   });
 
-  it("fills the Add button with literal white", () => {
+  it("still defines the white button literally, though + Add moved off it", () => {
     // Specified as a colour rather than a role, and #FFFFFF is not any token:
     // `--foreground` — the nearest role, and how `default` gets a light button
-    // on the console — is #E8E6E7, four counts off.
+    // on the console — is #E8E6E7, four counts off. The literal `white`
+    // variant stays in the kit for whatever else wants a bordered chip; this
+    // test used to also pin `custom-board.tsx`'s "+ Add" to it, which stopped
+    // being true the moment the 4 Sep 2026 blue retheme's header pass reserved
+    // the brand fill for "+ Add" and "New flow": `variant="accent"` IS that
+    // fill (`bg-primary` under `text-primary-foreground`).
     expect(button).toMatch(/white:\s*"[^"]*\bbg-white\b/);
-    expect(read("src/app/dashboard/custom-board.tsx")).toMatch(/variant="white"[\s\S]{0,200}?>\s*<Plus \/>\s*Add\b/);
+    const custom = read("src/app/dashboard/custom-board.tsx");
+    expect(custom, "+ Add now reads the brand fill, variant=\"accent\"").toMatch(
+      /variant="accent"[\s\S]{0,200}?>\s*<Plus \/>\s*Add\b/,
+    );
+    expect(custom, "and no longer the bordered white chip").not.toMatch(
+      /variant="white"[\s\S]{0,200}?>\s*<Plus \/>\s*Add\b/,
+    );
   });
 
   it("keeps the white button's active state off white-on-white", () => {

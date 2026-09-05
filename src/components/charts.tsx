@@ -16,21 +16,25 @@ import type { ImportCoverage } from "@/connectors/types";
  *     the sparkbars and a breakdown's first row — the goal bar stays
  *     neutral-until-met (see `TargetBar` below), which is a state, not a
  *     series.
- *   BLACK EMPHASISES. The bucket the series ends on, and a delta that moved.
+ *   BLACK EMPHASISES. A delta that moved.
  *   THE ACCENT THREE DECORATE, and only where decoration is safe — a
  *     breakdown's rows, each of which already carries its own name in the
  *     label beside it, so no hue is ever the thing telling you whose bar it is.
  *   SUCCESS AND WARN STAY STATE. A met goal and an unfinished import MEAN
  *     something. Nothing else in this file is allowed to borrow their colour.
  *
- * YELLOW IS ABSENT FROM THE MARKS, and it is now a measurement rather than the
- * scarcity rule it used to be. The brand works as a FILL because dark ink sits
- * on it at 11.24:1. A bar carries no ink — all it has is its own edge against
- * the card, which is 1.55:1 on white, under the 3:1 a graphic that carries
- * meaning owes. A yellow sparkbar is not a loud mark, it is a mark nobody can
- * see. Nothing in this file that MEANS something is yellow; the one place the
- * brand appears at all is a 5% wash behind the sparkbars, which is a surface
- * and not a mark — see `Sparkbars`.
+ * BLUE IS NOT ABSENT FROM THE MARKS ANY MORE, which the rule above used to
+ * defend. That defence was built for a YELLOW brand: dark ink sits on a
+ * yellow FILL at 11.24:1, but a bar carries no ink of its own — only its own
+ * edge against the card, at 1.55:1 on white, under the 3:1 a graphic that
+ * carries meaning owes — so a yellow sparkbar was not a loud mark, it was a
+ * mark nobody could see, and the brand only ever reached the marks as a low
+ * wash behind them. `--color-brand-500` (`#007BFF`) does not have that
+ * problem: blue clears enough contrast to BE the bar, not just its edge, so
+ * as of the 4 Sep 2026 blue retheme the sparkbars and the breakdown's first
+ * row are painted in it directly (see `Sparkbars` and `BREAKDOWN_ACCENTS`
+ * below) — the wash behind the sparkbars, now 12% rather than 5%, is no
+ * longer the only place in the dashboard's marks the brand appears.
  *
  * THE HONESTY RULES DID NOT MOVE, and the colour pass was not allowed to bend
  * them: every bar is still zero-anchored, every value a chart prints still goes
@@ -112,16 +116,22 @@ export function Sparkbars({
     // of showing: the hairline under the strip is the axis, and the wash behind
     // it is the field the bars are measured in — which is also what stops the
     // 6%-minimum stub below reading as a rendering fault instead of as a quiet
-    // bucket. The wash is 5%, so it is a tint in both themes rather than a
+    // bucket. The wash is 12%, so it is a tint in both themes rather than a
     // panel in one of them.
     //
     // THE TWO USED TO BE ONE COLOUR AND CANNOT BE, which is the fill/stroke
-    // split drawn inside a single element. The axis is a RULE, so it is the
-    // brand's: a 25% yellow line measures about 1.1:1 on a white card and is
-    // not a faint axis, it is no axis. The field is a SURFACE the marks sit on,
-    // so it takes the brand — at 5% it is a tint rather than a graphic, so it
-    // owes no ratio of its own, and it is the only place in the dashboard's
-    // marks the yellow appears at all.
+    // split drawn inside a single element. The axis is a RULE, so it takes the
+    // brand at 25% — a strength that dates back to a YELLOW brand, where a 25%
+    // yellow line measured about 1.1:1 on a white card: not a faint axis, no
+    // axis at all. `--color-brand-500` (`#007BFF`) does not have that problem;
+    // blue carries enough weight at 25% to read as a line on its own, so the
+    // rule keeps its old opacity under the new colour rather than needing a
+    // second one. The field is a SURFACE the marks sit on, so it takes the
+    // brand too — at 12% (up from 5%, per the spec's `rgb(0 123 255 / .12)`)
+    // it is a tint rather than a graphic, so it owes no ratio of its own. The
+    // bars themselves are the brand at FULL strength now (see the bar's own
+    // class below), so this wash is no longer the only place in the
+    // dashboard's marks the brand appears.
     //
     // Square bars, still. A rounded cap is a radius measured against the bar's
     // WIDTH, and a twelve-bucket series stretched across a tile is 50px wide
@@ -141,16 +151,17 @@ export function Sparkbars({
           title={`${s.bucket}: ${formatMetricValue(s.value, format)}`}
           className={cn(
             "min-w-0 flex-1",
-            // THE LATEST BUCKET IN INK. A strip where every bar carries the
-            // same weight has no right edge, so the eye lands in the middle and
-            // reads the TALLEST bar as the news — which on a time series it
-            // almost never is. Black is the sheet's emphasis colour and it says
-            // one positional fact here: this is where the series ends. It says
-            // nothing whatever about the value, which is the thing a mark on
-            // this dashboard is not allowed to editorialise.
-            //
-            // A one-bucket series keeps the series colour: there is no "latest"
-            // to distinguish it from, and a lone black bar would imply one.
+            // EVERY BAR TAKES THE SERIES COLOUR, WITH NO LATEST-BUCKET
+            // EMPHASIS. A comment here once described marking the bucket the
+            // series ends on in black, on the argument that a strip where every
+            // bar carries the same weight has no right edge, so the eye lands
+            // in the middle and reads the tallest bar as the news — which on a
+            // time series it almost never is. The idea never reached the class
+            // list: every bar has always taken this one class, position or not.
+            // The blue retheme did not revive it; the drift is recorded in the
+            // spec's own Deferred list rather than fixed here, so a future pass
+            // can pick it up on purpose instead of re-discovering it by reading
+            // old prose that never matched the markup.
             "bg-brand-500",
           )}
           style={{ height: `${Math.max((s.value / max) * 100, 6)}%` }}
@@ -204,7 +215,7 @@ export function Delta({
   return (
     <span
       className={cn(
-        "inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium",
+        "inline-flex shrink-0 items-center gap-1 rounded-control px-2 py-0.5 text-xs font-medium",
         // COLOURED BY WHETHER IT MOVED, NEVER BY WHICH WAY.
         //
         // The rule above bans a green/red pill and that was read as banning

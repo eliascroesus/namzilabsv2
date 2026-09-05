@@ -388,8 +388,20 @@ describe("the kit's shape", () => {
      * two tokens are no longer the same colour in either theme. `TargetBar`
      * is untouched again: it already drew in `--success`/neutral, never
      * `--marker`, so the goal-bar paragraphs above still hold.
+     *
+     * AND MOVED A SIXTH TIME IN THE HEADER FIX ROUND'S FIRST REVIEW PASS —
+     * a radius and a documentation fix, no behaviour and no further colour
+     * change. The delta chip was still `rounded-full`, missed when the fifth
+     * move repainted the marks; it is `rounded-control` now, the spec's own
+     * "8px corners" for a delta chip. The rest of the diff is prose: the
+     * file-level vocabulary and the `Sparkbars` comments still said "5% wash"
+     * and "25% yellow line" after the fifth move repainted them blue at 12%,
+     * and the "LATEST BUCKET IN INK" comment still described a black-emphasis
+     * behaviour the markup has never implemented (the spec's own Deferred
+     * list records that drift; this pass only stopped the comment claiming
+     * otherwise). None of it changes what a single bar or wash renders.
      */
     const hash = createHash("sha256").update(readFileSync(join(process.cwd(), "src/components/charts.tsx"))).digest("hex");
-    expect(hash).toBe("4eed3ef42969272154b5c7a8fc7176ea04e151265a974ff271a210ac92445c7d");
+    expect(hash).toBe("f91062cdf8b829755da7d3860bde2ca10da414fbba24abc89aa42629969c60bd");
   });
 });
