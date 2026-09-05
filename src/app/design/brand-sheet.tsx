@@ -176,18 +176,18 @@ export function BrandSheet() {
       <Block title="Tabs and chips">
         <div className="flex flex-wrap items-start gap-6">
           <div className="flex flex-col gap-2">
-            <span className="inline-flex h-9 items-center rounded-full bg-foreground px-4 text-sm font-medium text-background">
+            <span className="inline-flex h-9 items-center rounded-control bg-foreground px-4 text-sm font-medium text-background">
               Tab
             </span>
-            <span className="inline-flex h-9 items-center rounded-full border border-border bg-card px-4 text-sm font-medium text-muted-foreground">
+            <span className="inline-flex h-9 items-center rounded-control border border-border bg-card px-4 text-sm font-medium text-muted-foreground">
               Tab
             </span>
           </div>
           <div className="flex flex-col gap-2">
-            <span className="inline-flex h-8 items-center rounded-full border border-foreground px-4 text-xs font-semibold uppercase tracking-wide text-foreground">
+            <span className="inline-flex h-8 items-center rounded-control border border-foreground px-4 text-xs font-semibold uppercase tracking-wide text-foreground">
               Large
             </span>
-            <span className="inline-flex h-8 items-center rounded-full bg-foreground px-4 text-xs font-semibold uppercase tracking-wide text-background">
+            <span className="inline-flex h-8 items-center rounded-control bg-foreground px-4 text-xs font-semibold uppercase tracking-wide text-background">
               Small
             </span>
           </div>

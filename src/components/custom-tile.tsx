@@ -120,7 +120,7 @@ function DeadTile({ title }: { title: string }) {
     <Card data-tile-card variant="tile" padding="compact" className="flex h-full flex-col">
       <p className="truncate text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</p>
       <div className="mt-3 flex flex-1 flex-col items-start justify-center gap-2">
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-warn-soft px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-warn-ink">
+        <span className="inline-flex items-center gap-1.5 rounded-control bg-warn-soft px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-warn-ink">
           <AlertTriangle size={13} />
           Metric unavailable
         </span>

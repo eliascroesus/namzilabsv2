@@ -299,22 +299,24 @@ export default async function ActivityPage({ searchParams }: { searchParams: Pro
 /**
  * ONE OPTION OF THE SOURCE FILTER, WORN AS A CHIP.
  *
- * It is `ui/chip.tsx`'s recipe — h-8, `rounded-full`, 12px semibold ALL CAPS
+ * It is `ui/chip.tsx`'s recipe — h-8, `rounded-control`, 12px semibold ALL CAPS
  * with `tracking-wide`, the brand FILL when selected — and it deliberately is
  * not that component: `Chip` is a `<button>` in a client component, and this
  * filter lives in the URL. Every option here has to be a real `<a>` so the page
  * stays server-rendered, shareable and back-button-correct, which is also why
  * the control it replaced was a hand-rolled `<details>` rather than a
- * `<select>`.
+ * `<select>`. `rounded-full` is gone with the rest of the kit's pills — the 4
+ * September 2026 Figma reserves circles for avatars, badges and dots, and a
+ * chip is none of those.
  *
- * A SELECTED CHIP IS A FILLED OBJECT, which is the half of the split the yellow
- * owns: `bg-primary` under near-black ink at 11.24:1. Hover walks DOWN the ramp
- * to `brand-700` rather than up, because brightening a yellow moves it toward
- * the white behind it and the label's contrast falls at the moment of the
- * press. The OFF state is not a fill at all, so it hovers to the marker's tint
- * carrying the marker's ink — and to that rather than to `bg-muted`, because
- * `--muted` and the page are the same colour and a hover you cannot see is the
- * same as not having one.
+ * A SELECTED CHIP IS A FILLED OBJECT, which is the half of the split the brand
+ * owns: `bg-primary` under white ink at 4.68:1. Hover goes through
+ * `--primary-hover` rather than a bare ramp step, because the direction flips
+ * with the theme (down to `brand-700` on light, up to `brand-500` on dark) and
+ * a component may not spell `dark:` to say so. The OFF state is not a fill at
+ * all, so it hovers to the marker's tint carrying the marker's ink — and to
+ * that rather than to `bg-muted`, because `--muted` and the page are the same
+ * colour and a hover you cannot see is the same as not having one.
  */
 function FilterChip({
   href,
@@ -333,9 +335,9 @@ function FilterChip({
       href={href}
       aria-current={active ? "true" : undefined}
       className={cn(
-        "inline-flex h-8 shrink-0 items-center gap-2 rounded-full px-3.5 text-xs font-semibold uppercase tracking-wide transition-colors duration-(--duration-fast) ease-(--ease-standard)",
+        "inline-flex h-8 shrink-0 items-center gap-2 rounded-control px-3.5 text-xs font-semibold uppercase tracking-wide transition-colors duration-(--duration-fast) ease-(--ease-standard)",
         active
-          ? "bg-primary text-primary-foreground hover:bg-brand-700"
+          ? "bg-primary text-primary-foreground hover:bg-primary-hover"
           : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
       )}
     >

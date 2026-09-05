@@ -607,7 +607,7 @@ export function AppDirectory({
         <div
           role="group"
           aria-label="Apps view"
-          className="flex shrink-0 items-center gap-1 rounded-full bg-foreground/5 p-1"
+          className="flex shrink-0 items-center gap-1 rounded-control bg-foreground/5 p-1"
         >
           {/* BLACK MARKS THE ACTIVE ONE, which is the kit's own division of
               labour: black does the work (default buttons, the active tab), the

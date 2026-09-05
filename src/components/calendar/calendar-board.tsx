@@ -424,9 +424,16 @@ export function CalendarBoard({
               sunk into the track they read as a single control that moves the
               month, which is what they are. */}
           <div className={PERIOD_TRACK}>
+            {/* `size="icon"` (32px), NOT `iconSm` (28px). The track is `h-8` —
+                also 32px — and an `iconSm` arrow left a 2px inset on every
+                side, the last place in this groove a control did not reach
+                its own wall. `icon` matches the track's own box exactly; the
+                1px hairline border eats a pixel of that on each side, and the
+                track's `overflow-hidden` quietly absorbs it, which is what
+                actually fills the groove rather than floating inside it. */}
             <Button
               variant="ghost"
-              size="iconSm"
+              size="icon"
               className="text-muted-foreground hover:bg-accent hover:text-foreground"
               onClick={() => setMonthIdx((i) => Math.max(0, i - 1))}
               disabled={monthIdx === 0}
@@ -447,7 +454,7 @@ export function CalendarBoard({
             </span>
             <Button
               variant="ghost"
-              size="iconSm"
+              size="icon"
               className="text-muted-foreground hover:bg-accent hover:text-foreground"
               onClick={() => setMonthIdx((i) => Math.min(months.length - 1, i + 1))}
               disabled={monthIdx === months.length - 1}
@@ -476,15 +483,17 @@ export function CalendarBoard({
               best day" and a number they cannot reproduce. Three letters on
               the control that changes days says it where it applies, instead
               of a sentence at the top of the page that says it once.
-              STILL A CIRCLE, though the sheet's chips are 8px rectangles now
-              — this one is a static tag rather than a pressable chip, the same
-              "badge and count" exception the day-cell numeral and the legend
-              swatch below keep. It stays neutral: a footnote that took a
-              colour from the accent set would be the third hue in a bar that
+              NOT A CIRCLE AFTER ALL — three letters and horizontal padding
+              make this an oval, not the true circle the "badge and count"
+              exception (the day-cell numeral, the legend swatch below) is
+              actually for, so it takes the same 8px the sheet's other chips
+              do rather than keeping a pill shape nothing else in the row
+              still wears. It stays neutral: a footnote that took a colour
+              from the accent set would be the third hue in a bar that
               already has two. */}
           <span
             title="Days are UTC — the same days your metrics are counted in"
-            className="rounded-full border border-border px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+            className="rounded-control border border-border px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
           >
             UTC
           </span>
@@ -704,7 +713,7 @@ function monthDayLabel(key: string): string {
  */
 function StatChip({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs shadow-xs">
+    <span className="inline-flex items-center gap-2 rounded-control border border-border bg-card px-3 py-1 text-xs shadow-xs">
       <span className="font-semibold uppercase tracking-wide text-muted-foreground">{label}</span>
       <span>{children}</span>
     </span>

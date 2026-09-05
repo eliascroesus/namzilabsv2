@@ -213,3 +213,69 @@ describe("the console's supplied constants", () => {
     expect(chip, "an ink class can outlive the fill it was solved against").not.toMatch(/text-white|text-background/);
   });
 });
+
+/**
+ * THE LAST PILLS, SQUARED OFF — the shape rule's final word applied to the
+ * five places a chip container or a sample swatch still spelled `rounded-full`
+ * after the button, the period track and the month arrows already gave it up.
+ *
+ * Comments are stripped before the scan (the same reasoning `scripts/check-
+ * ui.ts` gives for doing it): this file's own activity-page prose now SAYS
+ * `rounded-full` is gone, in a sentence about the fix, and an unstripped scan
+ * would read that sentence as a violation of itself.
+ *
+ * `rounded-full` survives only on a true circle — nothing wider than it is
+ * tall — and the two left in `calendar-board.tsx` are exactly that: a fixed
+ * `size-5` icon badge and the day-of-month numeral disc, both listed in the
+ * allow-list below with the reason each one is a circle rather than a chip.
+ *
+ * Sabotage-verified: reverting any one of the five files' fixes to
+ * `rounded-full` fails that file's assertion alone; shrinking the allow-list
+ * to omit either surviving circle fails on THAT file for a reason that reads
+ * as a false positive, which is what proves the list is doing real work.
+ */
+describe("the last chip containers give up the pill", () => {
+  /** Block and line comments removed, so prose about the rule cannot trip the rule. */
+  const stripped = (src: string) =>
+    src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+
+  /**
+   * Per file, the exact `rounded-full`-bearing substrings that are true
+   * circles and stay — each with the one-line reason, in `mobile-content.
+   * test.ts`'s own allow-list style.
+   */
+  const ALLOWED: Record<string, string[]> = {
+    // A fixed size-5 (20x20) icon badge in the metric-picker's leading slot —
+    // square by construction, not a chip with variable-width text.
+    "src/components/calendar/calendar-board.tsx": [
+      "flex size-5 shrink-0 items-center justify-center rounded-full bg-accent text-muted-foreground",
+      // The day-of-month numeral disc — the same "you are here" object as the
+      // rail's active row and the period control's lit pill, per its own
+      // comment, and one of the shape rule's own named exceptions (a numeral
+      // wearing a circle, not a labelled chip).
+      "tnum ms-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-xs font-semibold",
+    ],
+  };
+
+  const FILES = [
+    "src/app/dashboard/activity/page.tsx",
+    "src/app/integrations/ConnectionRow.tsx",
+    "src/components/calendar/calendar-board.tsx",
+    "src/components/custom-tile.tsx",
+    "src/app/design/brand-sheet.tsx",
+  ];
+
+  for (const file of FILES) {
+    it(`${file} spells no rounded-full outside its allow-list`, () => {
+      const src = stripped(read(file));
+      const allowed = ALLOWED[file] ?? [];
+      const offenders: string[] = [];
+      for (const m of src.matchAll(/rounded-full/g)) {
+        const window = src.slice(Math.max(0, m.index! - 80), m.index! + 120);
+        if (allowed.some((a) => window.includes(a))) continue;
+        offenders.push(window.slice(0, 60));
+      }
+      expect(offenders, `${file}: rounded-full found outside the allow-list`).toEqual([]);
+    });
+  }
+});
