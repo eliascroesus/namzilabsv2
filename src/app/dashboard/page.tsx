@@ -9,13 +9,13 @@ import { MetricCard } from "@/components/metric-card";
 import { EmptyBoard } from "@/components/board-empty";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { PageContainer, PageHeader, PERIOD_PILL, PERIOD_TRACK } from "@/components/ui/page";
+import { PageContainer, PageHeader } from "@/components/ui/page";
 import { Sparkbars, TargetBar } from "@/components/charts";
 import { FreshnessPoller } from "@/components/freshness-poller";
 import { FunnelView } from "@/components/funnel-view";
 import { FlowTile, tileValueForRange, type FlowResultRow } from "@/components/flow-tile";
 import { OnboardingChecklist } from "@/components/onboarding-checklist";
-import { BoardControls, RangeLink, TileArea, ViewStrip, ViewTitle } from "./board-controls";
+import { BoardControls, RangeMenu, TileArea, ViewStrip, ViewTitle } from "./board-controls";
 import { BoardLayout } from "./board-layout";
 import { CustomBoard, type CanvasTile } from "./custom-board";
 import type { CustomTileSource } from "@/components/custom-tile";
@@ -670,33 +670,21 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
 
   /**
-   * The range control, worn by links — range lives in the URL, so these stay
-   * anchors rather than becoming the Chip button.
+   * THE RANGE CONTROL IS A DROPDOWN NOW — see `RangeMenu` in
+   * board-controls.tsx, which is where its markup and its argument both live.
    *
-   * A SEGMENTED TRACK, not loose pills. Eleven free-floating chips across
-   * two filter dimensions wrapped onto a second line and orphaned the last two
-   * sources, and nothing in the row said which chips answered which question.
-   * Sitting the ranges in one track makes them read as one control with one
-   * answer, and leaves the source picker beside it as visibly separate.
+   * What stood here was the case for a SEGMENTED TRACK: eleven free-floating
+   * chips across two filter dimensions had wrapped onto a second line and
+   * orphaned the last two sources, so sitting the ranges in one groove made
+   * them read as one control with one answer. That was right against loose
+   * chips and it is not what the 4 September Figma draws — six pills is a
+   * ~520px object in a header slot, carrying its own horizontal scroller so a
+   * narrow viewport would not push the page sideways, and a dropdown answers
+   * the same question in a tenth of the width with no scroller to carry.
    *
-   * THE TRACK CANNOT WRAP — it is `flex` at its default `nowrap`, so another
-   * option can only make it wider, never make it fold. It held seven when
-   * "Upcoming" was on it and holds six now; 8px of item padding (down from 10,
-   * and on the 4px grid the old value missed) is what kept seven inside the
-   * container with the source picker still beside it, so six has room to
-   * spare. An option ADDED here needs that measured again rather than assumed.
-   *
-   * THE SELECTED ITEM IS THE ACCENT WASH NOW, not a white knob. The track used
-   * to be a `bg-muted` groove with a white pill riding in it — a shape that
-   * only reads on a white page. On the warm canvas the groove and the page are
-   * within four levels of each other, so the control dissolved and the "knob"
-   * became a floating white smear. The track is a white island (the same
-   * border-and-shadow every floating thing in the builder wears) and selection
-   * is `bg-accent` + `text-accent-foreground`, which needs no depth to be read.
-   *
-   * The classes themselves now live on the `RangeLink` call below, because the
-   * ACTIVE one is decided per press rather than per render — see
-   * board-controls.tsx.
+   * The range still lives in the URL; the source filter is still gone; the
+   * press still lands optimistically through `BoardControls`. Only the shape
+   * changed.
    */
 
   /**
@@ -1002,13 +990,13 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             title, the period track, the tab strip and the action row all
             describe a board, and there is no board — so none of them render,
             and the only thing on screen is the invitation to make one.
-            Most of that is free: `viewStrip` and `boardActions` are rendered
-            INSIDE `BoardLayout`/`CustomBoard`, which live inside `TileArea`, so
-            not taking that branch already removes the strip, the `+`, New group,
-            All sources and Refresh all. `PageHeader` is the only chrome that
-            survived the old empty path, and this is what removes it.
+            Most of that is free: `boardActions` is rendered INSIDE
+            `BoardLayout`/`CustomBoard`, which live inside `TileArea`, so not
+            taking that branch already removes the `+`, New group and Refresh
+            all. `PageHeader` carries the view strip and the period dropdown,
+            and skipping the header is what removes those two.
             `BoardControls` is skipped with it. It is a context provider that
-            emits no DOM, and nothing here calls `useBoard()` — `RangeLink`,
+            emits no DOM, and nothing here calls `useBoard()` — `RangeMenu`,
             `ViewTab` and `TileArea` are its only consumers now and
             none of them render in this branch.
             A LOAD ERROR IS NOT AN EMPTY BOARD, so it wins: a workspace whose
@@ -1072,6 +1060,15 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             the same day `dashboard_views` grows a nullable `subtitle` and
             `renameViewAction` gains a sibling to write it. */}
         <PageHeader
+          /* THE THIRD ZONE, AND THE WHOLE REASON THE TITLE CENTRES.
+             The view strip used to be the first thing inside the BOARD, one
+             row below this header, which meant the top of the page read as a
+             title band and then a tab band. The Figma draws one row: tabs
+             left, the view's name centred, the actions right. `PageHeader`
+             grew a `tabs` slot for exactly this, and passing it is what
+             switches the component into its three-zone grid — no other route
+             passes it, and every other route is untouched. */
+          tabs={viewStrip}
           title={
             /* KEYED BY THE ACTIVE VIEW, for the reason `BoardLayout` is: this
                holds the optimistic name until the refresh carrying the server's
@@ -1097,71 +1094,22 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
               <div id="calendar-period" className="flex items-center gap-1.5" />
             ) : (
             /* ── THE PERIOD CONTROL ────────────────────────────────────────
-               THE SAME SIX LINKS, ON THE OTHER SIDE OF THE PAGE. This is the
-               range track that used to open the filter island — moved, not
-               rebuilt, and still `RangeLink`s carrying real `href`s so
-               middle-click, copy-link and a JavaScript-less viewer all keep
-               working. What changed is where it sits and what it is made of.
+               ONE DROPDOWN, SIX ANSWERS, AND THE SAME URL UNDERNEATH. The
+               track that stood here is gone (see the note above `boardActions`
+               for why); what replaces it says the current range on its face
+               and opens the other five. `RANGE_OPTIONS` is still the list, and
+               each `href` is still `qs()`'s, so nothing about which numbers a
+               link opens on has changed.
 
-               IT IS THE ONE CONTROL IN THE REDESIGN THAT FOLLOWS THE PAGE
-               RATHER THAN THE CHROME. The rail and the top bar are near-black
-               in both themes on purpose — that is the product's identity and it
-               does not flip. This group sits on the GROUND, and a near-black
-               pill group on a #f5f5f5 page would be a second dark object
-               competing with the chrome for the eye. So `--period-bg` and
-               `--period-line` answer differently under `.dark`, and the tokens'
-               own notes in globals.css carry the ratios.
-
-               THE SELECTED PILL IS THE BRAND FILL, where it used to be the
-               near-black `--foreground`. Black was right when this track was one
-               of two marks on a white bar and the app's selection colour was
-               spent on the view tabs a row below. The tabs are an underline now
-               — a rule is a stroke, so it is drawn in the marker — which leaves
-               the FILL free for the thing that is genuinely a SELECTION: one of
-               six mutually exclusive periods, a filled chip carrying near-black
-               ink at 11.24:1. A near-black chip inside a near-black group in
-               dark theme would have been invisible anyway.
-               `bg-primary`/`text-primary-foreground` rather than a new pair of
-               tokens: the brand IS `--primary`, and a second name for it is how
-               a product ends up with two primaries.
-
-               THE SCROLLER SURVIVES THE MOVE, and it has to. Six pills is a
-               ~520px track that cannot wrap — they are `shrink-0`, correctly,
-               or "Last 30 days" folds onto two lines inside its own pill — so
-               at 390px it would push the whole page into horizontal scroll.
-               The `-mx-1`/`px-1` pair is deliberate too: a bare
-               `overflow-x-auto` clips its children's focus ring at both ends,
-               so the first and last pill lose their outline exactly when a
-               keyboard user reaches them. See `PageHeader`'s own note for why
-               its right slot had to stop being `shrink-0` for this to work. */
-            <div className="-mx-1 min-w-0 overflow-x-auto px-1">
-              {/* The groove is `PERIOD_TRACK` now, imported rather than spelled:
-                  the calendar's month stepper sits in the same slot and has to
-                  be the same object, not a second one that looks like it. */}
-              <div className={PERIOD_TRACK}>
-                {RANGE_OPTIONS.map((r) => (
-                  // The press lands NOW: the pill lights and the tiles become
-                  // skeletons while this page re-renders, instead of a second
-                  // of nothing over numbers that answer the old range.
-                  <RangeLink
-                    key={r.key}
-                    href={qs({ range: r.key })}
-                    rangeKey={r.key}
-                    activeRange={rangeKey}
-                    className={PERIOD_PILL}
-                    activeClassName="bg-primary text-primary-foreground"
-                    /* Hover reaches for `--ground-ink`, which is the page's own
-                       ink at both exposures — white on the dark group, near-
-                       black on the white one. `--foreground` would have been
-                       wrong in exactly one theme, which is the kind of bug that
-                       ships. */
-                    idleClassName="text-muted-foreground hover:text-foreground"
-                  >
-                    {r.label}
-                  </RangeLink>
-                ))}
-              </div>
-            </div>
+               The scroller went with it, and that is the point rather than a
+               side effect: a ~520px control in this slot could only survive a
+               390px viewport by scrolling inside itself, and the header's
+               right column had to stop being `shrink-0` to let it. A 24px
+               dropdown needs neither. */
+            <RangeMenu
+              activeRange={rangeKey}
+              options={RANGE_OPTIONS.map((r) => ({ key: r.key, label: r.label, href: qs({ range: r.key }) }))}
+            />
             )
           }
         />
@@ -1269,8 +1217,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 picker lands in `#calendar-tools`, which is where a groups board
                 puts "New group" and a canvas puts "+ Add" — the one control
                 that changes what you are looking at. */}
-            <div className="flex items-center justify-between gap-4">
-              {viewStrip}
+            {/* `justify-end`, not `justify-between`: the left half of this row
+                was the view strip, and the strip is in the page header now. */}
+            <div className="flex items-center justify-end gap-4">
               {/* `gap-4`, WHICH IS WHAT EVERY OTHER VIEW'S ACTION ROW USES.
                   This was `gap-2` — half the canvas board's spacing between
                   "+ Add" and "Refresh all" one view over — so the metric picker
@@ -1349,7 +1298,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                  * permissions must not rearrange another's board.
                  */
                 layoutFrozen={hiddenOnThisView > 0}
-                viewStrip={viewStrip}
                 boardActions={boardActions}
               />
             ) : (
@@ -1363,7 +1311,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
               // without this would leave the previous view's columns on screen.
               key={activeView ?? "default"}
               viewId={activeView}
-              viewStrip={viewStrip}
               boardActions={boardActions}
               tiles={boardTiles}
               groups={groups}

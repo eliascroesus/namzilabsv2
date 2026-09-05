@@ -2,9 +2,16 @@
 
 import { createContext, useContext, useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Copy as CopyIcon, MoreHorizontal, PenLine, Trash2 } from "lucide-react";
+import { CalendarDays, ChevronDown, Copy as CopyIcon, MoreHorizontal, PenLine, Trash2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Popover } from "@/components/flow/controls/Popover";
 import { deleteViewAction, duplicateViewAction, renameViewAction, setViewPositionsAction } from "./board-actions";
@@ -134,6 +141,82 @@ export function RangeLink({
     >
       {children}
     </a>
+  );
+}
+
+/**
+ * THE PERIOD CONTROL, AS ONE DROPDOWN RATHER THAN SIX PILLS.
+ *
+ * The six were a segmented track sitting in the page header's right slot,
+ * and they were a ~520px control that could not wrap — it carried its own
+ * horizontal scroller specifically so a 390px viewport would not push the
+ * whole page sideways. The 4 September Figma draws the same six answers as
+ * a 24px-high dropdown reading "Today", which is the same information in a
+ * tenth of the width and takes the scroller's problem off the page rather
+ * than managing it.
+ *
+ * WHAT DID NOT CHANGE IS THE MECHANISM. The range still lives in the URL:
+ * each item pushes `?range=<key>` through `useBoard()`'s `go`, so the tiles
+ * still swap to skeletons on the press, the server still answers, and a
+ * link someone pastes into Slack still opens on the range it was copied
+ * from. Only the shape of the control moved.
+ *
+ * A RADIO GROUP, NOT A LIST OF ITEMS, because the six are mutually
+ * exclusive and exactly one of them is true — which is what a radio item
+ * says to a screen reader and what an ordinary menu item does not.
+ *
+ * `options` arrives as DATA rather than as a callback: this is a client
+ * component rendered by a server one, and a function prop does not cross
+ * that boundary. The page builds each `href` with its own `qs()` helper,
+ * which is where every other link on the board gets one.
+ */
+export function RangeMenu({
+  options,
+  activeRange,
+}: {
+  options: { key: string; label: string; href: string }[];
+  activeRange: string;
+}) {
+  const { pending, go, picked } = useBoard();
+  // The optimistic answer is only trusted WHILE the transition is in
+  // flight, exactly as `RangeLink` does it — a failed or redirected
+  // navigation must not leave the trigger reading a range nobody is on.
+  const active = pending && picked?.dim === "range" ? picked.key : activeRange;
+  const label = options.find((o) => o.key === active)?.label ?? options[0].label;
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        {/* `xs` with the icons pushed to 16px: the rung ships
+            `[&_svg]:size-3.5`, and the export draws 16. The override is on
+            the button because the size variant's own descendant rule beats
+            a class on the svg whichever order they are written in. */}
+        <Button
+          variant="secondary"
+          size="xs"
+          className="[&_svg]:size-4"
+          aria-label={`Period — ${label}`}
+        >
+          <CalendarDays aria-hidden />
+          <span>{label}</span>
+          <ChevronDown aria-hidden />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-44">
+        <DropdownMenuRadioGroup
+          value={active}
+          onValueChange={(key) => {
+            const chosen = options.find((o) => o.key === key);
+            if (chosen) go(chosen.href, { dim: "range", key });
+          }}
+        >
+          {options.map((o) => (
+            <DropdownMenuRadioItem key={o.key} value={o.key}>
+              {o.label}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 

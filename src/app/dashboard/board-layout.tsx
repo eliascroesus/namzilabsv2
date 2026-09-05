@@ -61,7 +61,6 @@ export function BoardLayout({
   placements: seedPlacements,
   canEdit,
   viewId,
-  viewStrip,
   boardActions,
 }: {
   tiles: BoardTile[];
@@ -78,20 +77,9 @@ export function BoardLayout({
    */
   viewId: string | null;
   /**
-   * The view tabs, rendered on the SERVER and passed through — same trick the
-   * tiles use, and for the same reason: they are links that must work without
-   * JavaScript, and this component is the only thing that knows where the
-   * board's own controls sit.
-   *
-   * They live on this row rather than up in the page header because the header
-   * asks a different question: it narrows WHICH NUMBERS (the period), while
-   * everything on this row is about the board those numbers land on.
-   */
-  viewStrip?: ReactNode;
-  /**
    * The source picker and Refresh all — the right half of the same row.
    *
-   * They arrive as a node for exactly the reason `viewStrip` does: the source
+   * They arrive as a node for the reason the tiles do: the source
    * rows are real anchors and Refresh all is a plain form post, so both are
    * rendered on the SERVER, and this component is the only thing that knows
    * where the board's own control row sits. They used to live in a white filter
@@ -317,11 +305,12 @@ export function BoardLayout({
     // cost the ability to copy a number off the board.
     <div ref={rootRef} className={drag ? "select-none" : undefined}>
       {/* ── THE TAB / ACTION ROW ────────────────────────────────────────────
-          WHICH VIEW on the left, WHAT IS ON IT on the right, and everything
-          here is about THIS BOARD. The one question that is not — over what
-          period — moved up to the page header, where it sits beside the title
-          as the pill group. One question per row, which is what lets a reader
-          stop looking for the third control.
+          WHAT IS ON THIS BOARD, and nothing else. Both of the other questions
+          moved up to the page header with the 4 September re-theme: WHICH VIEW
+          is the tab strip in the header's own `tabs` slot, and OVER WHAT PERIOD
+          is the "Today" dropdown in its actions. What is left here acts on the
+          board in front of you — New group, Refresh all — which is one question
+          per row taken to its end rather than abandoned.
 
           The right half arrives in two pieces from two places, and the seam is
           real rather than incidental: `boardActions` is server markup (real
@@ -340,7 +329,7 @@ export function BoardLayout({
           header, because every page in the product gets that same 16px from it.
           The board below keeps its own `mt-4` — that gap is this row's, not the
           header's. */}
-      {(viewStrip || boardActions || canEdit) && (
+      {(boardActions || canEdit) && (
                 <div className="flex items-center justify-between gap-4">
           {/* CENTRED, NOT TOP-ALIGNED. `items-start` put the two halves of this
               row on a shared TOP edge, and they are not the same height — the
@@ -354,7 +343,11 @@ export function BoardLayout({
               two tabs and capped the strip at a width nothing asked for; tabs
               are short and there is a whole row of space, so they simply fill
               it and fold onto a second line when there are enough of them. */}
-          <div className="min-w-0 flex-1">{viewStrip}</div>
+          {/* THE LEFT HALF IS EMPTY ON PURPOSE, and it is a spacer rather than
+              a deletion: `justify-between` needs something to push against, and
+              a flexible cell here keeps the actions on the right edge whether
+              or not they wrap. The tabs it used to hold are in the page header. */}
+          <div className="min-w-0 flex-1" />
           {(boardActions || canEdit) && (
             /* 16px, and it wraps: three pills at ~110px each is a third of a
                narrow viewport, and a row that cannot fold would push the page

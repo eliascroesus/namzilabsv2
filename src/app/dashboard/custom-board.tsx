@@ -125,7 +125,6 @@ export function CustomBoard({
   rangeKey,
   canEdit,
   layoutFrozen = false,
-  viewStrip,
   boardActions,
   actions: actionOverrides,
 }: {
@@ -149,16 +148,11 @@ export function CustomBoard({
    */
   layoutFrozen?: boolean;
   /**
-   * The same tabs the groups board wears. A view's whole promise is that you
-   * can move between kinds without the furniture moving, so the strip is
-   * rendered by the page and worn by whichever board is on screen.
-   */
-  viewStrip?: ReactNode;
-  /**
-   * The source picker and Refresh all — the same pair the groups board wears,
-   * for the same reason the strip above is shared: a view's promise is that
-   * moving between kinds does not move the furniture. Server markup, passed
-   * through; see the note on `boardActions` in board-layout.tsx.
+   * The source picker and Refresh all — the same pair the groups board wears.
+   * A view's promise is that moving between kinds does not move the furniture,
+   * and the tabs that promise is mostly about now live in the page header,
+   * above both boards. Server markup, passed through; see the note on
+   * `boardActions` in board-layout.tsx.
    */
   boardActions?: ReactNode;
   /** Test seam only — see `CanvasActions`. The dashboard leaves it unset. */
@@ -587,11 +581,11 @@ export function CustomBoard({
        * them. A panel is an overlay; overlays overlap.
        */
     >
-      {/* The tab / action row, in the same place and shape the groups board
-          puts it: the view strip on the left, the board's own controls on the
-          right. On a canvas the arrangement door reads "Add" rather than "New
-          group", and it takes the same first position in the right-hand group
-          — arrangement, then filter, then the yellow act on the outside edge.
+      {/* The action row, in the same place and shape the groups board puts it:
+          the board's own controls on the right, the left half a spacer since
+          the view strip moved into the page header. On a canvas the
+          arrangement door reads "Add" rather than "New group", and it takes
+          the same first position in the right-hand group.
 
           NO TOP MARGIN, for the reason the groups board states at length:
           `PageHeader`'s own `pb-4` is the 16px between the title block and this
@@ -606,7 +600,8 @@ export function CustomBoard({
               hierarchy. `items-center` gives them a shared MIDDLE, which is the
               line the eye actually uses. Wrapping is unaffected: a folded block
               of actions centres against the tabs the same way one row does. */}
-        <div className="min-w-0 flex-1">{viewStrip}</div>
+        {/* Empty spacer — see the same note in board-layout.tsx. */}
+        <div className="min-w-0 flex-1" />
         <div className="flex flex-wrap items-center justify-end gap-4">
           {canEdit && (
             <AddChartMenu
@@ -885,7 +880,17 @@ function AddChartMenu({
       align="right"
       width={288}
       anchor={
-        <Button variant="white" size="sm" onClick={() => setOpen(!open)} disabled={busy} aria-haspopup="menu" aria-expanded={open}>
+        /* THE BRAND IS SPENT HERE, AND ON "New flow", AND NOWHERE ELSE.
+           The bordered `white` button variant it wore was a chip from the
+           light-page era — on three near-black surfaces it is a white slab
+           beside two grey buttons. The Figma fills this one: it is the
+           control that ADDS something, which is the whole of the rule the
+           re-theme replaced "at most one yellow per screen" with. `accent`
+           IS the brand fill (`bg-primary` under `text-primary-foreground`);
+           the kit has no variant literally named `primary`. `xs` with a
+           16px glyph, the same rung and the same override as "Refresh all"
+           beside it. */
+        <Button variant="accent" size="xs" className="[&_svg]:size-4" onClick={() => setOpen(!open)} disabled={busy} aria-haspopup="menu" aria-expanded={open}>
           <Plus />
           Add
         </Button>

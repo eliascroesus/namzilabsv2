@@ -94,15 +94,18 @@ describe("what a calendar view costs on every freshness poll", () => {
 describe("the board still has its furniture", () => {
   it("carries the view strip and the board actions into the calendar branch", () => {
     /**
-     * THE ONE THING THAT WOULD BREAK QUIETLY. `viewStrip` and `boardActions` are
-     * rendered by `BoardLayout`/`CustomBoard`, not by the page — so a branch
-     * that forgets them loses the tab strip and the `+`, and the only way back
-     * to another view is the browser's back button.
+     * THE ONE THING THAT WOULD BREAK QUIETLY, RE-AIMED. `boardActions` is
+     * still rendered by the BRANCH — so a branch that forgets it loses
+     * Refresh all. The view strip is no longer its job: it moved into
+     * `PageHeader`'s `tabs` slot with the 4 September re-theme, which is above
+     * every branch and therefore cannot be forgotten by one. What this asserts
+     * now is exactly that split.
      */
     const branch = page.slice(page.indexOf('{!emptyWorkspace && activeKind === "calendar" ? ('));
     const head = branch.slice(0, branch.indexOf("<CalendarBoard"));
-    expect(head).toMatch(/\{viewStrip\}/);
+    expect(head, "the strip belongs to the header now, not to this branch").not.toMatch(/\{viewStrip\}/);
     expect(head).toMatch(/\{boardActions\}/);
+    expect(page).toMatch(/tabs=\{viewStrip\}/);
   });
 
   it("remounts the board when the view changes", () => {
@@ -147,7 +150,7 @@ describe("the board still has its furniture", () => {
     expect(page).toMatch(/hosted\b/);
   });
 
-  it("sits in the SAME groove the period pills do, imported not re-spelled", () => {
+  it("keeps the month stepper in the imported groove, beside the header's own dropdown", () => {
     /**
      * THE DRIFT THIS CATCHES, WHICH NOBODY FILES A BUG FOR. Both controls
      * answer "what span am I reading" in the same header slot, and each used to
@@ -158,8 +161,13 @@ describe("the board still has its furniture", () => {
      * together. `BOARD_GRID` is spelled once for the same reason one layout
      * down.
      */
+    // THE GROOVE IS THE CALENDAR'S ALONE NOW. The board's own time control is
+    // still `PERIOD_TRACK` — a month stepper is a segmented control and reads
+    // as one — while the range control it used to line up with became the
+    // Figma's "Today" dropdown. The drift this guards is unchanged in kind:
+    // neither may re-spell what the other imports.
     expect(board).toMatch(/className=\{PERIOD_TRACK\}/);
-    expect(page).toMatch(/className=\{PERIOD_TRACK\}/);
+    expect(page).toMatch(/<RangeMenu/);
     // Neither may go back to spelling the groove itself.
     for (const [name, src] of [["calendar-board", board], ["page", page]] as const) {
       expect(src, `${name} re-spells the period groove`).not.toMatch(/h-10 items-center gap-0\.5 rounded-full/);

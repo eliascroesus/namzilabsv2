@@ -67,6 +67,36 @@ const PLACEMENTS: TilePlacement[] = [
 ];
 
 export default function BoardLab() {
+  /* THE REAL TABS, not a drawing of them — the whole point of this page.
+     Enough of them to show the strip wrapping rather than scrolling, with
+     the active one wearing its kebab.
+     `ViewStrip`, NOT a row of `ViewTab`s — the strip is the component the
+     product renders, and it owns the drag. Drawing the tabs by hand here
+     meant the one behaviour worth checking on this page (can you reorder
+     them?) was the one thing the page could not show.
+     HOISTED OUT OF `BoardLayout`, AS OF THE 4 SEP 2026 BLUE RETHEME. The
+     dashboard moved its own strip into `PageHeader`'s `tabs` slot; this
+     public harness mirrors the same wiring rather than a shape the product
+     no longer draws. */
+  const viewStrip = (
+    <ViewStrip
+      views={[
+        /* The DEFAULT view first, named as the real strip names it.
+           `id: null` — it has no row until it is adopted, which is
+           also why it is the one tab here that will not drag. */
+        { key: "default", id: null, name: "Dashboard", href: "#", pos: "a1" },
+        { key: "v2", id: "v2", name: "Pipeline health", href: "#", pos: "a2" },
+        { key: "v3", id: "v3", name: "Revenue", href: "#", pos: "a3" },
+        { key: "v4", id: "v4", name: "Team", href: "#", pos: "a4" },
+        { key: "v5", id: "v5", name: "Weekly review", href: "#", pos: "a5" },
+        { key: "v6", id: "v6", name: "Ops", href: "#", pos: "a6" },
+      ]}
+      activeView="v6"
+      canEdit
+      defaultHref="#"
+    />
+  );
+
   return (
     // The dashboard's own scroll region: a DIV that clips, not the window.
     <div className="relative min-w-0 flex-1 overflow-y-auto rounded-l-frame bg-canvas-bg" style={{ height: "100vh" }}>
@@ -79,8 +109,10 @@ export default function BoardLab() {
               flex alignment, while the class that would have worked was being
               deleted by `cn()` on the way out. This is the same control the
               dashboard mounts, with `canEdit` on, so its hover box can be
-              screenshotted like everything else on /design. */}
-          <PageHeader title={<ViewTitle viewId="v-demo" name="Dashboard" canEdit />} />
+              screenshotted like everything else on /design.
+              `tabs={viewStrip}` for the same reason as the dashboard: the strip
+              lives in the header's own zone now, not inside `BoardLayout`. */}
+          <PageHeader tabs={viewStrip} title={<ViewTitle viewId="v-demo" name="Dashboard" canEdit />} />
           {/* The builder's flow-name field, on the same public route and for the
               same reason: its box was judged from class names and shipped at the
               wrong width twice. Rendered on the bar's own near-black so the
@@ -89,39 +121,7 @@ export default function BoardLab() {
             <FlowNameField name="Untitled flow" />
           </div>
           <TileArea count={TILES.length} columns={GROUPS.length}>
-            <BoardLayout
-              tiles={TILES}
-              groups={GROUPS}
-              placements={PLACEMENTS}
-              canEdit
-              viewId={null}
-              viewStrip={
-                /* THE REAL TABS, not a drawing of them — the whole point of
-                   this page. Enough of them to show the strip wrapping rather
-                   than scrolling, with the active one wearing its kebab. */
-                /* `ViewStrip`, NOT a row of `ViewTab`s — the strip is the
-                   component the product renders, and it owns the drag. Drawing
-                   the tabs by hand here meant the one behaviour worth checking
-                   on this page (can you reorder them?) was the one thing the
-                   page could not show. */
-                <ViewStrip
-                  views={[
-                    /* The DEFAULT view first, named as the real strip names it.
-                       `id: null` — it has no row until it is adopted, which is
-                       also why it is the one tab here that will not drag. */
-                    { key: "default", id: null, name: "Dashboard", href: "#", pos: "a1" },
-                    { key: "v2", id: "v2", name: "Pipeline health", href: "#", pos: "a2" },
-                    { key: "v3", id: "v3", name: "Revenue", href: "#", pos: "a3" },
-                    { key: "v4", id: "v4", name: "Team", href: "#", pos: "a4" },
-                    { key: "v5", id: "v5", name: "Weekly review", href: "#", pos: "a5" },
-                    { key: "v6", id: "v6", name: "Ops", href: "#", pos: "a6" },
-                  ]}
-                  activeView="v6"
-                  canEdit
-                  defaultHref="#"
-                />
-              }
-            />
+            <BoardLayout tiles={TILES} groups={GROUPS} placements={PLACEMENTS} canEdit viewId={null} />
           </TileArea>
         </BoardControls>
       </PageContainer>
