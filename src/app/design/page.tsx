@@ -328,7 +328,9 @@ export default function DesignPage() {
               the one thing the brand could not be — #eecf00 measures 1.55:1 on
               a light sheet, so a caps label in it was unreadable on the one
               page whose entire job is to be read, and `--marker-ink` existed to
-              carry exactly this case. The blue is 9.20:1 here. */}
+              carry exactly this case. The blue measures 6.59:1 on chrome,
+              6.20:1 on the dark panel this page renders on, 5.80:1 on white
+              and 5.46:1 on the light page. */}
           <p className="text-xs font-semibold uppercase tracking-widest text-marker">Brand kit</p>
           {/* THE TOGGLE IS GONE, along with the theme it toggled. It belonged on
               this page more than anywhere else while half the kit was role
@@ -446,7 +448,7 @@ export default function DesignPage() {
               <div className="h-16 rounded-card bg-primary-hover" />
               <p className="mt-1.5 text-xs font-medium text-foreground">primary hover</p>
               <p className="text-xs text-muted-foreground">
-                brand-500 on dark, brand-700 on light; white ink is 5.10:1 on light&apos;s hover, 3.98:1 on dark&apos;s — a known trade for &quot;raised means lighter&quot;
+                brand-500 on dark, brand-700 on light; white ink is 5.22:1 on light&apos;s hover, 3.98:1 on dark&apos;s — a known trade for &quot;raised means lighter&quot;
               </p>
             </div>
             <div className="min-w-0">

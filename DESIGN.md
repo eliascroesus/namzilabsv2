@@ -95,10 +95,10 @@ border has to say so on all three.
 The rail carries no labels at rest, same as two days ago, and it still
 opens: point at it and the column widens in place to 260px. What sits
 inside the open column changed — a tinted switcher badge, a search field,
-a "Main Menu" label, nav rows on a neutral fill rather than a coloured
-glyph — and the written kit's own Layout section is where that is
-itemised; the mechanism itself (hover, a cookie, a fixed 56px rest state)
-did not move.
+a "Main Menu" label, nav rows on a neutral fill with the active row's glyph
+still carrying its own colour on top (§4) — and the written kit's own
+Layout section is where that is itemised; the mechanism itself (hover, a
+cookie, a fixed 56px rest state) did not move.
 
 ---
 
@@ -183,7 +183,7 @@ than it did two days ago:
 
 | | job | where |
 |---|---|---|
-| a **stroke** | signal | links, the focus ring, a selected edge |
+| a **stroke** | signal | links, the focus ring, a selected edge, the active nav row's glyph |
 | a **fill** | action | the "+" in the header, "New flow", every primary button |
 
 *The active tab's rule is not this stroke.* It reads `--tab-rule` instead —
@@ -191,13 +191,16 @@ grey in both themes, `--muted-foreground` on dark and `--heading` on light,
 bridged as `border-tab-rule` — because the Figma draws that rule in grey, not
 blue. See §7.
 
-*Identity and location both left this table.* The ring that used to mark
-the rail's own mark left with the mark itself: the wordmark moved to the
-top bar as plain text (§2), and nothing rings it there. The glyph that
-used to mark the active nav row left with the row's own colour: the Figma
-marks WHERE YOU ARE with a neutral `--control` fill, not a coloured icon,
-so the brand has no location job left to hold. Two jobs now do the work
-three used to.
+*Identity left this table; location folded into the job that was already
+there.* The ring that used to mark the rail's own mark left with the mark
+itself: the wordmark moved to the top bar as plain text (§2), and nothing
+rings it there. The active nav row's glyph did NOT lose its colour —
+`RailChip` still inks it `text-marker` (`#3D9BFF` on `#202020`, 5.72:1), the
+same signal step a link or a focus ring uses — but the state is no longer
+that colour ALONE: the Figma's neutral `--control` fill goes under the
+whole row first, and the glyph's colour rides on top as a second signal,
+not the only one. Two jobs still do the work three used to — signal now
+covers the glyph as well as the stroke, and action stays the fill's alone.
 
 **Hover still walks UP the ramp on dark, and DOWN on light.** On a light
 page the fill darkens under the pointer (`600` → `700`), because
@@ -209,7 +212,7 @@ lighten toward. Because a component may not spell `dark:`, that direction is
 a role, `--primary-hover` (brand-500 in `.dark`, brand-700 in `:root`,
 bridged as `bg-primary-hover`), and the pressed step is `--primary-active`
 (brand-700 in both, `bg-primary-active`). White under the fill measures
-**3.98:1** at dark's hover and **5.10:1** at light's — dark trades a hair of
+**3.98:1** at dark's hover and **5.22:1** at light's — dark trades a hair of
 contrast for the lighten-on-raise feel, a documented trade rather than an
 oversight.
 
@@ -457,15 +460,16 @@ never `.css`.
   buttons, tabs and nav.
 - **Colour never carries state alone.** The reference draws its active nav row as
   a brand-coloured glyph and nothing else, which is invisible to a colour-blind
-  reader looking at six otherwise identical icons. This Figma goes further than
-  the objection asks for: the active row takes a neutral `--control` fill and
-  the glyph's own colour never changes at all — location is a SHAPE now, not a
-  colour, which answers the same objection with room to spare. The view strip's
-  active tab took the same lesson from the opposite direction (§7): its rule
-  went from carrying colour alone to carrying none, with weight and ink doing
-  the work instead. This is the same class of correction as §9's contrast
-  floor, and it is the second place the kit deliberately overrules its own
-  source.
+  reader looking at six otherwise identical icons. This kit answers with a
+  second signal rather than removing the first: the active row takes a
+  neutral `--control` fill UNDER the glyph, and the glyph keeps its own
+  `text-marker` colour on top — location is a SHAPE now as well as a colour,
+  not instead of one, which answers the same objection without spending the
+  brand's signal job. The view strip's active tab took the same lesson from
+  the opposite direction (§7): its rule went from carrying colour alone to
+  carrying none at all, with weight and ink doing the work instead. This is
+  the same class of correction as §9's contrast floor, and it is the second
+  place the kit deliberately overrules its own source.
 - **Nothing destructive fires on first click.**
 - **Motion is tokenised** — 120/180/280ms, three curves. `spring` only for things
   that appear or that the user just did; exit is faster than entry, because a

@@ -243,6 +243,9 @@ describe("fix round 1 — ratios and the gate's own rule count are pinned, not j
   it("the retired cyan-on-#1B191A ratio (9.20:1) does not survive as a CURRENT figure", () => {
     expect(brandKit()).not.toMatch(/9\.20:1/);
     expect(readFileSync(join(root, "DESIGN.md"), "utf8")).not.toMatch(/9\.20:1/);
+    // /design's own eyebrow comment carried the same retired figure — the
+    // reference page is the last place doc-rot may sit.
+    expect(readFileSync(join(root, "src/app/design/page.tsx"), "utf8")).not.toMatch(/9\.20:1/);
   });
 
   it("check-ui.ts's own rule count reads fourteen, not the stale thirteen", () => {
@@ -345,5 +348,30 @@ describe("The two new roles from the code pass are documented in every doc", () 
     const doc = designMd();
     expect(doc).not.toMatch(/a \*\*stroke\*\* \| signal \| links, the focus ring, the active tab's rule \|/);
     expect(doc).toMatch(/--tab-rule/);
+  });
+});
+
+/**
+ * FINAL PASS, PART 2, ITEM 2: THE ACTIVE NAV GLYPH KEEPS ITS COLOUR.
+ *
+ * `RailChip` (src/components/sidebar.tsx) inks the active glyph
+ * `text-marker` on top of the row's `--control` fill — two signals, not the
+ * Figma's one colourless fill. Both docs previously claimed the glyph
+ * "never changes colour" / "is not a coloured glyph", which is code that
+ * does not exist. These pin the corrected claim and ban the retired one.
+ */
+describe("Both docs say the active nav glyph keeps its colour (two signals, not one)", () => {
+  const designMd = () => readFileSync(join(root, "DESIGN.md"), "utf8");
+
+  it("DESIGN.md no longer claims the glyph's colour never changes", () => {
+    const doc = designMd();
+    expect(doc).not.toMatch(/the glyph's own colour never changes at all/);
+    expect(doc).toMatch(/text-marker/);
+  });
+
+  it("BRAND_KIT.md no longer claims the active row is 'not a coloured glyph'", () => {
+    const doc = brandKit();
+    expect(doc).not.toMatch(/not a coloured glyph/);
+    expect(doc).toMatch(/text-marker/);
   });
 });

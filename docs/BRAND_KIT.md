@@ -57,11 +57,16 @@ exhausting by 4pm.
 ### The brand ramp — one blue, two jobs
 
 Two days ago the kit ran cyan in three shapes: a ring for identity, a glyph
-for location, a fill for action. The Figma this pass builds from does not
-mark location with the brand at all — the rail's active row is a **neutral**
-`--control` fill with a `--border` edge, not a coloured glyph — so the "glyph
-is location" job retires with the cyan that carried it, and colour is left
-doing exactly two things: drawing a **stroke** and painting a **fill**.
+for location, a fill for action. The Figma this pass builds from draws the
+active row as a **neutral** `--control` fill with no coloured glyph at all —
+but `RailChip` overrules that on purpose (its own comment cites WCAG 1.4.1:
+a colour-blind reader looking at six otherwise-identical icons has no other
+way to tell which one is the current page), so the active glyph keeps
+`text-marker` UNDER the row's new `--control` fill rather than losing its
+colour to it. Location is now two signals, not the Figma's one, and colour
+is still left doing two JOBS rather than three: drawing a **stroke** (which
+now covers the active nav glyph as well as links and the focus ring) and
+painting a **fill**.
 
 | Step | Hex | Role | Measured |
 |---|---|---|---|
@@ -85,11 +90,11 @@ dark** (600 fill → 500 on hover) **and DOWN on light** (600 → 700), and beca
 a component may not spell `dark:`, that direction is a ROLE rather than a
 literal: `--primary-hover` is brand-500 in `.dark` and brand-700 in `:root`,
 bridged as `bg-primary-hover`. White under the fill measures **3.98:1** at
-dark's hover step and **5.10:1** at light's — dark's hover trades a hair of
+dark's hover step and **5.22:1** at light's — dark's hover trades a hair of
 contrast for the "raised means lighter" feel, a known, documented trade
 rather than an oversight. The pressed step is its own role too:
 `--primary-active` is brand-700 in BOTH themes, bridged as `bg-primary-active`
-— `#0069D9` under white measures 5.10:1 there as well, since pressed never
+— `#0069D9` under white measures 5.22:1 there as well, since pressed never
 lightens on either surface.
 
 Two more roles the Figma implies, added 5 Sep: `--tab-rule` is **not** the
@@ -421,9 +426,9 @@ search field styled exactly like a real `Input` (`--control` fill,
 `--border` outline, a magnifier, "Search", a ⌘K hint) that opens the same
 command palette a real search box would, a "Main Menu" caps label in
 `--faint` at 13px (`text-xs` — the scale has no 12px step, per §3), nav
-rows at 36px with 18px icons (the active row takes a `--control` fill —
-**not** a coloured glyph; the "location" job left the brand with this
-Figma, per §2), Dashboard's sub-items at 32px indented under an 8px dash
+rows at 36px with 18px icons (the active row takes a `--control` fill
+UNDER its glyph, which keeps `text-marker` on top — two signals, not the
+Figma's one; see §2), Dashboard's sub-items at 32px indented under an 8px dash
 marker, and at the foot a full-width `primary` "New flow" button above a
 "Get Free Access" row (a bell icon carrying a small blue dot, the label
 muted). The collapse/pin cookie behaviour — what actually opens and
@@ -572,7 +577,7 @@ and on nothing else in the header.
   **DOWN** on light (600 → 700); `active:bg-primary-active` presses to 700 on
   both. That inverted with the surface — on a light page the brand had to
   darken, because brightening it moved it toward the white behind it and the
-  label's contrast fell at the moment of the press (white clears 5.10:1 at
+  label's contrast fell at the moment of the press (white clears 5.22:1 at
   light's hover step; dark's hover trades down to 3.98:1 for the same "raised
   means lighter" feel). Never `hover:brightness-*` on the brand either way.
 - **Disabled:** `disabled:pointer-events-none disabled:opacity-50`, only.
