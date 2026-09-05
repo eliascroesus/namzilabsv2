@@ -183,8 +183,13 @@ than it did two days ago:
 
 | | job | where |
 |---|---|---|
-| a **stroke** | signal | links, the focus ring, the active tab's rule |
+| a **stroke** | signal | links, the focus ring, a selected edge |
 | a **fill** | action | the "+" in the header, "New flow", every primary button |
+
+*The active tab's rule is not this stroke.* It reads `--tab-rule` instead —
+grey in both themes, `--muted-foreground` on dark and `--heading` on light,
+bridged as `border-tab-rule` — because the Figma draws that rule in grey, not
+blue. See §7.
 
 *Identity and location both left this table.* The ring that used to mark
 the rail's own mark left with the mark itself: the wordmark moved to the
@@ -200,7 +205,13 @@ brightening a colour moves it toward the white behind it and the label's
 contrast falls at the moment of the press. On near-black the argument
 inverts with the surface: raised means lighter, so dark's hover is `500`
 — the brand's own named step, once too light to fill and exactly right to
-lighten toward.
+lighten toward. Because a component may not spell `dark:`, that direction is
+a role, `--primary-hover` (brand-500 in `.dark`, brand-700 in `:root`,
+bridged as `bg-primary-hover`), and the pressed step is `--primary-active`
+(brand-700 in both, `bg-primary-active`). White under the fill measures
+**3.98:1** at dark's hover and **5.10:1** at light's — dark trades a hair of
+contrast for the lighten-on-raise feel, a documented trade rather than an
+oversight.
 
 ### The collision that used to be here, and why it is gone
 
@@ -379,12 +390,13 @@ never `.css`.
   went from a green measuring 1.78:1 on the light ground, to a violet at
   4.41:1, to a cyan that cleared its own bar with room to spare — and colour
   got QUIETER at the same time it got easier to read: the rule this Figma
-  draws is `--muted-foreground`, no colour at all, and the active tab is
-  set apart by WEIGHT (500 → 600) and ink (muted → `--heading`) instead.
-  Three colour changes taught the same lesson before this pass finally
-  acted on it: a state that only colour carries is invisible to whoever
-  cannot see the colour, so the rule and the weight and the ink all have
-  to say SELECTED, not just one of them.
+  draws is a grey role, `--tab-rule` (`--muted-foreground` on dark,
+  `--heading` on light, bridged as `border-tab-rule`), no colour at all, and
+  the active tab is set apart by WEIGHT (500 → 600) and ink (muted →
+  `--heading`) instead. Three colour changes taught the same lesson before
+  this pass finally acted on it: a state that only colour carries is
+  invisible to whoever cannot see the colour, so the rule and the weight and
+  the ink all have to say SELECTED, not just one of them.
 - **The "Today" dropdown replaces the period track.** The dashboard used to
   spend a full-width 32px bordered `--control` groove on six mutually
   exclusive range buttons — Today, Yesterday, 7d, 30d, this month, last

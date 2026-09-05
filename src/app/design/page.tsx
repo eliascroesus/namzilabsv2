@@ -148,7 +148,7 @@ const DIRECTION: Array<{ rule: string; why: string }> = [
   },
   {
     rule: "One blue, two jobs",
-    why: "#007BFF replaces the cyan everywhere. It does two jobs, not three: a STROKE (--marker: links, the focus ring, the active tab rule) at 6.65:1 down to 6.20:1 across the three dark surfaces, and a FILL (--primary, one step deeper at #0070E8) at 4.68:1 under white ink. The 'glyph is location' job the cyan carried is gone — the rail's active row is a neutral --control fill now, not a coloured icon, because that is what the Figma draws. Success is still NOT the brand: it keeps the green the brand vacated, because a DONE badge and a New-flow button being one colour puts the loudest state and the loudest act in one vocabulary. Warn and danger are the other two state hues, and status is still quiet when fine.",
+    why: "#007BFF replaces the cyan everywhere. It does two jobs, not three: a STROKE (--marker: links, the focus ring, a selected edge — NOT the active tab's rule, which is the grey --tab-rule role instead) at 6.65:1 down to 6.20:1 across the three dark surfaces, and a FILL (--primary, one step deeper at #0070E8) at 4.68:1 under white ink. The 'glyph is location' job the cyan carried is gone — the rail's active row is a neutral --control fill now, not a coloured icon, because that is what the Figma draws. Success is still NOT the brand: it keeps the green the brand vacated, because a DONE badge and a New-flow button being one colour puts the loudest state and the loudest act in one vocabulary. Warn and danger are the other two state hues, and status is still quiet when fine.",
   },
   {
     rule: "Ten contains, eight presses",
@@ -446,7 +446,7 @@ export default function DesignPage() {
               <div className="h-16 rounded-card bg-primary-hover" />
               <p className="mt-1.5 text-xs font-medium text-foreground">primary hover</p>
               <p className="text-xs text-muted-foreground">
-                brand-500 on dark, brand-700 on light; white ink stays 4.5:1 or better both ways
+                brand-500 on dark, brand-700 on light; white ink is 5.10:1 on light&apos;s hover, 3.98:1 on dark&apos;s — a known trade for &quot;raised means lighter&quot;
               </p>
             </div>
             <div className="min-w-0">
@@ -783,15 +783,15 @@ export default function DesignPage() {
             </div>
             <div className="flex flex-1 flex-col justify-center gap-1 text-xs text-muted-foreground">
               <p>
-                The rail is <code className="font-mono text-foreground">--chrome</code> (#111111), the same step as the
+                The rail is <code className="font-mono text-foreground">--chrome</code>{" "}(#111111), the same step as the
                 top bar above it and every card on the page — one count off the #0F1011 ground and two off the #181818
                 panel, so its right edge is a real 1px hairline rather than a luminance step you could see unaided.
               </p>
               <p>
                 REST IS NOTHING AT ALL. Every chip but one is a bare glyph on the chrome — a white mark measures 18.88:1
                 there, so it does not need a plate to be found, and seven pale squares down the column were the loudest
-                thing in it. Hover raises to <code className="font-mono text-foreground">--accent</code> and ACTIVE takes
-                a <code className="font-mono text-foreground">--control</code> fill: neutral, not the brand, because
+                thing in it. Hover raises to <code className="font-mono text-foreground">--accent</code>{" "}and ACTIVE takes
+                a <code className="font-mono text-foreground">--control</code>{" "}fill: neutral, not the brand, because
                 where you are is not something you press.
               </p>
             </div>

@@ -69,7 +69,7 @@ doing exactly two things: drawing a **stroke** and painting a **fill**.
 | 100 | `#CCE5FF` | | — |
 | 200 | `#99CBFF` | | — |
 | 300 | `#66B2FF` | | 8.51:1 on `#0F1011` |
-| 400 | `#3D9BFF` | **THE DARK STROKE** (`--marker` in `.dark`): links, focus ring, active tab rule, selected edge | 6.65:1 on `#0F1011`, 6.59:1 on `#111111`, 6.20:1 on `#181818` |
+| 400 | `#3D9BFF` | **THE DARK STROKE** (`--marker` in `.dark`): links, focus ring, selected edge — NOT the active tab's rule, see `--tab-rule` below | 6.65:1 on `#0F1011`, 6.59:1 on `#111111`, 6.20:1 on `#181818` |
 | 500 | `#007BFF` | **THE BRAND**: hover of the fill, the workspace initial tint (`rgb(0 123 255 / .75)`), decorative dots, chart series default | 4.79:1 as a stroke on `#0F1011` |
 | 600 | `#0070E8` | **THE FILL** (`--primary`, both themes) under white ink | 4.68:1 white-on-fill — the Figma's own `#007BFF` measures 3.98:1 under white, short of the 4.5:1 a 15px label owes, so the fill sits one step deeper than the brand it is named after |
 | 700 | `#0069D9` | pressed | 5.22:1 under white |
@@ -81,9 +81,29 @@ under cyan, because `#00C0E8` needed a dark ink to clear its bar and `#0070E8`
 needs a light one. `--brand-soft` is `rgb(0 123 255 / 0.10)`; `--brand-soft-line`
 is `rgb(0 123 255 / 0.25)` on dark and `0.30` on light — a 10% wash needs more
 ring on the lighter ground to keep an edge. **Hover still walks UP the ramp on
-dark** (600 fill → 500 on hover) **and DOWN on light** (600 → 700): brightening
-a fill under the pointer moves it toward the white page behind it on a light
-surface, and the label's contrast falls at the exact moment of the press.
+dark** (600 fill → 500 on hover) **and DOWN on light** (600 → 700), and because
+a component may not spell `dark:`, that direction is a ROLE rather than a
+literal: `--primary-hover` is brand-500 in `.dark` and brand-700 in `:root`,
+bridged as `bg-primary-hover`. White under the fill measures **3.98:1** at
+dark's hover step and **5.10:1** at light's — dark's hover trades a hair of
+contrast for the "raised means lighter" feel, a known, documented trade
+rather than an oversight. The pressed step is its own role too:
+`--primary-active` is brand-700 in BOTH themes, bridged as `bg-primary-active`
+— `#0069D9` under white measures 5.10:1 there as well, since pressed never
+lightens on either surface.
+
+Two more roles the Figma implies, added 5 Sep: `--tab-rule` is **not** the
+blue stroke above — it is the active tab's 1px bottom rule, and it is grey
+in both themes: `--muted-foreground` in `.dark`, `--heading` in `:root`,
+bridged as `border-tab-rule`. The tab's TEXT carries the emphasis (15px/600
+in `--heading` versus 15px/500 muted for an inactive tab); the rule anchors
+the row, it does not repeat the colour.
+
+| Role | Dark | Light | Bridged as |
+|---|---|---|---|
+| `--tab-rule` | `--muted-foreground` | `--heading` | `border-tab-rule` |
+| `--primary-hover` | brand-500 `#007BFF` | brand-700 `#0069D9` | `bg-primary-hover` |
+| `--primary-active` | brand-700 `#0069D9` | brand-700 `#0069D9` | `bg-primary-active` |
 
 ### The neutral ramp (dark), re-cut for three surfaces
 
@@ -481,8 +501,10 @@ type, 14px glyphs) is the header row's rung, with a `[&_svg]:size-4`
 override wherever the export draws 16px icons on it. `Card` fills with
 `--card`, edges with `--border`, and floats on `--shadow-card`, all three
 carrying new values from §2 without a line of the component changing.
-`Tabs`' line variant draws its active rule from `--rule` — the heavier
-control-edge step, not the hairline itself — and keeps 8px corners.
+`Tabs`' line variant draws its active rule from `--tab-rule` — grey in both
+themes (`--muted-foreground` on dark, `--heading` on light), not the blue
+stroke — and keeps 8px corners; the active tab's own text carries the
+emphasis, at 15px/600 in `--heading`.
 `Avatar`'s fallback initials and its group-count overflow chip both fill
 with `--avatar` now, the same token, so a stack of avatars and the "+3"
 that follows it are one material. `Input`'s `Textarea` takes
@@ -496,8 +518,9 @@ trigger and its items: verified, not changed.
 
 `PageHeader`'s title is centred whenever a caller passes the new `tabs`
 slot — tab strip left (an active tab at 15px/600 in `--heading` with a 1px
-`--muted-foreground` bottom rule and a "…" menu; inactive tabs 15px/500,
-muted; a 28px `secondary` "+" square), the title itself centred at 26px/600
+`border-tab-rule` bottom rule — grey in both themes, never the blue stroke —
+and a "…" menu; inactive tabs 15px/500, muted; a 28px `secondary` "+"
+square), the title itself centred at 26px/600
 with its pencil, and the actions right. The dashboard is the one caller,
 and its three actions are the export's: a **"Today" dropdown** (`secondary`
 `xs`, a 16px calendar glyph, the selected preset's label, a chevron) in
@@ -543,12 +566,15 @@ and on nothing else in the header.
   moves the jank later instead of removing it.
 - **Hover:** neutral hovers are `hover:bg-accent` — the raised step — and never
   `hover:bg-muted`, which recesses and which was briefly the same value as
-  `--card`, so six controls had an invisible hover. Primary walks **UP** the
-  ramp: `hover:bg-brand-500`, `active:bg-brand-700`. That inverted with the
-  surface — on a light page the brand had to darken, because brightening it
-  moved it toward the white behind it and the label's contrast fell at the
-  moment of the press. On near-black, raised means lighter. Never
-  `hover:brightness-*` on the brand either way.
+  `--card`, so six controls had an invisible hover. Primary hovers through a
+  role rather than a literal, because a component may not spell `dark:`:
+  `hover:bg-primary-hover` walks the fill **UP** on dark (600 → 500) and
+  **DOWN** on light (600 → 700); `active:bg-primary-active` presses to 700 on
+  both. That inverted with the surface — on a light page the brand had to
+  darken, because brightening it moved it toward the white behind it and the
+  label's contrast fell at the moment of the press (white clears 5.10:1 at
+  light's hover step; dark's hover trades down to 3.98:1 for the same "raised
+  means lighter" feel). Never `hover:brightness-*` on the brand either way.
 - **Disabled:** `disabled:pointer-events-none disabled:opacity-50`, only.
 - **Motion tokens, not one-offs:** durations `--duration-fast|base|slow`
   (120/180/280ms) and curves `--ease-standard|spring|exit`. `spring` is only

@@ -297,3 +297,53 @@ describe("BRAND_KIT.md principle 3 states the mirror rule, not the recess one", 
     expect(brandKit()).not.toMatch(/A control recesses; a hover raises\./);
   });
 });
+
+/**
+ * FINAL PASS, PART 2, ITEM 1: THE TWO NEW ROLES FROM THE CODE PASS ARE
+ * ACTUALLY WRITTEN DOWN, AND THE RETIRED CLASS NAMES DO NOT SURVIVE IN PROSE.
+ *
+ * Part 1 (code) declared --tab-rule, --primary-hover and --primary-active in
+ * globals.css and converted every filled-control hover from a literal
+ * (hover:bg-brand-500) to the role. A doc that still shows the old class in
+ * a code sample, or never mentions the new roles at all, would describe code
+ * that no longer exists.
+ */
+describe("The two new roles from the code pass are documented in every doc", () => {
+  const designMd = () => readFileSync(join(root, "DESIGN.md"), "utf8");
+  const page = () => readFileSync(join(root, "src/app/design/page.tsx"), "utf8");
+
+  it("BRAND_KIT.md names --tab-rule and --primary-hover", () => {
+    const doc = brandKit();
+    expect(doc).toMatch(/--tab-rule/);
+    expect(doc).toMatch(/--primary-hover/);
+  });
+
+  it("DESIGN.md names --tab-rule and --primary-hover", () => {
+    const doc = designMd();
+    expect(doc).toMatch(/--tab-rule/);
+    expect(doc).toMatch(/--primary-hover/);
+  });
+
+  it("/design's prose names --tab-rule (or its bridge) and --primary-hover (or its bridge)", () => {
+    const src = page();
+    expect(src).toMatch(/tab-rule/);
+    expect(src).toMatch(/primary-hover/);
+  });
+
+  it("no doc's code sample still spells the retired hover:bg-brand-500", () => {
+    expect(brandKit()).not.toMatch(/hover:bg-brand-500/);
+    expect(designMd()).not.toMatch(/hover:bg-brand-500/);
+    expect(page()).not.toMatch(/hover:bg-brand-500/);
+  });
+
+  it("BRAND_KIT.md's brand-ramp row for step 400 no longer claims the active tab's rule", () => {
+    // The rule is grey (--tab-rule), not the blue stroke this row documents.
+    expect(brandKit()).not.toMatch(/`--marker` in `\.dark`\)[^|]*active tab rule/);
+  });
+
+  it("DESIGN.md's stroke/fill job table no longer lists the active tab's rule under the stroke", () => {
+    const doc = designMd();
+    expect(doc).not.toMatch(/a \*\*stroke\*\* \| signal \| links, the focus ring, the active tab's rule \|/);
+    expect(doc).toMatch(/--tab-rule/);
+  });
+});
