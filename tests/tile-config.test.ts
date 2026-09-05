@@ -181,9 +181,9 @@ describe("the colour key is a key, not anything that answers to `in`", () => {
   it("degrades an unpalatable stored value to the kit's own mark colour", () => {
     // Belt and braces: a row written before the schema was tightened must not
     // render a function into a style attribute.
-    expect(accentOf("constructor")).toBe("var(--color-brand-600)");
-    expect(accentOf("nope")).toBe("var(--color-brand-600)");
-    expect(accentOf(undefined)).toBe("var(--color-brand-600)");
-    expect(accentOf("teal")).not.toBe("var(--color-brand-600)");
+    expect(accentOf("constructor")).toBe("var(--color-brand-500)");
+    expect(accentOf("nope")).toBe("var(--color-brand-500)");
+    expect(accentOf(undefined)).toBe("var(--color-brand-500)");
+    expect(accentOf("teal")).not.toBe("var(--color-brand-500)");
   });
 });

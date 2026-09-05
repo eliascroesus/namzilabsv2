@@ -11,9 +11,11 @@ import type { ImportCoverage } from "@/connectors/types";
  * carrying four accents. The marks are what people actually look at, and they
  * were the least-decided thing on the page.
  *
- *   THE MARKER DRAWS THE SERIES. A mark here is one measure, and the marker's
- *     violet is the colour the product measures in: the sparkbars, the goal
- *     bar, a breakdown's first row.
+ *   THE BRAND DRAWS THE SERIES. A mark here is one measure, and
+ *     `--color-brand-500` (`#007BFF`) is the colour the product measures in:
+ *     the sparkbars and a breakdown's first row — the goal bar stays
+ *     neutral-until-met (see `TargetBar` below), which is a state, not a
+ *     series.
  *   BLACK EMPHASISES. The bucket the series ends on, and a delta that moved.
  *   THE ACCENT THREE DECORATE, and only where decoration is safe — a
  *     breakdown's rows, each of which already carries its own name in the
@@ -76,7 +78,7 @@ const TRACK = "h-2 overflow-hidden rounded-full";
  * a custom view's problem only, and a repeat is better there than a fifth
  * colour invented off the sheet.
  */
-const BREAKDOWN_ACCENTS = ["bg-marker", "bg-accent-peri", "bg-accent-orange", "bg-accent-pink"];
+const BREAKDOWN_ACCENTS = ["bg-brand-500", "bg-accent-peri", "bg-accent-orange", "bg-accent-pink"];
 
 /**
  * A bucketed series as a bare strip of bars.
@@ -115,7 +117,7 @@ export function Sparkbars({
     //
     // THE TWO USED TO BE ONE COLOUR AND CANNOT BE, which is the fill/stroke
     // split drawn inside a single element. The axis is a RULE, so it is the
-    // marker's: a 25% yellow line measures about 1.1:1 on a white card and is
+    // brand's: a 25% yellow line measures about 1.1:1 on a white card and is
     // not a faint axis, it is no axis. The field is a SURFACE the marks sit on,
     // so it takes the brand — at 5% it is a tint rather than a graphic, so it
     // owes no ratio of its own, and it is the only place in the dashboard's
@@ -127,7 +129,7 @@ export function Sparkbars({
     // data at every bucket count, and the colour pass was not a reason to
     // relitigate a decision that was made against the geometry.
     <div
-      className={cn("mt-3 flex items-end gap-1 rounded-t-sm border-b border-marker/25 bg-marker/5", className)}
+      className={cn("mt-3 flex items-end gap-1 rounded-t-sm border-b border-brand-500/25 bg-brand-500/12", className)}
       aria-hidden
     >
       {series.map((s) => (
@@ -149,7 +151,7 @@ export function Sparkbars({
             //
             // A one-bucket series keeps the series colour: there is no "latest"
             // to distinguish it from, and a lone black bar would imply one.
-            "bg-marker",
+            "bg-brand-500",
           )}
           style={{ height: `${Math.max((s.value / max) * 100, 6)}%` }}
         />

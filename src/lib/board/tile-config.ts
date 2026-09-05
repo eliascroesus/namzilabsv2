@@ -117,6 +117,12 @@ export function parseTileConfig(raw: unknown): TileConfig {
  * at once with no backfill, and a key this palette has since dropped degrades
  * to the kit's own mark colour instead of rendering `undefined` into a style
  * attribute. The same argument `node-accent.ts` makes for group colours.
+ *
+ * THE DEFAULT IS `--color-brand-500`, NOT `--primary`. As of the 4 Sep 2026
+ * blue retheme the ramp splits the two jobs the old single brand token did:
+ * `--color-brand-600` (`--primary`) is the FILL controls take under white
+ * ink, and `--color-brand-500` (`#007BFF`) is the chart-series step — the
+ * colour a tile with no `GROUP_ACCENT` colour of its own draws in.
  */
 export function accentOf(color?: string): string {
   /**
@@ -125,7 +131,7 @@ export function accentOf(color?: string): string {
    * which React stringifies into the style attribute. An own-property check
    * closes the write path and degrades anything already stored to the default.
    */
-  return color && Object.hasOwn(GROUP_ACCENT, color) ? GROUP_ACCENT[color] : "var(--color-brand-600)";
+  return color && Object.hasOwn(GROUP_ACCENT, color) ? GROUP_ACCENT[color] : "var(--color-brand-500)";
 }
 
 /**

@@ -376,8 +376,20 @@ describe("the kit's shape", () => {
      *
      * Still no honesty rule moved. Zero-anchoring, `formatMetricValue` and the
      * direction-blind delta are all untouched.
+     *
+     * AND MOVED A FIFTH TIME FOR THE BLUE RETHEME (4 Sep 2026) — a rename,
+     * not a behaviour change, but the file said "a series is a MARK and stays
+     * `--marker`" two paragraphs up and that stopped being true. The Figma's
+     * ramp splits jobs the single `--marker` used to hold alone: `--marker`
+     * becomes the dark stroke (`brand-400`) or light stroke (`brand-800`) for
+     * links, the focus ring and the active-tab rule, while the chart series —
+     * Sparkbars' wash, its bars, and the breakdown's first slot — takes
+     * `--color-brand-500` (`#007BFF`) directly, because after the split the
+     * two tokens are no longer the same colour in either theme. `TargetBar`
+     * is untouched again: it already drew in `--success`/neutral, never
+     * `--marker`, so the goal-bar paragraphs above still hold.
      */
     const hash = createHash("sha256").update(readFileSync(join(process.cwd(), "src/components/charts.tsx"))).digest("hex");
-    expect(hash).toBe("49fae91cb1e4bc260c958a910bbf0a26c2fe6dc7fec70f714f8fa907ba036203");
+    expect(hash).toBe("4eed3ef42969272154b5c7a8fc7176ea04e151265a974ff271a210ac92445c7d");
   });
 });
