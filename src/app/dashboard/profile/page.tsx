@@ -72,7 +72,7 @@ export default async function ProfilePage() {
                    cleared from the theme, so an off-kit size compiles to
                    nothing and the letters would have rendered at whatever they
                    inherited. `check:ui` caught this one. */
-                className="flex size-24 shrink-0 items-center justify-center rounded-full bg-accent text-display-xs font-semibold text-accent-foreground"
+                className="flex size-24 shrink-0 items-center justify-center rounded-full border border-input bg-avatar text-display-xs font-semibold text-foreground"
               >
                 {profile.initials}
               </span>

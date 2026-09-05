@@ -212,15 +212,13 @@ export async function AppShell({
         panel: (
           <div className="text-sm">
             <div className="flex items-center gap-2.5 px-3 py-2.5">
-              {/* The trigger's avatar again, at the same size and in the same
-                  violet tint, so the panel visibly belongs to the control that
-                  opened it. IDENTITY IS THE ONE JOB THE REBRAND LEFT THE
-                  VIOLET a fill for — which workspace you are in is a fact about
-                  the account, not a control, so it is not competing with the
-                  yellow for a press. This is the tint pair rather than the
-                  full-strength `chrome-avatar` the top bar wears: a wash
-                  carrying the ink step, because the 500 is 4.41:1 and the
-                  initials are text at 6.79:1 on the 700. */}
+              {/* The trigger's avatar again, at the same size, so the panel
+                  visibly belongs to the control that opened it. The initial
+                  disc renders through the `--avatar` role exactly as
+                  `ui/avatar.tsx`'s `AvatarFallback` does — the SAME fill and
+                  `--input` outline every avatar-shaped circle in the kit
+                  wears, rather than a one-off `--accent` treatment invented
+                  here. */}
               {profile.avatarUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
@@ -231,7 +229,7 @@ export async function AppShell({
               ) : (
                 <span
                   aria-hidden
-                  className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-semibold text-accent-foreground"
+                  className="flex size-8 shrink-0 items-center justify-center rounded-full border border-input bg-avatar text-xs font-semibold text-foreground"
                 >
                   {initials}
                 </span>

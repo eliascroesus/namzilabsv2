@@ -455,9 +455,12 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                     {/* DASHED AND NEUTRAL — the one avatar on the page with no
                         colour in it. A pending invitee is not a member yet, and
                         the same dashed-outline idiom marks the empty slot at the
-                        foot of the roles list. */}
+                        foot of the roles list. The fill and the ink are still
+                        the `--avatar` role, same as every other initial disc in
+                        the kit — the dashed edge is what says "not yet", not a
+                        different surface. */}
                     <span
-                      className="flex size-9 items-center justify-center rounded-full border border-dashed border-border bg-muted text-xs font-semibold text-muted-foreground"
+                      className="flex size-9 items-center justify-center rounded-full border border-dashed border-border bg-avatar text-xs font-semibold text-foreground"
                       aria-hidden
                     >
                       {initials(inv.email)}
