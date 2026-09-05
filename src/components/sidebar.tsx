@@ -71,7 +71,7 @@ import { GROUP_COLOR_KEYS, groupBadge, groupInk } from "@/components/flow/node-a
  * on this ground there is no surface to lift it off. The SLOT is the hit area:
  * 32px tall, and as WIDE as the column is at the moment you press it, so an open
  * rail lets you click the name as well as the picture. Colour is spent in
- * exactly one place — the row you are standing on carries a cyan glyph on a
+ * exactly one place — the row you are standing on carries a blue glyph on a
  * raised chip and the other four are plain.
  *
  * WHAT THE 48px COULD NOT HOLD, AND WHERE EACH THING WENT. Every one of these
@@ -322,7 +322,7 @@ const ICON_COL = "flex size-8 shrink-0 items-center justify-center";
  * `focus-ring-light` IS GONE, and it went with the thing it was for. globals.css
  * draws one ring for the whole product in `--ring`; while that ring was violet
  * and this rail was the one dark surface in a light app, it was invisible here
- * and needed a sanctioned white twin. The ring is cyan on a ground that is now
+ * and needed a sanctioned white twin. The ring is blue on a ground that is now
  * the SAME colour everywhere, so the product's own ring is the correct one and a
  * second spelling would be a second answer.
  *

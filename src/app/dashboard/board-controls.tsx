@@ -589,19 +589,21 @@ export function ViewTab({
        * is a place in a document, so it is a RULE, which every product that has
        * this row agrees on — and a rule is a stroke.
        *
-       * The colour is `--marker`, which is deliberately TWO RUNGS of one ramp
-       * rather than one value: a stroke that reads on near-black is invisible
-       * on white, and this row needs the same rule at both exposures. It is
-       * `brand-500` dark and `brand-900` light, so the underline measures
-       * 9.20:1 on the console and 6.77:1 on the light page — see the token's
-       * own note. Both clear the 3:1 an indicator carrying state owes, which a
-       * single value never did: the old one-value marker was 1.78:1 on the
-       * light ground, and that is the bug the split exists to fix. The underline carries
-       * the state on its own at both exposures, and the weight-and-ink change
-       * beside it (the active tab is the one set in `--ground-ink` while its
-       * neighbours sit muted) is reinforcement rather than the thing holding the
-       * rule up. That is a change in what this row DEPENDS on, not in what it
-       * looks like: both marks are still here.
+       * THE COLOUR IS NO LONGER `--marker`. It used to be, and for the reason
+       * the split usually gets reached for: a stroke that reads on near-black
+       * is invisible on white, so the rule needed two rungs of the ramp rather
+       * than one value. The 5 Sep 2026 amendment gives this rule its OWN role
+       * instead — `--tab-rule` (`--heading` light, `--muted-foreground` dark)
+       * — because the Figma draws it in grey, not in the brand, and a fixed
+       * ink owes no ramp-step contrast claim the way a coloured stroke did.
+       * `--marker` itself is untouched by that move and still measures 6.59:1
+       * on the chrome and 6.20:1 on the panel in dark (`brand-400`), 5.46:1 on
+       * white in light (`brand-800`) — it simply is not this rule's colour any
+       * more. The weight-and-ink change beside it (the active tab is the one
+       * set in `--heading` while its neighbours sit muted) is reinforcement
+       * rather than the thing holding the rule up. That is a change in what
+       * this row DEPENDS on, not in what it looks like: both marks are still
+       * here.
        *
        * `border-b-3` sits on the wrapper rather than on the anchor so the
        * kebab, which is a sibling inside this span, rides the same rule instead
@@ -636,8 +638,9 @@ export function ViewTab({
        */
       className={cn(
         "inline-flex shrink-0 items-center border-b-2 text-sm transition-colors duration-(--duration-fast)",
-        // THE ACTIVE TAB IS HEAVIER AS WELL AS WHITER. The rule carries the
-        // state on its own now (9.83:1 on the console, 5.91:1 on white), so the
+        // THE ACTIVE TAB IS HEAVIER AS WELL AS WHITER. `--tab-rule` is a grey,
+        // not a measured brand stroke, so it carries no contrast claim of its
+        // own — the weight and the ink are what say WHERE YOU ARE now. The
         // weight is not compensating for anything — it is there because a
         // selection should be unmistakable, and `--heading` is the same ink the
         // page title above it takes, so the two things that say WHERE YOU ARE

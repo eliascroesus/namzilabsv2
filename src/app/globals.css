@@ -74,7 +74,8 @@
  *
  * IT IS RARELY THE RIGHT TOOL. Ninety-nine times in a hundred the answer is a
  * ROLE that already differs between the two blocks — `bg-card` is white here
- * and #272426 there without a single `dark:` anywhere. Reach for the variant
+ * and #111111 there (the chrome's own value, which `--card` aliases) without a
+ * single `dark:` anywhere. Reach for the variant
  * only when a value genuinely has no role, and expect to be asked why.
  */
 @custom-variant dark (&:where(.dark, .dark *));
