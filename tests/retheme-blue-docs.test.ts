@@ -50,3 +50,41 @@ describe("BRAND_KIT.md §1–§2 match the blue re-theme (4 September 2026 Figma
     expect(doc).not.toMatch(/9\.02:1 on the ground, 7\.93:1 on a card/);
   });
 });
+
+describe("BRAND_KIT.md §3–§11 match the blue re-theme", () => {
+  it("the tile numeral is 28px and the wordmark is documented", () => {
+    const doc = brandKit();
+    expect(doc).toMatch(/28px/);
+    expect(doc).toMatch(/\.wordmark/);
+    expect(doc).toMatch(/weight\s*\*?\*?900/i);
+  });
+
+  it("shape is 8px, no pill, and names the Figma as final", () => {
+    const doc = brandKit();
+    expect(doc).not.toMatch(/Everything you press is a full pill/);
+    expect(doc).toMatch(/no pill/i);
+    expect(doc).toMatch(/4 September 2026 Figma/);
+  });
+
+  it("radius-frame is 8px again, not retired at 0", () => {
+    const doc = brandKit();
+    expect(doc).not.toMatch(/`--radius-frame` is \*\*0\*\*/);
+    expect(doc).toMatch(/`--radius-frame` is \*\*8px\*\*/);
+  });
+
+  it("the top bar carries the wordmark, out of the rail", () => {
+    const doc = brandKit();
+    expect(doc).toMatch(/top bar now carries the wordmark/i);
+  });
+
+  it("chart series default to the brand, not the marker", () => {
+    const doc = brandKit();
+    expect(doc).toMatch(/--color-brand-500/);
+    expect(doc).toMatch(/rgb\(0 123 255 \/ \.12\)/);
+  });
+
+  it("the enforcement section narrates the cyan-ramp and rounded-full retirements", () => {
+    const doc = brandKit();
+    expect(doc).toMatch(/two more rows/i);
+  });
+});

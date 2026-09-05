@@ -237,12 +237,15 @@ const RULES: Rule[] = [
    * someone looking at that exact hover state on that exact screen. A script
    * was the only thing that could.
    *
-   * The measurement it was built on is gone. `--primary` is #00c0e8 and
-   * `--marker` is #00cdf5, both cyan, and on #1b191a the stroke step is 9.20:1
-   * — past what a line owes AND past what body text owes. The split it enforced
-   * has nothing left to keep apart, and the exemption it carried (top-bar.tsx's
-   * ring arc, "the one surface where the brand strokes at 8.77:1") is now every
-   * surface in the product.
+   * The measurement it was built on is gone twice over now. Cyan (`--primary`
+   * #00c0e8, `--marker` #00cdf5) retired the rule on 2 September; the 4
+   * September Figma replaced the cyan itself, so `--primary` is #0070e8 and
+   * `--marker` is #3d9bff on dark and #0062cc on light. The split has nothing
+   * left to keep apart either way — the dark stroke step measures 6.65:1 on
+   * the page ground, past what a line owes AND past what body text owes. The
+   * exemption this rule carried (top-bar.tsx's ring arc, "the one surface
+   * where the brand strokes at 8.77:1") outlived it and then outlived the arc:
+   * the ring itself was deleted with the same re-theme.
    *
    * The two tokens survive as a FILL step and a STROKE step of one ramp, which
    * is an ordinary ramp rather than a rule needing a gate.

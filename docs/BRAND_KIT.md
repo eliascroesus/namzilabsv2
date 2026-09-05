@@ -210,10 +210,14 @@ Apple's, and `system-ui` is that request spelled correctly.
 
 **The display face is deleted.** Instrument Sans ran page titles, the landing
 hero and the metric numeral. The distinction this interface draws is between the
-chrome and the NUMBER, and 36px at -0.03em against a 14px interface already
-carries it; a second family was buying separation the size step had paid for.
-`.font-display` survives as a tracking utility (-0.022em) and `.stat-numeral` as
-the ledger figure.
+chrome and the NUMBER, and a tile's headline dropped from 36px to **28px** in
+this pass — the Figma draws it smaller than the console did — but the
+separation still does not need a second family: 28px Inter 600 against a 15px
+interface still reads as the loudest thing on the tile. `.font-display`
+survives as a tracking utility (-0.022em) and `.stat-numeral` is now `28px /
+40px`, `font-family: var(--font-inter, "Inter"), var(--font-sans)` — Inter
+named explicitly, because the numeral is the one place the Figma names a face
+rather than asking for the platform's own.
 
 | token | px | job |
 |---|---|---|
@@ -225,9 +229,28 @@ the ledger figure.
 | `text-xl` | 20 | the step above a card title |
 | `text-display-xs` | 26 | **page titles** (`PageHeader`) |
 | `text-display-sm` | 30 | — |
-| `text-display-md` | 36 | the tile's headline number |
+| `text-display-md` | 28 | the tile's headline number — Inter 600, 40px line, via `.stat-numeral` |
 | `text-display-lg` | 48 | the landing hero |
 | `text-banner` | fluid | the landing's one oversized moment |
+
+**The wordmark is a new, standalone class — not a scale step.** `.wordmark`
+sets "Namzilabs" at Inter, 24px, weight **900**, 22px line: the only weight
+above 600 anywhere in the kit, and it earns the exemption for one reason —
+the Figma names Inter 900 for exactly one string in the whole export, and a
+kit that has never bent its own never-700 rule does not get to bend it
+quietly now. The weight is declared in the CSS class, never as a
+`font-black` utility at a call site, which is what keeps the exception
+contained: `scripts/check-ui.ts` reads `.tsx` and never `.css`, so its
+`font-bold` ban still fails the build on any heavy weight anywhere in the
+app and needs no allow-list entry — one rule, one file, no widening. It sits
+in the top bar's left slot now; the rail's mark moved out with it (§5).
+
+**No new caption step.** The Figma's header actions ("+ Add", "Today",
+"Refresh All") set 12px/550, and its own body copy's inspector reports
+12.11px — both round to the kit's existing `text-xs` (13px) rather than
+earning a new named size: the header actions map to the kit's `xs` button
+size, and captions stay 13px, the closed scale's nearest step. A 12px step
+was considered and rejected for exactly this reason.
 
 **The micro-label voice**, as `.label-micro`: 10px, ALL CAPS,
 `--tracking-label`, muted. A status pill, a section heading, a table head and a
@@ -239,31 +262,61 @@ a word you scan. A chip carries a source or metric name the customer chose, and
 setting somebody's workspace name in caps is the product shouting a word it did
 not write.
 
-**One name per size**, enforced (§11). Weights are **400 / 500 / 600**; never
-700, and neither Figma export got an exemption for its bold numerals.
+**One name per size**, enforced (§11). Weights are **400 / 500 / 600 — plus
+exactly ONE named exception.** `.wordmark` is it, at 900 (above), and it is
+one because the Figma names a face and a weight for that single string and
+for nothing else. The rail's workspace-switcher badge was considered as a
+second and refused: its initial ships at 13px/**600** (`font-semibold`),
+because "a one-character badge is not prose" is an argument that would let
+every badge in the product off, and the kit's top weight already reads as a
+badge at 13px. Every other request for 700 or 900 either Figma export made —
+and both made several — ships at 500 or 600 regardless.
 
 ## 4. Shape & elevation
 
 **Everything that contains something is 10px** — `--radius-card` and
-`--radius-surface` are the same value. The kit ran 8 / 10 / 16, so a panel, a
-card and a tile were three different objects on one screen with nothing saying
-which was which.
+`--radius-surface` are still the same value, and still true of a card, a
+popover and a menu under this Figma as much as the last one.
 
-**Everything you press is a full pill** — and it is spelled on `buttonVariants`,
-NOT on `--radius-control`. That token was `9999px` for one commit once and 51
-files inherited it, so every text field, menu row and small panel went
-capsule-shaped; it stays at **8px** and holds the fields. The exception the pill
-needs is real: a control that WRAPS cannot be a pill, because a full radius on a
-two-line box renders as a circle around the words. Such a call site passes
-`rounded-control` and wins, because `cn()` knows the kit's radius names. **A
-badge is 4px.** `--radius-frame` is **0** — the notch it cut
-opened onto a colour that no longer differs from the page.
+**Everything you press is 8px. There is no pill, and this is recorded as
+the final word on the question.** The shape rule has flipped between a
+pill and a rounded rectangle more than once now (see the retired-token
+table in §2), and each flip changed the argument along with the answer.
+This one does not leave room for a third: the 4 September 2026 Figma is
+named here as the reference, and the rule is that a button, a chip's
+container, an input, a select, a tab, a nav row and the period switch are
+ALL `rounded-control` (8px), full stop. `buttonVariants`' base class drops
+`rounded-full` for `rounded-control`; `ui/page.tsx`'s `PERIOD_TRACK` and
+`PERIOD_PILL` do the same; `tests/console-theme.test.ts`'s pin flips from
+asserting a pill to asserting `rounded-control`. **Circles are reserved for
+four things only: an avatar, the bell's unread badge, the freshness dot,
+and the tile's "active count" numeral** — nothing that reads as an action
+is ever fully round again. The WRAP exception the last pill era needed —
+`rounded-control` on a two-line box, because a full radius there renders as
+a circle around the words — is no longer an exception to anything: 8px is
+simply what every button already is.
 
-**Shadows barely exist here.** Black at 10% over `#1b191a` moves about one count.
-The ladder keeps its rungs so vendored components compile, but only two are
-chosen on purpose — `shadow-card` in the page flow, `shadow-pop` for anything
-floating — and the floating rungs carry a **white inset ring**, because on a dark
-surface a hairline of light is the only thing that reads as height.
+**A badge is 4px.** `--radius-frame` is **8px** again — not the 0 it was
+cut to two days ago, and not because that reasoning was wrong: it argued
+that a notch drawn into a colour identical to what sits behind it draws
+nothing, which was true of a single-surface shell. The panel this Figma
+draws is `#181818`, meeting a top bar and a rail that are genuinely
+`#111111` — a real, if narrow, colour change — so the frame token has
+somewhere to point again. It rounds the panel's **top-RIGHT** corner, under
+the bar at the end of the row away from the rail; the rail-side corner stays
+square, and nothing about the top bar's own corners changes. That reverses
+the convention every earlier era of this shell used (`rounded-tl-frame`, the
+corner nearest the rail) and it is the export read literally rather than
+corrected toward habit. See Layout (§5).
+
+**Shadows barely exist here, still.** `--shadow-card` is now the Figma's
+own card shadow — `0 1px 2px rgb(0 0 0 / .20), 0 0 3px rgb(0 0 0 / .10)` —
+the same value in both themes rather than a dark-only rule with nothing to
+floor it on light. The ladder keeps its other rungs so vendored components
+compile, and the same two are ever chosen on purpose: `shadow-card` in the
+page flow, `shadow-pop` for anything floating, with the floating rungs
+keeping their white inset ring on dark — a hairline of light is still the
+only thing that reads as height on a near-black surface.
 
 ## 5. Layout & spacing
 
@@ -306,6 +359,52 @@ in four files including the loading skeleton, and `tests/page-width.test.ts`
 pins them — including **both hairlines**, which now take real pixels, so a ghost
 without them jumps the page 1px in each axis at hydration.
 
+**The top bar now carries the wordmark, and the rail does not.** Full
+width, 60px, `--chrome` fill, `--border` bottom rule. Left: `.wordmark` —
+moved out of the rail, because a name that only appears once per session
+should not live inside a column that is 56px wide most of the time.
+Centre: "Welcome back{, name}!". Right: Invite members and New flow as
+`secondary` 32px buttons with 16px icons, the bell (a 32px `--avatar`
+circle with its badge count), the avatar circle (initials, 13px/600).
+**No metrics-setup ring.** The export has none, and the progress it
+reported is already on the dashboard's own setup checklist with room to say
+what to do next — a 24px arc in the chrome was the same claim with no room
+for the second half. The arc, its `METRIC_GOAL` cap and the whole
+`metricCount` chain that fed it (page → `AppShell` → `AppFrame` → `TopBar`)
+came out together. `#topbar-slot` and `#topbar-status` — the two portals the
+flow builder's own chrome uses — are unchanged; the builder's toolbar still
+lands in the same bar, it is just a bluer, three-surfaced bar underneath it
+now.
+
+**The rail's dressing changed; its behaviour did not (decision 3).** It is
+still a hover rail: 56px of icons at rest on `--chrome`, opening in place
+to 260px. What used to be a bare icon column now expands into, top to
+bottom: a workspace switcher row (a 28px `rounded-control` square tinted
+`rgb(0 123 255 / .75)` carrying the initial in white at 13px/**600** — the
+kit's own top weight; the export's 700 here is one of the several §3 does
+not follow — the workspace name at 15px/600, and a chevron), a
+search field styled exactly like a real `Input` (`--control` fill,
+`--border` outline, a magnifier, "Search", a ⌘K hint) that opens the same
+command palette a real search box would, a "Main Menu" caps label in
+`--faint` at 12px, nav rows at 36px with 18px icons (the active row takes
+a `--control` fill — **not** a coloured glyph; the "location" job left the
+brand with this Figma, per §2), Dashboard's sub-items at 32px indented
+under an 8px dash marker, and at the foot a full-width `primary` "New
+flow" button above a "Get Free Access" row (a bell icon carrying a small
+blue dot, the label muted). The collapse/pin cookie behaviour — what
+actually opens and closes the column — is untouched; only what is drawn
+inside it changed.
+
+**The panel takes the corner, not the frame.** `AppFrame` renders the top
+bar above a row of `[rail | panel]`; the panel is `--panel` with an 8px
+**top-right** corner under the bar, and a square top-left where it butts
+against the rail behind a hairline. Every earlier era cut the rail-side
+corner instead; this one follows the export, which softens the far end.
+`shell-skeleton.tsx` mirrors the geometry by hand, same as it always has,
+and `tests/page-width.test.ts` is the pin that keeps the mirror honest —
+including a negative assertion on `rounded-tl-frame`, because a convention
+that old comes back on its own otherwise.
+
 ## 6. Components (`src/components/ui/`)
 
 `Button` (**11** variants × 6 sizes — every clickable; `xs` is the dense row's
@@ -330,6 +429,46 @@ it, and why every card title is the same 14px/500 as the body under it,
 
 Hand-rolling any of these is a defect. Links dressed as buttons use
 `buttonVariants()` — never a re-typed class string.
+
+**What this pass actually touches in these files, without changing what any
+of them mean:** `Button`'s base class carries `rounded-control` rather than
+`rounded-full` (§4); its `secondary` variant paints `bg-secondary
+text-secondary-foreground` with an `--input` outline — the Figma's own grey
+buttons are white with a hairline edge in light, a `#333333` fill in dark,
+and `--input` aliases `--border` there so the one spelling covers both. The
+brand fill is the `accent` variant (`bg-primary` under
+`text-primary-foreground`); there is no variant literally named `primary`,
+and prose that says "primary button" means this one. Sizes are untouched —
+32px is still the default height in both themes — and `xs` (24px, 13px
+type, 14px glyphs) is the header row's rung, with a `[&_svg]:size-4`
+override wherever the export draws 16px icons on it. `Card` fills with
+`--card`, edges with `--border`, and floats on `--shadow-card`, all three
+carrying new values from §2 without a line of the component changing.
+`Tabs`' line variant draws its active rule from `--rule` — the heavier
+control-edge step, not the hairline itself — and keeps 8px corners.
+`Avatar`'s fallback initials and its group-count overflow chip both fill
+with `--avatar` now, the same token, so a stack of avatars and the "+3"
+that follows it are one material. `Input`'s `Textarea` takes
+`rounded-control`, and its two stale `9999px` comments (left over from the
+pill era before this one) are corrected to say what the class actually
+renders. `ui/page.tsx`'s `PERIOD_TRACK` and `PERIOD_PILL` both move to 8px
+corners — the calendar's month stepper is what still wears them, and its
+two arrows drop the `rounded-full` override that would have left circles
+inside a rectangle. `Select` was already `rounded-control` on both its
+trigger and its items: verified, not changed.
+
+`PageHeader`'s title is centred whenever a caller passes the new `tabs`
+slot — tab strip left (an active tab at 15px/600 in `--heading` with a 1px
+`--muted-foreground` bottom rule and a "…" menu; inactive tabs 15px/500,
+muted; a 28px `secondary` "+" square), the title itself centred at 26px/600
+with its pencil, and the actions right. The dashboard is the one caller,
+and its three actions are the export's: a **"Today" dropdown** (`secondary`
+`xs`, a 16px calendar glyph, the selected preset's label, a chevron) in
+place of the six-pill period track — same six presets, same `?range=` in
+the URL, a tenth of the width and no horizontal scroller; **"+ Add"** on
+the brand fill at `xs` with a 16px plus; and **"Refresh All"** `secondary`
+`xs` with a 16px refresh glyph. Blue is spent on "+ Add" and "New flow",
+and on nothing else in the header.
 
 ## 7. Interaction
 
@@ -397,17 +536,33 @@ toolbar · **24** rail. `strokeWidth` 2 (2.25 only at ≤14px). Text glyphs
 
 ## 9. Data visualization
 
-**Marks are the MARKER** (`bg-marker`); target-met `success`; bottleneck
-`danger`; tracks `bg-muted`. Bars never `bg-neutral-800`. Headline numbers per
-§3. One `Sparkbars`/`TargetBar`/`GroupBars`/`Delta` implementation in
+**Marks are the BRAND now, not the marker.** The Figma's own chart draws
+its series in the same blue as its buttons: `--color-brand-500` (`#007BFF`)
+is the default series colour, an area fill under a line is
+`rgb(0 123 255 / .12)` — which `Sparkbars` spells `bg-brand-500/12`, up from
+the 5% it had inherited, keeping its 25% border — and a bar is `#007BFF`
+flat. Target-met
+stays `success`; bottleneck stays `danger`; tracks stay `bg-muted`.
+Headline numbers per §3 — 28px now, not 36, and inked with `--heading`
+rather than inherited, which is the same white in dark and `#313131` in
+light. One `Sparkbars`/`TargetBar`/`GroupBars`/`Delta` implementation in
 `src/components/charts.tsx`, shared by every tile.
 
-A bar is not a filled object in §2's sense — it is a **shape read by its edge
-against the card it sits on**, with no ink of its own to carry the contrast. That
-argument forced the series onto the marker when the brand was yellow (1.55:1
-against the marker's 4.41:1); it is satisfied either way now, since both steps of
-the blue ramp clear 8:1 on a card. The series stays `--marker` because a series
-is a MARK, and the fill step is reserved for things you press.
+**A comparison series steps down to the ramp's 300 (`#66B2FF`)** — one
+series at two strengths, not two hues competing. *This row is documentation
+and nothing else today*: nothing in the product plots a second series, so
+there is no consumer to point at the token and none was invented to give
+the line something to do. It is written here so the first chart that needs
+one does not pick a colour.
+
+*Why the series left the marker.* The marker argument two days ago was
+that a bar is a shape read by its edge, with no ink of its own to carry
+contrast — true when the brand was a stroke colour with nothing to spare
+for a second job. This blue already carries two jobs (§2: a stroke *and*
+a fill), and the Figma's own chart uses the fill job for its series, so
+the marker no longer needs to cover for it. `GROUP_ACCENT` in the flow
+builder is untouched — the canvas is out of scope regardless of which
+token wins here.
 
 **`TargetBar` drew two states in one colour**, back when success WAS the brand:
 "met" in `--success` and "in progress" in `--marker` rendered identically, so it
@@ -432,23 +587,33 @@ only a tile that needs something wears a full `StatusPill`. A board where every
 card shows a green badge is furniture reporting no news, and it buries the one
 card that matters.
 
-**One card, and it wears its column on its leading edge.** Every tile on the
-groups board — a materialized flow Output and a legacy `metrics` row alike —
-renders through `MetricCard`. It had been three components that drifted into
-three different cards in one grid, one of them carrying a comment claiming it
-was "kept in step with FlowTile's shape on purpose" while disagreeing on the
-shell, the padding, the title recipe and the footer. The reader cannot tell
-which table a number came from, and should not be able to.
+**One card. It does NOT wear its column on its leading edge any more — on
+the default board.** Every tile on the groups board — a materialized flow
+Output and a legacy `metrics` row alike — renders through `MetricCard`. The
+Figma draws no coloured edge on a metric tile at all, and the kit follows
+it: the 4px `--tile-edge` strip is removed from the default board's
+rendering. The token is not deleted — the canvas board, where a step
+card's own leading edge is exactly this idea and is explicitly out of
+scope for this pass, still reads it, so `--tile-edge` stays defined and
+simply gains one fewer consumer. It had been three components that drifted
+into three different cards in one grid, one of them carrying a comment
+claiming it was "kept in step with FlowTile's shape on purpose" while
+disagreeing on the shell, the padding, the title recipe and the footer.
+The reader cannot tell which table a number came from, and should not be
+able to.
 
-The card is one block of padding with a 4px leading edge in its group's colour,
-borrowed from the builder's step card. The colour arrives as `--tile-edge`, set
-by the lane in `board-column.tsx` and read by inheritance — so a tile dragged to
-another column changes allegiance on the frame it lands, with nothing threaded
-through a server-rendered node, and the ungrouped row falls back to `--border`
-rather than claiming a group. Content takes the slack (`flex-1 justify-center`,
-so a bare scalar centres instead of hanging off the top of a stretched card) and
-the footline is welded to the bottom, because a ragged row of footers is §5's
-difference between a board and a pile.
+The card is one block of padding, `p-4`, with no coloured edge on the
+default board now — the leading-edge idea moves entirely to the canvas
+board, where a step card already draws exactly this, and `--tile-edge`
+stays wired for it: set by the lane in `board-column.tsx`, read by
+inheritance, so a tile dragged to another column on the canvas board
+changes allegiance on the frame it lands, with nothing threaded through a
+server-rendered node. Content still takes the slack (`flex-1
+justify-center`, so a bare scalar centres instead of hanging off the top
+of a stretched card) and the footline is still welded to the bottom,
+because a ragged row of footers is §5's difference between a board and a
+pile — losing the coloured edge does not mean losing the discipline that
+made the tile readable without it.
 
 **The tile FOLLOWS the theme, and the light island it used to be is gone.** It
 was pinned white in dark by `dark:bg-white`, which changed the surface and not
@@ -500,6 +665,36 @@ in whatever colour its parent happened to be. Both look plausible, neither
 throws, and the build passed. Twenty-seven ramp classes and three ink classes
 survived the sweep that deleted their tokens and were found by grepping. The
 rule carries the full substitution table in its own comment (and §2 above).
+
+**This pass adds two more rows to §2's table rather than a new mechanism.**
+The cyan ramp's own values (`#00CDF5`/`#00C0E8`) are retired now that the
+ramp holds `#007BFF`/`#0070E8` instead — a class name that keeps compiling
+under a new value is not the same failure a dead class is, but it earns a
+row for the same reason: a value that changed under a name that did not is
+exactly the kind of fact a comment forgets and a table does not.
+`rounded-full` on `buttonVariants`' base class is the second row, and it is
+the one to read carefully — the CLASS still compiles (avatars, the bell
+badge, the freshness dot and the active-count numeral all keep using
+`rounded-full` on purpose), so nothing here is a dead-class failure either.
+The row exists because this is the shape rule's second flip (§4), and a
+rule that has flipped twice with no paper trail is a rule a third flip will
+not bother explaining either.
+
+**AND `scripts/check-ui.ts` GAINS NOTHING, WHICH IS THE FINDING.** The
+obvious move — "add the cyan names to the retired-token rule" — does not
+apply, and it is worth writing down why so nobody adds them later. That rule
+matches deleted TOKEN NAMES rendered as classes (`bg-ink-400`,
+`text-marker-ink`), because an unresolved colour utility renders with no
+colour at all and looks plausible. No name is retired here: `brand-500` and
+`brand-600` both still exist and still compile — only their VALUES moved, and
+a value cannot be caught by a rule that reads class names. The old cyan
+HEXES, meanwhile, are already a build failure anywhere in a component under
+the generic `hex literal` rule, which bans every `#xxxxxx` in `.tsx` outside
+four named files. The `font-bold` ban needs no widening either: `.wordmark`
+declares its 900 in CSS and `check-ui.ts` reads `.tsx` only (§3). The radius
+set already keeps `full` for avatars, badges and dots (§4). So the cyan's
+retirement is recorded in the table above — where a value that changed under
+a name that did not actually belongs — and the gate is left alone.
 
 **`dead dark: variant`** exists because `@custom-variant dark` is deliberately
 KEPT in `globals.css`. Deleting it hands `dark:` back to Tailwind's default
