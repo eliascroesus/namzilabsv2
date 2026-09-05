@@ -1,4 +1,4 @@
-import { X } from "lucide-react";
+import { RefreshCw, X } from "lucide-react";
 import Link from "next/link";
 import { eq, sql } from "drizzle-orm";
 import { getReadDb } from "@/db/client";
@@ -750,32 +750,34 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           number; what has gone is the UI that minted new ones. Apps is where
           you go to see what is connected. */}
       {/* Recompute every published metric.
-          THE YELLOW IS SPENT HERE, and the reason is no longer scarcity. This
-          file used to argue at length about how many yellows a screen may hold
-          — that the colour belongs to "the single act the page exists for", and
-          that a second one halves the value of the first. The kit retired that
-          rule because nothing could check it. What replaced it is the
-          fill/stroke split: yellow may only paint a FILLED object, and this is a
-          filled control carrying near-black ink at 11.24:1, which is the only
-          combination the brand is measured in. That is permission rather than
-          instruction, so the reason it is THIS control and not its neighbours
-          survives the change of rule: it is the one thing in the row that
-          CHANGES anything rather than narrowing what is shown, and the two
-          beside it stay white pills.
-          `variant="accent"` IS that fill — `bg-primary` under
-          `text-primary-foreground`. The `yellow` variant this used to name has
-          been deleted: with a yellow primary the two resolved to the same
-          object under two names.
-          `px-5` is 20px, wider than `size="sm"`'s own 14px, because the button
-          that acts is the one that is meant to be reached for. */}
+          NOT THE FILL, AS OF THE 4 SEP 2026 BLUE RETHEME. This used to argue
+          for spending the brand's one filled control here — first as
+          scarcity ("the single act the page exists for"), then as a
+          fill/stroke rule keyed to which control CHANGES something rather
+          than narrows what is shown. The Figma settles it a third way, by
+          naming names: blue is reserved for "+ Add" and "New flow"; every
+          other header action — Refresh all included — is `secondary`, the
+          kit's ordinary grey button (see `ui/button.tsx`). Acting is no
+          longer the test; being one of exactly two adds-something verbs is.
+          `px-5`'s argument went with the fill: a `secondary` button reaches
+          for no more attention than its neighbours.
+          `xs`, NOT `sm`, AND AN ICON. The Figma's header actions are its
+          smallest button rung with a 16px glyph in front of the verb, and
+          all three of them agree — this one, "+ Add" and the "Today"
+          dropdown. `xs` ships `[&_svg]:size-3.5` (14px), which is the rung's
+          default and not what this row draws, so the 16 is spelled here;
+          the override is on the button rather than the icon because the
+          size variant's own descendant rule would win over a class on the
+          svg no matter which order they were written in. */}
       <form action={refreshAllFlowsAction} className="shrink-0">
         <SubmitButton
-          variant="accent"
-          size="sm"
-          className="px-5"
+          variant="secondary"
+          size="xs"
+          className="[&_svg]:size-4"
           pendingLabel="Refreshing…"
           title="Recompute every published metric now"
         >
+          <RefreshCw />
           Refresh all
         </SubmitButton>
       </form>
