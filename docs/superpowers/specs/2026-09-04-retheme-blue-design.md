@@ -206,14 +206,17 @@ Every fractional Figma measurement is rounded to a whole pixel (Elias, 4 Sep):
 - **Page header** (`ui/page.tsx` PageHeader): tab strip left (active tab
   15/600 in `--heading` with a 1px `--muted-foreground` bottom rule and a "…"
   menu; inactive 15/500 muted; a 28px `secondary` "+" square), title centred
-  26/600 with the pencil, actions right. The actions are the Figma's three:
-  - a **"Today ▾" dropdown** — `secondary` `xs`, a 16px calendar icon, the
-    selected preset's label, a chevron — replacing the dashboard's six-pill
-    period track. It lists the SAME presets (`RANGE_OPTIONS`) and selects them
-    the same way, by `?range=` in the URL; only the control's shape changes.
+  26/600 with the pencil, actions right. The actions are the Figma's three, in
+  this order (settled 5 Sep; the Mobile section uses the same order):
   - **"+ Add"** — the brand fill (`variant="accent"`, which is the kit's
     `--primary` fill; there is no variant literally named `primary`) at `xs`,
-    with a 16px plus.
+    with a 16px plus. Only the canvas board offers it; the groups board shows
+    the other two.
+  - a **"Today ▾" dropdown** — `secondary` `xs`, a 16px calendar icon, the
+    selected preset's label, a chevron — replacing the dashboard's six-pill
+    period track. It lists the SAME presets (`RANGE_OPTIONS`) as real links
+    (`?range=` in the URL, so modifier-click and no-JS keep working); only the
+    control's shape changes.
   - **"Refresh All"** — `secondary` `xs`, with a 16px refresh icon. Blue is
     spent on "+ Add" and "New flow" only.
   `xs` ships `[&_svg]:size-3.5`, so each of the three passes `[&_svg]:size-4`
