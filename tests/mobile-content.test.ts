@@ -16,6 +16,14 @@ const read = (p: string) => readFileSync(join(root, p), "utf8");
 const page = read("src/components/ui/page.tsx");
 const css = read("src/app/globals.css");
 
+/**
+ * `page` WITH ITS COMMENTS REMOVED — for a check that asks "does this string
+ * still appear as LIVE CODE", where the file's own prose about why the string
+ * was retired would otherwise trip the check on itself. Block comments only:
+ * this file has no `//` line comments carrying a class-shaped string.
+ */
+const pageCode = page.replace(/\/\*[\s\S]*?\*\//g, "");
+
 describe("the board is one column below md", () => {
   it("moves the grid's first rung from sm to md", () => {
     /**
@@ -37,7 +45,15 @@ describe("the board is one column below md", () => {
      * phone and every render test would still pass.
      */
     expect(css).toMatch(/\.board-canvas\s*\{[^}]*grid-template-columns:\s*repeat\(1,/);
-    expect(css).toMatch(/@media \(min-width: 768px\)\s*\{\s*\.board-canvas\s*\{[^}]*repeat\(6,/);
+    // `.board-canvas` need not be the FIRST rule inside the media block — only
+    // that it is IN there somewhere with the 6-column rung. Anchoring to
+    // "first child of the media query" made this pin brittle to something
+    // that has nothing to do with the canvas: any other selector landing
+    // ahead of it in the same `@media` block (a phone rule for an unrelated
+    // component, say) would fail this test for a reason it does not name.
+    const media768 = css.match(/@media \(min-width: 768px\)\s*\{([\s\S]*?)\n\}/)?.[1] ?? "";
+    expect(media768, "the 768px media block was found").not.toBe("");
+    expect(media768).toMatch(/\.board-canvas\s*\{[^}]*repeat\(6,/);
   });
 });
 
@@ -49,8 +65,20 @@ describe("the page header stacks below md", () => {
     expect(header, "the sm rung belonged to a shell that broke at sm").not.toContain("sm:grid-cols-[1fr_auto_1fr]");
   });
 
-  it("puts the tab strip in its own scroller, not on a second line", () => {
-    expect(header).toMatch(/quiet-scroll[^"]*overflow-x-auto[^"]*md:overflow-visible/);
+  it("puts the tab strip in its own scroller, not on a second line — and keeps it scrolling at every width", () => {
+    /**
+     * `md:overflow-visible` USED TO HAND THE FOCUS RING ITS ROOM BACK ABOVE
+     * THE BREAKPOINT, on the reasoning that nothing needs to scroll there.
+     * False the moment a view name is long enough to need it: the tabs are
+     * `shrink-0` with names up to 60 characters inside a `1fr` track, so one
+     * long name at 768–900px pushed a page-level sideways scroll — the exact
+     * failure this row exists to prevent, reopened by the `md:` variant that
+     * was supposed to be a refinement. `overflow-x-auto` now holds at every
+     * width, and the whole file is checked rather than just this header, so a
+     * reintroduction anywhere else in `page.tsx` fails here too.
+     */
+    expect(header).toMatch(/quiet-scroll[^"]*overflow-x-auto/);
+    expect(pageCode, "md:overflow-visible must not come back anywhere in page.tsx").not.toMatch(/md:overflow-visible/);
     // …and the strip inside it has to stop wrapping, or it wraps INSIDE the
     // scroller and the scroller never has anything to scroll.
     expect(read("src/app/dashboard/board-controls.tsx")).toMatch(/flex flex-nowrap items-center gap-6 px-1 py-1 md:flex-wrap/);
@@ -79,6 +107,13 @@ describe("the page header stacks below md", () => {
  * measurement in pixels (56, 60, 280, 310, 640), and a rem width would be a
  * new habit rather than a hole in this rule.
  *
+ * BOTH `.ts` AND `.tsx`, not just the latter. `board-shape.ts` spells the
+ * board's own `COLUMN_W = "w-[310px]"` as a plain string constant rather than
+ * inline in a component's JSX, and a scan that only walked `.tsx` would never
+ * open the one file most likely to hold a board's fixed geometry. 310 clears
+ * 390 today; the point of widening the scan is that the NEXT literal added to
+ * a `.ts` constants file is checked at all.
+ *
  * `src/components/flow/*` is out of scope by the spec's own non-goals — the
  * builder's canvas is frozen for this re-theme, and it is a panning surface
  * with its own viewport besides.
@@ -102,7 +137,7 @@ describe("no authenticated page is wider than a phone", () => {
       if (statSync(full).isDirectory()) {
         if (full.endsWith(join("components", "flow"))) continue;
         tsx(full, out);
-      } else if (entry.endsWith(".tsx")) out.push(full);
+      } else if (entry.endsWith(".tsx") || entry.endsWith(".ts")) out.push(full);
     }
     return out;
   }

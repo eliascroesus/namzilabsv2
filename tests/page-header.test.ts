@@ -56,12 +56,25 @@ describe("PageHeader's title, with and without a tab strip beside it", () => {
         actions: createElement("button", null, "+ Add"),
       }),
     );
-    // The strip scrolls sideways inside its own box rather than pushing the
-    // page — the failure a ~520px control in this row used to cause.
-    expect(html).toMatch(/overflow-x-auto/);
+    /**
+     * THE TWO GENERIC ASSERTIONS THIS TEST OPENED WITH — `overflow-x-auto`
+     * and `flex-wrap … gap-2` — passed before Task 20's header rewrite and
+     * kept passing after it, which means neither one actually pinned
+     * anything Task 20 changed: `overflow-x-auto` matches the tab strip's
+     * scroller regardless of which row it stacks under, and a bare
+     * `flex-wrap` + `gap-2` says nothing about which edge the actions
+     * align to. Re-pointed at the tokens the rewrite actually introduced —
+     * the row's own `items-stretch`/`md:grid-cols-[1fr_auto_1fr]` flip, the
+     * actions' `justify-start`/`md:justify-end` flip, and the title's
+     * `md:items-center md:text-center` pair — so a revert of any one of
+     * them fails here rather than only in a screenshot.
+     */
+    expect(html).toMatch(/items-stretch[^"]*md:grid-cols-\[1fr_auto_1fr\]/);
     expect(html).toMatch(/text-left/);
-    // 8px between actions, wrapping rather than overflowing.
-    expect(html).toMatch(/flex-wrap[^"]*gap-2/);
+    // Actions hug the reading edge below md and the far edge above it.
+    expect(html).toMatch(/justify-start[^"]*md:justify-end/);
+    // The title stays left below md and centres only once the grid forms.
+    expect(html).toMatch(/md:items-center md:text-center/);
   });
 
   it("spells the h1 recipe exactly once, in one title block shared by both layouts", () => {

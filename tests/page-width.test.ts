@@ -238,15 +238,31 @@ describe("the board grid", () => {
      * skeletons standing in front of them. Five spellings for one rhythm is the
      * drift `check:ui` exists to catch everywhere else in the app.
      *
-     * The rule is narrow on purpose: it bans the exact old board literal, not
-     * `sm:grid-cols-2` in general — `/design` demonstrates grids as kit
-     * specimens and is not a board.
+     * TWO RETIRED SPELLINGS, NOT ONE STALE PROSE SENTENCE. This test used to
+     * say it "bans the exact old board literal" while its own filter checked
+     * for `md:grid-cols-2 xl:grid-cols-3` — the CURRENT literal, not the old
+     * one, a mismatch nobody would catch by reading the assertion alone. It
+     * now bans both retired shapes: the exact `sm:grid-cols-2 xl:grid-cols-3`
+     * literal BOARD_GRID replaced, anywhere in `src/` (that combination is
+     * specific enough that no unrelated grid collides with it — see the
+     * sabotage note below), and a bare `sm:grid-cols-2` reappearing in a file
+     * that already imports `BOARD_GRID`, which is what "a board grid"
+     * concretely means here rather than a content guess that would also catch
+     * `/design`'s demonstration grids and every unrelated form grid in the
+     * product (`connections/[id]/page.tsx`, `metrics/new/page.tsx`, the brand
+     * sheet's own `sm:grid-cols-2` chip row — none of them a board).
      */
-    const offenders = sourceFiles()
-      .filter((f) => !f.endsWith(join("components", "ui", "page.tsx")))
-      .filter((f) => readFileSync(f, "utf8").includes("md:grid-cols-2 xl:grid-cols-3"));
+    const scanned = sourceFiles().filter((f) => !f.endsWith(join("components", "ui", "page.tsx")));
 
-    expect(offenders.map((f) => f.slice(root.length + 1))).toEqual([]);
+    const oldLiteral = scanned.filter((f) => readFileSync(f, "utf8").includes("sm:grid-cols-2 xl:grid-cols-3"));
+    expect(oldLiteral.map((f) => f.slice(root.length + 1)), "the retired combined literal came back").toEqual([]);
+
+    const boardConsumers = scanned.filter((f) => readFileSync(f, "utf8").includes("BOARD_GRID"));
+    expect(boardConsumers.length, "no file imports BOARD_GRID — the parser missed every consumer").toBeGreaterThan(0);
+    const bareSmRung = boardConsumers.filter((f) => readFileSync(f, "utf8").includes("sm:grid-cols-2"));
+    expect(bareSmRung.map((f) => f.slice(root.length + 1)), "a BOARD_GRID consumer re-spelled the retired sm rung").toEqual(
+      [],
+    );
   });
 
   it("stops at three columns, and names no breakpoint the stylesheet lacks", () => {

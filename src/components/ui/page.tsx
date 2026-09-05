@@ -106,8 +106,7 @@ export function PageContainer({
  * A skeleton that mirrors a board must import this too — a placeholder grid
  * that disagrees with the real one does the single thing a skeleton exists to
  * prevent.
- */
-/**
+ *
  * THE FIRST RUNG IS `md`, NOT `sm`, SINCE THE 4 SEPTEMBER RE-THEME.
  *
  * `sm:grid-cols-2` put two tiles abreast from 640px — inside the band where
@@ -369,19 +368,24 @@ export function PageHeader({ title, lede, actions, tabs, back, className }: Page
             back && "mt-3",
           )}
         >
-          {/* THE STRIP SCROLLS RATHER THAN WRAPPING. A view bar is a horizontal
-              object — the order is meaningful and draggable — and a phone with
-              six views would otherwise turn the top of the board into three
-              lines of tabs above the title they belong to. `quiet-scroll` is
-              the same scrollbar the board's own lane scrollers wear.
-              `md:overflow-visible` hands the focus ring its room back above the
-              breakpoint, where nothing needs to scroll.
+          {/* THE STRIP SCROLLS RATHER THAN WRAPPING, AT EVERY WIDTH. A view bar
+              is a horizontal object — the order is meaningful and draggable —
+              and a phone with six views would otherwise turn the top of the
+              board into three lines of tabs above the title they belong to.
+              `quiet-scroll` is the same scrollbar the board's own lane
+              scrollers wear.
+              THERE IS NO `md:overflow-visible` ANY MORE. It handed the focus
+              ring its room back above the breakpoint on the reasoning that
+              nothing needs to scroll there — true of a short view list, false
+              of one long enough to need scrolling in the first place, and the
+              tabs are `shrink-0` with names up to 60 characters inside a `1fr`
+              track: at 768–900px a single long name pushed a page-level
+              sideways scroll, which is the exact failure this whole row exists
+              to prevent. `overflow-x-auto` stays on at every width instead.
               `-mx-1 px-1`: a bare `overflow-x-auto` clips the first and last
               tab's focus ring at both ends — the same compensation the period
               track already carries in `app/dashboard/page.tsx`. */}
-          <div className="quiet-scroll flex min-w-0 items-center overflow-x-auto -mx-1 px-1 md:overflow-visible">
-            {tabs}
-          </div>
+          <div className="quiet-scroll flex min-w-0 items-center overflow-x-auto -mx-1 px-1">{tabs}</div>
           {/* LEFT ON A PHONE, CENTRED ABOVE `md`. A centred title is what the
               Figma draws BETWEEN two zones; on its own line with nothing either
               side of it, centring is just a heading that has come loose from
