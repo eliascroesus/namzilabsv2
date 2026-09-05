@@ -131,7 +131,11 @@ Shadows: `--shadow-card` is `0 1px 2px rgb(0 0 0 / .20), 0 0 3px rgb(0 0 0 /
 top-RIGHT corner, under the top bar at the end of the row away from the rail,
 now that the panel and the chrome are genuinely different colours again,
 which is exactly the condition the frame token existed for and lost two days
-ago when the whole shell became one surface.
+ago when the whole shell became one surface. **That condition is a dark-theme
+fact, not a universal one:** in light, `--panel` is `--background` (`#F7F8F9`)
+— the same value the page already is — so the corner it cuts still reveals
+nothing there, exactly as it did not two days ago. The frame token is back
+because dark has three surfaces again; light never stopped having two.
 
 ### The light theme (`:root`), from the Figma's light export
 
@@ -240,9 +244,13 @@ the Figma names Inter 900 for exactly one string in the whole export, and a
 kit that has never bent its own never-700 rule does not get to bend it
 quietly now. The weight is declared in the CSS class, never as a
 `font-black` utility at a call site, which is what keeps the exception
-contained: `scripts/check-ui.ts` reads `.tsx` and never `.css`, so its
-`font-bold` ban still fails the build on any heavy weight anywhere in the
-app and needs no allow-list entry — one rule, one file, no widening. It sits
+contained: `scripts/check-ui.ts` reads `.ts`/`.tsx` and never `.css`, so its
+`font-bold` rule — which matches the literal class `font-bold` (`\bfont-bold\b`)
+and nothing else — still fails the build on that one spelling anywhere in
+the app and needs no allow-list entry for the wordmark. `font-black` and
+`font-extrabold` are a different spelling of the same idea and the rule
+does not catch either; that gap is unrelated to this exception; closing it,
+if it is ever closed, is a job for a later pass, not this one. It sits
 in the top bar's left slot now; the rail's mark moved out with it (§5).
 
 **No new caption step.** The Figma's header actions ("+ Add", "Today",
@@ -252,7 +260,7 @@ earning a new named size: the header actions map to the kit's `xs` button
 size, and captions stay 13px, the closed scale's nearest step. A 12px step
 was considered and rejected for exactly this reason.
 
-**The micro-label voice**, as `.label-micro`: 10px, ALL CAPS,
+**The micro-label voice**, as `.label-micro`: 11px, ALL CAPS,
 `--tracking-label`, muted. A status pill, a section heading, a table head and a
 group's sort marker all share it. It was four utilities spelled slightly
 differently in eleven files.
@@ -307,7 +315,11 @@ the bar at the end of the row away from the rail; the rail-side corner stays
 square, and nothing about the top bar's own corners changes. That reverses
 the convention every earlier era of this shell used (`rounded-tl-frame`, the
 corner nearest the rail) and it is the export read literally rather than
-corrected toward habit. See Layout (§5).
+corrected toward habit. See Layout (§5). **The corner is a dark-theme
+device.** In light, `--panel` is `--background` (`#F7F8F9`) — the page's
+own colour — so the same 8px cut reveals nothing there, exactly as the
+notch revealed nothing anywhere two days ago; only dark has grown a third
+surface for the frame to point at.
 
 **Shadows barely exist here, still.** `--shadow-card` is now the Figma's
 own card shadow — `0 1px 2px rgb(0 0 0 / .20), 0 0 3px rgb(0 0 0 / .10)` —
@@ -346,7 +358,7 @@ Measured across a rendered page, the app was running EIGHT control heights
 a near-miss, and it reads as a rendering fault rather than as a size choice. So
 `sm` resolves to `default`'s 32, fields follow the button (they are stacked in
 every form, which is where the mismatch is unmissable), chips match, and the
-and the period track is 32 with its segments filling it edge to edge, so the
+period track is 32 with its segments filling it edge to edge, so the
 whole control stands at the height of the buttons either side of it.
 
 **16px inside every card, including the metric tile.** It ran `p-5`; one tile
@@ -386,7 +398,7 @@ not follow — the workspace name at 15px/600, and a chevron), a
 search field styled exactly like a real `Input` (`--control` fill,
 `--border` outline, a magnifier, "Search", a ⌘K hint) that opens the same
 command palette a real search box would, a "Main Menu" caps label in
-`--faint` at 12px, nav rows at 36px with 18px icons (the active row takes
+`--faint` at 13px (`text-xs` — the scale has no 12px step, per §3), nav rows at 36px with 18px icons (the active row takes
 a `--control` fill — **not** a coloured glyph; the "location" job left the
 brand with this Figma, per §2), Dashboard's sub-items at 32px indented
 under an 8px dash marker, and at the foot a full-width `primary` "New
@@ -417,7 +429,7 @@ as "Cancel" is a form with no primary),
 `Card` (card/surface/**tile** × none/dense/compact/default) with
 **`CardHeader`/`CardTitle`/`CardDescription`/`CardBody`** — the ruled head, which
 is what makes a card's name a title without spending a size step or a weight on
-it, and why every card title is the same 14px/500 as the body under it,
+it, and why every card title is the same 15px/500 as the body under it,
 `MetricCard` (`src/components/metric-card.tsx` — the board's one tile shell),
 `Input`/`Textarea`/`NativeSelect`,
 `FieldLabel`/`FieldHint`/`FieldError`, `StatusPill` (5 tones, optional dot) /
@@ -647,14 +659,14 @@ types are humanized via `catalogEntry`/`eventTypeLabel`. Dates:
 
 ## 11. Enforcement
 
-`pnpm check:ui` (`scripts/check-ui.ts`) gates **thirteen** rules: stock
+`pnpm check:ui` (`scripts/check-ui.ts`) gates **fourteen** rules: stock
 type/radius/shadow classes, the nine retired type aliases, `font-bold`, raw
-chromatic palette classes, **`retired token`**, **`dead dark: variant`**, hex
-literals outside the five sanctioned paths, bare `toLocale*()` outside
-`format.ts`, text glyphs used as icons, and raw `<button>` outside the
-primitives and the builder's bespoke chrome. Each rule carries a per-path
-allowlist with a stated reason — "it's fine" is how the next drift gets waved
-through.
+chromatic palette classes, **`retired accent-yellow`**, **`retired token`**,
+**`dark: variant`**, **`re-spelled icon weight`**, hex literals outside the
+five sanctioned paths, bare `toLocale*()` outside `format.ts`, text glyphs
+used as icons, and raw `<button>` outside the primitives and the builder's
+bespoke chrome. Each rule carries a per-path allowlist with a stated reason
+— "it's fine" is how the next drift gets waved through.
 
 **`retired token` is the rule this re-theme earned the hard way.** Retiring a
 COLOUR token is not like retiring a size token. An unresolved `text-micro`
@@ -689,14 +701,15 @@ colour at all and looks plausible. No name is retired here: `brand-500` and
 `brand-600` both still exist and still compile — only their VALUES moved, and
 a value cannot be caught by a rule that reads class names. The old cyan
 HEXES, meanwhile, are already a build failure anywhere in a component under
-the generic `hex literal` rule, which bans every `#xxxxxx` in `.tsx` outside
-four named files. The `font-bold` ban needs no widening either: `.wordmark`
-declares its 900 in CSS and `check-ui.ts` reads `.tsx` only (§3). The radius
+the generic `hex literal` rule, which bans every `#xxxxxx` in `.ts`/`.tsx`
+outside five sanctioned paths. The `font-bold` ban needs no widening either:
+`.wordmark` declares its 900 in CSS and `check-ui.ts` reads `.ts`/`.tsx` only
+(§3). The radius
 set already keeps `full` for avatars, badges and dots (§4). So the cyan's
 retirement is recorded in the table above — where a value that changed under
 a name that did not actually belongs — and the gate is left alone.
 
-**`dead dark: variant`** exists because `@custom-variant dark` is deliberately
+**`dark: variant`** exists because `@custom-variant dark` is deliberately
 KEPT in `globals.css`. Deleting it hands `dark:` back to Tailwind's default
 `prefers-color-scheme` binding, where a stray class would fire on half the
 machines loading the page with nobody here able to see it. So the variant
@@ -706,11 +719,21 @@ compiles, matches nothing, and this rule stops the dead spelling accumulating.
 the build on `text-primary`, `border-primary`, `ring-primary` and their kin,
 because those classes point at a live token — they COMPILE, the build passes,
 and the link renders at 1.55:1 on white. It was the best rule in the file and
-its measurement is gone: the blue is 9.20:1 as a stroke on every surface in the
-product. `black-as-primary` banned `bg-neutral-900` as a near-black frozen at
-one exposure; there is one exposure, and that value is now the CONTROL surface
-every select legitimately names. `retired accent-yellow` is folded into
-`retired token`.
+its measurement is gone: the blue clears **6.65:1** on the page, **6.59:1** on
+the chrome and every card, **6.20:1** on the panel, and **5.80:1** on white —
+a stroke that clears its bar on every surface in both themes, which is the
+exact finding the retired rule existed to force. `black-as-primary` banned
+`bg-neutral-900` as a near-black frozen at one exposure; there is one
+exposure, and that value is now the CONTROL surface every select legitimately
+names.
+
+**`retired accent-yellow` is a third rule, and it is not one of the two
+above.** It is still active, unrelated to either retirement, and unrelated to
+the blue re-theme: `--color-accent-yellow` was deleted when yellow stopped
+being the brand, two re-themes ago, and the class survives compiling to
+NOTHING — exactly the "renders with no colour at all" failure this whole
+family of rules exists to catch. It does not fold into `retired token`; it
+predates it and still runs beside it.
 
 Three of these rules exist because the gate was PASSING while the drift it exists
 to stop was in the tree: two legal spellings of 12px, a fourth font weight in the

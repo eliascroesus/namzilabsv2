@@ -5,8 +5,8 @@ register: quiet chrome, loud numbers
 surfaces: [page, chrome (top bar + rail + card), panel (the content area), control, raised, floating]
 themes: dark (the console) + light · per device · defaults to the OS
 accent: one blue (#007BFF) · 400 strokes on dark, 800 strokes on light · 600 fills on both
-neutral: one ramp, re-cut for three darks (#0F1011 / #111111 / #181818) — eight surface steps below the gap, two ink steps above it, one caps-label-only step between them
-type: SF Pro (system) / Inter · 11 · 13 · 15 · 17 · 18 · 20 · 26 · 28 · 48
+neutral: one ramp, re-cut for three darks (#0F1011 / #111111 / #181818) — eight surface steps below the gap, five defined steps above it (two role-bearing), one caps-label-only step between them
+type: SF Pro (system) / Inter · 11 · 13 · 15 · 17 · 18 · 20 · 26 · 28 · 30 · 48
 radius: 4 badge · 8 field, button and chip · 10 everything that contains something · full avatar, bell badge, freshness dot and active-count numeral
 status: chrome, furniture and primitives SETTLED · metric card and chart card IN PROGRESS
 ---
@@ -65,13 +65,15 @@ same 1px `#343434` rule as before, recut for the new ground:
   they take a real pixel each, and `ShellSkeleton` mirrors both for the
   same reason it always did: a ghost without them jumps the content at
   hydration.
-- **The notch is back.** `--radius-frame` was 0 because a corner cut into
-  `#1B191A` to reveal `#1B191A` draws nothing. The panel it now cuts into
-  is `#181818`, sitting beside a rail and under a bar that are `#111111`
-  — a real, if narrow, colour change — so the same argument that retired
-  the notch two days ago is exactly the argument that reinstates it here:
-  a radius reveals whatever is behind it, and there is something behind
-  it again.
+- **The notch is back — on dark.** `--radius-frame` was 0 because a corner
+  cut into `#1B191A` to reveal `#1B191A` draws nothing. The panel it now
+  cuts into is `#181818`, sitting beside a rail and under a bar that are
+  `#111111` — a real, if narrow, colour change — so the same argument that
+  retired the notch two days ago is exactly the argument that reinstates
+  it here: a radius reveals whatever is behind it, and there is something
+  behind it again. Only on dark: in light, `--panel` is `--background`
+  (`#F7F8F9`) — the page's own colour — so the identical cut still reveals
+  nothing there. The frame is a dark-theme device, not a universal one.
 - **The rail's glyphs still sit on nothing at rest** — the surface behind
   them is `--chrome`, and a bare icon measures the same 14+:1 it always
   did against a near-black ground, chrome or otherwise.
@@ -241,6 +243,10 @@ butts square against the rail behind a hairline and softens the far end
 instead. Followed literally rather than corrected toward the older
 convention, and pinned in `tests/page-width.test.ts` with a negative
 assertion on `rounded-tl-frame` so the habit cannot return by itself.
+**This is a dark-theme device, not a universal one:** in light, `--panel`
+is `--background` (`#F7F8F9`) — the same colour the page already is — so
+the identical 8px cut reveals nothing there, exactly as it did not two
+days ago. Dark grew a third surface; light never lost its second.
 
 **Hairlines still carry structure; shadows still barely exist.** The card
 shadow is now the Figma's own value, `0 1px 2px rgb(0 0 0 / .20), 0 0 3px

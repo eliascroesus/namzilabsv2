@@ -196,3 +196,44 @@ describe("STATE.md records the retheme", () => {
     expect(doc).toMatch(/#007BFF/);
   });
 });
+
+/**
+ * FIX ROUND 1: RATIO AND RULE-COUNT PINS THE DOCS REVIEW ASKED FOR.
+ *
+ * The prose-only assertions above would not have caught the review's two
+ * Critical findings — a stale "thirteen rules" count and a stale 9.20:1
+ * cyan-on-#1B191A figure both read as plausible prose and neither
+ * regex above touched them. These pin the corrected numbers directly and
+ * ban the retired ones outright, so the same drift trips the suite next
+ * time rather than waiting for a human re-read.
+ */
+describe("fix round 1 — ratios and the gate's own rule count are pinned, not just prose", () => {
+  it("the fill's white-on-fill ratio is pinned at 4.68:1", () => {
+    expect(brandKit()).toMatch(/4\.68:1/);
+  });
+
+  it("the dark stroke's ratio on the page is pinned at 6.65:1", () => {
+    expect(brandKit()).toMatch(/6\.65:1/);
+  });
+
+  it("the light muted-foreground's ratio on the page/panel is pinned at 5.01:1", () => {
+    expect(brandKit()).toMatch(/5\.01:1/);
+  });
+
+  it("the danger trio's three surface ratios are pinned", () => {
+    const doc = brandKit();
+    expect(doc).toMatch(/5\.00:1/);
+    expect(doc).toMatch(/4\.96:1/);
+    expect(doc).toMatch(/4\.66:1/);
+  });
+
+  it("the retired cyan-on-#1B191A ratio (9.20:1) does not survive as a CURRENT figure", () => {
+    expect(brandKit()).not.toMatch(/9\.20:1/);
+  });
+
+  it("check-ui.ts's own rule count reads fourteen, not the stale thirteen", () => {
+    const doc = brandKit();
+    expect(doc).not.toMatch(/gates \*\*thirteen\*\* rules/);
+    expect(doc).toMatch(/gates \*\*fourteen\*\* rules/);
+  });
+});
