@@ -140,12 +140,15 @@ sentence about one theme stated as a rule about both, and the Figma
 contradicts it outright on the dark side.
 
 `--control` and `--accent` are the pair that carries it now. (`--muted`
-is a separate role — a skeleton's track, a table's head, the content
-area's own fill — and it was briefly indistinguishable from `--card` in
-an earlier draft, which broke six hovers into invisibility: a card
-painted onto itself. That is a different bug from depth pointing the
-wrong way, and the lesson from both is the same one — two roles that
-carry a visible state may never collapse to a single value.)
+is a separate role — a table's head, the content area's own fill — and it
+was briefly indistinguishable from `--card` in an earlier draft, which
+broke six hovers into invisibility: a card painted onto itself. A
+skeleton's own track is not this role either: `Skeleton` is `bg-foreground/15`,
+a `--foreground` alpha rather than a role, so it reads on the ground and on
+a card alike without needing a role of its own. That is a different bug
+from depth pointing the wrong way, and the lesson from both is the same
+one — two roles that carry a visible state may never collapse to a single
+value.)
 
 ---
 
@@ -258,9 +261,10 @@ is the honest reading regardless of palette: a bar at 40% is not good, it is
 ## 5. Shape
 
 **Everything that contains something is still 10px.** Cards, panels,
-popovers, selects, the period track, tables — unchanged by this pass,
+popovers, a select's own open menu, tables — unchanged by this pass,
 because the argument for one container radius never depended on which
-theme sat under it.
+theme sat under it. The period track is NOT in this group any more — see
+below, it presses now, it does not contain.
 
 **Everything you press is 8px, and there is no pill this time — nor is
 there a next time.** This has flipped between a pill and a rounded
@@ -324,13 +328,17 @@ white inset ring on dark.
 
 ## 6. Type
 
-**Set in `system-ui`**, with `-apple-system` one rung down for older Safari and
-Inter last. The reference's export names "SF Pro", and this chased it with
-`-apple-system` first — but the reference's own rendered page reports
-`System-ui Semi-bold` in the inspector. It is asking the platform for its UI
-face, not naming Apple's. `system-ui` is the same thing said correctly: SF Pro
-on Apple hardware, Segoe UI Variable on Windows, the platform's own face on
-Linux.
+**Set in `system-ui`**, with `-apple-system` and `BlinkMacSystemFont` behind
+it for older Safari and Chromium, `"Segoe UI"` behind that for older Windows,
+and Inter FIFTH — the stack's actual reading order in `globals.css`, and
+Inter is the one name in it, not the workhorse: every platform this stack
+meets in practice resolves one of the first four keywords to its own UI
+face before Inter is ever reached. The reference's export names "SF Pro",
+and this chased it with `-apple-system` first — but the reference's own
+rendered page reports `System-ui Semi-bold` in the inspector. It is asking
+the platform for its UI face, not naming Apple's. `system-ui` is the same
+thing said correctly: SF Pro on Apple hardware, Segoe UI Variable on
+Windows, the platform's own face on Linux.
 
 **The display face is still gone, and the number holding its place got
 smaller.** Instrument Sans ran page titles, the landing hero and the metric
@@ -452,7 +460,7 @@ never `.css`.
 - **A press lands immediately.** Anything that re-renders from the URL lights its
   control on the press and swaps its content for content-shaped skeletons, while
   the URL updates inside a transition. Never dim the old numbers: a legible
-  figure under a pill that now says something else is a wrong answer shown
+  figure under a chip that now says something else is a wrong answer shown
   confidently.
 - **Focus is declared once**, globally, for every control in the product.
   Components must not re-spell it and must not set `outline-none`.

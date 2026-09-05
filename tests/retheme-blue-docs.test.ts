@@ -375,3 +375,68 @@ describe("Both docs say the active nav glyph keeps its colour (two signals, not 
     expect(doc).toMatch(/text-marker/);
   });
 });
+
+/**
+ * FINAL PASS, PART 2, ITEM 3: THE MINOR UNTRUTHS.
+ *
+ * A grab-bag the docs review found: the period track quoted at both 8px and
+ * 10px in the same breath, the phone board grid hedged as a future pass that
+ * has since shipped, the skeleton's track filed under a role it does not
+ * use, "Inter last" standing in for the stack's real fifth-place order, the
+ * pre-mirror "which recesses" wording surviving in the hover bullet, a stale
+ * button variant count, and "pill" describing objects that have been 8px
+ * rectangles since Task 4.
+ */
+describe("Final pass docs item 3: the minor untruths are corrected", () => {
+  const designMd = () => readFileSync(join(root, "DESIGN.md"), "utf8");
+  const page = () => readFileSync(join(root, "src/app/design/page.tsx"), "utf8");
+
+  it("DESIGN.md's 10px 'contains' list no longer includes the period track", () => {
+    expect(designMd()).not.toMatch(/popovers,\s*selects, the period track, tables/);
+  });
+
+  it("/design's shape note no longer double-lists the period track under both 10px and 8px", () => {
+    expect(page()).not.toMatch(/popovers, selects, the period track\. Everything pressable is 8/);
+  });
+
+  it("BRAND_KIT.md states the phone board's one column as shipped fact, not a hedged future pass", () => {
+    const doc = brandKit();
+    expect(doc).not.toMatch(/even though it ships as its own\s*pass \(Task 20\)/);
+    expect(doc).toMatch(/BOARD_GRID/);
+  });
+
+  it("DESIGN.md no longer files the skeleton's track under --muted", () => {
+    const doc = designMd();
+    expect(doc).not.toMatch(/a skeleton's track, a table's head/);
+    expect(doc).toMatch(/bg-foreground\/15/);
+  });
+
+  it("both docs state Inter's real stack position (fifth), not 'Inter last' alone", () => {
+    expect(brandKit()).toMatch(/Inter fifth/);
+    expect(designMd()).toMatch(/Inter FIFTH/);
+  });
+
+  it("BRAND_KIT.md's hover bullet states the mirror depth rule instead of 'which recesses'", () => {
+    expect(brandKit()).not.toMatch(/hover:bg-muted`, which recesses/);
+  });
+
+  it("BRAND_KIT.md's Button count reads twelve variants by seven sizes, not eleven by six", () => {
+    const doc = brandKit();
+    expect(doc).not.toMatch(/\*\*11\*\* variants × 6 sizes/);
+    expect(doc).toMatch(/\*\*12\*\* variants × 7 sizes/);
+  });
+
+  it("/design's Buttons section reads twelve variants, not eleven", () => {
+    expect(page()).not.toMatch(/One component, eleven variants/);
+    expect(page()).toMatch(/One component, twelve variants/);
+  });
+
+  it("neither doc still calls the interaction chip a 'pill that now says something else'", () => {
+    expect(brandKit()).not.toMatch(/figure under a\s*pill that now says something else/);
+    expect(designMd()).not.toMatch(/figure under a pill that now says something else/);
+  });
+
+  it("BRAND_KIT.md's Chip entry no longer calls it a filter pill", () => {
+    expect(brandKit()).not.toMatch(/Chip`\s*\(filter pill/);
+  });
+});

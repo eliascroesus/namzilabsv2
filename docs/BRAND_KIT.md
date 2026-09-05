@@ -234,10 +234,14 @@ fine" tint. `--success` itself keeps doing status work everywhere else
 
 ## 3. Typography
 
-**`system-ui`**, with `-apple-system` behind it for older Safari and **Inter**
-last. The reference's export names "SF Pro"; its rendered page reports
-`System-ui`. It is asking the platform for its UI face rather than naming
-Apple's, and `system-ui` is that request spelled correctly.
+**`system-ui`**, with `-apple-system` and `BlinkMacSystemFont` behind it for
+older Safari and Chromium, `"Segoe UI"` behind that for older Windows, and
+**Inter fifth** — the stack's real order (`--font-sans` in `globals.css`),
+so Inter is the one name in it, not what most visitors actually see: every
+platform this stack meets resolves one of the first four keywords to its
+own UI face first. The reference's export names "SF Pro"; its rendered page
+reports `System-ui`. It is asking the platform for its UI face rather than
+naming Apple's, and `system-ui` is that request spelled correctly.
 
 **The display face is deleted.** Instrument Sans ran page titles, the landing
 hero and the metric numeral. The distinction this interface draws is between the
@@ -463,13 +467,13 @@ rather than leaving `md:hidden` to paint over a dialog whose overlay,
 scroll lock and focus trap all stay attached regardless of what a class
 hides. Its rows are 44px (`min-h-11`) against the rail's 36; the greeting
 drops below `sm` (`max-sm:hidden`); the bell keeps every width, the one
-circle that does. Below `md` the board itself renders one column and the
-page header stacks — the rule stated here even though it ships as its own
-pass (Task 20).
+circle that does. Below `md` the board itself renders one column
+(`BOARD_GRID`: `md:grid-cols-2 xl:grid-cols-3`) and the page header stacks
+— Task 20's own shipped rule, folded in here for completeness.
 
 ## 6. Components (`src/components/ui/`)
 
-`Button` (**11** variants × 6 sizes — every clickable; `xs` is the dense row's
+`Button` (**12** variants × 7 sizes — every clickable; `xs` is the dense row's
 geometry, for a tile footline where `sm` would crowd out the timestamp; `default`
 is the reference's 32px and the **workhorse is a bordered card chip**, not a
 solid fill — which is what a console's ordinary act looks like, and which is why
@@ -483,7 +487,7 @@ it, and why every card title is the same 15px/500 as the body under it,
 `MetricCard` (`src/components/metric-card.tsx` — the board's one tile shell),
 `Input`/`Textarea`/`NativeSelect`,
 `FieldLabel`/`FieldHint`/`FieldError`, `StatusPill` (5 tones, optional dot) /
-`Badge`, `Switch` (2 sizes), `Chip` (filter pill + count), `Modal`/`ModalTitle`
+`Badge`, `Switch` (2 sizes), `Chip` (filter chip + count, 8px `rounded-control`), `Modal`/`ModalTitle`
 (one scrim: `bg-neutral-950/40 backdrop-blur-sm`; focus-trapped, scroll-locked), `TableShell`/`Table`/`THead`/
 `TH`/`TBody`/`TR`/`TD`, `Toast` (dark, bottom-center, optional action),
 `EmptyState`, `Skeleton`, `PageContainer`/`PageHeader`/`SectionHeading`,
@@ -553,7 +557,7 @@ and on nothing else in the header.
   still updates inside a `useTransition` so back and shared links keep working.
   Controls stay real `<a href>`s — middle-click and the pre-hydration paint
   depend on it. Never dim the old numbers instead: a legible figure under a
-  pill that now says something else is a wrong answer shown confidently.
+  chip that now says something else is a wrong answer shown confidently.
 - **Nothing here is a login, and the browser must be told four times.** Fields
   default to `autocomplete="off"` and `spellcheck="false"` (`ui/input.tsx`) —
   almost every field in this app asks for something no browser has stored. A
@@ -569,9 +573,13 @@ and on nothing else in the header.
   to the thing it stands in for — a route's `loading.tsx` should be its page's
   own layout in grey, not three bars. A skeleton that doesn't match its content
   moves the jank later instead of removing it.
-- **Hover:** neutral hovers are `hover:bg-accent` — the raised step — and never
-  `hover:bg-muted`, which recesses and which was briefly the same value as
-  `--card`, so six controls had an invisible hover. Primary hovers through a
+- **Hover:** neutral hovers are `hover:bg-accent` — depth's mirror rule (§1,
+  §2): on dark a field is a step UP from the surface (`--control` `#202020`
+  on `#111111`) and its hover a further step up (`--accent` `#3A3A3A`); on
+  light a field is a step DOWN (`--control` `#F4F4F4` on white) and its hover
+  a further step down (`--accent` `#ECECEC`). Never `hover:bg-muted`, which
+  was briefly the same value as `--card`, so six controls had an invisible
+  hover. Primary hovers through a
   role rather than a literal, because a component may not spell `dark:`:
   `hover:bg-primary-hover` walks the fill **UP** on dark (600 → 500) and
   **DOWN** on light (600 → 700); `active:bg-primary-active` presses to 700 on

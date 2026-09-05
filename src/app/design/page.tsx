@@ -152,7 +152,7 @@ const DIRECTION: Array<{ rule: string; why: string }> = [
   },
   {
     rule: "Ten contains, eight presses",
-    why: "Everything that contains something is 10px — cards, panels, popovers, selects, the period track. Everything pressable is 8: buttons, chips, inputs, selects, tabs, nav rows, the period switch. A badge is 4. Circles are reserved for four things that are never an action — an avatar, the bell's unread badge, the freshness dot, and the tile's active-count numeral. This replaced 'everything pressable is a full pill' for the second time, and the 4 September 2026 Figma is named as the reference so a third flip needs a new design rather than a preference.",
+    why: "Everything that contains something is 10px — cards, panels, popovers, a select's own open menu. Everything pressable is 8: buttons, chips, inputs, selects, tabs, nav rows, the period switch. A badge is 4. Circles are reserved for four things that are never an action — an avatar, the bell's unread badge, the freshness dot, and the tile's active-count numeral. This replaced 'everything pressable is a full pill' for the second time, and the 4 September 2026 Figma is named as the reference so a third flip needs a new design rather than a preference.",
   },
   {
     rule: "Three sizes do the work",
@@ -164,7 +164,7 @@ const DIRECTION: Array<{ rule: string; why: string }> = [
   },
   {
     rule: "A press lands immediately",
-    why: "The control lights on the press and its content becomes content-shaped skeletons while the server answers. Never dim the old numbers — a legible figure under a pill that now says something else is a wrong answer shown confidently.",
+    why: "The control lights on the press and its content becomes content-shaped skeletons while the server answers. Never dim the old numbers — a legible figure under a chip that now says something else is a wrong answer shown confidently.",
   },
   {
     rule: "Honesty over tidiness",
@@ -487,7 +487,7 @@ export default function DesignPage() {
           </div>
         </Section>
 
-        <Section title="Type" note="An 8px baseline and 16px spacing, set in the system UI face — SF Pro on Apple hardware — with Inter (--font-sans) carrying every other platform rather than dropping to Arial. One name per size: the kit's old aliases (micro/tiny/small/base/lead/title/display/stat/hero) have been deleted from the theme, and check:ui fails on them.">
+        <Section title="Type" note="An 8px baseline and 16px spacing, set in the system UI face — SF Pro on Apple hardware, Segoe UI on Windows — with Inter (--font-sans) fifth in the stack, reached only where none of the platform's own UI-face keywords resolve, rather than dropping straight to Arial. One name per size: the kit's old aliases (micro/tiny/small/base/lead/title/display/stat/hero) have been deleted from the theme, and check:ui fails on them.">
           <Card padding="none" className="divide-y divide-border">
             {TYPE.map((t) => (
               <div key={t.token} className="flex items-baseline gap-4 px-4 py-3">
@@ -532,7 +532,7 @@ export default function DesignPage() {
           </p>
         </Section>
 
-        <Section title="Buttons" note="One component, eleven variants, seven sizes — every clickable thing in the product comes from it, and 32px is the default because every control in the reference is 32: the date picker, the selects, the segmented groups. The ladder came down from 28/36/44/52, which put a 44px button beside a 40px period track beside a 24px title with nothing in the row standing on the same line. The WORKHORSE is a bordered card chip rather than a solid fill — what a console's ordinary act looks like — which is exactly why the PRIMARY act has to say so: SubmitButton defaults to the brand, because a submit is the primary act by definition and Save rendering as the same object as Cancel is a form with no primary. Links dressed as buttons compose buttonVariants() rather than re-typing the string.">
+        <Section title="Buttons" note="One component, twelve variants, seven sizes — every clickable thing in the product comes from it, and 32px is the default because every control in the reference is 32: the date picker, the selects, the segmented groups. The ladder came down from 28/36/44/52, which put a 44px button beside a 40px period track beside a 24px title with nothing in the row standing on the same line. The WORKHORSE is a bordered card chip rather than a solid fill — what a console's ordinary act looks like — which is exactly why the PRIMARY act has to say so: SubmitButton defaults to the brand, because a submit is the primary act by definition and Save rendering as the same object as Cancel is a form with no primary. Links dressed as buttons compose buttonVariants() rather than re-typing the string.">
           <div className="flex flex-wrap items-center gap-3">
             <Button>Publish flow</Button>
             <Button variant="accent">Review &amp; publish</Button>
