@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Sidebar } from "./sidebar";
 import { TopBar } from "./top-bar";
+import { MobileDrawer } from "./mobile-drawer";
 import { cn } from "@/lib/utils";
 import type { BoardView } from "@/lib/board/types";
 
@@ -129,7 +130,20 @@ export function AppFrame({
    * nearest the rail. The 4 September Figma cuts the TOP-RIGHT instead and
    * leaves the rail-side corner square, so that is what this spells.
    */
-  const className = cn("relative min-w-0 flex-1 rounded-tr-frame bg-panel", surface);
+  /**
+   * THE CORNER IS A DESKTOP FACT. It reveals the page behind the panel where
+   * the bar's rule ends and the rail's begins — and below `md` there is no
+   * rail, so the panel runs the full width of the viewport and the only thing
+   * an 8px notch could reveal is the 8px of `--background` outside it. A
+   * rounded corner against the edge of a phone screen reads as a rendering
+   * fault, which is the same argument that took the notch off when the
+   * surfaces were one colour, in a different axis.
+   *
+   * `md:rounded-tr-frame bg-panel` in that order on purpose: the pair is
+   * matched as a literal by `tests/page-width.test.ts`, on both sides of the
+   * frame/skeleton mirror.
+   */
+  const className = cn("relative min-w-0 flex-1 md:rounded-tr-frame bg-panel", surface);
 
   return (
     // `h-dvh`, not `h-screen` — see the safe-area note below; unchanged.
@@ -148,7 +162,16 @@ export function AppFrame({
           Figma has no ring; the dashboard's checklist reports the same
           progress). What the bar draws on its own account is the wordmark,
           the greeting and the right-hand cluster. */}
-      <TopBar account={account} firstName={firstName} />
+      {/* THE DRAWER IS BUILT HERE BECAUSE THIS IS WHERE THE NAVIGATION DATA
+          IS. `AppFrame` already holds the workspace, the account, the view
+          list and `hide` for the rail beside it; the bar holds none of them
+          and should not start. Below `md` this is the only way into any of
+          it — the rail is not rendered at all. */}
+      <TopBar
+        account={account}
+        firstName={firstName}
+        menu={<MobileDrawer hide={hide} views={views} workspace={workspace} account={account} />}
+      />
       {/* THE ROW BELOW THE BAR — the rail, then the panel. `min-h-0` is load
           bearing: without it a flex row with a scrolling child never shrinks
           past its content's natural height, and the panel's own

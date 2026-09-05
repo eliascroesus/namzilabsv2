@@ -220,7 +220,10 @@ describe("the page container and the skeleton that stands in for it", () => {
     const code = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
     // The rail's right edge, and the ghost standing in for it.
     expect(code(sidebar)).toMatch(/border-r border-border/);
-    expect(code(skeleton)).toMatch(/w-\[56px\][^"]*border-r border-border/);
+    // `hidden` precedes the width now — the ghost mirrors the rail's absence
+    // below `md` as well as its 56px above it, or the skeleton reserves a
+    // column the real chrome will not draw.
+    expect(code(skeleton)).toMatch(/hidden w-\[56px\][^"]*border-r border-border/);
     // The bar's bottom edge, and its ghost.
     expect(code(read("src/components/top-bar.tsx"))).toMatch(/<header className="[^"]*border-b border-border/);
     expect(code(skeleton)).toMatch(/h-\[60px\][^"]*border-b border-border/);
@@ -424,8 +427,11 @@ describe("the rail's pinned mode", () => {
     expect(code).toMatch(/"peer group\/rail absolute/);
     // The <aside>'s OWN class carries no group — a negative match against the
     // element would always fail, because the panel that DOES carry it is a
-    // descendant. This is the aside's class string, asserted whole.
-    expect(code).toMatch(/"relative z-20 h-full shrink-0"/);
+    // descendant. This is the aside's class string, asserted whole — and it
+    // now also carries the phone layout, because the FOOTPRINT is what has to
+    // go below `md`: hiding the panel alone would leave a 56px column of
+    // nothing down the left of every phone screen.
+    expect(code).toMatch(/"relative z-20 hidden h-full shrink-0 md:block"/);
     // …and the toggle comes after it, or `peer-hover` resolves to nothing.
     expect(code.indexOf("peer group/rail")).toBeLessThan(code.indexOf('aria-pressed={pinned}'));
     expect(code).toMatch(/peer-hover:left-65/);

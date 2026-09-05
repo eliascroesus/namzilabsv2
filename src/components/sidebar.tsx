@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Bell, ChevronDown, LayoutDashboard, PanelLeftClose, PanelLeftOpen, Plug, Plus, Radio, Search, Settings, Workflow } from "lucide-react";
+import { Bell, ChevronDown, LayoutDashboard, PanelLeftClose, PanelLeftOpen, Plug, Plus, Radio, Search, Settings, UserPlus, Workflow } from "lucide-react";
 import { Fragment, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -323,8 +323,16 @@ const ICON_COL = "flex size-8 shrink-0 items-center justify-center";
  * padding, which is 28px — over WCAG 2.2's 24px minimum by four pixels and
  * under what a rail you click all day should ask for. The extra four cost
  * nothing: the chip is what you see and it is still 24.
+ *
+ * 44px BELOW `md`, AND IT IS THE SAME ROW, NOT A SECOND ONE.
+ *
+ * `h-9` is 36 — over WCAG 2.2's 24px minimum and right for a pointer, and
+ * four pixels under what a finger asks for. `min-h-11` raises the computed
+ * height to 44 on a phone without touching `h-9`, and `md:min-h-0` stands
+ * down again above the breakpoint, so the rail keeps its density and the
+ * drawer keeps its targets from one string.
  */
-const SLOT = "group flex h-9 w-full shrink-0 items-center justify-start gap-2.5 rounded-control";
+const SLOT = "group flex h-9 min-h-11 w-full shrink-0 items-center justify-start gap-2.5 rounded-control md:min-h-0";
 
 /**
  * THE GUTTER, WRITTEN DOWN.
@@ -344,33 +352,43 @@ const SLOT = "group flex h-9 w-full shrink-0 items-center justify-start gap-2.5 
  */
 const GUTTER = "px-3.5";
 
-export function Sidebar({
+/**
+ * THE RAIL'S CONTENT — one tree, rendered in two places.
+ *
+ * The phone has no hover, so it cannot have a hover rail; below `md` the
+ * column is not rendered at all and a drawer carries the same rows (see
+ * `mobile-drawer.tsx`). The thing that must not happen is the obvious one:
+ * a second nav list, a second search row, a second answer to "which view am
+ * I on", drifting apart on the first change to either. So this is the whole
+ * of what the rail SAYS, and the rail and the drawer are two frames around
+ * it — one 56px and hover-driven, one 280px and pressed open.
+ *
+ * IT NEEDS NO "EXPANDED" PROP, AND THAT IS THE POINT OF THE SPLIT. Every
+ * label in here rides `REVEAL`, which fades on `group-hover/rail`,
+ * `group-focus-within/rail` and `group-data-[pinned=true]/rail`. The drawer
+ * wraps this in a `group/rail` carrying `data-pinned="true"`, so the third
+ * variant fires and the labels, the keycap, the view list and the filled
+ * "New flow" row all open exactly as they do in a pinned rail. Not one class
+ * below knows a drawer exists.
+ */
+export function RailContent({
   hide,
   views = [],
-  /**
-   * PINNED OPEN, READ ON THE SERVER FROM A COOKIE.
-   *
-   * It arrives as a prop rather than being read here because the alternative is
-   * a layout jump on every cold load: `localStorage` is not knowable during
-   * render, so a pinned rail would paint at 56px and snap to 260px a frame
-   * later — dragging the top bar and the whole page with it. That is the exact
-   * failure `tests/page-width.test.ts` exists for, and a preference is not
-   * worth reintroducing it. `AppShell` reads the cookie; this only toggles it.
-   */
-  pinned: initialPinned = false,
   workspace,
   account,
+  invite = false,
 }: {
   hide?: string[];
   views?: BoardView[];
-  pinned?: boolean;
-  /**
-   * The active workspace's name and the signed-in account. `AppFrame` hands
-   * both down for the rail's own head block, which is the workspace switcher
-   * now — see the block below.
-   */
   workspace?: string;
   account?: { initials: string; avatarUrl?: string | null; panel: ReactNode };
+  /**
+   * Draw "Invite members" in the foot. The DRAWER sets it and the rail does
+   * not, because this is where that control lands when the top bar sheds it
+   * below `md` — above `md` it is still in the bar, and a second copy here
+   * would be two routes to one settings page a centimetre apart.
+   */
+  invite?: boolean;
 }) {
   const pathname = usePathname();
   const params = useSearchParams();
@@ -386,19 +404,6 @@ export function Sidebar({
    * on history nobody can see.
    */
   const [allViews, setAllViews] = useState(false);
-  /**
-   * Local state as well as the cookie, so the press is instant. The cookie is
-   * for the NEXT page load; this is for this one. Writing only the cookie would
-   * mean the rail did nothing until you navigated.
-   */
-  const [pinned, setPinned] = useState(initialPinned);
-  const togglePin = () => {
-    const next = !pinned;
-    setPinned(next);
-    // A year, path-wide, Lax: it is a display preference, so it wants to
-    // survive a restart and does not want to ride on cross-site requests.
-    document.cookie = `rail=${next ? "pinned" : "hover"}; path=/; max-age=31536000; samesite=lax`;
-  };
   /**
    * The strip's own order, and the same comparator the board uses. An adopted
    * default sorts first because its key was minted to; a view dragged elsewhere
@@ -468,7 +473,7 @@ export function Sidebar({
                  make it a child of the Dashboard chip above without pushing it
                  out to the parent's label, which is where it started. */
               className={cn(
-                "flex h-8 items-center rounded-control pl-4 pr-2 text-sm transition-colors duration-(--duration-fast)",
+                "flex h-8 min-h-11 items-center rounded-control pl-4 pr-2 text-sm transition-colors duration-(--duration-fast) md:min-h-0",
                 on
                   ? "bg-accent font-medium text-foreground"
                   : "text-muted-foreground hover:bg-accent hover:text-foreground",
@@ -499,7 +504,7 @@ export function Sidebar({
                16px by their dash and its margin, so this is level with their
                NAMES. A fold that starts left of the names it folds reads as
                belonging to the section rather than to them. */
-            className="h-8 w-full justify-start rounded-control pl-8 pr-2 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground active:bg-accent"
+            className="h-8 min-h-11 w-full justify-start rounded-control pl-8 pr-2 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground active:bg-accent md:min-h-0"
           >
             {allViews ? "Show less" : `Show all ${ordered.length}`}
           </Button>
@@ -509,109 +514,7 @@ export function Sidebar({
   );
 
   return (
-    // THE FOOTPRINT, AND ONLY THE FOOTPRINT. This element is 48px in every
-    // state; the panel inside it is what grows. The width is pinned against
-    // `shell-skeleton.tsx` by tests/page-width.test.ts — the skeleton reserves
-    // this exact column while a route streams, and the two drifting is content
-    // jumping sideways at the moment the page lands. It reads the FIRST
-    // `w-[…px]` in each file, which is this one, so nothing wider may be
-    // written above it.
-    //
-    // 48, down from 70 and from 264 before that. It is not a shrunken column,
-    // it is a different object: a 12px gutter either side of a 24px chip, and
-    // nothing else has to fit until the pointer arrives.
-    //
-    // `z-20` IS READ OFF THE LADDER IN globals.css, NOT INVENTED. That file
-    // lists five rungs; the open panel is a DOCKED PANEL — the same thing as
-    // the builder's config rail, chrome fixed to an edge and floating over the
-    // page — so it takes 20. Above 10, because a card's own sticky chrome must
-    // not surface through it. Below 30, because anchored surfaces (menus,
-    // popovers, the field browser) have to open OVER the rail, and below 40/50
-    // because a toast and a dialog outrank all chrome.
-    <aside
-      className={cn(
-        /**
-         * NO TRANSITION ON THE FOOTPRINT, AND THAT IS THE FIX FOR THE LAG.
-         *
-         * This animated its own width for 180ms, and the width of this element
-         * is what the top bar and the entire board are laid out against — so
-         * every frame of that animation was a full reflow of every tile,
-         * every chart and every axis on the page. On a full dashboard it drops
-         * frames badly enough to feel like the click did not register.
-         *
-         * The PANEL inside still animates (it overlays and costs nothing), so
-         * the rail still opens smoothly on hover. Pinning is a deliberate,
-         * once-in-a-while act, and an instant layout change reads as decisive
-         * where a janky one reads as broken.
-         */
-        "relative z-20 h-full shrink-0",
-        // THE FOOTPRINT IS THE WHOLE DIFFERENCE BETWEEN THE TWO MODES.
-        // Pinned, the <aside> itself is 260px, so the top bar and the page are
-        // laid out beside it and every board reflows into what is left — which
-        // is what "expanded" has to mean if the content is not to sit under it.
-        // Unpinned it stays 56px and the panel inside overlays, which is the
-        // behaviour that must not change: widening in flow on a pointer-move
-        // would re-lay-out every tile on the dashboard as the cursor passed.
-        pinned ? "w-65" : "w-[56px]",
-      )}
-    >
-      {/* THE PANEL — the whole rail, floated out of the layout.
-          `inset-y-0 left-0` pins it to the footprint above and `w-[48px]`
-          keeps the two the same object at rest; the two `group-*` widths are
-          the only thing that ever differs.
-
-          THE HAIRLINE TRAVELS WITH IT, and in a one-surface product it is doing
-          considerably more work than it used to. The rail is the same #1b191a
-          as the page beside it, so `border-r` is the ONLY thing that says where
-          one ends and the other starts — leaving the rule behind at 48px while
-          the panel opened past it would not read as a rail overhanging a page,
-          it would read as a stray line down the middle of one flat surface.
-
-          For the seconds it is open the panel covers the top bar's left end —
-          its workspace address — which is the cost of overlaying rather than
-          pushing, and it is paid back the instant the pointer leaves.
-
-          NO SHADOW, on purpose, and the reason changed with the surface. It
-          used to be "this is the BAND, and a band that lifts off the page stops
-          being the frame around it". There is no band; the reason now is that a
-          black shadow on #1b191a is a change of about one count (see the
-          elevation ladder) and would buy nothing but a class. The hairline is
-          the separation. */}
-      {/* THE TOGGLE SITS ON THE <aside>, NOT IN THE PANEL, AND THAT IS WHY IT
-          IS ALWAYS VISIBLE.
-          Inside the panel it was subject to `overflow-hidden`, so at 56px it
-          was clipped away and only appeared once you were already hovering —
-          a control for opening the rail that you could only reach by opening
-          the rail. Calendly's is pinned to the rail's edge and always there;
-          this is the same object.
-          `z-10` puts it over the panel it overlaps, `-right-3` straddles the
-          hairline so it reads as belonging to the boundary rather than to
-          either side, and the card fill plus the border make it legible against
-          both the rail and the page.
-          NOT wrapped in `REVEAL`: being always visible is the whole point. */}
-      {/* `group/rail` IS ON THIS WRAPPER, NOT ON THE <aside>, AND MOVING IT IS
-          THE FIX FOR "THE RAIL FREEZES UNTIL I CLICK SOMEWHERE ELSE".
-          Pressing the toggle FOCUSES it. While the toggle was inside the group,
-          `group-focus-within/rail:w-65` then held the panel open — the state
-          had changed, the cookie was written, and the rail sat there at 260px
-          until focus moved. Measured, not guessed: after a collapse the aside
-          was 56 and the panel was still 260.
-          The toggle is a sibling of this wrapper now, so focusing it says
-          nothing about the rail. Hover and focus-within mean what they were
-          meant to mean: the pointer is over the NAVIGATION, or a nav item has
-          the keyboard. */}
-      <div
-        className={cn(
-          "peer group/rail absolute inset-y-0 left-0 flex flex-col overflow-hidden border-r border-border bg-background transition-[width] duration-(--duration-base) ease-(--ease-standard)",
-          pinned ? "w-65" : "w-[56px] hover:w-65 focus-within:w-65",
-        )}
-        /* Read by `REVEAL` through `group-data-[pinned=true]/rail:`, so every
-           label, the keycap, the view list and the "New flow" fill open
-           together without any of them taking a prop. It lives on the GROUP,
-           which is this element — a `data-` attribute on the <aside> would be
-           on the wrong side of the `group/rail` that reads it. */
-        data-pinned={pinned}
-      >
+    <>
         {/* THE SWITCHER IS HERE NOW; THE MARK MOVED TO THE BAR.
             One wordmark in the chrome is enough, and the bar carries it full
             width now — this block used to be that mark, and it is the
@@ -921,27 +824,106 @@ export function Sidebar({
             </span>
             <RailLabel className="text-muted-foreground group-hover:text-foreground">Get Free Access</RailLabel>
           </Link>
+          {/* INVITE MEMBERS, WHICH IS A GUEST OF THIS FOOT RATHER THAN A
+              RESIDENT. It is a top-bar control; below `md` the bar has room
+              for a menu button, the mark and your avatar and nothing else, so
+              it comes here with "New flow" rather than being dropped. The rail
+              never sets `invite`, because up there the bar still carries it. */}
+          {invite && (
+            <Link
+              href="/dashboard/settings"
+              className={cn(SLOT, "text-muted-foreground hover:bg-accent hover:text-foreground")}
+            >
+              <span className={ICON_COL}>
+                <UserPlus className="size-[18px]" />
+              </span>
+              <RailLabel className="text-muted-foreground group-hover:text-foreground">Invite members</RailLabel>
+            </Link>
+          )}
         </div>
+      </>
+  );
+}
+
+/**
+ * THE HOVER RAIL — the frame around `RailContent`, and nothing else.
+ *
+ * What is left here is the geometry the CONTENT does not care about: the
+ * footprint the page is laid out against, the panel that overlays rather
+ * than pushes, the pin cookie, and the toggle straddling the hairline. The
+ * rows, the search field and the foot are all `RailContent`, which the
+ * phone's drawer renders too.
+ *
+ * IT IS NOT RENDERED BELOW `md`. A hover rail on a touch screen is a column
+ * of unlabelled glyphs that can never open — the panel's whole vocabulary is
+ * `hover` and `focus-within`, and a finger produces neither. `hidden
+ * md:block` on the FOOTPRINT rather than on the panel: hiding the panel
+ * alone would leave 56px of empty column down the left of every phone
+ * screen, laid out and painted, holding nothing.
+ */
+export function Sidebar({
+  hide,
+  views = [],
+  /**
+   * PINNED OPEN, READ ON THE SERVER FROM A COOKIE.
+   *
+   * It arrives as a prop rather than being read here because the alternative
+   * is a layout jump on every cold load: `localStorage` is not knowable
+   * during render, so a pinned rail would paint at 56px and snap to 260px a
+   * frame later — dragging the top bar and the whole page with it. That is
+   * the exact failure `tests/page-width.test.ts` exists for, and a
+   * preference is not worth reintroducing it. `AppShell` reads the cookie;
+   * this only toggles it.
+   */
+  pinned: initialPinned = false,
+  workspace,
+  account,
+}: {
+  hide?: string[];
+  views?: BoardView[];
+  pinned?: boolean;
+  workspace?: string;
+  account?: { initials: string; avatarUrl?: string | null; panel: ReactNode };
+}) {
+  /**
+   * Local state as well as the cookie, so the press is instant. The cookie is
+   * for the NEXT page load; this is for this one. Writing only the cookie
+   * would mean the rail did nothing until you navigated.
+   */
+  const [pinned, setPinned] = useState(initialPinned);
+  const togglePin = () => {
+    const next = !pinned;
+    setPinned(next);
+    // A year, path-wide, Lax: it is a display preference, so it wants to
+    // survive a restart and does not want to ride on cross-site requests.
+    document.cookie = `rail=${next ? "pinned" : "hover"}; path=/; max-age=31536000; samesite=lax`;
+  };
+
+  return (
+    <aside className={cn("relative z-20 hidden h-full shrink-0 md:block", pinned ? "w-65" : "w-[56px]")}>
+      {/* THE PANEL — the whole rail, floated out of the layout. The hairline
+          travels with it: the rail and the panel beside it are two surfaces
+          now, and `border-r` is where one stops. `group/rail` is HERE and not
+          on the <aside>, which is what stops the toggle's own focus holding
+          the column open — see the note on the toggle below. */}
+      <div
+        className={cn(
+          "peer group/rail absolute inset-y-0 left-0 flex flex-col overflow-hidden border-r border-border bg-chrome transition-[width] duration-(--duration-base) ease-(--ease-standard)",
+          pinned ? "w-65" : "w-[56px] hover:w-65 focus-within:w-65",
+        )}
+        /* Read by `REVEAL` through `group-data-[pinned=true]/rail:`, so every
+           label, the keycap, the view list and the "New flow" fill open
+           together without any of them taking a prop. The drawer sets the
+           same attribute by hand for exactly that reason. */
+        data-pinned={pinned}
+      >
+        <RailContent hide={hide} views={views} workspace={workspace} account={account} />
       </div>
-      {/* IT FOLLOWS THE PANEL'S EDGE, NOT THE FOOTPRINT'S.
-          `-right-3` on the <aside> looked right while pinned, where the two are
-          the same width — and sat 200px inland the moment the rail opened on
-          HOVER, because that only widens the panel. So it is positioned from
-          the LEFT, on the same conditional the panel's width uses, with the
-          same transition: the button and the edge it straddles now move as one
-          object. `-translate-x-1/2` centres it on the hairline.
-
-          `peer-hover` is what keeps it reachable: the panel is the peer, so
-          hovering the rail slides the button out with it, and hovering the
-          BUTTON does not open the rail — which is the whole reason the group
-          moved off the <aside> (see the panel's note).
-
-          NO TOOLTIP. It carried one, and before that a native `title`; both put
-          a label over the rail every time the pointer crossed the seam, which
-          on a control you meet on the way to everything else is noise. The icon
-          flips between "open" and "close" and `aria-label` says which — a
-          disclosure at a panel's edge is the most conventional control in the
-          genre and does not need explaining twice. */}
+      {/* THE TOGGLE FOLLOWS THE PANEL'S EDGE, NOT THE FOOTPRINT'S, and it is
+          a sibling of the panel rather than a child: pressing it FOCUSES it,
+          and while it sat inside `group/rail` that focus held the panel open
+          after a collapse. `top-12` centres it on y=60, the corner where the
+          bar's bottom rule meets the rail's right one. */}
       <Button
         variant="ghost"
         size="iconXs"
@@ -949,12 +931,6 @@ export function Sidebar({
         aria-pressed={pinned}
         aria-label={pinned ? "Collapse the navigation" : "Keep the navigation open"}
         className={cn(
-          /* `top-12` PUTS IT ON THE CORNER. The top bar is 60px and this button
-             is 24px, so 48 centres it on y=60 — the exact point where the bar's
-             `border-b` meets the rail's `border-r`. It sat at 22px, which is
-             the middle of the rail's own head block and reads as an object
-             floating beside the mark rather than as the joint between two
-             surfaces. A disclosure at an edge belongs where the edges meet. */
           "absolute top-12 z-10 -translate-x-1/2 rounded-control border border-border bg-card text-muted-foreground shadow-card transition-[left] duration-(--duration-base) ease-(--ease-standard) hover:bg-accent hover:text-foreground",
           pinned ? "left-65" : "left-14 peer-hover:left-65 peer-focus-within:left-65",
         )}

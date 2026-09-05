@@ -36,13 +36,17 @@ export function ShellSkeleton({
             `tests/page-width.test.ts`. `--chrome`, matching the bar above it;
             the border is the ONLY thing marking where it ends, because the
             rail and the panel beside it are two different surfaces now. */}
-        <div className="w-[56px] shrink-0 border-r border-border bg-chrome" />
+        {/* NOTHING IS RESERVED FOR THE RAIL BELOW `md`, because nothing is
+            drawn there — see `Sidebar`. A ghost the real chrome will not
+            replace is 57px of content jumping left when the route lands,
+            which is the one failure this file exists to prevent. */}
+        <div className="hidden w-[56px] shrink-0 border-r border-border bg-chrome md:block" />
         <div className="flex min-w-0 flex-1 flex-col">
           {/* THE PANEL'S GHOST — its own surface (`--panel`) and the same
               top-RIGHT corner the real content column carries under the bar.
               The rail side stays square in both, which is the export's own
               geometry and the reverse of every earlier notch this shell had. */}
-          <div className="flex-1 overflow-y-auto rounded-tr-frame bg-panel">
+          <div className="flex-1 overflow-y-auto md:rounded-tr-frame bg-panel">
             {/* Not <main>: PageContainer renders the page's one main landmark. */}
             <div className={`mx-auto w-full p-6 ${width === "narrow" ? "max-w-3xl" : "max-w-6xl"}`}>
               <Skeleton className="h-8 w-48" />

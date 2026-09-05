@@ -43,6 +43,7 @@ import { cn } from "@/lib/utils";
 export function TopBar({
   account,
   firstName,
+  menu,
   unread = 1,
 }: {
   account?: { initials: string; avatarUrl?: string | null; panel: ReactNode };
@@ -52,6 +53,18 @@ export function TopBar({
    * that guesses at your name is worse than one that does not use it.
    */
   firstName?: string;
+  /**
+   * The phone's way into the navigation — `MobileDrawer`, built by
+   * `AppFrame` and handed down as a node.
+   *
+   * A NODE RATHER THAN FOUR PROPS. The drawer needs the workspace, the
+   * account, the view list and the hidden-items list; this bar needs none of
+   * them and has just finished giving two of them back (see the file note).
+   * Passing the built control keeps the bar's signature about the BAR, which
+   * is the same reason `account.panel` arrives as a node rather than as a
+   * workspace list.
+   */
+  menu?: ReactNode;
   /** Unread notifications. Placeholder until notifications have a store. */
   unread?: number;
 }) {
@@ -59,15 +72,35 @@ export function TopBar({
 
   return (
     <header className="flex h-[60px] shrink-0 items-center justify-between gap-4 border-b border-border bg-chrome px-6 py-2">
-      {/* ── THE MARK ─────────────────────────────────────────────────────── */}
-      <Link href="/dashboard" className="wordmark shrink-0 text-foreground">
-        Namzilabs
-      </Link>
+      {/* ── THE WAY IN, THEN THE MARK ────────────────────────────────────
+          The menu button exists only below `md`, where there is no rail to
+          the left of this bar — it is the phone's whole navigation, so it
+          takes the reading edge and the mark steps right by 40px. Above
+          `md` it is not rendered and this group is the wordmark alone,
+          exactly where it was. */}
+      <div className="flex shrink-0 items-center gap-2">
+        {menu}
+        <Link href="/dashboard" className="wordmark shrink-0 text-foreground">
+          Namzilabs
+        </Link>
+      </div>
 
       {/* ── WHAT YOU ARE LOOKING AT ──────────────────────────────────────── */}
       <div className="flex min-w-0 flex-1 items-center justify-center">
         <div id="topbar-slot" className="peer flex min-w-0 flex-1 items-center gap-2 empty:hidden" />
-        <span className="truncate text-sm font-medium text-foreground peer-[:not(:empty)]:hidden">{greeting}</span>
+        {/* `max-sm:hidden`, NOT `hidden sm:block`, AND THE DIFFERENCE IS A
+            BUG AVOIDED. This span already carries `peer-[:not(:empty)]:hidden`
+            — the rule that gets out of the builder's way when its toolbar
+            portals into the slot beside it. A base `hidden` plus `sm:block`
+            would put a responsive variant into a fight with that peer rule
+            that is settled by Tailwind's own emission order rather than by
+            anything written here, and the losing case is a greeting sitting
+            on top of the builder's toolbar. One `max-` variant hides it below
+            `sm` and leaves the peer rule the only thing deciding anything at
+            `sm` and above. */}
+        <span className="truncate text-sm font-medium text-foreground max-sm:hidden peer-[:not(:empty)]:hidden">
+          {greeting}
+        </span>
       </div>
 
       {/* ── WHAT YOU CAN START ───────────────────────────────────────────
@@ -78,15 +111,27 @@ export function TopBar({
       <div className="flex shrink-0 items-center gap-4">
         <div id="topbar-status" className="flex shrink-0 items-center empty:hidden" />
 
+        {/* BOTH ACTS LEAVE THE BAR BELOW `md`, AND NEITHER IS LOST. They are
+            in the drawer's foot — "New flow" is the rail's own filled row and
+            has always been there, and "Invite members" is a guest of that
+            foot for exactly as long as this bar has no room for it. What is
+            left up here on a phone is the menu, the mark and you, which is
+            the export's own phone bar.
+            The label's `hidden sm:inline` goes with the move: it was the
+            narrow-viewport accommodation this replaces, and a control that is
+            not rendered below `md` cannot need one. */}
         <Link
           href="/dashboard/settings"
-          className={cn(buttonVariants({ variant: "secondary" }), "[&_svg]:size-4")}
+          className={cn(buttonVariants({ variant: "secondary" }), "hidden md:inline-flex [&_svg]:size-4")}
           title="Invite someone to this workspace"
         >
           <UserPlus />
-          <span className="hidden sm:inline">Invite members</span>
+          <span>Invite members</span>
         </Link>
-        <Link href="/dashboard/flows" className={cn(buttonVariants({ variant: "secondary" }), "[&_svg]:size-4")}>
+        <Link
+          href="/dashboard/flows"
+          className={cn(buttonVariants({ variant: "secondary" }), "hidden md:inline-flex [&_svg]:size-4")}
+        >
           <Plus />
           <span>New flow</span>
         </Link>
