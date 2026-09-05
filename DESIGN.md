@@ -2,12 +2,12 @@
 name: Namzilabs
 tagline: Six tools disagree; this one answers in a figure you can defend.
 register: quiet chrome, loud numbers
-surfaces: [ground (rail + top bar + page), card, control, raised, floating]
+surfaces: [page, chrome (top bar + rail + card), panel (the content area), control, raised, floating]
 themes: dark (the console) + light · per device · defaults to the OS
-accent: one blue (#00C0E8) · 500 draws on dark, 900 on light · 600 fills on both
-neutral: one ramp, cut for #1B191A — five surfaces below, four inks above
-type: SF Pro (system) / Inter · 11 · 13 · 15 · 17 · 18 · 20 · 26 · 36 · 48
-radius: 4 badge · 8 field · 10 everything that contains something · full button, chip and avatar
+accent: one blue (#007BFF) · 400 strokes on dark, 800 strokes on light · 600 fills on both
+neutral: one ramp, re-cut for three darks (#0F1011 / #111111 / #181818) — eight surface steps below the gap, two ink steps above it, one caps-label-only step between them
+type: SF Pro (system) / Inter · 11 · 13 · 15 · 17 · 18 · 20 · 26 · 28 · 48
+radius: 4 badge · 8 field, button and chip · 10 everything that contains something · full avatar, bell badge, freshness dot and active-count numeral
 status: chrome, furniture and primitives SETTLED · metric card and chart card IN PROGRESS
 ---
 
@@ -39,48 +39,64 @@ Furniture that shouts is why most operational tools are exhausting by 4pm.
 
 ---
 
-## 2. One surface, and the hairline that is now structural
+## 2. Three surfaces, and the hairline that is still structural
 
-The product's identity is **a single near-black surface** — `#1B191A` — carrying
-a 56px icon rail down the left, a 60px bar across the top, and the page inside
-them. All three are the same colour. **Every separation in the product is a 1px
-`#3D393B` rule and nothing else.**
+The product's identity was **a single near-black surface** two days ago —
+`#1B191A` carrying a 56px icon rail, a 60px bar and the page inside them,
+all one colour. The 4 September 2026 Figma draws three: the page is
+`#0F1011`, the top bar and the rail (and every card) are `#111111`, and
+the content panel sitting under the top bar — where the board and its
+tiles live — is `#181818`. **This reverses the reversal.** The one-surface
+thesis was this file's own central argument two days ago, made
+deliberately (a 40-point luminance step needs no help finding its own
+edge, and a rule drawn where two identical surfaces meet does nothing);
+it is reversed again here, just as deliberately, because the surfaces are
+no longer identical and the hairline has a job to do that it did not have
+before.
 
-This is the reverse of what shipped before, and the reversal is the whole
-re-theme. The product used to be a `#2E2E2E` **band** wrapping a `#F5F5F5` page,
-and the rule then was that the band had *no seam inside it* — because a
-40-point luminance step needs no help finding its own edge, and a rule drawn
-where two materials already meet is a rule doing nothing. That was right, and it
-inverts completely the moment the two materials become one:
+The three are close on purpose, not despite the purpose: `#111111` on
+`#0F1011` measures **1.01:1**, and `#181818` on `#0F1011` measures
+**1.07:1** — both TIGHTER than the 1.14:1 gap the previous surface ran
+between its ground and its cards. **The hairline is doing more work now,
+not less.** Every separation that is not one of those two steps is the
+same 1px `#343434` rule as before, recut for the new ground:
 
-- The rail's `border-r` and the bar's `border-b` are **back, and load-bearing.**
-  Without them the chrome bleeds into the page. They also take a real pixel each,
-  which is why `ShellSkeleton` mirrors both — a ghost without them jumps the
-  content 1px sideways and 1px down at hydration.
-- **The notch is gone.** `--radius-frame` cut 16px out of the page's top-left so
-  the band's charcoal showed through. Cutting a corner out of `#1B191A` to reveal
-  `#1B191A` draws nothing, so the class went and the token is 0.
-- **The rail's glyphs sit on nothing.** They wore a chip because a bare icon on
-  near-black was a smudge; at 14.08:1 on this ground a chip is a surface step
-  away from a surface that is already there.
-- **There is one focus ring.** `focus-ring-light` was a sanctioned white twin,
-  because the product's violet ring was invisible on the one dark surface in a
-  light app. Every surface is that surface now, and the ring is blue at 9.20:1
-  on all of them.
+- The rail's `border-r` and the bar's `border-b` are unchanged in kind —
+  they take a real pixel each, and `ShellSkeleton` mirrors both for the
+  same reason it always did: a ghost without them jumps the content at
+  hydration.
+- **The notch is back.** `--radius-frame` was 0 because a corner cut into
+  `#1B191A` to reveal `#1B191A` draws nothing. The panel it now cuts into
+  is `#181818`, sitting beside a rail and under a bar that are `#111111`
+  — a real, if narrow, colour change — so the same argument that retired
+  the notch two days ago is exactly the argument that reinstates it here:
+  a radius reveals whatever is behind it, and there is something behind
+  it again.
+- **The rail's glyphs still sit on nothing at rest** — the surface behind
+  them is `--chrome`, and a bare icon measures the same 14+:1 it always
+  did against a near-black ground, chrome or otherwise.
+- **The focus ring is still one ring.** It is blue at `--marker`'s new
+  measurement — 6.65:1 on the page, 6.59:1 on the chrome, 6.20:1 on the
+  panel — on every one of the three surfaces rather than the one this
+  file used to have to cover.
 
-**Cards step UP, not down.** `--card` is `#272426` on a `#1B191A` page: a
-**1.14:1** step, which exists in the numbers and not in the eye. A card without
-its border is not a flatter card, it is an invisible one. That is the single
-most important consequence in this file, and it is why `border border-border` is
-in the base of the Card primitive rather than in any of its variants.
+**Cards still need their border, and for almost the same reason as two
+days ago — just not the one you'd guess.** `--card` is `#111111`: on the
+`#0F1011` page that is **1.01:1**, and on the `#181818` panel a card
+usually sits on, it is **1.06:1** — lighter to darker rather than the old
+"cards step up" direction, and close enough either way that eye and
+instrument disagree about which one is which. A card without its border
+is still not a flatter card, it is an invisible one; what changed is that
+there are now three surfaces this is true of instead of one, and the
+border has to say so on all three.
 
-The rail carries no labels at rest. Six 36px slots, each holding an 18px glyph,
-in one flat uniformly-spaced stack from the mark to the foot — and **it opens.**
-Point at it and the column widens in place to 260px with the names fading in
-beside the chips. The reference this is drawn from does not do that, and its
-twelve unlabelled icons are the reason to: an icon rail is unreadable until you
-have learned it. Names live in the visible label *and* the accessible name,
-which is one string, so the two cannot drift.
+The rail carries no labels at rest, same as two days ago, and it still
+opens: point at it and the column widens in place to 260px. What sits
+inside the open column changed — a tinted switcher badge, a search field,
+a "Main Menu" label, nav rows on a neutral fill rather than a coloured
+glyph — and the written kit's own Layout section is where that is
+itemised; the mechanism itself (hover, a cookie, a fixed 56px rest state)
+did not move.
 
 ---
 
@@ -188,38 +204,51 @@ is the honest reading regardless of palette: a bar at 40% is not good, it is
 
 ## 5. Shape
 
-**Everything that contains something is 10px.** Cards, panels, popovers,
-selects, the period track, tables. The kit ran three container radii — 8, 10 and
-16 — so a panel, a card and a tile were three different objects on one screen
-and nothing said which was which. The reference draws exactly one.
+**Everything that contains something is still 10px.** Cards, panels,
+popovers, selects, the period track, tables — unchanged by this pass,
+because the argument for one container radius never depended on which
+theme sat under it.
 
-**Everything you press is a full pill; everything you type in is 8px.** This
-has now moved twice, and what decides it is the SHEET rather than a principle:
-the previous reference drew its buttons, badges and selects all as rounded
-rectangles, and a capsule among them read as borrowed. The current one pills
-every pressable thing — "New flow", "Refresh all", "Invite members", the lit
-period chip, the notification bell — while leaving cards and fields square-ish.
+**Everything you press is 8px, and there is no pill this time — nor is
+there a next time.** This has flipped between a pill and a rounded
+rectangle twice now: the reference before the cyan console pilled every
+pressable thing, the cyan console kept the pill, and this Figma draws
+none. Two flips with no stated reference produced a genuine "which one is
+right" argument each time; this file names the 4 September 2026 Figma as
+the reference specifically so a third flip needs a new design behind it,
+not a preference. `buttonVariants`' base class carries `rounded-control`
+(8px) rather than `rounded-full`; the period track's segments do the
+same. The WRAP exception the last flip needed — a control that wraps to
+two lines cannot be a pill, because a full radius on a two-line box
+renders as a circle around the words — does not reopen, because nothing
+here is a pill for that exception to be an exception to. `rounded-control`
+simply is what a button is now.
 
-The pill lives on `buttonVariants`, **not** on `--radius-control`. That token was
-`9999px` for one commit once and fifty-one files inherited it, so every text
-field, menu row and small panel went capsule-shaped. The token stays at 8px and
-holds the fields; the button carries its own shape.
+**Circles are reserved for four things, and reading as an action is no
+longer one of them:** an avatar, the bell's unread badge, the freshness
+dot, and the tile's "active count" numeral. Nothing that a person presses
+is ever fully round.
 
-The one exception the pill needs is real and still handled: a control that WRAPS
-cannot be a pill, because a full radius on a two-line box is half its height and
-renders as a circle around the words. Such a call site passes `rounded-control`
-and now genuinely wins, because `cn()` was taught the kit's radius names — the
-last time buttons were pills, that override was silently dropped and the page
-title rendered inside a grey circle.
+**A badge is 4px. A card is 10px.**
 
-**A badge is 4px.** **A card is 10px.**
+**The frame is back, and on the other corner.** `--radius-frame` was 0 two
+days ago because the notch's whole argument — a radius reveals whatever sits
+behind it — had nothing to reveal once the shell became one colour. It did
+not stay one colour; see §2. The token is **8px** again, cutting the content
+panel's **top-right** corner under the top bar. Every earlier era cut the
+top-LEFT, the corner nearest the rail, and the export does not: the panel
+butts square against the rail behind a hairline and softens the far end
+instead. Followed literally rather than corrected toward the older
+convention, and pinned in `tests/page-width.test.ts` with a negative
+assertion on `rounded-tl-frame` so the habit cannot return by itself.
 
-**Hairlines carry structure; shadows barely exist.** On `#1B191A` a black shadow
-at 10% moves about one count. The elevation ladder keeps its rungs so vendored
-components compile, but only two are ever chosen on purpose — `card` for
-anything in the page flow and `pop` for anything floating over it — and the
-floating ones carry a **white inset ring**, because on a dark surface a hairline
-of light is the only thing that reads as height at all.
+**Hairlines still carry structure; shadows still barely exist.** The card
+shadow is now the Figma's own value, `0 1px 2px rgb(0 0 0 / .20), 0 0 3px
+rgb(0 0 0 / .10)`, shared by both themes rather than floored only on
+dark. The elevation ladder keeps its unused rungs so vendored components
+compile, and the same two are ever chosen on purpose — `card` in the page
+flow, `pop` for anything floating, with the floating ones keeping their
+white inset ring on dark.
 
 ---
 
@@ -233,12 +262,13 @@ face, not naming Apple's. `system-ui` is the same thing said correctly: SF Pro
 on Apple hardware, Segoe UI Variable on Windows, the platform's own face on
 Linux.
 
-**The display face is gone.** Instrument Sans ran page titles, the landing hero
-and the metric numeral, because a page set entirely in Inter is the house style
-of every dashboard built since 2019. That argument is answered rather than
-abandoned: the distinction this interface draws is between the chrome and the
-NUMBER, and 36px at -0.03em against a 14px interface already carries it. A
-second family was buying separation the size step had paid for.
+**The display face is still gone, and the number holding its place got
+smaller.** Instrument Sans ran page titles, the landing hero and the metric
+numeral; the distinction this interface draws is between the chrome and the
+NUMBER, and that argument does not need the numeral to be 36px to work —
+this Figma draws it at **28px**, Inter 600, and 28 against a 15px interface
+still reads as the loudest thing on the tile. A second family was buying
+separation the size step had already paid for, at 36 or at 28 either one.
 
 Three sizes do the work: **15px** for the interface, **13px** for labels,
 captions and dense controls, and **11px** for the micro badge. 17px is reading
@@ -256,14 +286,32 @@ a word you scan. A filter chip carries a source name or a metric name, which is
 a proper noun the customer chose, and setting somebody's workspace name in caps
 is the product shouting a word it did not write.
 
+**The wordmark is new, and it is not a scale step.** "Namzilabs" sets in a
+class of its own, `.wordmark` — Inter, 24px, weight 900, 22px line —
+because this is the one string in the whole Figma the export actually
+names a face and a weight for, rather than asking for the platform's own
+UI font at whatever this kit already runs. It moved out of the rail into
+the top bar's left slot in the same pass (§2, above), which is the more
+visible of the two changes: a wordmark that only appeared once per
+session, inside a column that is 56px wide most of the time, was never
+going to be the thing anyone noticed move.
+
 **One name per size.** The scale is closed and single-spelled, and the gate fails
 on a second spelling. This is not tidiness: the app once ran twelve names over
 nine sizes with three-way ties, every one of them legal, so the same label was
 one size in one file and another size in the next while every check passed.
 
-Weights are 400 / 500 / 600. Never 700 — and neither rebrand's source got an
-exemption. Both Figma exports set small numerals and chrome labels at 700;
-`check:ui` fails on `font-bold`, so all of them shipped at 500 or 600.
+Weights are 400 / 500 / 600 — plus exactly ONE named exception, and the
+count matters more than the exception does. `.wordmark` is it, at 900,
+because the Figma names a face and a weight for that one string and for
+nothing else. The rail's workspace-switcher badge was the candidate for a
+second and did not get it: its initial ships at 13px/600, since "a
+one-character badge is not prose" would let every badge in the product
+through and 600 already reads as a badge at that size. Every other request
+for 700 or 900 either Figma export made ships at 500 or 600 regardless.
+`check:ui` still fails on `font-bold` and needs no allow-list for the
+wordmark: the 900 is declared in the CSS class, and the gate reads `.tsx`,
+never `.css`.
 
 ---
 
@@ -377,11 +425,16 @@ figure is the loudest thing on them, and a row of them lines its footers up.
 What is still open: how a comparison series is drawn, whether a tile carries its
 own controls, and how a mark fills a tall tile.
 
-**The builder's canvas.** Out of scope for this pass by instruction. One visible
-consequence: `--canvas-bg` keeps its previous value `#1B191A` rather than moving
-to `#1B191A`, so the canvas sits six counts off the chrome around it. That is a
-known seam, not an oversight. The builder's *chrome* — its toolbar, config panel
-and modals — follows the primitives and so inherits the new control ladder
-without having been redesigned.
+**The builder's canvas.** Out of scope for this pass by instruction, same as
+last time. `--canvas-bg` keeps its frozen value, `#1B191A` — the OLD page
+ground, from before either retheme — rather than moving to this pass's `#0F1011`.
+Two days ago that value happened to equal the page ground,
+which is the coincidence that closed a seam a previous pass had opened;
+this pass reopens it, on purpose, because moving `--canvas-bg` would be a
+canvas decision and none has been made. It is the same seam a previous
+pass closed by coincidence, not a new one — the builder's *chrome* (its
+toolbar, config panel and modals) still follows the primitives, so it
+inherits every token change in this pass without the canvas itself having
+been touched.
 
 Do not treat any of the three as the reference for anything else.

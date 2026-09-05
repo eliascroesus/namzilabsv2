@@ -88,3 +88,38 @@ describe("BRAND_KIT.md §3–§11 match the blue re-theme", () => {
     expect(doc).toMatch(/two more rows/i);
   });
 });
+
+describe("DESIGN.md matches the blue re-theme in lockstep", () => {
+  const designMd = () => readFileSync(join(root, "DESIGN.md"), "utf8");
+
+  it("frontmatter names the new accent, not the cyan one", () => {
+    const doc = designMd();
+    expect(doc).toMatch(/#007BFF/);
+    expect(doc).not.toMatch(/accent: one blue \(#00C0E8\)/);
+  });
+
+  it("section 2 argues three surfaces, not one", () => {
+    const doc = designMd();
+    expect(doc).toMatch(/#0F1011/);
+    expect(doc).toMatch(/#111111/);
+    expect(doc).toMatch(/#181818/);
+  });
+
+  it("section 5 names the Figma as the final shape reference", () => {
+    const doc = designMd();
+    expect(doc).toMatch(/4 September 2026 Figma/);
+    expect(doc).not.toMatch(/Everything you press is a full pill; everything you type in is 8px/);
+  });
+
+  it("section 6 documents the 28px numeral and the wordmark", () => {
+    const doc = designMd();
+    expect(doc).toMatch(/28px/);
+    expect(doc).toMatch(/\.wordmark/);
+  });
+
+  it("the section 10 canvas-bg sentence is no longer self-contradictory", () => {
+    const doc = designMd();
+    expect(doc).not.toMatch(/keeps its previous value `#1B191A` rather than moving\s+to `#1B191A`/);
+    expect(doc).toMatch(/rather than moving to (this pass's )?`#0F1011`/);
+  });
+});
