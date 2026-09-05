@@ -95,7 +95,7 @@ export function ThemeChoice({ className }: { className?: string }) {
               PERIOD_PILL,
               "gap-1.5",
               on
-                ? "bg-primary text-primary-foreground hover:bg-brand-500"
+                ? "bg-primary text-primary-foreground hover:bg-primary-hover"
                 : "text-muted-foreground hover:bg-accent hover:text-foreground",
             )}
           >

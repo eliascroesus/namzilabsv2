@@ -103,7 +103,7 @@ const buttonVariants = cva(
          * it toward the white behind it, so the label's contrast FELL at the one
          * moment the button was under a pointer.
          */
-        accent: "bg-primary text-primary-foreground shadow-xs hover:bg-brand-500 active:bg-brand-700",
+        accent: "bg-primary text-primary-foreground shadow-xs hover:bg-primary-hover active:bg-primary-active",
         /**
          * THE RECESSED TWIN OF `default`, AND NOW ITS OWN TOKEN.
          *

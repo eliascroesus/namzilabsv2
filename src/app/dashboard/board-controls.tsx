@@ -643,7 +643,7 @@ export function ViewTab({
         // page title above it takes, so the two things that say WHERE YOU ARE
         // are spelled the same way.
         active
-          ? "border-marker font-semibold text-heading"
+          ? "border-tab-rule font-semibold text-heading"
           : "border-transparent font-medium text-muted-foreground hover:text-foreground",
       )}
     >

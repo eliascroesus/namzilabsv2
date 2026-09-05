@@ -423,6 +423,38 @@ export default function DesignPage() {
               </div>
             ))}
           </div>
+          {/* THREE ROLES THAT FLIP WITH THE THEME, added 5 Sep 2026. Unlike the
+              ramps above, each of these names a DIFFERENT hex per theme by
+              construction — that is the entire reason they are roles rather
+              than a ramp step — so this row has no single hex to caption and
+              is deliberately outside `tests/design-swatches.test.ts`'s ramp
+              parser; `tests/theme-roles.test.ts` pins the values in
+              globals.css instead. Reload the page in each theme to see the
+              swatch itself change. */}
+          <p className="mb-2 mt-5 text-xs font-medium text-muted-foreground">
+            Roles that flip with the theme — one name, two values, so a component never spells `dark:`
+          </p>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="min-w-0">
+              <div className="h-16 rounded-card border border-border bg-tab-rule" />
+              <p className="mt-1.5 text-xs font-medium text-foreground">tab rule</p>
+              <p className="text-xs text-muted-foreground">
+                the active tab&apos;s 1px underline: muted-foreground on dark, heading on light
+              </p>
+            </div>
+            <div className="min-w-0">
+              <div className="h-16 rounded-card bg-primary-hover" />
+              <p className="mt-1.5 text-xs font-medium text-foreground">primary hover</p>
+              <p className="text-xs text-muted-foreground">
+                brand-500 on dark, brand-700 on light; white ink stays 4.5:1 or better both ways
+              </p>
+            </div>
+            <div className="min-w-0">
+              <div className="h-16 rounded-card bg-primary-active" />
+              <p className="mt-1.5 text-xs font-medium text-foreground">primary active</p>
+              <p className="text-xs text-muted-foreground">the pressed step — brand-700 in both themes</p>
+            </div>
+          </div>
         </Section>
 
         <Section

@@ -841,7 +841,7 @@ export function RailContent({
               aria-hidden
               className={cn(
                 "flex size-8 shrink-0 items-center justify-center [&_svg]:size-[18px]",
-                "rounded-control bg-primary text-primary-foreground transition-colors duration-(--duration-fast) ease-(--ease-standard) group-hover:bg-brand-500",
+                "rounded-control bg-primary text-primary-foreground transition-colors duration-(--duration-fast) ease-(--ease-standard) group-hover:bg-primary-hover",
                 /* THE "+" LEAVES WHEN THE WORDS ARRIVE. Collapsed, the glyph IS
                    the control — it is the only thing a 48px rail can say.
                    Expanded, the row reads "New flow" in full, and a plus beside

@@ -634,6 +634,13 @@
   --primary: var(--color-brand-600); /* the fill does not change with the theme */
   --primary-foreground: #ffffff;
   --marker: var(--color-brand-800); /* THE LIGHT STROKE — 5.80:1 on white */
+  /* THE FILL'S HOVER — walks DOWN on light: brand-700, the same step as the
+     press below it, because light has nowhere further to walk without the
+     white ink losing its floor. 5.22:1 white-on-fill. */
+  --primary-hover: var(--color-brand-700);
+  /* THE PRESSED STEP — brand-700 in BOTH themes, the one step of the ramp
+     that does not flip direction with the surface. */
+  --primary-active: var(--color-brand-700);
   --brand-soft: rgb(0 123 255 / 0.1);
   /* 30%, not the dark theme's 25%: the same alpha over white is a smaller edge
      than it is over the near-black surfaces, and a wash with no ring is not a
@@ -683,6 +690,11 @@
   --border: #e1e1e1;
   --input: #e4e4e4; /* the control outline — one count darker than `--border` */
   --ring: var(--marker);
+
+  /* THE ACTIVE TAB'S RULE — NOT the stroke. The Figma draws this 1px bottom
+     rule in grey (#313131), the same value as `--heading`, so the active tab
+     announces itself by weight and ink rather than by borrowing the brand. */
+  --tab-rule: var(--heading);
 
   /* The heavier rule a control owes 3:1 for — a switch track, a checkbox at
      rest, a table divider, a chart's zero line. #CFCFCF: one clear step darker
@@ -765,6 +777,12 @@
      not `500`), because the fill's own step reads as a stroke at only 4.79:1
      and a 1px ring owes more room than a button's ink does. */
   --marker: var(--color-brand-400);
+  /* THE FILL'S HOVER — walks UP on dark: brand-500, the same value the ramp
+     names THE BRAND. Raised means lighter on a near-black ground. */
+  --primary-hover: var(--color-brand-500);
+  /* THE PRESSED STEP — brand-700 in BOTH themes, the one step of the ramp
+     that does not flip direction with the surface. */
+  --primary-active: var(--color-brand-700);
   /* The brand as a WASH — the "Free" and "Developer" pills, a selected row, a
      soft banner. Alpha rather than a mixed step so it sits correctly on any of
      the dark surfaces without a second token. */
@@ -842,6 +860,12 @@
   --rule: var(--color-neutral-500); /* #4A4A4A */
   /* THE RING IS A STROKE, so it is the marker's. */
   --ring: var(--marker);
+
+  /* THE ACTIVE TAB'S RULE — NOT the stroke. The Figma draws this 1px bottom
+     rule in grey (#7E7E7E), the same value as `--muted-foreground`, so the
+     active tab announces itself by weight and ink rather than by borrowing
+     the brand. */
+  --tab-rule: var(--muted-foreground);
 
   /* shadcn components that do their own `calc()` off a single base radius. */
   --radius: 0.5rem;
@@ -936,7 +960,10 @@
   --color-panel: var(--panel);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-active: var(--primary-active);
   --color-marker: var(--marker);
+  --color-tab-rule: var(--tab-rule);
   --color-rule: var(--rule);
   --color-heading: var(--heading);
   --color-brand-soft: var(--brand-soft);

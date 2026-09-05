@@ -128,28 +128,28 @@ function TabsTrigger({
         // ACTIVE, segmented: the brand fill. #1b191a on #00c0e8 is 8.08:1,
         // comfortably past AA for the label it carries.
         "data-[state=active]:bg-primary data-[state=active]:font-medium data-[state=active]:text-primary-foreground",
-        // ACTIVE, line: no fill, and the label goes WHITE rather than green.
+        // ACTIVE, line: no fill, and the label goes WHITE.
         //
-        // It was the marker's ink step, because a 2px violet rule at 4.41:1
-        // could not carry the state on its own and the coloured word was
-        // helping it. The rule is green at 9.20:1 now and carries it alone, so
-        // the label is free to do what the reference does — step up the ink ramp
-        // to white while the four beside it stay muted. That reads as SELECTED
-        // rather than as LINKED, which is what a coloured word says.
+        // It was the marker's ink step, because a 2px rule at 4.41:1 could not
+        // carry the state on its own and the coloured word was helping it. The
+        // rule is `--tab-rule` now — a grey, not the brand stroke, since the 5
+        // Sep amendment moved the active tab's underline off the marker
+        // entirely — so the label carries the state on its own, stepping up
+        // the ink ramp to white while the four beside it stay muted. That reads
+        // as SELECTED rather than as LINKED, which is what a coloured word says.
         "group-data-[variant=line]/tabs-list:bg-transparent group-data-[variant=line]/tabs-list:data-[state=active]:bg-transparent group-data-[variant=line]/tabs-list:data-[state=active]:text-heading group-data-[variant=line]/tabs-list:data-[state=active]:border-transparent",
         // The line variant's mark, and the one class in this file the rebrand
         // moved. It was `after:bg-primary`, and `after:bg-foreground` before
         // that — a near-black underline said "current" in the same voice as the
         // body text around it, where a brand colour says it as the product.
         //
-        // A 2px rule is a STROKE, and it stays `--marker` through the rebrand
-        // for a reason that inverted underneath it. The yellow it replaced read
-        // 11.24:1 as a fill and 1.42:1 as a line on the ground, so an indicator
-        // carrying state was the one thing on the strip you could not see; the
-        // violet that fixed it managed 4.41:1. `--marker` is the green now at
-        // 9.20:1, which is the first value this rule has held that is legible
-        // without the weight change beside it doing half the work.
-        "after:absolute after:bg-marker after:opacity-0 after:transition-opacity group-data-[orientation=horizontal]/tabs:after:inset-x-0 group-data-[orientation=horizontal]/tabs:after:bottom-[-5px] group-data-[orientation=horizontal]/tabs:after:h-0.5 group-data-[orientation=vertical]/tabs:after:inset-y-0 group-data-[orientation=vertical]/tabs:after:-right-1 group-data-[orientation=vertical]/tabs:after:w-0.5 group-data-[variant=line]/tabs-list:data-[state=active]:after:opacity-100",
+        // THE LINE VARIANT'S MARK IS NOT THE STROKE ANY MORE. `--marker` drew
+        // it through every earlier rebrand, but the 5 Sep 2026 amendment gives
+        // the active tab's rule its own role — `--tab-rule` (`--muted-foreground`
+        // dark, `--heading` light) — because the Figma draws this rule in grey,
+        // not in the brand. `--marker` stays reserved for links, the focus ring
+        // and a selected edge, which is what it draws everywhere else in the kit.
+        "after:absolute after:bg-tab-rule after:opacity-0 after:transition-opacity group-data-[orientation=horizontal]/tabs:after:inset-x-0 group-data-[orientation=horizontal]/tabs:after:bottom-[-5px] group-data-[orientation=horizontal]/tabs:after:h-0.5 group-data-[orientation=vertical]/tabs:after:inset-y-0 group-data-[orientation=vertical]/tabs:after:-right-1 group-data-[orientation=vertical]/tabs:after:w-0.5 group-data-[variant=line]/tabs-list:data-[state=active]:after:opacity-100",
         className
       )}
       {...props}
