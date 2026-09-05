@@ -476,14 +476,20 @@ export function Freshness({ status }: { status: string }) {
        * a speck of dust; the halo gives it a shape to be, at no extra ink.
        * It is also what makes the healthy state and the pill states the same
        * SIZE, so the head does not reflow when a tile goes stale.
+       *
+       * ITS OWN TOKEN, AS OF THE 4 SEP 2026 BLUE RETHEME — not `--success`
+       * borrowed. `--freshness-dot`/`--freshness-halo` (globals.css) are a
+       * separate pair so a goal bar or a badge going success-green some day
+       * cannot drag this dot's hue along, and this dot going anything else
+       * cannot dim what "goal met" means.
        */
       <span
-        className="mt-px flex size-4 shrink-0 items-center justify-center rounded-full bg-success/15"
+        className="mt-px flex size-4 shrink-0 items-center justify-center rounded-full bg-freshness-halo"
         title="Up to date"
         role="img"
         aria-label="Up to date"
       >
-        <span className="size-1.5 rounded-full bg-success" />
+        <span className="size-1.5 rounded-full bg-freshness-dot" />
       </span>
     );
   }
