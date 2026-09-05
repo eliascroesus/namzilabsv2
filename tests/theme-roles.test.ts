@@ -128,6 +128,13 @@ describe("board-controls.tsx's active view tab uses --tab-rule, not --marker", (
  *
  * A plain grep for the retired string is the simplest honest pin: it says
  * nothing survives, rather than enumerating every place that doesn't.
+ *
+ * ONE ASSERTION, NOT ONE PER FILE. The sweep first shipped as an `it` per
+ * file — a couple hundred of them, all but one with an identical body — which
+ * is the same information a single collected-offenders assertion carries in
+ * one line, at a fraction of the suite's run-time noise. Any offender's PATH
+ * still appears by name in the failure message, so nothing about "which file"
+ * is lost by collapsing it.
  */
 describe("no filled control anywhere still hovers to the bare brand-500 step", () => {
   const flowDir = join(root, "src", "components", "flow") + sep;
@@ -139,10 +146,8 @@ describe("no filled control anywhere still hovers to the bare brand-500 step", (
     expect(files.length).toBeGreaterThan(50);
   });
 
-  for (const f of files) {
-    const rel = f.slice(root.length + 1);
-    it(`${rel} does not hover to bg-brand-500`, () => {
-      expect(read(rel)).not.toMatch(/hover:bg-brand-500/);
-    });
-  }
+  it("no file hovers to bg-brand-500", () => {
+    const offenders = files.filter((f) => /hover:bg-brand-500/.test(read(f.slice(root.length + 1))));
+    expect(offenders.map((f) => f.slice(root.length + 1))).toEqual([]);
+  });
 });

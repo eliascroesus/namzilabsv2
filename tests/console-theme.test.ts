@@ -249,11 +249,15 @@ describe("the last chip containers give up the pill", () => {
     // square by construction, not a chip with variable-width text.
     "src/components/calendar/calendar-board.tsx": [
       "flex size-5 shrink-0 items-center justify-center rounded-full bg-accent text-muted-foreground",
-      // The day-of-month numeral disc — the same "you are here" object as the
-      // rail's active row and the period control's lit pill, per its own
-      // comment, and one of the shape rule's own named exceptions (a numeral
-      // wearing a circle, not a labelled chip).
-      "tnum ms-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-xs font-semibold",
+      // The day-of-month numeral disc — NOT one of the spec's own named
+      // exceptions (that list is avatars, the bell badge, the freshness dot
+      // and "the tile's active-count numeral", a different object; citing it
+      // here was the mistake a fix round corrected). It earns its circle on
+      // its own terms instead: `px-1` came off so `min-w-5` alone sets the
+      // width, and two 12px tabular digits (`tnum`) fit inside that 20px box
+      // without it — verified square at both one and two digits, not merely
+      // asserted square.
+      "tnum ms-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full text-xs font-semibold",
     ],
   };
 

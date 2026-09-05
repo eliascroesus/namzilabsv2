@@ -63,14 +63,20 @@ describe("PageHeader's title, with and without a tab strip beside it", () => {
      * anything Task 20 changed: `overflow-x-auto` matches the tab strip's
      * scroller regardless of which row it stacks under, and a bare
      * `flex-wrap` + `gap-2` says nothing about which edge the actions
-     * align to. Re-pointed at the tokens the rewrite actually introduced —
-     * the row's own `items-stretch`/`md:grid-cols-[1fr_auto_1fr]` flip, the
-     * actions' `justify-start`/`md:justify-end` flip, and the title's
+     * align to. A fix round SUPPLEMENTED them rather than deleting them —
+     * removing an assertion that still holds, even a weak one, is the same
+     * "never delete, re-point" violation as removing a wrong one — with the
+     * tokens the rewrite actually introduced: the row's own
+     * `items-stretch`/`md:grid-cols-[1fr_auto_1fr]` flip, the actions'
+     * `justify-start`/`md:justify-end` flip, and the title's
      * `md:items-center md:text-center` pair — so a revert of any one of
      * them fails here rather than only in a screenshot.
      */
+    expect(html).toMatch(/overflow-x-auto/);
     expect(html).toMatch(/items-stretch[^"]*md:grid-cols-\[1fr_auto_1fr\]/);
     expect(html).toMatch(/text-left/);
+    // 8px between actions, wrapping rather than overflowing.
+    expect(html).toMatch(/flex-wrap[^"]*gap-2/);
     // Actions hug the reading edge below md and the far edge above it.
     expect(html).toMatch(/justify-start[^"]*md:justify-end/);
     // The title stays left below md and centres only once the grid forms.

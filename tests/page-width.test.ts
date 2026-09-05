@@ -238,21 +238,33 @@ describe("the board grid", () => {
      * skeletons standing in front of them. Five spellings for one rhythm is the
      * drift `check:ui` exists to catch everywhere else in the app.
      *
-     * TWO RETIRED SPELLINGS, NOT ONE STALE PROSE SENTENCE. This test used to
-     * say it "bans the exact old board literal" while its own filter checked
-     * for `md:grid-cols-2 xl:grid-cols-3` — the CURRENT literal, not the old
-     * one, a mismatch nobody would catch by reading the assertion alone. It
-     * now bans both retired shapes: the exact `sm:grid-cols-2 xl:grid-cols-3`
-     * literal BOARD_GRID replaced, anywhere in `src/` (that combination is
-     * specific enough that no unrelated grid collides with it — see the
-     * sabotage note below), and a bare `sm:grid-cols-2` reappearing in a file
-     * that already imports `BOARD_GRID`, which is what "a board grid"
-     * concretely means here rather than a content guess that would also catch
-     * `/design`'s demonstration grids and every unrelated form grid in the
-     * product (`connections/[id]/page.tsx`, `metrics/new/page.tsx`, the brand
-     * sheet's own `sm:grid-cols-2` chip row — none of them a board).
+     * THREE CHECKS NOW, NOT ONE — the duplication guard this test opened with,
+     * plus the two retired-spelling guards a later pass added beside it rather
+     * than in place of it.
+     *
+     * 1. THE DUPLICATION GUARD, the one this `it`'s name and docblock have
+     *    always been about: no file outside `ui/page.tsx` re-types the CURRENT
+     *    literal, `md:grid-cols-2 xl:grid-cols-3`, instead of importing
+     *    `BOARD_GRID`. This briefly went missing entirely — a fix round found
+     *    the filter deleted rather than updated when `BOARD_GRID`'s own value
+     *    moved from `sm` to `md`, which silently turned "is spelled once" into
+     *    a test that could no longer tell a duplicate from an import.
+     * 2. THE OLD COMBINED LITERAL, `sm:grid-cols-2 xl:grid-cols-3` — the exact
+     *    shape `BOARD_GRID` replaced — anywhere in `src/`. Specific enough that
+     *    no unrelated grid collides with it (see the sabotage note below).
+     * 3. A BARE `sm:grid-cols-2` reappearing in a file that already imports
+     *    `BOARD_GRID`, which is what "a board grid" concretely means here
+     *    rather than a content guess that would also catch `/design`'s
+     *    demonstration grids and every unrelated form grid in the product
+     *    (`connections/[id]/page.tsx`, `metrics/new/page.tsx`, the brand
+     *    sheet's own `sm:grid-cols-2` chip row — none of them a board).
      */
     const scanned = sourceFiles().filter((f) => !f.endsWith(join("components", "ui", "page.tsx")));
+
+    const duplicated = scanned.filter((f) => readFileSync(f, "utf8").includes("md:grid-cols-2 xl:grid-cols-3"));
+    expect(duplicated.map((f) => f.slice(root.length + 1)), "BOARD_GRID's literal was re-typed instead of imported").toEqual(
+      [],
+    );
 
     const oldLiteral = scanned.filter((f) => readFileSync(f, "utf8").includes("sm:grid-cols-2 xl:grid-cols-3"));
     expect(oldLiteral.map((f) => f.slice(root.length + 1)), "the retired combined literal came back").toEqual([]);

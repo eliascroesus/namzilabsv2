@@ -77,7 +77,14 @@ describe("the page header stacks below md", () => {
      * width, and the whole file is checked rather than just this header, so a
      * reintroduction anywhere else in `page.tsx` fails here too.
      */
-    expect(header).toMatch(/quiet-scroll[^"]*overflow-x-auto/);
+    // Matched against `pageCode` (comments stripped), not `header`: the
+    // uncommented `header` slice let this same regex match the explanatory
+    // prose above rather than the class — `quiet-scroll` and `overflow-x-auto`
+    // both appear in that comment with no `"` between them, so deleting the
+    // class from the live `className` left the assertion passing anyway. The
+    // full literal is asserted rather than a loose `[^"]*` gap, so a future
+    // reordering of the class string cannot reopen the same hole.
+    expect(pageCode).toContain("quiet-scroll flex min-w-0 items-center overflow-x-auto -mx-1 px-1");
     expect(pageCode, "md:overflow-visible must not come back anywhere in page.tsx").not.toMatch(/md:overflow-visible/);
     // …and the strip inside it has to stop wrapping, or it wraps INSIDE the
     // scroller and the scroller never has anything to scroll.

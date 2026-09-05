@@ -829,10 +829,16 @@ function DayCell({
             carrying WHITE ink at 4.68:1, which is the shape and the ratio the
             fill exists for, and the same object the rail's active row and the
             period control's lit pill are. All three say "you are here", so all
-            three are spelled one way. */}
+            three are spelled one way.
+            NO `px-1`. It used to carry horizontal padding on top of `min-w-5`,
+            which pushed a two-digit date (22 of every 31) past 20px wide while
+            the 20px height held still — a pill, not the circle this square is
+            supposed to be. Two 12px tabular digits (`tnum`) fit inside a 20px
+            box on their own; `min-w-5` alone holds it square without the
+            padding fighting it. */}
         <span
           className={cn(
-            "tnum ms-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-xs font-semibold",
+            "tnum ms-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full text-xs font-semibold",
             today ? "bg-primary text-primary-foreground" : has ? "text-foreground" : "text-muted-foreground",
           )}
         >
