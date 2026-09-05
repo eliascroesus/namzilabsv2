@@ -2,16 +2,11 @@
 
 import { createContext, useContext, useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarDays, ChevronDown, Copy as CopyIcon, MoreHorizontal, PenLine, Trash2 } from "lucide-react";
+import Link from "next/link";
+import { CalendarDays, Check, ChevronDown, Copy as CopyIcon, MoreHorizontal, PenLine, Trash2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Popover } from "@/components/flow/controls/Popover";
 import { deleteViewAction, duplicateViewAction, renameViewAction, setViewPositionsAction } from "./board-actions";
@@ -161,9 +156,19 @@ export function RangeLink({
  * link someone pastes into Slack still opens on the range it was copied
  * from. Only the shape of the control moved.
  *
- * A RADIO GROUP, NOT A LIST OF ITEMS, because the six are mutually
- * exclusive and exactly one of them is true — which is what a radio item
- * says to a screen reader and what an ordinary menu item does not.
+ * REAL LINKS, NOT A RADIO GROUP — fixed in the first review round. Radix's
+ * radio item answers "which one is selected" to a screen reader, which
+ * sounded right for six mutually exclusive answers, but it also means the
+ * item is a `<div role="menuitemradio">` with an `onSelect` handler, not an
+ * anchor: no `href`, so a modifier-click, a middle-click or "open in a new
+ * tab" all did nothing, and a viewer with no JavaScript got a button that
+ * opened a menu leading nowhere. `RangeLink`'s own comment defended exactly
+ * this — "still an `<a>` with a real `href`" — and the dropdown's items owe
+ * the same defence. Each one is `<DropdownMenuItem asChild><Link href=…>`,
+ * which keeps the menu's keyboard nav and close-on-select behaviour while
+ * making the rendered node a genuine anchor; `aria-current="true"` and a
+ * trailing check glyph say which one is active, the way `RangeLink`'s own
+ * `aria-current` already does.
  *
  * `options` arrives as DATA rather than as a callback: this is a client
  * component rendered by a server one, and a function prop does not cross
@@ -182,14 +187,22 @@ export function RangeMenu({
   // flight, exactly as `RangeLink` does it — a failed or redirected
   // navigation must not leave the trigger reading a range nobody is on.
   const active = pending && picked?.dim === "range" ? picked.key : activeRange;
-  const label = options.find((o) => o.key === active)?.label ?? options[0].label;
+  // `options[0]?.label`, NOT `options[0].label` — `RANGE_OPTIONS` is a fixed,
+  // non-empty constant today, so this should never run against an empty
+  // array, but the trigger reading "Period" instead of throwing is a cheaper
+  // failure than a crashed header if a future edit ever empties it.
+  const label = options.find((o) => o.key === active)?.label ?? options[0]?.label ?? "Period";
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         {/* `xs` with the icons pushed to 16px: the rung ships
             `[&_svg]:size-3.5`, and the export draws 16. The override is on
             the button because the size variant's own descendant rule beats
-            a class on the svg whichever order they are written in. */}
+            a class on the svg whichever order they are written in.
+            `truncate max-w-40` on the label: the trigger sits beside "+ Add"
+            and "Refresh All" in a header slot with real width limits, and a
+            future preset with a long name should ellipsize rather than push
+            its neighbours off the row. */}
         <Button
           variant="secondary"
           size="xs"
@@ -197,24 +210,35 @@ export function RangeMenu({
           aria-label={`Period — ${label}`}
         >
           <CalendarDays aria-hidden />
-          <span>{label}</span>
+          <span className="truncate max-w-40">{label}</span>
           <ChevronDown aria-hidden />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-44">
-        <DropdownMenuRadioGroup
-          value={active}
-          onValueChange={(key) => {
-            const chosen = options.find((o) => o.key === key);
-            if (chosen) go(chosen.href, { dim: "range", key });
-          }}
-        >
-          {options.map((o) => (
-            <DropdownMenuRadioItem key={o.key} value={o.key}>
-              {o.label}
-            </DropdownMenuRadioItem>
-          ))}
-        </DropdownMenuRadioGroup>
+        {options.map((o) => {
+          const isActive = o.key === active;
+          return (
+            <DropdownMenuItem key={o.key} asChild>
+              {/* A REAL ANCHOR, asChild — see the file note above. The click
+                  handler is `RangeLink`'s own: let the browser take every
+                  click that means "somewhere else" (a new tab, a download, a
+                  non-primary button), and only take over — optimistic pill,
+                  no page reload — for the plain press this menu exists for. */}
+              <Link
+                href={o.href}
+                aria-current={isActive ? "true" : undefined}
+                onClick={(e) => {
+                  if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+                  e.preventDefault();
+                  go(o.href, { dim: "range", key: o.key });
+                }}
+              >
+                <span className="min-w-0 flex-1 truncate">{o.label}</span>
+                {isActive && <Check aria-hidden />}
+              </Link>
+            </DropdownMenuItem>
+          );
+        })}
       </DropdownMenuContent>
     </DropdownMenu>
   );

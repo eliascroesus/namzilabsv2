@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import {
   AreaChart,
@@ -118,6 +119,26 @@ export type CanvasTile = GridBox & {
   attention: 0 | 1 | 2 | 3;
 };
 
+/**
+ * RENDER INTO A SLOT THE PAGE PUT IN ITS CHROME.
+ *
+ * The same portal `calendar-board.tsx`'s own `Slot` and `FlowToolbar.tsx`'s
+ * `TopBarStatusPortal` use, and for the same reason: `page.tsx` is an async
+ * server component that cannot hold `picking`/`busy`/`addTile` — those are
+ * this component's own client state — so "+ Add" is instantiated here, where
+ * the state lives, and only its rendered DOM output moves into the header's
+ * placeholder div. Neither side can hand the other what it has.
+ *
+ * `null` until the effect runs — the slot cannot be read during render, and
+ * `useEffect` is the only hook allowed to touch the document. One frame of an
+ * empty header slot, exactly as the calendar's own portals have always had.
+ */
+function Slot({ id, children }: { id: string; children: ReactNode }) {
+  const [node, setNode] = useState<HTMLElement | null>(null);
+  useEffect(() => setNode(document.getElementById(id)), [id]);
+  return node ? createPortal(children, node) : null;
+}
+
 export function CustomBoard({
   viewId,
   tiles,
@@ -125,7 +146,6 @@ export function CustomBoard({
   rangeKey,
   canEdit,
   layoutFrozen = false,
-  boardActions,
   actions: actionOverrides,
 }: {
   /** Always a real id: the default view has no row and is always a groups view. */
@@ -147,14 +167,6 @@ export function CustomBoard({
    * those writes touch one row and move nothing.
    */
   layoutFrozen?: boolean;
-  /**
-   * The source picker and Refresh all — the same pair the groups board wears.
-   * A view's promise is that moving between kinds does not move the furniture,
-   * and the tabs that promise is mostly about now live in the page header,
-   * above both boards. Server markup, passed through; see the note on
-   * `boardActions` in board-layout.tsx.
-   */
-  boardActions?: ReactNode;
   /** Test seam only — see `CanvasActions`. The dashboard leaves it unset. */
   actions?: Partial<CanvasActions>;
 }) {
@@ -581,39 +593,35 @@ export function CustomBoard({
        * them. A panel is an overlay; overlays overlap.
        */
     >
-      {/* The action row, in the same place and shape the groups board puts it:
-          the board's own controls on the right, the left half a spacer since
-          the view strip moved into the page header. On a canvas the
-          arrangement door reads "Add" rather than "New group", and it takes
-          the same first position in the right-hand group.
-
-          NO TOP MARGIN, for the reason the groups board states at length:
-          `PageHeader`'s own `pb-4` is the 16px between the title block and this
-          row, and the `mt-4` that used to be here made it 32. Both boards wear
-          the same row, so both had to stop paying for the gap twice. */}
-              <div className="flex items-center justify-between gap-4">
-          {/* CENTRED, NOT TOP-ALIGNED. `items-start` put the two halves of this
-              row on a shared TOP edge, and they are not the same height — the
-              tab strip measures 32px against the 36px action pills, so the tab
-              labels sat exactly 2px below the button labels. Two rows of text
-              that nearly share a baseline read as a mistake rather than as a
-              hierarchy. `items-center` gives them a shared MIDDLE, which is the
-              line the eye actually uses. Wrapping is unaffected: a folded block
-              of actions centres against the tabs the same way one row does. */}
-        {/* Empty spacer — see the same note in board-layout.tsx. */}
-        <div className="min-w-0 flex-1" />
-        <div className="flex flex-wrap items-center justify-end gap-4">
-          {canEdit && (
-            <AddChartMenu
-              open={picking}
-              setOpen={setPicking}
-              busy={busy}
-              onPick={(chart, tileKey) => addTile(tileKey, chart)}
-            />
-          )}
-          {boardActions}
-        </div>
-      </div>
+      {/* "+ ADD" LIVES IN THE PAGE HEADER NOW — fixed in the first review
+          round. This board used to draw its own action row here: "+ Add" on
+          the right, a spacer on the left where the view strip used to be
+          before it moved into `PageHeader`'s `tabs` slot. The header fix
+          round moved "+ Add" up beside "Today" and Refresh all, per the
+          Figma's own three-action ordering, which left this row holding
+          nothing at all — `boardActions` (the other thing it used to draw)
+          retired the same round, having lost Refresh all to the header
+          earlier. An empty row is worse than no row, so it is gone rather
+          than guarded.
+          THE STATE STAYS HERE, THOUGH. `picking`/`busy`/`addTile` are this
+          component's own optimistic state, and the button and popover that
+          use them still render from here — `<Slot>` below only moves WHERE
+          their output lands in the DOM, the same trick `calendar-board.tsx`
+          uses for `#calendar-tools`/`#calendar-period` and `FlowToolbar.tsx`
+          uses for its own status chip. `page.tsx` leaves an empty
+          `#canvas-add-chart` div in its header only when the active view is
+          this kind of board; `canEdit` is still checked here, so a viewer
+          without `create_flows` portals nothing into it. */}
+      {canEdit && (
+        <Slot id="canvas-add-chart">
+          <AddChartMenu
+            open={picking}
+            setOpen={setPicking}
+            busy={busy}
+            onPick={(chart, tileKey) => addTile(tileKey, chart)}
+          />
+        </Slot>
+      )}
 
       {/* ONE LINE, ONCE, UNDER THE CONTROLS. Enough to explain why nothing
           moves, and deliberately not enough to describe what is hidden: naming

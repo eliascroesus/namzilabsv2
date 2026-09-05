@@ -38,7 +38,10 @@ describe("the dashboard's page header, 4 Sep 2026 blue retheme", () => {
   });
 
   it("answers 'what span' with the Figma's dropdown, not six pills", () => {
-    expect(page).toContain("<RangeMenu");
+    // Anchored past the component name — the bare word `RangeMenu` also
+    // matches a typo like `RangeMenuXXX`, which a sabotage pass on the
+    // original substring check found does not fail it.
+    expect(page).toMatch(/<RangeMenu[\s/>]/);
     expect(page, "the six-pill track is gone from this page").not.toMatch(/className=\{PERIOD_TRACK\}/);
     expect(page, "and so are its imports").not.toMatch(/PERIOD_PILL/);
   });
@@ -57,6 +60,25 @@ describe("the dashboard's page header, 4 Sep 2026 blue retheme", () => {
     expect(menu).toContain('dim: "range"');
   });
 
+  it("draws each preset as a real link, not a radio item with no href", () => {
+    /**
+     * FIXED IN THE FIRST REVIEW ROUND. `DropdownMenuRadioItem` renders a
+     * `role="menuitemradio"` div with an `onSelect` handler — no `href`,
+     * so a modifier-click, a middle-click or "open in a new tab" all did
+     * nothing, and a no-JS viewer got a menu that opened onto nothing.
+     * `RangeLink`'s own comment defended exactly this for the pill track
+     * this menu replaced; the dropdown's items owe the same defence, which
+     * is why each one is `asChild` around a real `next/link` `Link` reading
+     * `href={o.href}`.
+     */
+    const controls = read("src/app/dashboard/board-controls.tsx");
+    const menu = controls.slice(controls.indexOf("export function RangeMenu"), controls.indexOf("export function ViewStrip"));
+    expect(menu, "each item is a real anchor").toMatch(/<Link\s+href=\{o\.href\}/);
+    expect(menu, "the radio group it replaced is gone").not.toContain("DropdownMenuRadioGroup");
+    expect(menu, "and so is the radio item").not.toContain("DropdownMenuRadioItem");
+    expect(menu, "the active preset says so to assistive tech").toContain('aria-current={isActive ? "true" : undefined}');
+  });
+
   it("promotes + Add to the brand fill at the header's own size", () => {
     const custom = read("src/app/dashboard/custom-board.tsx");
     const add = custom.slice(custom.indexOf("function AddChartMenu"));
@@ -64,5 +86,50 @@ describe("the dashboard's page header, 4 Sep 2026 blue retheme", () => {
     expect(add).toContain('size="xs"');
     expect(add).toContain("[&_svg]:size-4");
     expect(add, "the white variant it borrowed is gone from this control").not.toContain('variant="white"');
+  });
+
+  it("co-locates + Add, Today and Refresh All in the header, + Add gated to the canvas board", () => {
+    /**
+     * FIXED IN THE FIRST REVIEW ROUND, WHICH FOUND THE FIGMA'S THREE HEADER
+     * ACTIONS SPLIT ACROSS TWO PLACES: "+ Add" was still inline in
+     * `custom-board.tsx`'s own row, and Refresh all was still in the retired
+     * `boardActions`. All three now render from `PageHeader`'s own `actions`
+     * slot, in the Figma's order — "+ Add", "Today", "Refresh All" — and
+     * "+ Add" is a header-only placeholder gated on the active view being a
+     * canvas, since the groups board and the calendar offer no `AddChartMenu`.
+     */
+    const actionsStart = page.indexOf("actions={");
+    // Sliced to the tag's own close (`\n        />`) rather than a guessed
+    // byte count, so a comment growing past an arbitrary window does not
+    // silently stop finding Refresh all.
+    const header = page.slice(actionsStart, page.indexOf("\n        />", actionsStart));
+    const addAt = header.indexOf('id="canvas-add-chart"');
+    const rangeAt = header.indexOf("<RangeMenu");
+    const refreshAt = header.indexOf("action={refreshAllFlowsAction}");
+    expect(addAt, '"+ Add"\'s header slot was found').toBeGreaterThan(-1);
+    expect(rangeAt, "the Today dropdown was found").toBeGreaterThan(-1);
+    expect(refreshAt, "Refresh all was found").toBeGreaterThan(-1);
+    expect(addAt, "+ Add comes before Today").toBeLessThan(rangeAt);
+    expect(rangeAt, "Today comes before Refresh All").toBeLessThan(refreshAt);
+    // Gated: the placeholder only appears for the canvas board.
+    expect(header.slice(Math.max(0, addAt - 200), addAt)).toMatch(/activeKind === "custom" &&/);
+  });
+
+  it("draws + Add through the Slot portal, not as a bare inline row", () => {
+    /**
+     * The call site to `<AddChartMenu>` is supposed to still exist — its own
+     * state (`picking`/`busy`/`addTile`) lives in `CustomBoard`, so the
+     * component is instantiated there and only its rendered output portals
+     * into the header. What must be true is that the ONE call is wrapped by
+     * the `Slot`, and that there is only one — a leftover second copy sitting
+     * inline in the old action row is the regression this guards.
+     */
+    const custom = read("src/app/dashboard/custom-board.tsx");
+    const beforeDefinition = custom.slice(0, custom.indexOf("function AddChartMenu"));
+    expect(beforeDefinition, "the call is wrapped by the canvas-add-chart Slot").toMatch(
+      /<Slot id="canvas-add-chart">\s*<AddChartMenu/,
+    );
+    const calls = beforeDefinition.match(/<AddChartMenu\s/g) ?? [];
+    expect(calls.length, "AddChartMenu is instantiated exactly once").toBe(1);
   });
 });

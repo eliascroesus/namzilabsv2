@@ -92,20 +92,29 @@ describe("what a calendar view costs on every freshness poll", () => {
 });
 
 describe("the board still has its furniture", () => {
-  it("carries the view strip and the board actions into the calendar branch", () => {
+  it("no longer threads the retired viewStrip/boardActions pair into the calendar branch", () => {
     /**
-     * THE ONE THING THAT WOULD BREAK QUIETLY, RE-AIMED. `boardActions` is
-     * still rendered by the BRANCH — so a branch that forgets it loses
-     * Refresh all. The view strip is no longer its job: it moved into
-     * `PageHeader`'s `tabs` slot with the 4 September re-theme, which is above
-     * every branch and therefore cannot be forgotten by one. What this asserts
-     * now is exactly that split.
+     * RETIRED, NOT FORGOTTEN — re-aimed a second time, in the header
+     * co-location fix round. `viewStrip` moved into `PageHeader`'s `tabs`
+     * slot with the 4 September re-theme; `boardActions` held only Refresh
+     * all after that, which the header fix round moved into `PageHeader`'s
+     * `actions` alongside "+ Add" and the "Today" dropdown, leaving nothing
+     * for `boardActions` to carry — so it was removed rather than kept as an
+     * always-empty prop three files threaded for no reason.
+     *
+     * What this now asserts is what a half-finished revert of either change
+     * would look like: the calendar branch quietly re-declaring a reference
+     * to a name this page no longer defines, which would fail to COMPILE
+     * (an unbound identifier) rather than fail a render — so this is a
+     * source pin over a behavioural one, the same trade the rest of this
+     * file makes for the same reason.
      */
     const branch = page.slice(page.indexOf('{!emptyWorkspace && activeKind === "calendar" ? ('));
     const head = branch.slice(0, branch.indexOf("<CalendarBoard"));
     expect(head, "the strip belongs to the header now, not to this branch").not.toMatch(/\{viewStrip\}/);
-    expect(head).toMatch(/\{boardActions\}/);
+    expect(head, "boardActions is retired -- Refresh all moved to the header").not.toMatch(/\{boardActions\}/);
     expect(page).toMatch(/tabs=\{viewStrip\}/);
+    expect(page, "Refresh all lives in the header now").toMatch(/<RefreshCw \/>\s*Refresh all/);
   });
 
   it("remounts the board when the view changes", () => {
@@ -128,7 +137,7 @@ describe("the board still has its furniture", () => {
      * Pinned as the shape of the wrapper, because the two branches are only
      * comparable when neither contributes a step of its own.
      */
-    expect(page).toMatch(/activeKind === "calendar" \? \([\s\S]{0,1400}?<div>\s*\{\/\* THE SAME ROW/);
+    expect(page).toMatch(/activeKind === "calendar" \? \([\s\S]{0,1400}?<div>\s*\{\/\* THE METRIC PICKER/);
     expect(page).not.toMatch(/activeKind === "calendar" \? \([\s\S]{0,1400}?<div className="mt-4">/);
     // And the header still owns the gap, for both branches.
     expect(readFileSync(join(root, "src/components/ui/page.tsx"), "utf8")).toMatch(/pb-4/);
@@ -167,7 +176,10 @@ describe("the board still has its furniture", () => {
     // Figma's "Today" dropdown. The drift this guards is unchanged in kind:
     // neither may re-spell what the other imports.
     expect(board).toMatch(/className=\{PERIOD_TRACK\}/);
-    expect(page).toMatch(/<RangeMenu/);
+    // Anchored past the component name — `<RangeMenu` alone also matches a
+    // typo like `<RangeMenuXXX`, which a sabotage pass on this exact pin
+    // found does not fail it.
+    expect(page).toMatch(/<RangeMenu[\s/>]/);
     // Neither may go back to spelling the groove itself.
     for (const [name, src] of [["calendar-board", board], ["page", page]] as const) {
       expect(src, `${name} re-spells the period groove`).not.toMatch(/h-10 items-center gap-0\.5 rounded-full/);

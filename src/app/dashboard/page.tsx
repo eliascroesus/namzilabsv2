@@ -688,89 +688,22 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
    */
 
   /**
-   * THE ACTION HALF OF THE TAB ROW — and the filter island is gone.
+   * `boardActions` IS RETIRED, IN THE FIX ROUND THAT CO-LOCATED THE HEADER.
    *
-   * There used to be a white bar above the board holding all three of these:
-   * the period pills, the source picker and Refresh all. It was a sound object
-   * on a white page and it is the wrong one now, for two reasons that arrived
-   * together.
+   * It used to carry the source picker (removed earlier — see the note that
+   * lived here) and Refresh all, rendered on the server and handed down to
+   * whichever board was mounted, for the same reason `viewStrip` was: the
+   * source rows were real anchors and Refresh all is a plain form post, so
+   * neither needed the client boundary the board itself is behind.
    *
-   * ONE: the page has a HEADER again. The old bar existed partly because there
-   * was nothing else at the top of this screen — the title had been deleted as
-   * a duplicate of a sidebar row that said "Dashboard" beside it. That sidebar
-   * is a 70px icon rail with no words on it, so the duplication it was deleted
-   * for no longer exists, and the period control has somewhere better to be:
-   * the header's right slot, where it reads as "this page, over this window".
-   *
-   * TWO: an island on a dark ground is a THIRD surface. The board is already
-   * white cards on a dark page inside a dark band; a white bar between them is
-   * one more panel for the eye to account for before it reaches a number.
-   *
-   * So the two controls that are not the period join the row that was already
-   * there — the view tabs and New group — and the bar dissolves. The row's own
-   * question is unchanged by the arrivals: the tabs and New group say how the
-   * board is ARRANGED, and these two say what is ON it. Both are about this
-   * board; the period is about the numbers inside it, and it stays upstairs.
-   *
-   * Rendered here, on the server, and handed to whichever board is mounted —
-   * the same trick `viewStrip` uses, and for the same reason: the source rows
-   * are real anchors and Refresh all is a plain form post, so neither needs the
-   * client boundary the board itself is behind.
+   * Refresh all is the one that survived, and the Figma's own ruling on the
+   * three header actions ("+ Add", "Today", "Refresh All") puts it beside the
+   * other two in `PageHeader`'s own `actions` slot rather than on the board's
+   * row — see that slot below, where the button and its styling rationale
+   * both moved. With nothing left to carry, the variable goes with it rather
+   * than surviving as a prop three files thread through for no reason; see
+   * `board-layout.tsx` and `custom-board.tsx` for the matching removal.
    */
-  const boardActions = (
-    <>
-      {/* THE SOURCE FILTER IS GONE, FROM EVERY VIEW.
-          It was a <details> popover narrowing the board to one connected app,
-          and it had already been switched off for calendars on the grounds that
-          a calendar draws values that were computed and stored, so no filter on
-          this page could reach them. That argument turns out to be the general
-          case rather than the exception: every number on this board is
-          materialised, the filter re-rendered the page to change which flows
-          were LISTED rather than what any figure said, and the row it sat in is
-          the one place a customer looks for controls that act.
-          Removed rather than hidden: a control nobody can reach is still a
-          prop and a branch, and the `connectedSources` query that filled it
-          goes with it — one fewer read on the most-rendered page in the
-          product.
-          `?source=` ITSELF STAYS LIVE, and that is deliberate rather than an
-          oversight. `computeAggregate` and `computeFunnel` still take it, so a
-          link someone has already saved or shared keeps answering the same
-          number; what has gone is the UI that minted new ones. Apps is where
-          you go to see what is connected. */}
-      {/* Recompute every published metric.
-          NOT THE FILL, AS OF THE 4 SEP 2026 BLUE RETHEME. This used to argue
-          for spending the brand's one filled control here — first as
-          scarcity ("the single act the page exists for"), then as a
-          fill/stroke rule keyed to which control CHANGES something rather
-          than narrows what is shown. The Figma settles it a third way, by
-          naming names: blue is reserved for "+ Add" and "New flow"; every
-          other header action — Refresh all included — is `secondary`, the
-          kit's ordinary grey button (see `ui/button.tsx`). Acting is no
-          longer the test; being one of exactly two adds-something verbs is.
-          `px-5`'s argument went with the fill: a `secondary` button reaches
-          for no more attention than its neighbours.
-          `xs`, NOT `sm`, AND AN ICON. The Figma's header actions are its
-          smallest button rung with a 16px glyph in front of the verb, and
-          all three of them agree — this one, "+ Add" and the "Today"
-          dropdown. `xs` ships `[&_svg]:size-3.5` (14px), which is the rung's
-          default and not what this row draws, so the 16 is spelled here;
-          the override is on the button rather than the icon because the
-          size variant's own descendant rule would win over a class on the
-          svg no matter which order they were written in. */}
-      <form action={refreshAllFlowsAction} className="shrink-0">
-        <SubmitButton
-          variant="secondary"
-          size="xs"
-          className="[&_svg]:size-4"
-          pendingLabel="Refreshing…"
-          title="Recompute every published metric now"
-        >
-          <RefreshCw />
-          Refresh all
-        </SubmitButton>
-      </form>
-    </>
-  );
 
   /**
    * EVERY TILE, PLUS THE FOUR FACTS AN ARRANGEMENT IS COMPUTED FROM.
@@ -990,11 +923,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             title, the period track, the tab strip and the action row all
             describe a board, and there is no board — so none of them render,
             and the only thing on screen is the invitation to make one.
-            Most of that is free: `boardActions` is rendered INSIDE
-            `BoardLayout`/`CustomBoard`, which live inside `TileArea`, so not
-            taking that branch already removes the `+`, New group and Refresh
-            all. `PageHeader` carries the view strip and the period dropdown,
-            and skipping the header is what removes those two.
+            Most of that is free: `New group` is rendered INSIDE `BoardLayout`
+            (client state, gated on `canEdit`), which lives inside `TileArea`,
+            so not taking that branch already removes it. `PageHeader` carries
+            the view strip, the period dropdown, "+ Add" and Refresh all —
+            all three header actions, since the fix round that co-located
+            them — so skipping the header is what removes the rest.
             `BoardControls` is skipped with it. It is a context provider that
             emits no DOM, and nothing here calls `useBoard()` — `RangeMenu`,
             `ViewTab` and `TileArea` are its only consumers now and
@@ -1082,35 +1016,98 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             />
           }
           actions={
-            /* A CALENDAR PUTS ITS OWN TIME CONTROL HERE INSTEAD.
-               The period pills narrow WHICH NUMBERS a board shows; a calendar
-               answers two fixed months — the only two the materializer stores —
-               so six live pills would be the interface offering something it
-               cannot do. But the SLOT is right: this is where every view says
-               what span it is reading, and a calendar reads in months. The
-               board fills this from the client (it owns which month is on
-               screen); an empty div collapses to nothing if it never does. */
-            activeKind === "calendar" ? (
-              <div id="calendar-period" className="flex items-center gap-1.5" />
-            ) : (
-            /* ── THE PERIOD CONTROL ────────────────────────────────────────
-               ONE DROPDOWN, SIX ANSWERS, AND THE SAME URL UNDERNEATH. The
-               track that stood here is gone (see the note above `boardActions`
-               for why); what replaces it says the current range on its face
-               and opens the other five. `RANGE_OPTIONS` is still the list, and
-               each `href` is still `qs()`'s, so nothing about which numbers a
-               link opens on has changed.
+            /* THE THREE HEADER ACTIONS, CO-LOCATED — fixed in the first
+               review round, which found the Figma's own three ("+ Add",
+               "Today", "Refresh All") spread across two places: "+ Add" was
+               still inline in `custom-board.tsx`'s own row and Refresh all
+               was still in the retired `boardActions`. The ruling puts all
+               three here, in this order, because the header is the one slot
+               every view shares — a groups board, a canvas and a calendar all
+               render this same fragment, and only the middle third differs
+               between them. */
+            <>
+              {/* "+ ADD", AND ONLY ON A CANVAS. `AddChartMenu` is `custom-
+                  board.tsx`'s own popover — it owns the metric-add state
+                  (`picking`, `busy`, the optimistic `addTile`), which lives
+                  inside that CLIENT component, not in this async server one.
+                  This page cannot instantiate it directly, so it leaves an
+                  empty placeholder in the slot the Figma draws "+ Add" in,
+                  and `CustomBoard` portals its own button and popover into it
+                  — the identical trick the calendar uses for `#calendar-tools`
+                  and `#calendar-period` below, and for the same reason: the
+                  state belongs to the client, the position belongs to the
+                  server-rendered header, and neither can hand the other what
+                  it has. `CustomBoard` gates the portal on `canEdit` itself,
+                  so a viewer without `create_flows` sees an empty div here,
+                  same as the groups board and the calendar always have. */}
+              {activeKind === "custom" && <div id="canvas-add-chart" className="flex items-center" />}
+              {/* A CALENDAR PUTS ITS OWN TIME CONTROL HERE INSTEAD.
+                  The period pills narrow WHICH NUMBERS a board shows; a
+                  calendar answers two fixed months — the only two the
+                  materializer stores — so six live pills would be the
+                  interface offering something it cannot do. But the SLOT is
+                  right: this is where every view says what span it is
+                  reading, and a calendar reads in months. The board fills
+                  this from the client (it owns which month is on screen); an
+                  empty div collapses to nothing if it never does. */}
+              {activeKind === "calendar" ? (
+                <div id="calendar-period" className="flex items-center gap-1.5" />
+              ) : (
+                /* ── THE PERIOD CONTROL ──────────────────────────────────
+                   ONE DROPDOWN, SIX ANSWERS, AND THE SAME URL UNDERNEATH.
+                   The six-pill track that stood here is gone; what replaces
+                   it says the current range on its face and opens the other
+                   five. `RANGE_OPTIONS` is still the list, and each `href` is
+                   still `qs()`'s, so nothing about which numbers a link opens
+                   on has changed.
 
-               The scroller went with it, and that is the point rather than a
-               side effect: a ~520px control in this slot could only survive a
-               390px viewport by scrolling inside itself, and the header's
-               right column had to stop being `shrink-0` to let it. A 24px
-               dropdown needs neither. */
-            <RangeMenu
-              activeRange={rangeKey}
-              options={RANGE_OPTIONS.map((r) => ({ key: r.key, label: r.label, href: qs({ range: r.key }) }))}
-            />
-            )
+                   The scroller went with the track, and that is the point
+                   rather than a side effect: a ~520px control in this slot
+                   could only survive a 390px viewport by scrolling inside
+                   itself, and the header's right column had to stop being
+                   `shrink-0` to let it. A 24px dropdown needs neither. */
+                <RangeMenu
+                  activeRange={rangeKey}
+                  options={RANGE_OPTIONS.map((r) => ({ key: r.key, label: r.label, href: qs({ range: r.key }) }))}
+                />
+              )}
+              {/* REFRESH ALL, LAST, AND ON EVERY VIEW — the groups board, a
+                  canvas and the calendar all recompute the same published
+                  metrics, so it belongs to the page rather than to any one
+                  board's own row. It used to sit inside `boardActions` (see
+                  the retirement note above) and inside the calendar branch's
+                  own row before that; both threaded it down as server markup
+                  for no reason once the header could hold it directly.
+                  NOT THE FILL, AS OF THE 4 SEP 2026 BLUE RETHEME. This used
+                  to argue for spending the brand's one filled control here —
+                  first as scarcity ("the single act the page exists for"),
+                  then as a fill/stroke rule keyed to which control CHANGES
+                  something rather than narrows what is shown. The Figma
+                  settles it a third way, by naming names: blue is reserved
+                  for "+ Add" and "New flow"; every other header action —
+                  Refresh all included — is `secondary`, the kit's ordinary
+                  grey button (see `ui/button.tsx`). Acting is no longer the
+                  test; being one of exactly two adds-something verbs is.
+                  `xs`, WITH A 16px ICON — the header's smallest rung, and the
+                  same override as "+ Add" and "Today" beside it: `xs` ships
+                  `[&_svg]:size-3.5` (14px), which is not what this row draws,
+                  so the 16 is spelled on the button rather than the icon,
+                  because the size variant's own descendant rule would win
+                  over a class on the svg no matter which order they were
+                  written in. */}
+              <form action={refreshAllFlowsAction} className="shrink-0">
+                <SubmitButton
+                  variant="secondary"
+                  size="xs"
+                  className="[&_svg]:size-4"
+                  pendingLabel="Refreshing…"
+                  title="Recompute every published metric now"
+                >
+                  <RefreshCw />
+                  Refresh all
+                </SubmitButton>
+              </form>
+            </>
           }
         />
 
@@ -1191,9 +1188,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             it at all (they are hidden above, with `PageHeader`'s track). Putting
             it inside would flash a three-up column of skeletons for a press that
             changes nothing on screen.
-            It still carries `viewStrip` and `boardActions`, because those are
-            rendered by the BOARD components rather than by this page — a branch
-            that forgot them would lose the tab strip and the `+`. */}
+            The tab strip, the period control, "+ Add" and Refresh all are all
+            `PageHeader`'s job now, above this branch rather than inside it — a
+            branch that forgot any of them would still show all four, because
+            none of them live down here any more. All this branch still owns is
+            its own metric picker's slot, `#calendar-tools`. */}
         {!emptyWorkspace && activeKind === "calendar" ? (
           /**
            * NO `mt-4` HERE, AND THAT ABSENCE IS THE WHOLE POINT.
@@ -1212,28 +1211,14 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
            * `mt-4`, which is this row's gap rather than the header's.
            */
           <div>
-            {/* THE SAME ROW EVERY OTHER VIEW HAS: arrangement on the left,
-                what-changes-the-board and the actions on the right. The metric
-                picker lands in `#calendar-tools`, which is where a groups board
-                puts "New group" and a canvas puts "+ Add" — the one control
-                that changes what you are looking at. */}
-            {/* `justify-end`, not `justify-between`: the left half of this row
-                was the view strip, and the strip is in the page header now. */}
-            <div className="flex items-center justify-end gap-4">
-              {/* `gap-4`, WHICH IS WHAT EVERY OTHER VIEW'S ACTION ROW USES.
-                  This was `gap-2` — half the canvas board's spacing between
-                  "+ Add" and "Refresh all" one view over — so the metric picker
-                  sat visibly tighter against the button than anything else in
-                  the product, on the one row a customer moves between views
-                  looking at.
-                  `empty:hidden` on the slot so a view with no tools does not
-                  leave a zero-width flex item behind, which the parent's gap
-                  would still space around. */}
-              <div className="flex items-center gap-4">
-                <div id="calendar-tools" className="flex items-center gap-2 empty:hidden" />
-                {boardActions}
-              </div>
-            </div>
+            {/* THE METRIC PICKER'S OWN SLOT — the one thing left on this row
+                now that "+ Add" and Refresh all both moved into the page
+                header (see the note above). `justify-end` so the picker, once
+                `CalendarBoard` portals it in, sits at the row's right edge —
+                the same edge every other view's action row ends on.
+                `empty:hidden` so a view with no tools does not leave a
+                zero-height flex row taking up space above the calendar sheet. */}
+            <div id="calendar-tools" className="flex items-center justify-end gap-2 empty:hidden" />
             {calendarRowsFailed ? (
               <p className="mt-6 rounded-card border border-danger-soft bg-danger-soft/50 p-3 text-md text-danger-ink">
                 This calendar couldn&rsquo;t be loaded. Nothing has been deleted and no number has changed — refresh to
@@ -1298,7 +1283,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                  * permissions must not rearrange another's board.
                  */
                 layoutFrozen={hiddenOnThisView > 0}
-                boardActions={boardActions}
               />
             ) : (
             /* The ARRANGEMENT is the client's; the CARDS are still rendered
@@ -1311,7 +1295,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
               // without this would leave the previous view's columns on screen.
               key={activeView ?? "default"}
               viewId={activeView}
-              boardActions={boardActions}
               tiles={boardTiles}
               groups={groups}
               placements={placements}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState, type ReactNode } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Plus } from "lucide-react";
 import { useSettle } from "./board-settle";
 import { arrangeBoard, type BoardLane } from "@/lib/board/arrange";
@@ -61,7 +61,6 @@ export function BoardLayout({
   placements: seedPlacements,
   canEdit,
   viewId,
-  boardActions,
 }: {
   tiles: BoardTile[];
   groups: BoardGroup[];
@@ -76,25 +75,6 @@ export function BoardLayout({
    * previous view's board on screen with the new view's props ignored.
    */
   viewId: string | null;
-  /**
-   * The source picker and Refresh all — the right half of the same row.
-   *
-   * They arrive as a node for the reason the tiles do: the source
-   * rows are real anchors and Refresh all is a plain form post, so both are
-   * rendered on the SERVER, and this component is the only thing that knows
-   * where the board's own control row sits. They used to live in a white filter
-   * island above the board, alongside the period pills; the island is gone (see
-   * the note on `boardActions` in page.tsx) and the period went upstairs, so
-   * what is left of it is these two, on the row that was already here.
-   *
-   * "New group" stays a child of this file rather than joining them, because it
-   * is the one control on the row that is CLIENT state: it calls `addGroup`
-   * below, which writes optimistically into the same `groups` this component
-   * owns. It renders FIRST of the three, so the row runs
-   * arrangement → filter → action from left to right, and the one control that
-   * wears the brand's fill lands on the outside edge, where the act belongs.
-   */
-  boardActions?: ReactNode;
 }) {
   // The `useState` initialisers are what "seeded once" means: the arguments are
   // read on the first render and ignored on every one after it.
@@ -304,22 +284,25 @@ export function BoardLayout({
     // card's own name. Permanent `select-none` would be the lazy fix and would
     // cost the ability to copy a number off the board.
     <div ref={rootRef} className={drag ? "select-none" : undefined}>
-      {/* ── THE TAB / ACTION ROW ────────────────────────────────────────────
-          WHAT IS ON THIS BOARD, and nothing else. Both of the other questions
-          moved up to the page header with the 4 September re-theme: WHICH VIEW
-          is the tab strip in the header's own `tabs` slot, and OVER WHAT PERIOD
-          is the "Today" dropdown in its actions. What is left here acts on the
-          board in front of you — New group, Refresh all — which is one question
-          per row taken to its end rather than abandoned.
+      {/* ── THE ACTION ROW ──────────────────────────────────────────────────
+          WHAT IS ON THIS BOARD, and nothing else. All three of the other
+          questions moved up to the page header with the 4 September re-theme
+          and its header fix round: WHICH VIEW is the tab strip in the
+          header's own `tabs` slot, OVER WHAT PERIOD is the "Today" dropdown,
+          and Refresh all sits beside it. What is left here is New group, the
+          one control on this row that is CLIENT state — it calls `addGroup`
+          below, which writes optimistically into the same `groups` this
+          component owns, so it could never have moved to a server-rendered
+          header slot in the first place.
 
-          The right half arrives in two pieces from two places, and the seam is
-          real rather than incidental: `boardActions` is server markup (real
-          anchors, a real form post), "New group" is client state. They are
-          spelled as one 16px group because from the outside they are one.
-
-          `items-start`, not centre: the tab strip can wrap to a second line and
-          the buttons must stay on the first one, level with the tabs rather
-          than floating half-way down a two-line strip.
+          ONE GUARD, NOT TWO — fixed in the first review round. This used to
+          be `(boardActions || canEdit)` wrapping an outer row (a spacer
+          against a now-retired `boardActions`, so the row's one real button
+          could sit at the right edge) and then the SAME check again around
+          the inner one, which was dead the moment the outer guard had already
+          passed. `boardActions` retired with the header fix round (see the
+          note on it in page.tsx) — New group is this row's only occupant now,
+          so `canEdit` is the row's only question, asked once.
 
           NO TOP MARGIN — THE HEADER ALREADY OWNS THIS GAP. `PageHeader` ends in
           `pb-4`, which is the 16px step this row is meant to sit at; the `mt-4`
@@ -329,42 +312,12 @@ export function BoardLayout({
           header, because every page in the product gets that same 16px from it.
           The board below keeps its own `mt-4` — that gap is this row's, not the
           header's. */}
-      {(boardActions || canEdit) && (
-                <div className="flex items-center justify-between gap-4">
-          {/* CENTRED, NOT TOP-ALIGNED. `items-start` put the two halves of this
-              row on a shared TOP edge, and they are not the same height — the
-              tab strip measures 32px against the 36px action pills, so the tab
-              labels sat exactly 2px below the button labels. Two rows of text
-              that nearly share a baseline read as a mistake rather than as a
-              hierarchy. `items-center` gives them a shared MIDDLE, which is the
-              line the eye actually uses. Wrapping is unaffected: a folded block
-              of actions centres against the tabs the same way one row does. */}
-          {/* WRAPS RATHER THAN SCROLLS. A scroller here put a grey bar under
-              two tabs and capped the strip at a width nothing asked for; tabs
-              are short and there is a whole row of space, so they simply fill
-              it and fold onto a second line when there are enough of them. */}
-          {/* THE LEFT HALF IS EMPTY ON PURPOSE, and it is a spacer rather than
-              a deletion: `justify-between` needs something to push against, and
-              a flexible cell here keeps the actions on the right edge whether
-              or not they wrap. The tabs it used to hold are in the page header. */}
-          <div className="min-w-0 flex-1" />
-          {(boardActions || canEdit) && (
-            /* 16px, and it wraps: three pills at ~110px each is a third of a
-               narrow viewport, and a row that cannot fold would push the page
-               into horizontal scroll — the failure the period track upstairs
-               carries its own scroller to avoid. `justify-end` so a folded
-               second line stays against the right edge rather than drifting
-               back under the tabs. */
-            <div className="flex flex-wrap items-center justify-end gap-4">
-              {canEdit && (
-                <Button variant="secondary" size="sm" onClick={addGroup} disabled={busy} className="shrink-0">
-                  <Plus size={15} />
-                  New group
-                </Button>
-              )}
-              {boardActions}
-            </div>
-          )}
+      {canEdit && (
+        <div className="flex flex-wrap items-center justify-end gap-4">
+          <Button variant="secondary" size="sm" onClick={addGroup} disabled={busy} className="shrink-0">
+            <Plus size={15} />
+            New group
+          </Button>
         </div>
       )}
 
