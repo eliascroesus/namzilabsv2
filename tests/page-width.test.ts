@@ -244,7 +244,7 @@ describe("the board grid", () => {
      */
     const offenders = sourceFiles()
       .filter((f) => !f.endsWith(join("components", "ui", "page.tsx")))
-      .filter((f) => readFileSync(f, "utf8").includes("sm:grid-cols-2 xl:grid-cols-3"));
+      .filter((f) => readFileSync(f, "utf8").includes("md:grid-cols-2 xl:grid-cols-3"));
 
     expect(offenders.map((f) => f.slice(root.length + 1))).toEqual([]);
   });
@@ -265,7 +265,10 @@ describe("the board grid", () => {
     // 24px, matching the page gutter and the reference's own grid gap. It was
     // 16: a page inset 24 with its cards 16 apart reads as a grid that does not
     // know how wide its own page is.
-    expect(page).toMatch(/BOARD_GRID = "grid gap-6 sm:grid-cols-2 xl:grid-cols-3";/);
+    // The first rung is `md` since the 4 September re-theme: below it the
+    // rail is not rendered and the header has stacked, so two tiles abreast
+    // there is a phone layout pretending to be a tablet one.
+    expect(page).toMatch(/BOARD_GRID = "grid gap-6 md:grid-cols-2 xl:grid-cols-3";/);
     expect(page).not.toMatch(/BOARD_GRID = "[^"]*3xl:/);
     expect(css).not.toMatch(/--breakpoint-3xl:/);
   });

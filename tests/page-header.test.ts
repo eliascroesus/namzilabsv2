@@ -31,8 +31,13 @@ describe("PageHeader's title, with and without a tab strip beside it", () => {
         actions: createElement("button", null, "+ Add"),
       }),
     );
-    expect(html).toMatch(/grid-cols-\[1fr_auto_1fr\]/);
-    expect(html).toMatch(/text-center/);
+    // BOTH LAYOUTS, FROM ONE RENDER. The three-zone grid is a `md:` fact
+    // now — below the breakpoint this same markup is a column with the title
+    // left-aligned, which is a phone's only honest reading of a row that
+    // wants a tab strip, a centred name and three buttons on it.
+    expect(html).toMatch(/md:grid-cols-\[1fr_auto_1fr\]/);
+    expect(html).toMatch(/md:text-center/);
+    expect(html).toMatch(/flex flex-col items-stretch/);
     // Source order is tabs, then the title, then the actions — the grid places
     // them left/centre/right by DOM position, not by an `order-*` override.
     const tabsAt = html.indexOf("Views");
@@ -41,6 +46,22 @@ describe("PageHeader's title, with and without a tab strip beside it", () => {
     expect(tabsAt).toBeGreaterThan(-1);
     expect(titleAt).toBeGreaterThan(tabsAt);
     expect(actionsAt).toBeGreaterThan(titleAt);
+  });
+
+  it("stacks below md: a scrolling tab strip, a left title, wrapping actions", () => {
+    const html = renderToStaticMarkup(
+      createElement(PageHeader, {
+        title: "Dashboard",
+        tabs: createElement("nav", null, "Views"),
+        actions: createElement("button", null, "+ Add"),
+      }),
+    );
+    // The strip scrolls sideways inside its own box rather than pushing the
+    // page — the failure a ~520px control in this row used to cause.
+    expect(html).toMatch(/overflow-x-auto/);
+    expect(html).toMatch(/text-left/);
+    // 8px between actions, wrapping rather than overflowing.
+    expect(html).toMatch(/flex-wrap[^"]*gap-2/);
   });
 
   it("spells the h1 recipe exactly once, in one title block shared by both layouts", () => {

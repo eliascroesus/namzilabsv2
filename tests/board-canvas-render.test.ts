@@ -79,6 +79,24 @@ describe("the canvas places what it is given", () => {
     }
   });
 
+  it("renders the phone at ONE column, in the desktop reading order", () => {
+    /**
+     * `--c1` is what the stylesheet picks below 768px. Two tiles side by side
+     * at twelve columns must both come back full width and stacked here —
+     * `reflow(tiles, 1)` packs left to right and wraps when the next tile
+     * will not fit, which at one column is every time.
+     *
+     * The ORDER is the desktop reading order, which is the only order a
+     * phone can honestly present: the cells are placed on explicit lines, so
+     * the DOM order is the same at every width and this decides tab order.
+     */
+    const html = render([tile("a"), tile("b", { x: 3 })]);
+    expect(html.match(/--c1:1 \/ span 1/g) ?? []).toHaveLength(2);
+    expect(html).toContain("--r1:1 / span 4");
+    expect(html).toContain("--r1:5 / span 4");
+    expect(html.indexOf("Metric a")).toBeLessThan(html.indexOf("Metric b"));
+  });
+
   it("converts 0-based coordinates to 1-based grid lines", () => {
     // A tile above it, so its row is not simply floated to the top by gravity
     // and the row assertion means something.

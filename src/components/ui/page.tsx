@@ -107,7 +107,18 @@ export function PageContainer({
  * that disagrees with the real one does the single thing a skeleton exists to
  * prevent.
  */
-export const BOARD_GRID = "grid gap-6 sm:grid-cols-2 xl:grid-cols-3";
+/**
+ * THE FIRST RUNG IS `md`, NOT `sm`, SINCE THE 4 SEPTEMBER RE-THEME.
+ *
+ * `sm:grid-cols-2` put two tiles abreast from 640px — inside the band where
+ * the rail is no longer rendered and this page's own header has already
+ * stacked, on a screen that is a large phone held sideways. Two 300px tiles
+ * there are narrower than the 28px numeral they are built around, and the
+ * board stops being readable exactly where the shell has just admitted it is
+ * on a phone. One decision, one breakpoint: below `md` the console is a
+ * single column of everything.
+ */
+export const BOARD_GRID = "grid gap-6 md:grid-cols-2 xl:grid-cols-3";
 
 /**
  * THE HEADER'S TIME CONTROL — the groove, and the segments that sit in it.
@@ -332,20 +343,61 @@ export function PageHeader({ title, lede, actions, tabs, back, className }: Page
          * its own container (`overflow-x-auto`) rather than relying on that
          * shrink alone, per the spec's Mobile section.
          *
-         * Base layout stacks (title, then tabs, then actions) below `sm`,
-         * where three side-by-side zones have no room left to be zones.
+         * Base layout stacks below `md` — the tab strip in its own scroller,
+         * then the title on its own line at the reading edge, then the actions
+         * wrapping — in DOM order, which is the order the grid places them in
+         * left to right above the breakpoint. `md` rather than `sm` because
+         * that is where the shell's rail goes; see the row's own note.
          */
         <div
           className={cn(
-            "flex flex-col items-center gap-3 sm:grid sm:grid-cols-[1fr_auto_1fr] sm:items-center sm:gap-x-4",
+            /**
+             * IT BREAKS AT `md`, WHICH IS WHERE THE SHELL BREAKS. This stacked
+             * at `sm` when it was written, on the reasonable-sounding rule that
+             * three side-by-side zones need ~640px to be zones. The rail leaves
+             * at 768 (see `Sidebar`), so between the two the page had a
+             * three-zone header, no rail, and a board still trying for two
+             * columns — one layout in three minds. One breakpoint for the whole
+             * console is worth more than a header that is right on its own.
+             *
+             * `items-stretch`, NOT `items-center`, below the breakpoint: these
+             * three are full-width rows on a phone, and centring them makes the
+             * tab strip's scroller as narrow as its content, which is the one
+             * shape a scroller must never take.
+             */
+            "flex flex-col items-stretch gap-3 md:grid md:grid-cols-[1fr_auto_1fr] md:items-center md:gap-x-4",
             back && "mt-3",
           )}
         >
-          {/* `-mx-1 px-1`: a bare `overflow-x-auto` clips the first and last tab's focus ring at both ends — the same compensation the period track already carries in `app/dashboard/page.tsx`. */}
-          <div className="flex min-w-0 items-center overflow-x-auto -mx-1 px-1">{tabs}</div>
-          <HeaderTitle title={title} lede={lede} className="flex flex-col items-center gap-2 text-center" />
+          {/* THE STRIP SCROLLS RATHER THAN WRAPPING. A view bar is a horizontal
+              object — the order is meaningful and draggable — and a phone with
+              six views would otherwise turn the top of the board into three
+              lines of tabs above the title they belong to. `quiet-scroll` is
+              the same scrollbar the board's own lane scrollers wear.
+              `md:overflow-visible` hands the focus ring its room back above the
+              breakpoint, where nothing needs to scroll.
+              `-mx-1 px-1`: a bare `overflow-x-auto` clips the first and last
+              tab's focus ring at both ends — the same compensation the period
+              track already carries in `app/dashboard/page.tsx`. */}
+          <div className="quiet-scroll flex min-w-0 items-center overflow-x-auto -mx-1 px-1 md:overflow-visible">
+            {tabs}
+          </div>
+          {/* LEFT ON A PHONE, CENTRED ABOVE `md`. A centred title is what the
+              Figma draws BETWEEN two zones; on its own line with nothing either
+              side of it, centring is just a heading that has come loose from
+              the page's own reading edge. */}
+          <HeaderTitle
+            title={title}
+            lede={lede}
+            className="flex flex-col items-start gap-2 text-left md:items-center md:text-center"
+          />
           {actions && (
-            <div className="flex min-w-0 flex-wrap items-center justify-center gap-2 sm:justify-end">{actions}</div>
+            /* WRAPS AT 8px, ALIGNED TO THE READING EDGE BELOW `md`. "+ Add",
+               "Refresh All" and "Today ▾" are ~260px of `xs` controls: they fit
+               on one line at 390px and wrap to two the moment a label grows,
+               which is what `flex-wrap` is for and why none of them is
+               `shrink-0`. */
+            <div className="flex min-w-0 flex-wrap items-center justify-start gap-2 md:justify-end">{actions}</div>
           )}
         </div>
       ) : (

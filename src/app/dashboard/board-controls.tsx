@@ -349,7 +349,14 @@ export function ViewStrip({
   };
 
   return (
-    <div ref={strip} className="-mx-1 flex flex-wrap items-center gap-6 px-1 py-1">
+    /* `flex-nowrap` BELOW `md`, AND THE HEADER SCROLLS IT. A wrapping strip
+       inside an `overflow-x-auto` box never scrolls — it just gets taller,
+       which on a phone is three lines of tabs above the title they name. It
+       also fixes the drag on a narrow screen for free: the reorder finds its
+       target by comparing `clientX` against each tab's rect, and a wrapped
+       row has several tabs at the same x. Above `md` there is room for the
+       row and wrapping stays the right answer. */
+    <div ref={strip} className="-mx-1 flex flex-nowrap items-center gap-6 px-1 py-1 md:flex-wrap">
       {order.map((v) => (
         <div
           key={v.key}
