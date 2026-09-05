@@ -49,7 +49,7 @@ Figma artefact — it is set in the UI face at 15px/600).
 | 100 | `#CCE5FF` | | — |
 | 200 | `#99CBFF` | | — |
 | 300 | `#66B2FF` | | 8.51:1 on `#0F1011` |
-| 400 | `#3D9BFF` | THE DARK STROKE (`--marker` in `.dark`): links, focus ring, active tab rule, selected edge | 6.65:1 on `#0F1011`, 6.59:1 on `#111111`, 6.20:1 on `#181818` |
+| 400 | `#3D9BFF` | THE DARK STROKE (`--marker` in `.dark`): links, focus ring, selected edge. NOT the active tab's rule — see `--tab-rule` below (amended 5 Sep: the Figma draws that rule in grey) | 6.65:1 on `#0F1011`, 6.59:1 on `#111111`, 6.20:1 on `#181818` |
 | 500 | `#007BFF` | THE BRAND: hover of the fill, the workspace initial tint (`rgb(0 123 255 / .75)`), decorative dots, chart series default | 4.79:1 as a stroke on `#0F1011` |
 | 600 | `#0070E8` | THE FILL (`--primary`, both themes) under WHITE ink | 4.68:1 white-on-fill; the Figma's `#007BFF` measures 3.98:1 under white, under the 4.5 a 15px label owes — one step deeper, indistinguishable beside it |
 | 700 | `#0069D9` | pressed | 5.22:1 under white |
@@ -58,8 +58,20 @@ Figma artefact — it is set in the UI face at 15px/600).
 
 `--primary-foreground` becomes `#FFFFFF` in both themes (was near-black under
 cyan). `--brand-soft` = `rgb(0 123 255 / 0.10)`, `--brand-soft-line` =
-`rgb(0 123 255 / 0.25)` (dark) / `0.30` (light). Hover still walks UP on dark
-(600 → 500) and DOWN on light (600 → 700).
+`rgb(0 123 255 / 0.25)` (dark) / `0.30` (light). Hover walks UP on dark
+(600 → 500) and DOWN on light (600 → 700), and because a component may not
+spell `dark:`, that is a ROLE: `--primary-hover` = brand-500 in `.dark` and
+brand-700 in `:root`, bridged as `bg-primary-hover`; the pressed step
+`--primary-active` = brand-700 in both (amended 5 Sep; until the final pass
+lands, `button.tsx` hovers to 500 in both themes, which on light puts white
+text on `#007BFF` at 3.98:1 for the duration of the hover).
+
+Two more roles the Figma implies, added 5 Sep: `--tab-rule` — the active tab's
+1px bottom rule — is `--muted-foreground` in `.dark` (the Figma draws
+`#7E7E7E`) and `--heading` in `:root` (the Figma draws `#313131`), bridged as
+`border-tab-rule`; the rule is NOT the blue stroke. The active nav row's glyph
+keeps `text-marker` on its `--control` row (two signals: fill and colour; the
+docs must not claim the glyph is uncoloured).
 
 ### Neutral ramp (dark), re-cut for `#0F1011`
 
