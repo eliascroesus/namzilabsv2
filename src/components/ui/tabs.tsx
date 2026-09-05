@@ -88,9 +88,12 @@ function TabsList({
  * word. Neither may be yellow. #eecf00 measures 1.42:1 as a stroke on the app's
  * ground, which is not dim, it is gone.
  *
- * So the rule takes `--marker` (4.41:1 light, 6.60:1 dark) and the label takes
- * `accent-foreground`, the marker's ink step, at 6.79:1 — because 4.41 clears
- * the 3:1 a rule owes and falls short of the 4.5:1 a word does.
+ * So the rule takes `--tab-rule` — a grey, not the brand stroke:
+ * `--muted-foreground` dark, `--heading` light — and the TEXT carries the
+ * emphasis instead, stepping to `--heading` while the tabs beside it stay
+ * muted. See the 5 Sep 2026 amendment: a fixed grey rule owes no ramp-step
+ * contrast claim the way `--marker` did, so the word is what says SELECTED
+ * now, not the line under it.
  *
  * That is the whole rule the rebrand cares about, in one component: fills are
  * yellow, lines and words are violet, and a strip that renders both has to say
@@ -125,8 +128,8 @@ function TabsTrigger({
         // every other control in the product — the exact drift that rule
         // exists to end.
         "relative inline-flex h-full flex-1 items-center justify-center gap-1.5 rounded-control border border-transparent px-2.5 py-1 text-sm font-medium whitespace-nowrap text-muted-foreground transition-colors duration-(--duration-fast) group-data-[orientation=vertical]/tabs:w-full group-data-[orientation=vertical]/tabs:justify-start hover:text-foreground disabled:pointer-events-none disabled:opacity-50 group-data-[variant=default]/tabs-list:data-[state=active]:shadow-xs group-data-[variant=line]/tabs-list:data-[state=active]:shadow-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
-        // ACTIVE, segmented: the brand fill. #1b191a on #00c0e8 is 8.08:1,
-        // comfortably past AA for the label it carries.
+        // ACTIVE, segmented: the brand fill. White on `--primary` (#0070E8) is
+        // 4.68:1, clear of the 4.5:1 the label owes.
         "data-[state=active]:bg-primary data-[state=active]:font-medium data-[state=active]:text-primary-foreground",
         // ACTIVE, line: no fill, and the label goes WHITE.
         //

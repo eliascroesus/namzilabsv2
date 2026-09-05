@@ -333,8 +333,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                   <div key={m.id} className={memberRow}>
                     {/* THE OWNER TAKES THE BRAND FILL — one branded block per
                         list, marking identity, like the rail's own mark, and a
-                        filled disc under near-black ink is the shape the yellow
-                        is measured in (11.24:1). The rest wear the decorative
+                        filled disc under WHITE ink is the shape the brand is
+                        measured in (4.68:1, `--primary-foreground` on
+                        `--primary`). The rest wear the decorative
                         set (see AVATAR_TONES): round, because on this page a
                         CIRCLE is a person and a rounded SQUARE is a thing (the
                         role marks in the panel below use the same three colours
@@ -420,12 +421,13 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                     exists for is putting another person in the workspace, which
                     is precisely what `accent` is reserved for.
                     WHAT CHANGED IS THE REASON IT IS SAFE. It used to be a count
-                    — nothing else on this page may take the yellow, because a
-                    second one halves the value of the first — and that rule was
+                    — nothing else on this page may take the brand fill, because
+                    a second one halves the value of the first — and that rule was
                     retired because nothing could check it. What holds now is
-                    that this is a FILLED control under near-black ink at
-                    11.24:1, which is the only shape the brand is allowed to take
-                    at all. The owner's disc above is the same fill and does not
+                    that this is a FILLED control under WHITE ink at 4.68:1
+                    (`--primary-foreground` on `--primary`), which is the only
+                    shape the brand is allowed to take at all. The owner's disc
+                    above is the same fill and does not
                     compete with it: an avatar is identity and a button is an
                     act. The destructive controls below are ghosts, which is what
                     keeps them the quietest things on the page. */}

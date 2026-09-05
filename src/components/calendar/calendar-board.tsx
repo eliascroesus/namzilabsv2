@@ -69,26 +69,30 @@ const HEAT_RISE = 44;
 function heatFill(share: number, negative = false): string {
   // THE BRAND, BECAUSE THIS SQUARE CARRIES INK.
   //
-  // The split's full form is that yellow fills WHERE SOMETHING SITS ON IT — the
-  // 11.24:1 it holds against near-black is the entire licence for it to be a
-  // surface, and a fill with nothing written on it never collects that number.
-  // A heat cell is the clearest case of the other kind: it is a tint with a
-  // date chip, a figure and a records line printed on top, so it collects the
-  // ratio in full. That is why this ramp is the brand while the chart bars two
-  // files away are not — those carry nothing and have only their edge against
-  // the card, where the yellow is 1.42:1.
+  // The split's full form is that a fill earns its surface WHERE SOMETHING
+  // SITS ON IT — `--primary` (brand-600, #0070E8) holds 4.68:1 under white
+  // ink, which is the licence a FILL owes, and a fill with nothing written on
+  // it never collects that number. A heat cell is the clearest case of the
+  // surface kind: it is a tint with a date chip, a figure and a records line
+  // printed on top, so it collects the ratio in full. That is why this ramp
+  // is the brand while the chart bars two files away are not — those carry
+  // nothing and are a 25% stroke against the card, not a surface, so they owe
+  // no fill-grade ratio at all.
   //
-  // IT READS BETTER THAN THE VIOLET IT REPLACES, which is not the usual
-  // direction for this kind of change. At the top of the ramp the figure sits
-  // at 13.47:1 against the old violet's 7.5:1, and the records line — already
-  // spelled `foreground/80` precisely because `muted-foreground` collapsed on
-  // the deep end — comes up to 7.8:1. The ceiling was set by ink contrast, and
-  // a paler hue simply has more room under it.
+  // THE RAMP IS BLUE NOW, AFTER THE YELLOW AND THE VIOLET BEFORE IT. The
+  // figure and the records line printed on top (`foreground`,
+  // `foreground/80`) sit against whatever this mix lands on at each day's
+  // share, so the read varies with the day rather than holding one fixed
+  // ratio — a number worth checking against the rendered page rather than
+  // reasserting here as a constant. What still holds: the ceiling below is
+  // set by ink contrast at the pale end and by the eye at the deep end (see
+  // the note above `HEAT_FLOOR`), and a paler hue keeps more room under it
+  // than a saturated one would.
   //
   // NEGATIVE STAYS ORANGE. Two warm hues are closer than violet-and-orange
   // were, but they part company exactly where it matters: at the deep end,
   // where a day that lost ground actually needs to be told from one that
-  // gained it, 56% orange is a flushed pink and 56% yellow is a flat gold.
+  // gained it, 56% orange is a flushed pink and 56% blue reads as ink, not warmth.
   const hue = negative ? "--color-accent-orange" : "--color-brand-600";
   return `color-mix(in srgb, var(${hue}) ${(HEAT_FLOOR + share * HEAT_RISE).toFixed(1)}%, var(--card))`;
 }
@@ -301,11 +305,12 @@ export function CalendarBoard({
         description="The calendar breaks a published metric down day by day. Build a flow, publish it, and it appears in the picker here."
         action={
           // THE BRAND, spent on the one act this screen exists for — and it is
-          // a BUTTON, which is the only shape the yellow is legible in: a
-          // filled pill carrying near-black at 11.24:1. This used to be a word
-          // set in `text-primary`, which is the same colour doing the one thing
-          // it cannot do — 1.55:1 as text on the page, an instruction nobody
-          // could read.
+          // a BUTTON, which is the only shape the fill is legible in: a
+          // filled pill carrying WHITE ink at 4.68:1. This used to be a word
+          // set in `text-primary`, which asked the same blue to do a
+          // different job a fill's own ratio says nothing about — carry
+          // itself as running text, a much harder bar an instruction nobody
+          // could read failed to clear.
           //
           // `variant="accent"`, not `variant="yellow"`: that variant existed
           // because the primary was violet and the hero act needed a colour the
@@ -427,10 +432,16 @@ export function CalendarBoard({
             {/* `size="icon"` (32px), NOT `iconSm` (28px). The track is `h-8` —
                 also 32px — and an `iconSm` arrow left a 2px inset on every
                 side, the last place in this groove a control did not reach
-                its own wall. `icon` matches the track's own box exactly; the
-                1px hairline border eats a pixel of that on each side, and the
-                track's `overflow-hidden` quietly absorbs it, which is what
-                actually fills the groove rather than floating inside it. */}
+                its own wall. `icon` does NOT match the track's inner box
+                exactly: the track's own 1px hairline border eats a pixel off
+                each side of its 32px, so its inner box is 30px, and the 32px
+                button OVERFLOWS that by 1px top and bottom. The track's
+                `overflow-hidden` clips the overflow, which is what actually
+                fills the groove rather than floating inside it — the fit is
+                by clipping, not by an exact match. The same swap also grows
+                the chevron itself from 16px (`iconSm`'s `size-4`) to 18px
+                (`icon`'s `size-[18px]`), a real, visible change to the glyph
+                alongside the box. */}
             <Button
               variant="ghost"
               size="icon"
@@ -780,11 +791,11 @@ function DayCell({
         // A day still to come is drawn quieter — it can carry a real number
         // (a meeting already booked for Friday), but it is not a result yet.
         future && !has && "border-dashed border-border",
-        // Today's edge is violet because an EDGE IS A LINE, and the split hands
-        // every line to the marker: the brand measures 1.55:1 as a stroke and a
-        // yellow rim round one square in thirty-five is a rim nobody finds. The
-        // date chip inside it is the yellow — same square, two colours, each
-        // doing the job it can actually do.
+        // Today's edge is `--marker`'s blue because an EDGE IS A LINE, and the
+        // split hands every line to the marker: the stroke measures 6.59:1 on
+        // the card in dark and 5.80:1 on white in light, both past the 3:1 an
+        // edge owes. The date chip inside it is the brand FILL — same square,
+        // two rungs of one ramp, each doing the job it can actually do.
         today && "border-marker",
         // The empty day's well takes the PAGE colour rather than `muted`: the
         // two are identical in the light theme and `muted` collapses into the
@@ -801,7 +812,7 @@ function DayCell({
             counts apart that could never be kept in step.
             The brand does not inherit the job either, and the square itself is
             the argument: the best day CAN BE TODAY, and today's date already
-            wears a filled yellow chip 20px away. Two yellow chips on one square
+            wears a filled brand chip 20px away. Two filled chips on one square
             say nothing. Beyond that, the brand marks an ACT — the thing on the
             screen to press — and "Best" is a reading of the data, which is what
             ink is for. Ink also survives the heat wash under it at every step of
@@ -815,12 +826,10 @@ function DayCell({
         {/* TODAY'S DATE IS A FILLED CHIP, and the reason is the same one it has
             always been — a coloured word is the weaker and less legible mark —
             but the colour changed hands. It is the BRAND now: a 20px disc
-            carrying near-black at 11.24:1, which is the shape and the ratio the
-            yellow exists for, and the same object the rail's active row and the
+            carrying WHITE ink at 4.68:1, which is the shape and the ratio the
+            fill exists for, and the same object the rail's active row and the
             period control's lit pill are. All three say "you are here", so all
-            three are spelled one way. Coloured text at this size would be the
-            one thing neither hue can do: the brand is 1.55:1 on the card and
-            the marker's 500 is 4.41:1, under the 4.5:1 a 12px numeral owes. */}
+            three are spelled one way. */}
         <span
           className={cn(
             "tnum ms-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-xs font-semibold",

@@ -43,14 +43,14 @@ export function Chip({ className, active, count, children, ...props }: ChipProps
         // in caps is the product shouting a word it did not write.
         "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-control px-3 text-sm font-medium transition-colors duration-(--duration-fast) ease-(--ease-standard)",
         active
-          ? // THE FILL IS THE BRAND: #00c0e8 under #1b191a ink at 8.08:1. Hover
-            // walks UP the ramp on the same ladder the primary Button uses, so a
-            // selected chip and a primary button never answer the pointer
-            // differently. Up rather than down is the surface's doing — on a
-            // light page the brand had to darken under the pointer, because
-            // brightening it moved it toward the white behind it and the label's
-            // contrast fell at the moment of the press. On near-black, raised
-            // means lighter.
+          ? // THE FILL IS THE BRAND: white on `--primary` (#0070E8) at 4.68:1.
+            // Hover and press go through the `--primary-hover`/`--primary-active`
+            // roles rather than a bare ramp step — the same ones the primary
+            // Button uses, so a selected chip and a primary button never answer
+            // the pointer differently — because the direction flips with the
+            // theme: up to brand-500 on dark (raised means lighter on
+            // near-black), down to brand-700 on light (brightening there moves
+            // toward the white behind it and the label's contrast would fall).
             "bg-primary text-primary-foreground hover:bg-primary-hover active:bg-primary-active"
           : // OFF-HOVER IS A RAISED STEP, NOT A TINT. It was the marker's violet
             // wash, because on a light page `hover:bg-accent` and the page were
@@ -75,13 +75,13 @@ export function Chip({ className, active, count, children, ...props }: ChipProps
           information. Inverting keeps both states shaped like the same component
           and introduces no colour that is not already on the chip: the pill
           takes the chip's INK and the numeral takes the chip's FILL, which is
-          the same 11.24:1 read the other way up.
+          the same 4.68:1 read the other way up.
           (`bg-black/20` measures better still and was rejected: it puts pure
           black into a kit that refuses it by name.)
 
           BOTH HALVES ARE CONSTANTS, and that is why the fill is spelled as the
-          RAMP rather than as `--primary`. The chip does not invert — the yellow
-          and its near-black ink answer identically in both themes — so a pill
+          RAMP rather than as `--primary`. The chip does not invert — the blue
+          and its white ink answer identically in both themes — so a pill
           built from `foreground`/`background`, or an ink taken from
           `accent-foreground`, would flip underneath a fill that stayed put.
 

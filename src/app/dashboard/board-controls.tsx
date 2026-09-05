@@ -597,9 +597,10 @@ export function ViewTab({
        * — because the Figma draws it in grey, not in the brand, and a fixed
        * ink owes no ramp-step contrast claim the way a coloured stroke did.
        * `--marker` itself is untouched by that move and still measures 6.59:1
-       * on the chrome and 6.20:1 on the panel in dark (`brand-400`), 5.46:1 on
-       * white in light (`brand-800`) — it simply is not this rule's colour any
-       * more. The weight-and-ink change beside it (the active tab is the one
+       * on the chrome and 6.20:1 on the panel in dark (`brand-400`), 5.80:1 on
+       * white in light (chrome and cards) and 5.46:1 on the `#F7F8F9` page
+       * (`brand-800`) — it simply is not this rule's colour any more. The
+       * weight-and-ink change beside it (the active tab is the one
        * set in `--heading` while its neighbours sit muted) is reinforcement
        * rather than the thing holding the rule up. That is a change in what
        * this row DEPENDS on, not in what it looks like: both marks are still
