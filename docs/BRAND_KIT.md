@@ -121,7 +121,7 @@ rule exists to punish, so they stay — orphaned by the roles, not retired.
 a card" was true of one theme and stated as a rule about both. What actually
 holds is that the two directions MIRROR: on dark, a field on the `#111111`
 chrome is a step UP (`--control` `#202020`) and its hover a further step up
-(`--accent` `#333333`); on light a field on white is a step DOWN (`#F4F4F4`)
+(`--accent` `#3A3A3A`); on light a field on white is a step DOWN (`#F4F4F4`)
 and its hover a further step down (`#ECECEC`). Neither is "recessed", and the
 Figma contradicts the old wording outright on the dark side.
 
