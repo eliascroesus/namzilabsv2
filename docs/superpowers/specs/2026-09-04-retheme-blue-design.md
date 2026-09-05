@@ -250,9 +250,12 @@ cannot do). The re-theme ships one.
   Dashboard's sub-items, and the foot (New flow, Get Free Access, plus Invite
   members). Any navigation closes the drawer. The drawer is the same
   component tree as the expanded rail, not a copy.
-- **Content.** Below `md` the panel drops its rounded corner and side inset;
-  the page header stacks: the tab strip scrolls horizontally inside its own
-  `overflow-x-auto` container, the title sits on its own line left-aligned,
+- **Content.** Below `md` the panel drops its rounded top-right corner (the
+  page gutter is the same flat 24px at every width; there is no side inset
+  to drop — amended 5 Sep); the page header stacks: the tab strip scrolls
+  horizontally inside its own `overflow-x-auto` container at EVERY width
+  (above `md` too, so a long view name can never push a page-level
+  sideways scroll), the title sits on its own line left-aligned,
   the actions row wraps with 8px gaps ("+ Add" keeps its label; "Refresh
   All" and "Today" keep theirs at `xs`). Tiles render in ONE column at full
   width in placement order (the board grid's column count is 1 below `md`);
@@ -261,10 +264,12 @@ cannot do). The re-theme ships one.
 - **Touch.** Nav rows and drawer rows are at least 44px tall below `md`
   (`min-h-11`); buttons keep 32px with at least 8px between them; the
   freshness dot and delta chips are unchanged.
-- **Verification.** Render tests with a 390px-wide jsdom viewport pin: the
-  rail is absent and the menu button present below `md`; the drawer opens
-  and closes on navigation; the board renders one column. The manual pass is
-  Elias on the Vercel preview on a phone, both themes.
+- **Verification.** The repo's tests have no DOM (no jsdom; ruling 4 in the
+  ledger), so the phone rules are pinned as source pins plus
+  `renderToStaticMarkup`: the rail's `md:` classes and the menu button's
+  `md:hidden`; the drawer's close-on-navigation and close-at-`md` handlers;
+  `BOARD_GRID`'s one-column base; the fixed-width scan with its allow-list.
+  The manual pass is Elias on the Vercel preview on a phone, both themes.
 
 ## Tiles and charts
 
