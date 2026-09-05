@@ -98,6 +98,10 @@ directions mirror each other; neither is "recessed".
 Shadows: `--shadow-card` = `0 1px 2px rgb(0 0 0 / .20), 0 0 3px rgb(0 0 0 / .10)`
 (the Figma card shadow, both themes). Card radius stays 10px; controls 8px;
 `--radius-frame` becomes 8px. Which corner it cuts is settled in Layout below.
+The corner is a DARK-theme device: in light the page and the panel are both
+`#F7F8F9` (the Figma light export's outer frame is a dark artefact, not a
+ground), so the notch cuts a colour out of the same colour and draws nothing
+there; the code's comment says so (amended 5 Sep after the shell review).
 
 ### Light theme (`:root`), from the Figma light export
 
