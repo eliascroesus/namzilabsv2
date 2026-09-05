@@ -98,3 +98,22 @@ describe("PageHeader's title, with and without a tab strip beside it", () => {
     }
   });
 });
+
+/**
+ * THE CANVAS HARNESS NEEDS THE SAME PORTAL TARGET THE DASHBOARD OFFERS.
+ *
+ * `custom-board.tsx` looks up `#canvas-add-chart` by id with
+ * `document.getElementById` and portals its own "+ Add" button and popover
+ * into whatever it finds — see `dashboard-page-header.test.ts`'s pins on the
+ * dashboard side of that contract. `/design/canvas` renders `CustomBoard`
+ * through `CanvasHarness` rather than through the dashboard page, and the
+ * harness had no header at all, so the portal's target resolved to nothing
+ * and "+ Add" silently failed to render on that page — the one place this
+ * kit's own canvas can be exercised without a session.
+ */
+describe("the design canvas harness offers CustomBoard the + Add portal target", () => {
+  it("renders a div with id canvas-add-chart", () => {
+    const source = read("src/app/design/canvas/harness.tsx");
+    expect(source).toMatch(/id="canvas-add-chart"/);
+  });
+});

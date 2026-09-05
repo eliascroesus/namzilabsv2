@@ -1039,8 +1039,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                   server-rendered header, and neither can hand the other what
                   it has. `CustomBoard` gates the portal on `canEdit` itself,
                   so a viewer without `create_flows` sees an empty div here,
-                  same as the groups board and the calendar always have. */}
-              {activeKind === "custom" && <div id="canvas-add-chart" className="flex items-center" />}
+                  same as the groups board and the calendar always have.
+                  `empty:hidden` is what makes that div cost nothing in the
+                  actions zone's layout when it stays unfilled, rather than a
+                  hollow gap where a button would otherwise sit. */}
+              {activeKind === "custom" && <div id="canvas-add-chart" className="flex items-center empty:hidden" />}
               {/* A CALENDAR PUTS ITS OWN TIME CONTROL HERE INSTEAD.
                   The period pills narrow WHICH NUMBERS a board shows; a
                   calendar answers two fixed months — the only two the

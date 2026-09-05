@@ -132,4 +132,18 @@ describe("the dashboard's page header, 4 Sep 2026 blue retheme", () => {
     const calls = beforeDefinition.match(/<AddChartMenu\s/g) ?? [];
     expect(calls.length, "AddChartMenu is instantiated exactly once").toBe(1);
   });
+
+  it("collapses the + Add target to nothing when it stays empty", () => {
+    /**
+     * A GROUPS BOARD AND A CALENDAR LEAVE THIS DIV EMPTY, and before this it
+     * still took up room: `flex items-center` gives an empty div no content
+     * but keeps its box, so the actions zone reserved space for a button that
+     * a viewer without `create_flows` (or a non-canvas board) never gets.
+     * `empty:hidden` is Tailwind's `:empty` variant — it drops the div from
+     * layout entirely the moment it has no children, and restores it the
+     * instant `CustomBoard` portals `AddChartMenu` into it.
+     */
+    const target = page.slice(page.indexOf('id="canvas-add-chart"'), page.indexOf('id="canvas-add-chart"') + 120);
+    expect(target).toMatch(/className="[^"]*\bempty:hidden\b[^"]*"/);
+  });
 });

@@ -105,13 +105,25 @@ export function CanvasHarness({
        gallery above mounts panel specimens carrying the same `data-tile-panel`
        hook, and an unscoped locator matched all three. */
     <div {...{ "data-canvas-harness": "" }}>
-      <div className="mb-3 flex gap-2">
+      <div className="mb-3 flex items-center gap-2">
         <Button variant="secondary" size="sm" onClick={remoteAdd} {...{ "data-canvas-sim": "add" }}>
           Simulate remote add
         </Button>
         <Button variant="secondary" size="sm" onClick={remoteDelete} {...{ "data-canvas-sim": "remove" }}>
           Simulate remote delete
         </Button>
+        {/* THE SAME PORTAL TARGET THE DASHBOARD'S HEADER OFFERS, AND FOR THE
+            SAME REASON: `CustomBoard` looks up `#canvas-add-chart` by id and
+            portals its own "+ Add" button and popover into it (see
+            `custom-board.tsx`'s `Slot`). The dashboard page renders that div
+            in its header actions; this harness has no header at all, so
+            without a div of the same id here "+ Add" resolves its portal
+            target to nothing and silently does not render — the gap this
+            commit closes. `empty:hidden` matches the dashboard's own target:
+            harmless on a canvas that can't edit (`canEdit` is hard-coded true
+            above, so it never actually sits empty here, but the class keeps
+            this specimen honest about what the real target does). */}
+        <div id="canvas-add-chart" className="flex items-center empty:hidden" />
       </div>
       <CustomBoard
         viewId="design"
