@@ -417,6 +417,29 @@ and `tests/page-width.test.ts` is the pin that keeps the mirror honest —
 including a negative assertion on `rounded-tl-frame`, because a convention
 that old comes back on its own otherwise.
 
+**Phones.** Below `md` (768px) the rail does not render at all —
+`Sidebar`'s `<aside>` is `hidden md:block` — because a hover surface has
+no equivalent under a finger; a permanently-open 56px column would be a
+worse answer than no rail. In its place the top bar grows a 32px menu
+button (`ghost` `icon`, `bg-avatar`, the hamburger glyph) ahead of the
+wordmark, and pressing it opens a 280px left drawer (`ui/sheet.tsx`,
+`--chrome` fill, `--border` edge) rendering `RailContent` — the same
+export the expanded rail renders, not a copy — end to end: the workspace
+switcher, the search field, the "Main Menu" label, the nav with
+Dashboard's sub-items, and a foot of New flow, Get Free Access and, only
+here, Invite members (a top-bar control above `md`; below it the bar has
+room for the menu button, the mark and the avatar and nothing else, so it
+rides down into the drawer's foot instead of being dropped). The drawer
+closes on any navigation and, separately, the instant the viewport
+crosses `md` — a `matchMedia` listener actually calls `setOpen(false)`
+rather than leaving `md:hidden` to paint over a dialog whose overlay,
+scroll lock and focus trap all stay attached regardless of what a class
+hides. Its rows are 44px (`min-h-11`) against the rail's 36; the greeting
+drops below `sm` (`max-sm:hidden`); the bell keeps every width, the one
+circle that does. Below `md` the board itself renders one column and the
+page header stacks — the rule stated here even though it ships as its own
+pass (Task 20).
+
 ## 6. Components (`src/components/ui/`)
 
 `Button` (**11** variants × 6 sizes — every clickable; `xs` is the dense row's

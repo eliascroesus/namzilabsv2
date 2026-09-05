@@ -237,3 +237,31 @@ describe("fix round 1 — ratios and the gate's own rule count are pinned, not j
     expect(doc).toMatch(/gates \*\*fourteen\*\* rules/);
   });
 });
+
+/**
+ * PHONES (5 SEP AMENDMENT): THE DRAWER IS DOCUMENTED, THE OLD §3 IS GONE.
+ *
+ * Task 15-17's own remit: both docs must describe the phone drawer as the
+ * rail's own component tree (not a hand-kept copy), and the §3 rewrite must
+ * have actually replaced its old anchor sentence rather than leaving it to
+ * sit alongside the new "depth is a mirror" argument.
+ */
+describe("Phones: both docs document the drawer; the old §3 anchor is retired", () => {
+  const designMd = () => readFileSync(join(root, "DESIGN.md"), "utf8");
+
+  it("BRAND_KIT.md §5 describes the drawer as the rail's own component tree", () => {
+    const doc = brandKit();
+    expect(doc).toMatch(/drawer/);
+    expect(doc).toMatch(/RailContent|same component tree/);
+  });
+
+  it("DESIGN.md §5 describes the same drawer, built the same way", () => {
+    const doc = designMd();
+    expect(doc).toMatch(/drawer/);
+    expect(doc).toMatch(/RailContent|same component tree/);
+  });
+
+  it("DESIGN.md no longer states the retired 'a control recesses' rule", () => {
+    expect(designMd()).not.toMatch(/A control recesses; a hover raises\./);
+  });
+});

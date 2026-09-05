@@ -102,33 +102,54 @@ did not move.
 
 ---
 
-## 3. Five surfaces, and which direction each one goes
+## 3. Eight steps below the gap, and three more above it
 
-There is one grey ramp, and its steps are five surfaces and four inks with a
-deliberate gap between the halves.
+There is one grey ramp, cut deeper now: eight surface steps carry the
+weight one used to, because three grounds need somewhere to sit rather
+than one, and the ink side above the gap is unchanged in kind — still a
+handful of defined steps, still only two of them read by a role.
 
-| | | |
+| Token | Hex | Job |
 |---|---|---|
-| `neutral-950` | `#1B191A` | **the ground** — rail, top bar and page |
-| `neutral-900` | `#211F20` | **a control** — selects, inputs, the period track |
-| `neutral-800` | `#272426` | **a card** — and popovers |
-| `neutral-700` | `#332F31` | **raised** — hover, a menu row, the toast |
-| `neutral-600` | `#3D393B` | **the hairline** |
-| `neutral-500` | `#4D494B` | the heavier rule a switch track or checkbox owes |
+| `neutral-950` | `#0F1011` | **the page** |
+| `neutral-925` | `#111111` | **the chrome** — top bar, rail, and the card fill |
+| `neutral-900` | `#181818` | **the panel** — the content area under the top bar |
+| `neutral-850` | `#202020` | **a control** — fields, the search box, the active nav row |
+| `neutral-800` | `#333333` | grey buttons (`--secondary`) |
+| `neutral-700` | `#3A3A3A` | `--accent` — the hover/press step above a grey button (amended 5 Sep); also avatar and icon circles (`--avatar`) |
+| `neutral-600` | `#343434` | **the hairline** |
+| `neutral-500` | `#4A4A4A` | the heavier rule a switch track or checkbox owes |
+| `neutral-450` | `#6E6E6E` | the caps section label only — never a sentence |
+| `neutral-400` | `#858585` | the first step body TEXT may be set in |
+| `neutral-200` | `#FFFFFF` | body, headings and card titles alike |
 
-**A control recesses; a hover raises.** That is the one thing to hold on to. A
-select on a card is a slot cut into it, which is what makes a row of fields read
-as fields rather than as a stack of small panels; a row you can press comes
-*forward* under the pointer. Getting this backwards is not a slightly-wrong
-colour, it is depth pointing the wrong way.
+The first three are the three grounds from §2, one to three counts apart
+from each other. **500 is still the last step a LINE may be drawn in, and
+400 the first that TEXT may be set in** — the gap between them used to be
+one step and is now two, because `450` sits inside it for exactly one
+job: a caps section caption ("Main Menu") that has to read quieter than
+body text without being mistaken for a rule. A sentence set at `450`
+would be the same bug a sentence set at `500` always was.
 
-`--muted` and `--accent` are the two roles that carry it, and they were briefly
-the same value, which broke six hovers into invisibility — a card painted onto
-itself. Muted recesses, accent raises, and they may never collapse again.
+**Depth is stated as a mirror now, not as a rule about which way things
+go.** On dark, a field on the `#111111` chrome is a step UP (`--control`
+`#202020`) and its hover a further step up (`--accent` `#3A3A3A`); on
+light a field on white is a step DOWN (`#F4F4F4`) and its hover a
+further step down (`#ECECEC`). Neither is "recessed" — that was a
+sentence about one theme stated as a rule about both, and the Figma
+contradicts it outright on the dark side.
+
+`--control` and `--accent` are the pair that carries it now. (`--muted`
+is a separate role — a skeleton's track, a table's head, the content
+area's own fill — and it was briefly indistinguishable from `--card` in
+an earlier draft, which broke six hovers into invisibility: a card
+painted onto itself. That is a different bug from depth pointing the
+wrong way, and the lesson from both is the same one — two roles that
+carry a visible state may never collapse to a single value.)
 
 ---
 
-## 4. One blue, in three shapes
+## 4. One blue, two jobs
 
 The kit ran **"yellow FILLS, violet DRAWS"** for one reason, and it is worth
 recording because the reason is now gone rather than forgotten. `#EECF00`
@@ -138,35 +159,48 @@ and a superb box — so the brand could only ever safely do one of the two jobs,
 second colour had to hold the other, and `check-ui.ts` needed a rule to stop
 them swapping places.
 
-On `#1B191A`:
+Across the three dark surfaces, as a **stroke** (`--marker`, step 400):
 
-| | as a **stroke / text** | as a **fill**, ink `#1B191A` |
-|---|---|---|
-| `#00CDF5` on the ground | **9.20:1** | — |
-| `#00CDF5` on a card | **8.49:1** | — |
-| `#00C0E8` | — | **8.08:1** |
+| | |
+|---|---|
+| on the page `#0F1011` | **6.65:1** |
+| on the chrome `#111111` | **6.59:1** |
+| on the panel `#181818` | **6.20:1** |
 
-Both columns clear their bar with room, so the split has nothing left to
+and as a **fill** (`--primary`, step 600) under white ink: **4.68:1** — one
+step deeper than the Figma's own `#007BFF`, which measures 3.98:1 under
+white and falls short of the 4.5 a 15px label owes, so the fill sits one
+rung below the colour it is named after rather than at it.
+
+All four numbers clear their bar with room, so the split has nothing left to
 prevent. `--primary` fills and `--marker` draws, and they are **two steps of one
 ramp** rather than two colours holding each other's job open. The
-`yellow-as-stroke` gate rule retires with the token it policed.
+`yellow-as-stroke` gate rule retired with the token it policed, two re-themes
+ago now.
 
-What replaces the split is a rule about **shape**, and the rail is where you can
-see all three at once:
+What the split shares the rail with — **shape** — has one fewer job on it
+than it did two days ago:
 
 | | job | where |
 |---|---|---|
-| a **ring** | identity | the mark at the top of the rail |
-| a **glyph** | location | the active nav row |
-| a **fill** | action | the "+" in the foot, every primary button, the active chip |
+| a **stroke** | signal | links, the focus ring, the active tab's rule |
+| a **fill** | action | the "+" in the header, "New flow", every primary button |
 
-Three appearances of one colour in three different shapes, each answering a
-different question, rather than three fills competing to be the thing you press.
+*Identity and location both left this table.* The ring that used to mark
+the rail's own mark left with the mark itself: the wordmark moved to the
+top bar as plain text (§2), and nothing rings it there. The glyph that
+used to mark the active nav row left with the row's own colour: the Figma
+marks WHERE YOU ARE with a neutral `--control` fill, not a coloured icon,
+so the brand has no location job left to hold. Two jobs now do the work
+three used to.
 
-**Hover walks UP the ramp now, and that inverted with the surface.** On a light
-page the brand had to *darken* under the pointer, because brightening a yellow
-moves it toward the white behind it and the label's contrast fell at the moment
-of the press. On near-black, raised means lighter.
+**Hover still walks UP the ramp on dark, and DOWN on light.** On a light
+page the fill darkens under the pointer (`600` → `700`), because
+brightening a colour moves it toward the white behind it and the label's
+contrast falls at the moment of the press. On near-black the argument
+inverts with the surface: raised means lighter, so dark's hover is `500`
+— the brand's own named step, once too light to fill and exactly right to
+lighten toward.
 
 ### The collision that used to be here, and why it is gone
 
@@ -178,21 +212,24 @@ the kit conceded it: a success green four counts from the brand green would have
 been indistinguishable on screen and guaranteed to drift, so the rule became
 "green means good-or-brand" and state gave up its own vocabulary.
 
-That concession was conditional on a hue, and the hue changed. **The brand is
-cyan; success keeps the green the brand vacated.** Restoring the split is not a
-reversal of the reasoning but the same reasoning under new facts — and the new
-facts make the collision actively wrong, because a DONE badge and a New-flow
-button sharing one colour puts the loudest *state* and the loudest *act* in one
-vocabulary. Warn and danger are the other two state hues.
+That concession was conditional on a hue, and the hue has changed twice since.
+**The brand is blue; success keeps the green the brand vacated two re-themes
+ago.** Restoring the split was not a reversal of the reasoning but the same
+reasoning under new facts, and the facts have not moved since: a DONE badge
+and a New-flow button sharing one colour still puts the loudest *state* and
+the loudest *act* in one vocabulary. Warn and danger are the other two state
+hues.
 
-The green is not a fresh cut. It is `#00D492` / `#00734B`, the exact ramp the
-brand vacated, which was solved for this interface and still measures: **9.02:1**
-on the ground, **7.93:1** on a card, **5.91:1** on white.
+The green is not a fresh cut, and this pass re-measured it against three new
+grounds rather than carrying the old numbers on faith: `#00D492` clears
+**9.83:1** on the page, **9.74:1** on the chrome, **9.16:1** on the panel;
+the light theme's `#00734B` is unchanged at **5.91:1** on white.
 
 What survives untouched is the half of the rule that was doing the real work —
 **status is quiet when fine.** A healthy thing carries a 6px dot; only a thing
-that needs something wears a full pill. A board where every card shows a green
-badge is furniture reporting no news, and it buries the one card that matters.
+that needs something wears a full `StatusPill`. A board where every card shows
+a green badge is furniture reporting no news, and it buries the one card that
+matters.
 
 `TargetBar` is the component that paid for the collision: it drew "goal met" in
 `--success` and "in progress" in `--marker`, which was a real distinction while
@@ -247,6 +284,19 @@ assertion on `rounded-tl-frame` so the habit cannot return by itself.
 is `--background` (`#F7F8F9`) — the same colour the page already is — so
 the identical 8px cut reveals nothing there, exactly as it did not two
 days ago. Dark grew a third surface; light never lost its second.
+
+**Below `md`, the corner's whole argument evaporates a second time, for a
+third reason.** The notch reveals the panel meeting the rail on a line
+that only exists at `md` and up; below it there is no rail to butt
+against, so the panel takes the full inset rather than a cut corner —
+same conclusion as the light theme's flat colour, reached by removing the
+edge instead of matching it. The rail's own tree does not vanish with the
+rail, it moves: a 32px menu button opens a 280px **drawer** built on the
+SAME component tree as the expanded rail (`RailContent`, one export
+rendered in two frames, never a hand-kept copy), closing on navigation or
+the instant the window crosses back over `md`. The board underneath drops
+to one column for the same reason the corner drops — a phone has no room
+to spend on either.
 
 **Hairlines still carry structure; shadows still barely exist.** The card
 shadow is now the Figma's own value, `0 1px 2px rgb(0 0 0 / .20), 0 0 3px
@@ -324,25 +374,35 @@ never `.css`.
 ## 7. Furniture, in the order you meet it
 
 - **View strip** — the board's arrangements, Notion's view bar doing Notion's
-  job. Real anchors, so a link pasted into Slack opens on the sender's view. The
-  active tab takes a 2px green rule **and** goes white while the others stay
-  muted. It has held three colours and only this one carries the state alone:
-  the green it started as measured 1.78:1 on the light ground, the violet that
-  replaced it managed 4.41:1, and this is 9.20:1. The white label is what the
-  other two could not afford — with the rule legible on its own, the label is
-  free to say SELECTED rather than LINKED, which is what a coloured word says.
-- **Period track** — six mutually exclusive windows in a 32px bordered
-  `--control` groove, segments filling it edge to edge. Track and segments are
-  both capsules; `overflow-hidden` plus `h-full` is what makes them agree, so
-  the first and last segment's outer corners land on the track's own and the
-  lit segment reads as a pill inside a pill.
+  job. Real anchors, so a link pasted into Slack opens on the sender's view.
+  The active tab used to carry the state in colour ALONE — a 2px rule that
+  went from a green measuring 1.78:1 on the light ground, to a violet at
+  4.41:1, to a cyan at 9.20:1 — and colour got QUIETER at the same time it
+  got easier to read: the rule this Figma draws is `--muted-foreground`, no
+  colour at all, and the active tab is set apart by WEIGHT (500 → 600) and
+  ink (muted → `--heading`) instead. Three colour changes taught the same
+  lesson before this pass finally acted on it: a state that only colour
+  carries is invisible to whoever cannot see the colour, so the rule and
+  the weight and the ink all have to say SELECTED, not just one of them.
+- **The "Today" dropdown replaces the period track.** The dashboard used to
+  spend a full-width 32px bordered `--control` groove on six mutually
+  exclusive range buttons — Today, Yesterday, 7d, 30d, this month, last
+  month — filling it edge to edge as segments, capsule inside capsule. The
+  Figma draws a single `secondary` `xs` button instead: a 16px calendar
+  glyph, the selected preset's own label, a chevron. What it DOES has not
+  changed — it lists the same six presets and selects them the same way,
+  through `?range=` in the URL — only the control's shape did, from a groove
+  that had to fight a narrow screen for width to a button a tenth as wide
+  and never touching a horizontal scroller.
 
-  *This entry is a correction.* One pass read "all buttons and timeline buttons
-  have 999 radius" as licence to restyle the control and deleted the border,
-  the fill and the enclosure, leaving six bare labels on the page. Nobody asked
-  for that; a radius is a radius. The groove is the design this product has and
-  `tests/console-theme.test.ts` now asserts its three properties, so losing
-  them again has to be deliberate.
+  *The groove is not gone, only reassigned.* `PERIOD_TRACK` and
+  `PERIOD_PILL` still exist, now 8px like every other control (§5) rather
+  than a capsule, and `tests/console-theme.test.ts` still pins the three
+  properties that matter — border, fill and enclosure — regardless of which
+  radius they render at. The calendar's own month stepper is what wears
+  them now, so a control that used to be pill-first everywhere is
+  pill-nowhere, including the one place this section used to have to
+  defend it.
 - **Group column** — a tinted lane with a 4px accent bar, a name badge in its own
   hue, and a count. The tint is 6% so a card on it still reads as an object; the
   1px inset ring at 14% is what turns a wash into a panel.
@@ -384,9 +444,15 @@ never `.css`.
   buttons, tabs and nav.
 - **Colour never carries state alone.** The reference draws its active nav row as
   a brand-coloured glyph and nothing else, which is invisible to a colour-blind
-  reader looking at six otherwise identical icons. Ours takes the colour *and* a
-  raised chip. This is the same class of correction as §9's contrast floor, and
-  it is the second place the kit deliberately overrules its own source.
+  reader looking at six otherwise identical icons. This Figma goes further than
+  the objection asks for: the active row takes a neutral `--control` fill and
+  the glyph's own colour never changes at all — location is a SHAPE now, not a
+  colour, which answers the same objection with room to spare. The view strip's
+  active tab took the same lesson from the opposite direction (§7): its rule
+  went from carrying colour alone to carrying none, with weight and ink doing
+  the work instead. This is the same class of correction as §9's contrast
+  floor, and it is the second place the kit deliberately overrules its own
+  source.
 - **Nothing destructive fires on first click.**
 - **Motion is tokenised** — 120/180/280ms, three curves. `spring` only for things
   that appear or that the user just did; exit is faster than entry, because a
@@ -412,11 +478,13 @@ character:
 - **A number that leaves data out has to admit it**, or the gap reads as an
   answer.
 - **Heat is magnitude, never judgement.**
-- **The kit measures its own source.** The reference's dimmest ink is `#6A7282`,
-  and it sets its empty-state copy in it: **3.56:1** on its own `#272426` card,
-  against the 4.5:1 body text owes. Ours is `#948D93` — four steps up, same hue,
-  4.75:1. Copying a value because it came from the comp is how a design system
-  inherits somebody else's bug.
+- **The kit measures its own source.** This is not a one-time finding; the same
+  gap reopened with the new Figma and was caught the same way. Its own dimmest
+  ink is `#7E7E7E`, and it measures **4.37:1** on its own `#181818` panel,
+  against the 4.5:1 body text owes. Ours is `#858585` — one step up, same
+  hue — clearing **4.81:1** on the panel and **5.12:1** on a card. Copying a
+  value because it came from the comp is how a design system inherits
+  somebody else's bug, twice now.
 
 ---
 
