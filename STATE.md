@@ -376,7 +376,8 @@ entry as a fix, only as the diagnosis.
 
 ## Update — 4 September 2026
 
-**The blue re-theme shipped**, two days after the cyan console did.
+**The blue re-theme is built on branch `retheme-blue`** (pending Elias's
+preview check and merge), two days after the cyan console shipped.
 `#007BFF` replaces `#00C0E8`/`#00CDF5` everywhere; the one-surface thesis
 (`#1B191A` for the rail, the top bar and the page alike) is reversed back
 to three dark surfaces (`#0F1011` page, `#111111` chrome, `#181818`
@@ -385,6 +386,7 @@ corner, named final against the 4 September 2026 Figma; the tile numeral
 drops from 36px to 28px; the top bar gains a wordmark the rail used to
 carry and loses the metrics-setup ring; and the dashboard's six-pill
 period track becomes a "Today" dropdown beside a centred title.
-`docs/BRAND_KIT.md`, `DESIGN.md` and `/design` were rewritten in lockstep
+`docs/BRAND_KIT.md`, `DESIGN.md` and `/design` have been rewritten in
+lockstep on the branch (DESIGN.md's own §3/4/7/8/9 finished 5 September)
 — see `docs/superpowers/specs/2026-09-04-retheme-blue-design.md` for the
 approved decisions and the measured contrast ratios behind them.

@@ -8,8 +8,8 @@ and `/design` ever disagree, the tokens win and the other two are bugs.
 Benchmarked against Linear, Stripe, Notion, Vercel, Miro and Zapier, and drawn
 from the 4 September 2026 Figma: **three dark surfaces meeting at one
 hairline**, one neutral ramp, one blue doing a stroke's job and a fill's,
-a 14px UI base, and a state for everything — hover, focus, empty, loading,
-error.
+a 15px UI base (`--text-sm`), and a state for everything — hover, focus,
+empty, loading, error.
 
 **The thesis: quiet chrome, loud numbers.** This is a reconciliation product —
 six tools disagree and the app's job is to answer in one figure you can defend.
@@ -35,9 +35,11 @@ exhausting by 4pm.
 2. **Roles, not ramps.** Components say `bg-card`, `border-border`,
    `text-muted-foreground` — never `bg-neutral-800` or `border-neutral-600`.
    Roles are what make a surface change a one-file edit.
-3. **A control recesses; a hover raises.** `--control` is a step DOWN from the
-   card it sits on and `--accent` is a step UP. Getting this backwards is depth
-   pointing the wrong way, not a slightly-wrong colour.
+3. **Depth is a mirror, not a recess.** On dark, a control (`--control`
+   `#202020`) is a step UP from the card it sits on (`#111111`) and its hover
+   (`--accent` `#3A3A3A`) is a further step up; on light both steps go DOWN
+   (`#F4F4F4`, then `#ECECEC`). Getting a surface's own direction backwards is
+   depth pointing the wrong way, not a slightly-wrong colour.
 4. **Every interactive element has all five states**: rest, hover, focus-visible,
    active, disabled. No exceptions — including icon buttons, tabs, and nav. And
    **colour never carries state alone.**
@@ -398,14 +400,14 @@ not follow — the workspace name at 15px/600, and a chevron), a
 search field styled exactly like a real `Input` (`--control` fill,
 `--border` outline, a magnifier, "Search", a ⌘K hint) that opens the same
 command palette a real search box would, a "Main Menu" caps label in
-`--faint` at 13px (`text-xs` — the scale has no 12px step, per §3), nav rows at 36px with 18px icons (the active row takes
-a `--control` fill — **not** a coloured glyph; the "location" job left the
-brand with this Figma, per §2), Dashboard's sub-items at 32px indented
-under an 8px dash marker, and at the foot a full-width `primary` "New
-flow" button above a "Get Free Access" row (a bell icon carrying a small
-blue dot, the label muted). The collapse/pin cookie behaviour — what
-actually opens and closes the column — is untouched; only what is drawn
-inside it changed.
+`--faint` at 13px (`text-xs` — the scale has no 12px step, per §3), nav
+rows at 36px with 18px icons (the active row takes a `--control` fill —
+**not** a coloured glyph; the "location" job left the brand with this
+Figma, per §2), Dashboard's sub-items at 32px indented under an 8px dash
+marker, and at the foot a full-width `primary` "New flow" button above a
+"Get Free Access" row (a bell icon carrying a small blue dot, the label
+muted). The collapse/pin cookie behaviour — what actually opens and
+closes the column — is untouched; only what is drawn inside it changed.
 
 **The panel takes the corner, not the frame.** `AppFrame` renders the top
 bar above a row of `[rail | panel]`; the panel is `--panel` with an 8px

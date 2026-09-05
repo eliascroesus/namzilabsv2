@@ -377,13 +377,14 @@ never `.css`.
   job. Real anchors, so a link pasted into Slack opens on the sender's view.
   The active tab used to carry the state in colour ALONE — a 2px rule that
   went from a green measuring 1.78:1 on the light ground, to a violet at
-  4.41:1, to a cyan at 9.20:1 — and colour got QUIETER at the same time it
-  got easier to read: the rule this Figma draws is `--muted-foreground`, no
-  colour at all, and the active tab is set apart by WEIGHT (500 → 600) and
-  ink (muted → `--heading`) instead. Three colour changes taught the same
-  lesson before this pass finally acted on it: a state that only colour
-  carries is invisible to whoever cannot see the colour, so the rule and
-  the weight and the ink all have to say SELECTED, not just one of them.
+  4.41:1, to a cyan that cleared its own bar with room to spare — and colour
+  got QUIETER at the same time it got easier to read: the rule this Figma
+  draws is `--muted-foreground`, no colour at all, and the active tab is
+  set apart by WEIGHT (500 → 600) and ink (muted → `--heading`) instead.
+  Three colour changes taught the same lesson before this pass finally
+  acted on it: a state that only colour carries is invisible to whoever
+  cannot see the colour, so the rule and the weight and the ink all have
+  to say SELECTED, not just one of them.
 - **The "Today" dropdown replaces the period track.** The dashboard used to
   spend a full-width 32px bordered `--control` groove on six mutually
   exclusive range buttons — Today, Yesterday, 7d, 30d, this month, last

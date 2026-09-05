@@ -180,10 +180,23 @@ describe("/design's specimens and prose reflect the blue re-theme", () => {
      * re-themes ago, and "ONE GREEN, IN THREE SHAPES" a caption for a
      * yellow-and-violet kit. Each described the product accurately at some
      * point and none of them has for months, on the one page whose whole
-     * job is to be the reference.
+     * job is to be the reference. "Helvetica Neue" and "14px interface" are
+     * the same kind of rot from the docs-fix review: the type note claimed a
+     * face `--font-sans` never sets, and the size rule described the
+     * pre-15px scale.
      */
     const src = page();
-    for (const dead of ["#2E2E2E", "#F5F5F5", "ink-950", "ink-900", "ink-800", "ONE GREEN, IN THREE SHAPES", "Pill-first"]) {
+    for (const dead of [
+      "#2E2E2E",
+      "#F5F5F5",
+      "ink-950",
+      "ink-900",
+      "ink-800",
+      "ONE GREEN, IN THREE SHAPES",
+      "Pill-first",
+      "Helvetica Neue",
+      "14px interface",
+    ]) {
       expect(src, `"${dead}" is still on the kit page`).not.toContain(dead);
     }
   });
@@ -229,6 +242,7 @@ describe("fix round 1 — ratios and the gate's own rule count are pinned, not j
 
   it("the retired cyan-on-#1B191A ratio (9.20:1) does not survive as a CURRENT figure", () => {
     expect(brandKit()).not.toMatch(/9\.20:1/);
+    expect(readFileSync(join(root, "DESIGN.md"), "utf8")).not.toMatch(/9\.20:1/);
   });
 
   it("check-ui.ts's own rule count reads fourteen, not the stale thirteen", () => {
@@ -263,5 +277,23 @@ describe("Phones: both docs document the drawer; the old §3 anchor is retired",
 
   it("DESIGN.md no longer states the retired 'a control recesses' rule", () => {
     expect(designMd()).not.toMatch(/A control recesses; a hover raises\./);
+  });
+});
+
+/**
+ * DOCS-FIX REVIEW ROUND: PRINCIPLE 3 NEVER GOT THE MIRROR REWRITE.
+ *
+ * A previous fix commit claimed principle 3 was corrected but the diff
+ * never touched it — it still read "A control recesses; a hover raises"
+ * two sections above where §2 already states the mirror rule. This pins
+ * the phrase gone for good, independent of the DESIGN.md pin above.
+ */
+describe("BRAND_KIT.md principle 3 states the mirror rule, not the recess one", () => {
+  it("principle 3 no longer states 'A control recesses; a hover raises.'", () => {
+    // Narrower than a bare "A control recesses" match: §2's own retrospective
+    // ("the sentence this kit no longer says... 'A control recesses from a
+    // card'") legitimately quotes the old wording to explain why it is gone,
+    // and a blanket ban would flag that correct, deliberate mention too.
+    expect(brandKit()).not.toMatch(/A control recesses; a hover raises\./);
   });
 });

@@ -156,7 +156,7 @@ const DIRECTION: Array<{ rule: string; why: string }> = [
   },
   {
     rule: "Three sizes do the work",
-    why: "14px interface, 12px labels, 10px for the micro badge. 16px is reading prose only. The micro-label voice — 10px, ALL CAPS, tracked, muted, available as .label-micro — is the product's signature and what lets a very small string read as a LABEL rather than as very small prose. A chip is the one small object that is NOT caps: a badge carries a status you scan, a chip carries a name the customer chose.",
+    why: "15px interface, 13px labels, 11px for the micro badge. 17px is reading prose only — legal pages, marketing copy — and the app's body is not that. The micro-label voice — 11px, ALL CAPS, tracked, muted, available as .label-micro — is the product's signature and what lets a very small string read as a LABEL rather than as very small prose. A chip is the one small object that is NOT caps: a badge carries a status you scan, a chip carries a name the customer chose.",
   },
   {
     rule: "The active thing is the heavier one",
@@ -185,7 +185,7 @@ const TYPE: Array<{ token: string; cls: string; px: string; use: string; sample:
     token: "text-2xs",
     cls: "label-micro",
     px: "11px",
-    use: "The micro badge — ALL CAPS at --tracking-label, and never prose. At 10px a sentence is not small text, it is unreadable text",
+    use: "The micro badge — ALL CAPS at --tracking-label, and never prose. At 11px a sentence is not small text, it is unreadable text",
     sample: "Speed to lead",
   },
 ];
@@ -201,7 +201,10 @@ const RADII: Array<{ cls: string; label: string; body: string }> = [
      because the step it reveals is a fraction of what the light page was.
      Applied to the panel's TOP-RIGHT corner: every earlier era cut the
      top-left, nearest the rail, and the 4 Sep 2026 Figma does not. The rail
-     side butts square behind a hairline. */
+     side butts square behind a hairline. THIS IS A DARK-THEME DEVICE: in
+     light, --panel is --background (#F7F8F9) — the page's own colour — so
+     the identical cut reveals nothing there, same as it did not two days
+     ago. */
   { cls: "rounded-frame", label: "frame · 8px", body: "The panel's top-right corner, under the bar away from the rail" },
 ];
 /**
@@ -450,7 +453,7 @@ export default function DesignPage() {
           </div>
         </Section>
 
-        <Section title="Type" note="An 8px baseline and 16px spacing, set in Helvetica Neue — native on macOS, with Inter carrying every other platform rather than dropping to Arial. One name per size: the kit's old aliases (micro/tiny/small/base/lead/title/display/stat/hero) have been deleted from the theme, and check:ui fails on them.">
+        <Section title="Type" note="An 8px baseline and 16px spacing, set in the system UI face — SF Pro on Apple hardware — with Inter (--font-sans) carrying every other platform rather than dropping to Arial. One name per size: the kit's old aliases (micro/tiny/small/base/lead/title/display/stat/hero) have been deleted from the theme, and check:ui fails on them.">
           <Card padding="none" className="divide-y divide-border">
             {TYPE.map((t) => (
               <div key={t.token} className="flex items-baseline gap-4 px-4 py-3">
@@ -765,7 +768,7 @@ export default function DesignPage() {
 
         <Section
           title="Frame"
-          note="THE NOTCH IS BACK AND --radius-frame IS 8px. It went to 0 when the rail, the bar and the page became one colour: a radius reveals whatever is BEHIND the element it is cut into, and cutting a corner out of a colour to reveal the same colour draws nothing. There are three surfaces again — the panel is #181818 under a bar and beside a rail that are #111111 — so there is something to reveal. It is the panel's TOP-RIGHT corner, under the bar at the end of the row away from the rail; every earlier era of this shell cut the top-left instead, and the 4 September 2026 Figma does not."
+          note="THE NOTCH IS BACK AND --radius-frame IS 8px. It went to 0 when the rail, the bar and the page became one colour: a radius reveals whatever is BEHIND the element it is cut into, and cutting a corner out of a colour to reveal the same colour draws nothing. There are three surfaces again — the panel is #181818 under a bar and beside a rail that are #111111 — so there is something to reveal. It is the panel's TOP-RIGHT corner, under the bar at the end of the row away from the rail; every earlier era of this shell cut the top-left instead, and the 4 September 2026 Figma does not. This is a DARK-THEME DEVICE, not a universal one: in light, --panel is --background (#F7F8F9) — the page's own colour — so the identical cut draws nothing there, exactly as it did not two days ago."
         >
           <div className="flex h-40 overflow-hidden rounded-card bg-chrome">
             {/* The rail's width, holding the chrome's own colour — the panel
@@ -969,11 +972,12 @@ export default function DesignPage() {
           title="Config panel"
           note="The most-used surface in the product. The shell and the tab row are IMPORTED from panel-chrome.tsx — the same two exports ConfigPanel renders, so there is one definition of them and a change lands here or nowhere. Everything between them is sample content built from the kit's own fields: a Summarize step, mid-configure."
         >
-          {/* On the canvas colour, because that is what it floats over: a white
-              panel on a white page is an invisible box, and its border, its
-              elevation and its 16px corner are the whole point of showing it.
-              The 452px width IS the real one; the fixed height stands in for
-              the band between the builder's two chrome bars. */}
+          {/* On the canvas colour, because that is what it floats over: the
+              canvas is frozen (--canvas-bg, out of scope for this pass) and
+              the panel is --card, so its border, its elevation and its 10px
+              corner (rounded-surface) are what keep it from reading as more
+              canvas. The 452px width IS the real one; the fixed height
+              stands in for the band between the builder's two chrome bars. */}
           <div className="relative overflow-hidden rounded-card bg-canvas-bg p-6">
             <div
               className="absolute inset-0"
