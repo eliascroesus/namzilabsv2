@@ -158,7 +158,7 @@ export async function AppShell({
   } catch {
     // The frame must never fail on a DB hiccup.
   }
-  // The active workspace's own name, for the top bar. Falls back rather than
+  // The active workspace's own name, for the rail's own head block. Falls back rather than
   // rendering an empty slot: a membership list can come back short.
   const workspace = orgs.find((o) => o.id === orgId)?.name ?? "Workspace";
 

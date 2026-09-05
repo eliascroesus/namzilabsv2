@@ -57,12 +57,34 @@ describe("the drawer", () => {
     expect(drawer).toContain("border-border");
   });
 
-  it("exists only below md, on the trigger AND on the panel", () => {
-    // Both, because a drawer left open across a resize past 768px would
-    // otherwise sit beside the rail it stands in for.
-    const trigger = drawer.slice(drawer.indexOf("<SheetTrigger"), drawer.indexOf("<SheetContent"));
+  it("hides the trigger with a class; closes the open panel with a breakpoint listener", () => {
+    /**
+     * SLICED OVER THE COMMENT-STRIPPED FILE, NOT THE RAW ONE. The comment
+     * sitting between `</SheetTrigger>` and `<SheetContent` talks ABOUT
+     * `md:hidden` (explaining why it is no longer there) — so a slice of the
+     * raw source would find that literal string in the PROSE and pass this
+     * assertion even if the class had been removed from the Button itself.
+     * Stripping comments first is what lets a removed class actually fail
+     * this test.
+     */
+    const stripped = code(drawer);
+    const trigger = stripped.slice(stripped.indexOf("<SheetTrigger"), stripped.indexOf("<SheetContent"));
     expect(trigger).toContain("md:hidden");
-    expect(drawer.slice(drawer.indexOf("<SheetContent"))).toContain("md:hidden");
+    /**
+     * THE PANEL DOES NOT HIDE ITSELF IN CSS ANY MORE. It used to carry
+     * `md:hidden` too, and that was the bug: CSS can hide the PANEL, but
+     * Radix's own dialog state — the overlay, the scroll lock, the focus
+     * trap — all read `open`, not a media query, so a drawer left "open" in
+     * React while a resize past 768px painted over it left that machinery
+     * attached to a panel nobody could see or reach. It closes ITSELF at the
+     * breakpoint instead, via `matchMedia`, so there is nothing left for a
+     * class on `SheetContent` to hide.
+     */
+    expect(stripped.slice(stripped.indexOf("<SheetContent"))).not.toMatch(/className="[^"]*\bmd:hidden\b/);
+    expect(drawer).toContain('window.matchMedia("(min-width: 768px)")');
+    expect(stripped).toMatch(/query\.matches\)\s*setOpen\(false\)/);
+    expect(stripped).toMatch(/addEventListener\("change", closeAboveMd\)/);
+    expect(stripped).toMatch(/removeEventListener\("change", closeAboveMd\)/);
   });
 
   it("opens the rail's own tree by pinning it, not by re-styling it", () => {
@@ -99,7 +121,11 @@ describe("the top bar below md", () => {
   });
 
   it("draws the menu button at 32px, on the avatar circle", () => {
-    const trigger = drawer.slice(drawer.indexOf("<SheetTrigger"), drawer.indexOf("<SheetContent"));
+    // Comment-stripped for the same reason the slice above is: the prose
+    // between the tags is not code, and should not be able to satisfy a
+    // check about it.
+    const stripped = code(drawer);
+    const trigger = stripped.slice(stripped.indexOf("<SheetTrigger"), stripped.indexOf("<SheetContent"));
     expect(trigger).toContain('size="icon"');
     expect(trigger).toContain("rounded-full bg-avatar");
   });

@@ -130,9 +130,21 @@ describe("the phone's navigation drawer", () => {
 
     pathname = "/dashboard/flows";
     tree = draw({ workspace: "Acme", views: [], hide: [] });
-    expect(effects, "MobileDrawer's own effect, captured rather than run").toHaveLength(1);
-    // Stepped by hand, exactly as `freshness-poller.test.ts` steps its timer:
-    // this is what React would run because `pathname` moved.
+    // Two effects now: this one (closes on navigation) and the breakpoint
+    // listener that closes the panel past `md` — `effects[0]` is this one,
+    // in source order.
+    expect(effects, "MobileDrawer's own two effects, captured rather than run").toHaveLength(2);
+    /**
+     * STEPPED BY HAND, exactly as `freshness-poller.test.ts` steps its timer
+     * — and that is what this assertion actually checks: the effect's OWN
+     * BODY does what it should (`setOpen(false)`) when run, not that React's
+     * dependency-diffing is what decides to run it. That second fact — that
+     * this effect's dependency list is `[pathname, search]`, which is the
+     * reason React would re-run it on exactly this navigation — is pinned as
+     * source in `tests/mobile-shell.test.ts` instead, and has to be: nothing
+     * here calls a reconciler, so there is no dependency comparison to
+     * observe, only the callback to invoke directly.
+     */
     effects[0]!.fn();
     expect(openState, "a drawer left open over the page it just navigated to").toBe(false);
   });
@@ -141,9 +153,10 @@ describe("the phone's navigation drawer", () => {
     // The dashboard's views are `?view=` on one pathname. A drawer keyed on
     // the pathname alone stays open over the board it just switched — which
     // is exactly why `mobile-shell.test.ts` pins `[pathname, search]` as the
-    // effect's own dependency list at the source. This proves the other half:
-    // that running the body the dependency change would trigger actually
-    // closes the drawer.
+    // effect's own dependency list at the source. This checks the other
+    // half, the effect's BODY, invoked by hand rather than triggered by a
+    // dependency comparison this suite has no reconciler to run: that the
+    // callback itself closes the drawer.
     let tree = draw({ workspace: "Acme", views: [], hide: [] });
     const onOpenChange = find(tree, Sheet)!.props!.onOpenChange as (v: boolean) => void;
     onOpenChange(true);

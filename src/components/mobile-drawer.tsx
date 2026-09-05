@@ -51,6 +51,32 @@ export function MobileDrawer({
   useEffect(() => {
     setOpen(false);
   }, [pathname, search]);
+  /**
+   * CLOSES ITSELF AT THE BREAKPOINT, RATHER THAN JUST HIDING THE PANEL.
+   *
+   * `md:hidden` on `SheetContent` used to be the only guard here, and it
+   * guarded the wrong thing: it hides the PANEL, but Radix's own dialog
+   * machinery — the overlay, the scroll lock, the focus trap — all read
+   * `open`, not a media query. A phone rotated to landscape (or a window
+   * dragged wider) past 768px with the drawer open left that machinery fully
+   * attached to a panel CSS had made invisible: body scroll still locked,
+   * focus still trapped, nothing on screen to say why or how to get out.
+   *
+   * A `matchMedia` listener that actually calls `setOpen(false)` tears the
+   * whole dialog down instead of painting over it — which is what lets
+   * `SheetContent` below drop `md:hidden` entirely: once this fires, Radix
+   * does not render the content at all, so there is nothing left for a class
+   * to hide.
+   */
+  useEffect(() => {
+    const query = window.matchMedia("(min-width: 768px)");
+    const closeAboveMd = () => {
+      if (query.matches) setOpen(false);
+    };
+    closeAboveMd();
+    query.addEventListener("change", closeAboveMd);
+    return () => query.removeEventListener("change", closeAboveMd);
+  }, []);
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -68,9 +94,10 @@ export function MobileDrawer({
           <Menu />
         </Button>
       </SheetTrigger>
-      {/* `md:hidden` HERE TOO, and it is not belt-and-braces: a drawer left
-          open while the window widens past 768px would otherwise sit over the
-          page beside the rail it stands in for.
+      {/* NO `md:hidden` HERE ANY MORE — see the breakpoint effect above. The
+          panel used to hide itself in CSS while staying "open" as far as
+          Radix was concerned; now it actually CLOSES at the breakpoint, so
+          there is nothing left here for a class to hide.
 
           280px, `--chrome`, `--border` — the export's own drawer. `p-0` and
           `gap-0` because the sheet's padded, gapped default is for a form and
@@ -82,7 +109,7 @@ export function MobileDrawer({
         side="left"
         showCloseButton={false}
         aria-describedby={undefined}
-        className="w-[280px] gap-0 border-border bg-chrome p-0 md:hidden"
+        className="w-[280px] gap-0 border-border bg-chrome p-0"
       >
         {/* Radix names the dialog from this; the drawer's own head is the
             workspace switcher, which is a name for the WORKSPACE rather than

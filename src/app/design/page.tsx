@@ -280,6 +280,12 @@ export default function DesignPage() {
         { id: "v4", name: "Weekly review", pos: "e", kind: "custom" },
         { id: "v5", name: "Ops", pos: "f", kind: "groups" },
       ]}
+      // The switcher (and the account panel it opens) is gated on `workspace`
+      // being truthy — `{workspace && (…)}` in `RailContent` — so without this
+      // the kit page's own account panel below is unreachable: no switcher
+      // renders, no trigger opens it. "Namzilabs" matches the panel's own
+      // hardcoded workspace name a few lines down.
+      workspace="Namzilabs"
       surface="overflow-y-auto bg-card"
       account={{
         initials: "EC",

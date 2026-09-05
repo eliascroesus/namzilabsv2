@@ -216,9 +216,11 @@ export function WorkspaceChip({ id, name, className }: { id?: string; name: stri
  * cannot separate those two hues.
  *
  * So the colour stays — it is what the reference draws and it is 9.20:1 here —
- * and a `neutral-700` chip goes under it, which is the same raised step the
- * hover already uses. Two signals, one of them not a colour, and the row still
- * looks like the reference's.
+ * and a `--control` chip goes under it: the SAME fill the search field wears
+ * a few rows up, not the hover's `--accent` step (a visibly stronger raise,
+ * reserved for what the pointer is over right now, which the active row is
+ * not). Two signals, one of them not a colour, and the row still looks like
+ * the reference's.
  *
  * IT USED TO BE THE OTHER WAY ROUND: a filled yellow chip with dark ink, on the
  * argument that one filled object in a column settles the question so the other
@@ -232,7 +234,7 @@ function RailChip({ tone, children }: { tone: "rest" | "active"; children: React
       className={cn(
         "flex size-8 items-center justify-center rounded-control transition-colors duration-(--duration-fast) ease-(--ease-standard) [&_svg]:size-[18px]",
         tone === "active"
-          ? "bg-accent text-marker"
+          ? "bg-control text-marker"
           : "text-foreground group-hover:bg-accent",
       )}
     >
@@ -552,9 +554,31 @@ export function RailContent({
             (account ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
+                  {/* `size="iconSm"` CARRIES NO PADDING OF ITS OWN, WHICH IS
+                      THE POINT. With no `size` at all this fell back to the
+                      "default" variant's `h-8 px-3 text-sm [&_svg]:size-4`,
+                      and `px-3` is a class `cn(SLOT, …)` has nothing to
+                      cancel it with — `SLOT` sets no horizontal padding — so
+                      it survived the merge and pushed the 28px square 12px
+                      off `ICON_COL`, 2px past the 56px rail's own edge,
+                      clipped. `iconSm` (the search button below already uses
+                      it) has no `px-*` of its own, so the row goes back to
+                      being exactly as wide as `ICON_COL` says it should be;
+                      `SLOT`'s own `w-full`/`h-9` still win the merge for the
+                      row's actual size, the same way they already do for the
+                      search button.
+
+                      `[&_svg]:size-3` is not decoration: every size variant
+                      ships its own `[&_svg]:size-*` (`iconSm`'s is `size-4`),
+                      and that descendant rule beats the chevron's own
+                      `size-3` on specificity no matter which order the two
+                      are written in — overriding at the same level, on the
+                      button that owns the rule, is the only spelling that
+                      actually lands. */}
                   <Button
                     variant="ghost"
-                    className={cn(SLOT, "hover:bg-transparent active:bg-transparent")}
+                    size="iconSm"
+                    className={cn(SLOT, "hover:bg-transparent active:bg-transparent [&_svg]:size-3")}
                     aria-label={`${workspace} — workspace and account`}
                   >
                     <span className={ICON_COL}>
@@ -651,12 +675,21 @@ export function RailContent({
                   the announced fact and the chip is `aria-hidden`, so "⌘K" is a
                   picture of the shortcut rather than half of the button's
                   name. */}
-              {/* `iconSm` rather than the default size, and it is load-bearing:
-                  that variant is the only one that carries no padding and sets
-                  `[&_svg]:size-4`, so the glyph lands at 16px inside the 28px
-                  chip. The ghost's own wash is switched OFF — the CHIP is what
-                  lights on hover, and a second wash behind it would draw a
-                  210px bar that no other row in the rail has. */}
+              {/* `iconSm` rather than the default size, and it is load-bearing
+                  for the padding: that variant is the only one that carries
+                  none of its own, so `SLOT`'s row keeps its own width instead
+                  of gaining a stray `px-3`. The ghost's own wash is switched
+                  OFF — the CHIP is what lights on hover, and a second wash
+                  behind it would draw a 210px bar that no other row in the
+                  rail has.
+
+                  `[&_svg]:size-[18px]` OVERRIDES `iconSm`'s OWN `[&_svg]:
+                  size-4`, and it has to: a descendant rule beats the
+                  magnifier's own `size-[18px]` on specificity regardless of
+                  which order the two are written in, and 16px is not this
+                  rail's icon scale — every other row draws its glyph at 18px,
+                  and a magnifier alone at 16 would be the one icon in the
+                  column that is quietly a size smaller than its neighbours. */}
               {/* THE FIELD LOOK IS THE WHOLE ROW'S NOW, NOT A HOVER STATE OF
                   IT — a bordered, filled box the way an actual search field
                   is drawn everywhere else in the kit, since this is a field
@@ -665,7 +698,7 @@ export function RailContent({
                 variant="ghost"
                 size="iconSm"
                 aria-keyshortcuts="Meta+K"
-                className={cn(SLOT, "border border-border bg-control hover:bg-control active:bg-control")}
+                className={cn(SLOT, "border border-border bg-control hover:bg-control active:bg-control [&_svg]:size-[18px]")}
               >
                 <span className={ICON_COL}>
                   <Search aria-hidden className="size-[18px] text-muted-foreground" />
@@ -739,26 +772,37 @@ export function RailContent({
               BE THE ONLY BRAND FILL IN THE RAIL.
               It has been a yellow slab, then a white chip with a hairline, and
               the argument each time was about how much brand a column could
-              carry. That argument resolves cleanly here: the mark at the top is
-              a brand RING, the active row is a brand GLYPH on a neutral chip,
-              and this is the single FILL. Three appearances of one colour in
-              three different shapes, each doing a different job — identity,
-              location, action — rather than three fills competing to be the
-              thing you press.
+              carry. That argument resolves cleanly here: the workspace
+              switcher's square at the head of the column is its own flat
+              brand TINT (identity — see `Sidebar`'s head block above), the
+              active row is a brand GLYPH on a neutral chip (location), and
+              this is the single FILL (action). Three appearances of one
+              colour in three different shapes, each doing a different job,
+              rather than three fills competing to be the thing you press.
 
-              THE INK IS THE GROUND. `--primary-foreground` is #1b191a at 8.08:1
-              on the fill, which is a constant rather than a role: the blue does
-              not invert and neither may what is written on it.
+              THE INK IS WHITE, NOT THE GROUND — and that it ever read
+              otherwise here is a tell for which era this comment was last
+              true. `--primary-foreground` is `#ffffff` in both themes: the
+              fill is `--primary` (the brand blue), and blue wants light ink
+              for contrast in light and dark alike. A DARK ink was the right
+              constant on the old YELLOW slab this replaced; it stayed
+              written down a full re-theme after the fill it described
+              actually went blue.
 
               24px, ON THE `ICON_COL` AXIS. The chip is the same size as every
-              other picture in the column, so the rail's single vertical line
-              runs unbroken from the mark to the bell. */}
+              other picture in the column, so the rail's own vertical line
+              runs unbroken from the switcher's square to the Get Free Access
+              bell below — a DIFFERENT bell from the one the top bar carries
+              for notifications; this one is the rail's own upsell row. */}
           {/* IT BECOMES A BUTTON WHEN THERE IS ROOM TO BE ONE.
               Collapsed, the brand is a 24px chip inside the icon column,
               because a 48px rail has space for a mark and nothing else.
               Expanded, the fill moves OUT of the chip and onto the row itself,
-              so "New flow" reads as the same full-width primary the top bar
-              carries rather than as a coloured square with a caption beside it
+              so "New flow" reads as a full-width primary — the row's OWN
+              filled state, not a match for the top bar's copy of the same
+              shortcut, which stays the ordinary secondary grey (blue is
+              reserved for the controls that add something, and this row
+              already is one of them without needing the bar's to agree too)
               — which is what it looked like, and it is the one control in the
               foot that is a verb.
               The fill swaps rather than stacks: the chip is removed at the same
@@ -784,7 +828,7 @@ export function RailContent({
               aria-hidden
               className={cn(
                 "flex size-8 shrink-0 items-center justify-center [&_svg]:size-[18px]",
-                "rounded-full bg-primary text-primary-foreground transition-colors duration-(--duration-fast) ease-(--ease-standard) group-hover:bg-brand-500",
+                "rounded-control bg-primary text-primary-foreground transition-colors duration-(--duration-fast) ease-(--ease-standard) group-hover:bg-brand-500",
                 /* THE "+" LEAVES WHEN THE WORDS ARRIVE. Collapsed, the glyph IS
                    the control — it is the only thing a 48px rail can say.
                    Expanded, the row reads "New flow" in full, and a plus beside
@@ -922,8 +966,23 @@ export function Sidebar({
       {/* THE TOGGLE FOLLOWS THE PANEL'S EDGE, NOT THE FOOTPRINT'S, and it is
           a sibling of the panel rather than a child: pressing it FOCUSES it,
           and while it sat inside `group/rail` that focus held the panel open
-          after a collapse. `top-12` centres it on y=60, the corner where the
-          bar's bottom rule meets the rail's right one. */}
+          after a collapse.
+
+          `-top-3` CENTRES IT ON THE ASIDE'S OWN TOP EDGE, NOT ON y=60 ANY
+          MORE. This used to read `top-12`, correctly, for a layout where the
+          bar sat BESIDE the rail: both started at y=0, the bar was 60px tall,
+          and a 24px (`iconXs`) button centred on that seam sits with its top
+          at 60 − 12 = 48, i.e. `top-12`. Task 7 moved the bar ABOVE this row
+          instead — so the aside's own top edge (its local y=0) now IS that
+          seam, 60px lower on the page than it used to be. `top-12` did not
+          adjust with it: it kept centring 48px into the aside's OWN frame,
+          which floated the button into the middle of the switcher's head
+          block, ~60px below the bar/rail corner it is supposed to sit on.
+          Centring a 24px button ON a point that is now the box's own edge
+          puts half of it outside the box: top = 0 − 12 = −12, i.e. `-top-3`
+          — half the button sits over the bar's own bottom-left corner, half
+          over the rail's, which is what "on the corner" has to mean once the
+          corner IS the aside's edge rather than a point inside it. */}
       <Button
         variant="ghost"
         size="iconXs"
@@ -931,7 +990,7 @@ export function Sidebar({
         aria-pressed={pinned}
         aria-label={pinned ? "Collapse the navigation" : "Keep the navigation open"}
         className={cn(
-          "absolute top-12 z-10 -translate-x-1/2 rounded-control border border-border bg-card text-muted-foreground shadow-card transition-[left] duration-(--duration-base) ease-(--ease-standard) hover:bg-accent hover:text-foreground",
+          "absolute -top-3 z-10 -translate-x-1/2 rounded-control border border-border bg-card text-muted-foreground shadow-card transition-[left] duration-(--duration-base) ease-(--ease-standard) hover:bg-accent hover:text-foreground",
           pinned ? "left-65" : "left-14 peer-hover:left-65 peer-focus-within:left-65",
         )}
       >

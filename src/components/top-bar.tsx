@@ -71,12 +71,16 @@ export function TopBar({
   const greeting = firstName ? `Welcome back, ${firstName}!` : "Welcome back!";
 
   return (
+    // The prose sits ABOVE the tag deliberately: tests/page-width.test.ts
+    // reads this bar's height by matching `<header className="…"`, and a
+    // comment between the two breaks the check that keeps the loading
+    // skeleton's band the same height as the real one.
     <header className="flex h-[60px] shrink-0 items-center justify-between gap-4 border-b border-border bg-chrome px-6 py-2">
       {/* ── THE WAY IN, THEN THE MARK ────────────────────────────────────
           The menu button exists only below `md`, where there is no rail to
           the left of this bar — it is the phone's whole navigation, so it
           takes the reading edge and the mark steps right by 40px. Above
-          `md` it is not rendered and this group is the wordmark alone,
+          `md` it is `display:none` and this group is the wordmark alone,
           exactly where it was. */}
       <div className="flex shrink-0 items-center gap-2">
         {menu}
@@ -85,7 +89,24 @@ export function TopBar({
         </Link>
       </div>
 
-      {/* ── WHAT YOU ARE LOOKING AT ──────────────────────────────────────── */}
+      {/* ── WHAT YOU ARE LOOKING AT ──────────────────────────────────────
+          `#topbar-slot` PORTALS the flow builder's entire toolbar into this
+          bar — its controls sit deep in the canvas's own client tree, holding
+          its undo stack and its save state, so lifting them out of the canvas
+          would mean lifting all of that with them.
+
+          KEEP THE ID. Losing `#topbar-slot` does not degrade the builder, it
+          breaks it: `document.getElementById("topbar-slot")` (see
+          `FlowToolbar.tsx`) returns null and the toolbar renders nowhere at
+          all.
+
+          THE GREETING IS THE OTHER OCCUPANT, and it steps aside rather than
+          sharing: `peer` + `:not(:empty)` lets the slot's own contents do the
+          hiding — `empty:hidden` on the slot is what stops an EMPTY one
+          claiming the centre from the greeting, and `peer-[:not(:empty)]:
+          hidden` on the greeting below is what yields it the moment the slot
+          has something in it — so no page has to remember to tell this bar
+          what it is doing. */}
       <div className="flex min-w-0 flex-1 items-center justify-center">
         <div id="topbar-slot" className="peer flex min-w-0 flex-1 items-center gap-2 empty:hidden" />
         {/* `max-sm:hidden`, NOT `hidden sm:block`, AND THE DIFFERENCE IS A
@@ -115,14 +136,20 @@ export function TopBar({
             in the drawer's foot — "New flow" is the rail's own filled row and
             has always been there, and "Invite members" is a guest of that
             foot for exactly as long as this bar has no room for it. What is
-            left up here on a phone is the menu, the mark and you, which is
-            the export's own phone bar.
+            left up here on a phone is the menu, the mark, the bell and you —
+            the bell stays at every width, unlike these two, because it is
+            reachable nowhere else on a phone — which is the export's own
+            phone bar.
             The label's `hidden sm:inline` goes with the move: it was the
             narrow-viewport accommodation this replaces, and a control that is
-            not rendered below `md` cannot need one. */}
+            not rendered below `md` cannot need one.
+            `[&_svg]:size-4` is gone from both: `buttonVariants`' own default
+            size already sets it (`h-8 px-3 text-sm [&_svg]:size-4`), so the
+            explicit copy here was setting a class to the value it already
+            had. */}
         <Link
           href="/dashboard/settings"
-          className={cn(buttonVariants({ variant: "secondary" }), "hidden md:inline-flex [&_svg]:size-4")}
+          className={cn(buttonVariants({ variant: "secondary" }), "hidden md:inline-flex")}
           title="Invite someone to this workspace"
         >
           <UserPlus />
@@ -130,7 +157,7 @@ export function TopBar({
         </Link>
         <Link
           href="/dashboard/flows"
-          className={cn(buttonVariants({ variant: "secondary" }), "hidden md:inline-flex [&_svg]:size-4")}
+          className={cn(buttonVariants({ variant: "secondary" }), "hidden md:inline-flex")}
         >
           <Plus />
           <span>New flow</span>

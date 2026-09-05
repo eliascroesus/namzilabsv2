@@ -45,7 +45,7 @@ export function AppFrame({
   children,
 }: {
   account?: { initials: string; avatarUrl?: string | null; panel: ReactNode };
-  /** The workspace's own name — shown beside its avatar in the top bar. */
+  /** The workspace's own name — shown beside its avatar in the rail's own head block, not the top bar (see `Sidebar`). */
   workspace?: string;
   /**
    * The signed-in person's first name, for the top bar's greeting.
@@ -117,18 +117,27 @@ export function AppFrame({
    * other route gets the ground without mentioning it.
    */
   /**
-   * THE NOTCH IS BACK, ON THE OTHER SIDE.
+   * THE NOTCH IS BACK, ON THE OTHER SIDE — IN DARK. `--radius-frame` went to
+   * 0 when the rail, the bar and the page became one `#0F1011`: a radius
+   * reveals whatever is BEHIND the element it is cut into, and cutting a
+   * corner out of a colour to reveal the same colour draws nothing at the
+   * cost of a gap the bar's hairline then has to stop short of. Dark has
+   * three surfaces again — the panel is `--panel` (`#181818`), the bar and
+   * rail `--chrome` (`#111111`) — so there is something behind the cut there,
+   * and the token is 8px.
    *
-   * `--radius-frame` went to 0 when the rail, the bar and the page became one
-   * #1B191A: a radius reveals whatever is BEHIND the element it is cut into,
-   * and cutting a corner out of a colour to reveal the same colour draws
-   * nothing at the cost of a gap the bar's hairline then has to stop short of.
-   * There are three surfaces again — the panel is `--panel`, the bar and rail
-   * `--chrome` — so there is something behind it, and the token is 8px.
+   * IT IS A DARK-THEME DEVICE, THOUGH, NOT A UNIVERSAL ONE — the spec says so
+   * explicitly (amended 5 Sep after the shell review) because this comment
+   * did not: in LIGHT, `--panel` is `var(--background)`, both `#F7F8F9`, so
+   * the exact failure above is what this corner does to itself there — a
+   * colour cut out of the same colour, drawing nothing. That is not a bug to
+   * fix; light was never meant to show a seam here, and `md:rounded-tr-frame`
+   * costs nothing to leave on where it is invisible.
    *
-   * WHICH corner is the part that changed. Every previous notch was TOP-LEFT,
-   * nearest the rail. The 4 September Figma cuts the TOP-RIGHT instead and
-   * leaves the rail-side corner square, so that is what this spells.
+   * WHICH corner is the part that changed, in dark. Every previous notch was
+   * TOP-LEFT, nearest the rail. The 4 September Figma cuts the TOP-RIGHT
+   * instead and leaves the rail-side corner square, so that is what this
+   * spells.
    */
   /**
    * THE CORNER IS A DESKTOP FACT. It reveals the page behind the panel where
@@ -146,7 +155,13 @@ export function AppFrame({
   const className = cn("relative min-w-0 flex-1 md:rounded-tr-frame bg-panel", surface);
 
   return (
-    // `h-dvh`, not `h-screen` — see the safe-area note below; unchanged.
+    // `h-dvh`, not `h-screen` — the dynamic viewport unit, so a phone's
+    // address bar sliding away does not leave a strip of `bg-background`
+    // showing under the frame. The left/right insets below are the same
+    // safe-area accommodation, on the other two edges: a phone in landscape
+    // (or one with a notch) can inset the viewport from either side, and
+    // without these two the bar's own edge-to-edge content would render
+    // partly behind the device's own chrome.
     <div
       className="flex h-dvh flex-col bg-background"
       style={{

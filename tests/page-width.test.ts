@@ -436,6 +436,24 @@ describe("the rail's pinned mode", () => {
     expect(code.indexOf("peer group/rail")).toBeLessThan(code.indexOf('aria-pressed={pinned}'));
     expect(code).toMatch(/peer-hover:left-65/);
   });
+
+  /**
+   * THE TOGGLE'S OWN ARITHMETIC MOVED WHEN THE BAR DID, AND THE CLASS DID
+   * NOT FOLLOW IT.
+   *
+   * `top-12` centred the 24px toggle on y=60 when the bar sat BESIDE the
+   * rail and both started at the page's own y=0. Task 7 put the bar ABOVE
+   * this row instead, so the aside's own top edge now IS that seam — and a
+   * positive `top-12` inside the aside's frame floats the button ~60px down
+   * into the middle of the switcher's own head block instead of on the
+   * corner where the bar's rule meets the rail's. Centring on a point that
+   * is now the box's own edge takes a NEGATIVE offset: `-top-3` (0 − 12).
+   */
+  it("centres the toggle on the aside's own top edge now that the bar sits above the row, not beside it", () => {
+    const code = sidebar.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    expect(code).toMatch(/absolute -top-3 z-10 -translate-x-1\/2 rounded-control/);
+    expect(code, "the old bar-beside-rail arithmetic must not come back").not.toMatch(/absolute top-12 z-10/);
+  });
 });
 
 describe("the frame's new shape — a full-width bar over [rail | panel]", () => {
@@ -514,6 +532,67 @@ describe("the rail's re-dress — a workspace switcher, Main Menu, a search fiel
     // rule is pinned at the one call site most likely to bend it.
     expect(sidebar).toMatch(/rounded-control bg-brand-500\/75 text-xs font-semibold text-white/);
     expect(sidebar, "no heavy weight anywhere in the rail").not.toMatch(/\bfont-(?:bold|black)\b/);
+  });
+
+  /**
+   * NO SIZE MEANT THE "default" VARIANT'S OWN `px-3` SURVIVED THE MERGE.
+   *
+   * `cn(SLOT, …)` sets no horizontal padding of its own to cancel it, so an
+   * un-sized `<Button variant="ghost">` fell back to `h-8 px-3 text-sm
+   * [&_svg]:size-4` and the 28px switcher square landed 12px off `ICON_COL`
+   * — 2px past the 56px rail's own edge, clipped. `px-3` itself is never
+   * spelled in THIS file — it comes from `buttonVariants`' own `cva` table in
+   * `button.tsx`, composed at render time from whichever `size` prop (or its
+   * absence) the caller passes — so the only thing checkable here, at the
+   * source, is that a `size` was actually given. Scoped to the switcher's own
+   * trigger, because `size="iconSm"` and `[&_svg]:size-3` both exist
+   * elsewhere in this file too (the search button below, other rows' icons),
+   * so a whole-file `toContain` would pass even with this ONE Button left
+   * un-sized — which is exactly the bug this exists to catch.
+   */
+  it("gives the switcher's trigger a size, so the default variant's own px-3 does not survive the merge", () => {
+    // Comment-stripped: the restored comment right after `<DropdownMenuTrigger>`
+    // explains the fix in prose that itself contains the literal string
+    // `size="iconSm"`, which would let this pass even with the prop removed
+    // from the actual `<Button>` below it.
+    const code = sidebar.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    const trigger = code.slice(code.indexOf("<DropdownMenuTrigger asChild>"), code.indexOf("</DropdownMenuTrigger>"));
+    expect(trigger).toContain('size="iconSm"');
+    expect(trigger).toContain("[&_svg]:size-3");
+  });
+
+  /**
+   * TWO ICON SIZES A SIZE VARIANT'S OWN `[&_svg]:size-*` WOULD OTHERWISE WIN.
+   *
+   * A descendant rule beats a plain utility on the element itself for
+   * specificity no matter which order the two are written in, so the
+   * switcher's chevron (wants `size-3`) and the search field's magnifier
+   * (wants `size-[18px]`) both silently rendered at whatever their OWN
+   * button's size variant shipped (`size-4` either way) until overridden at
+   * the same level, on the button that owns the rule.
+   *
+   * BOTH CHECKS ARE SCOPED TO THEIR OWN BUTTON, comment-stripped, and for two
+   * separate reasons neither may be a whole-file `toContain`: `[&_svg]:
+   * size-[18px]` is also `RailChip`'s own rule and the "+" chip's, both
+   * unrelated to the search field, so it is already IN this file regardless
+   * of whether the search button carries it; and the comments this task just
+   * wrote to explain both fixes themselves contain the literal strings being
+   * checked for.
+   */
+  it("overrides both size variants' own icon rule, for the chevron and the magnifier", () => {
+    const code = sidebar.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    const switcherTrigger = code.slice(code.indexOf("<DropdownMenuTrigger asChild>"), code.indexOf("</DropdownMenuTrigger>"));
+    expect(switcherTrigger).toContain("[&_svg]:size-3");
+    const searchButton = code.slice(code.indexOf('aria-keyshortcuts="Meta+K"'), code.indexOf('aria-keyshortcuts="Meta+K"') + 300);
+    expect(searchButton).toContain("[&_svg]:size-[18px]");
+  });
+
+  it("fills the active row's chip with --control, the search field's own fill, not the hover step", () => {
+    // The spec's own words: "nav rows 36px with 18px icons (active row
+    // `--control` fill)". `--accent` is the HOVER step, a stronger raise
+    // reserved for what the pointer is over right now.
+    expect(sidebar).toMatch(/tone === "active"\s*\n\s*\? "bg-control text-marker"/);
+    expect(sidebar, "the hover step must not come back as the active fill").not.toMatch(/"bg-accent text-marker"/);
   });
 
   it("leaves WorkspaceChip exactly as it was", () => {
