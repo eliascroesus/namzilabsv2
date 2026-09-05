@@ -29,8 +29,8 @@ import { GROUP_COLOR_KEYS, groupBadge, groupInk } from "@/components/flow/node-a
  * there is one hairline down the right edge doing the entire job. The glyphs sit
  * directly on the ground at 12.9:1 with no chip, because a chip is a surface
  * step and there is nothing here to step away from. The focus ring is the
- * product's own — cyan at 9.20:1 on this exact colour, which is the ring the
- * light page provably could not carry.
+ * product's own — blue (`#3D9BFF`) at 6.65:1 on this exact colour, which is
+ * the ring the light page provably could not carry.
  *
  * The rail's top block is still exactly the top bar's height, and that is still
  * the point: it is what makes the corner where the rail's rule meets the bar's
@@ -204,8 +204,8 @@ export function WorkspaceChip({ id, name, className }: { id?: string; name: stri
  * because a 210px bar lighting under the pointer is a shape nothing else in this
  * column draws.
  *
- * ACTIVE IS THE BRAND GLYPH, WITH A RAISED CHIP UNDER IT, AND THE CHIP IS THE
- * ONE PLACE THIS RAIL OVERRULES ITS REFERENCE.
+ * ACTIVE IS THE BRAND GLYPH, WITH THE ROW ITSELF RAISED — NOT THE CHIP — AND
+ * THAT IS THE ONE PLACE THIS RAIL OVERRULES ITS REFERENCE.
  *
  * The reference draws the active row as a coloured glyph and nothing else — no
  * fill, no rule, no chip. That is colour carrying state on its own, which is the
@@ -215,12 +215,17 @@ export function WorkspaceChip({ id, name, className }: { id?: string; name: stri
  * covers nothing for someone who can see the screen perfectly well and simply
  * cannot separate those two hues.
  *
- * So the colour stays — it is what the reference draws and it is 9.20:1 here —
- * and a `--control` chip goes under it: the SAME fill the search field wears
- * a few rows up, not the hover's `--accent` step (a visibly stronger raise,
- * reserved for what the pointer is over right now, which the active row is
- * not). Two signals, one of them not a colour, and the row still looks like
- * the reference's.
+ * So the colour stays — `text-marker`, 5.72:1 on `--control` in dark
+ * (`#3D9BFF` on `#202020`), up from ≈4.0:1 on the `--accent` fill this
+ * replaced — and `--control` goes under the WHOLE ROW (the `<Link
+ * className={SLOT}>` below, not this chip): the SAME fill the search field
+ * wears a few rows up, not the hover's `--accent` step (a visibly stronger
+ * raise, reserved for what the pointer is over right now, which the active
+ * row is not). The chip carries no fill of its own any more — with the row
+ * already raised, a second, smaller raise directly under the glyph would be
+ * one signal drawn twice. Two signals remain (the row's own fill, and a
+ * colour that is not just a colour), and the row still looks like the
+ * reference's.
  *
  * IT USED TO BE THE OTHER WAY ROUND: a filled yellow chip with dark ink, on the
  * argument that one filled object in a column settles the question so the other
@@ -234,7 +239,7 @@ function RailChip({ tone, children }: { tone: "rest" | "active"; children: React
       className={cn(
         "flex size-8 items-center justify-center rounded-control transition-colors duration-(--duration-fast) ease-(--ease-standard) [&_svg]:size-[18px]",
         tone === "active"
-          ? "bg-control text-marker"
+          ? "text-marker"
           : "text-foreground group-hover:bg-accent",
       )}
     >
@@ -737,8 +742,16 @@ export function RailContent({
                        printed name cannot drift. It stays announced at 70px
                        because clipping and `opacity: 0` hide a thing from the
                        eye and not from the tree. */
+                    /* `bg-control` ON THE ROW, NOT THE CHIP — the same fill
+                       the search field wears (see `RailChip`'s own doc
+                       comment for the rest of the argument). Spec: "active
+                       row `--control` fill". */
                     <Fragment key={href}>
-                      <Link href={href} aria-current={active ? "page" : undefined} className={SLOT}>
+                      <Link
+                        href={href}
+                        aria-current={active ? "page" : undefined}
+                        className={cn(SLOT, active && "bg-control")}
+                      >
                         <span className={ICON_COL}>
                           <RailChip tone={active ? "active" : "rest"}>
                             <Icon className="size-[18px]" />

@@ -587,11 +587,20 @@ describe("the rail's re-dress — a workspace switcher, Main Menu, a search fiel
     expect(searchButton).toContain("[&_svg]:size-[18px]");
   });
 
-  it("fills the active row's chip with --control, the search field's own fill, not the hover step", () => {
-    // The spec's own words: "nav rows 36px with 18px icons (active row
-    // `--control` fill)". `--accent` is the HOVER step, a stronger raise
-    // reserved for what the pointer is over right now.
-    expect(sidebar).toMatch(/tone === "active"\s*\n\s*\? "bg-control text-marker"/);
+  it("fills the active row itself with --control, not the 32px chip inside it", () => {
+    /**
+     * THE SPEC'S OWN WORDS: "nav rows 36px with 18px icons (active row
+     * `--control` fill)" — the ROW, not the chip. `--accent` is the HOVER
+     * step, a stronger raise reserved for what the pointer is over right
+     * now, and it was the fill's first stand-in before `--control` replaced
+     * it; both are checked against here so neither regression comes back.
+     * A chip raised INSIDE an already-raised row would be one signal drawn
+     * twice, which is why the chip (`RailChip`, above) carries no fill of
+     * its own at all — only the glyph's own `text-marker` colour.
+     */
+    expect(sidebar).toContain('className={cn(SLOT, active && "bg-control")}');
+    expect(sidebar).toMatch(/tone === "active"\s*\n\s*\? "text-marker"/);
+    expect(sidebar, "the fill must not land back on the chip").not.toMatch(/"bg-control text-marker"/);
     expect(sidebar, "the hover step must not come back as the active fill").not.toMatch(/"bg-accent text-marker"/);
   });
 

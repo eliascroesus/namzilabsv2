@@ -118,8 +118,9 @@ export function AppFrame({
    */
   /**
    * THE NOTCH IS BACK, ON THE OTHER SIDE — IN DARK. `--radius-frame` went to
-   * 0 when the rail, the bar and the page became one `#0F1011`: a radius
-   * reveals whatever is BEHIND the element it is cut into, and cutting a
+   * 0 when the rail, the bar and the page became one `#1B191A` — the cyan
+   * console's own ground, since retired for the blue retheme's `#0F1011`: a
+   * radius reveals whatever is BEHIND the element it is cut into, and cutting a
    * corner out of a colour to reveal the same colour draws nothing at the
    * cost of a gap the bar's hairline then has to stop short of. Dark has
    * three surfaces again — the panel is `--panel` (`#181818`), the bar and
