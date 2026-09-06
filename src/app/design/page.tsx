@@ -487,7 +487,7 @@ export default function DesignPage() {
           </div>
         </Section>
 
-        <Section title="Type" note="An 8px baseline and 16px spacing, set in the system UI face — SF Pro on Apple hardware, Segoe UI on Windows — with Inter (--font-sans) fifth in the stack, reached only where none of the platform's own UI-face keywords resolve, rather than dropping straight to Arial. One name per size: the kit's old aliases (micro/tiny/small/base/lead/title/display/stat/hero) have been deleted from the theme, and check:ui fails on them.">
+        <Section title="Type" note="An 8px baseline and 16px spacing, set in INTER — it leads both --font-sans and --font-display as of 6 September 2026, with system-ui and the platform keywords behind it as the fallback. Inter sat fifth in that stack for four days, which meant the webfont loaded on every page was never reached and only the two rules that named it directly (.stat-numeral, .wordmark) actually drew in it; those two name no family now and inherit like everything else. One name per size: the kit's old aliases (micro/tiny/small/base/lead/title/display/stat/hero) have been deleted from the theme, and check:ui fails on them.">
           <Card padding="none" className="divide-y divide-border">
             {TYPE.map((t) => (
               <div key={t.token} className="flex items-baseline gap-4 px-4 py-3">

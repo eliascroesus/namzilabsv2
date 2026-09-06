@@ -330,22 +330,25 @@ white inset ring on dark.
 
 ## 6. Type
 
-**Set in `system-ui`**, with `-apple-system` and `BlinkMacSystemFont` behind
-it for older Safari and Chromium, `"Segoe UI"` behind that for older Windows,
-and Inter fifth in `--font-sans` — that stack's actual reading order in
-`globals.css`, and Inter is the one name in it, not the workhorse: every
-platform this stack meets in practice resolves one of the first four
-keywords to its own UI face before `--font-sans`'s Inter is ever reached.
-Two rules invert that order on purpose: `.stat-numeral` (the tile's headline
-number) and `.wordmark` ("Namzilabs") both open with
-`var(--font-inter, "Inter")` first — the two places the Figma names Inter
-specifically rather than asking for the platform's own face, so those two
-alone put it first instead of fifth. The reference's export names "SF Pro",
-and this chased it with `-apple-system` first — but the reference's own
-rendered page reports `System-ui Semi-bold` in the inspector. It is asking
-the platform for its UI face, not naming Apple's. `system-ui` is the same
-thing said correctly: SF Pro on Apple hardware, Segoe UI Variable on
-Windows, the platform's own face on Linux.
+**Set in Inter**, everywhere, as of 6 September 2026. `--font-sans` and
+`--font-display` both open with `var(--font-inter, "Inter")` and keep
+`system-ui`, `-apple-system`, `BlinkMacSystemFont` and `"Segoe UI"` behind it
+as the fallback.
+
+For four days they did not. Inter sat FIFTH, behind four keywords that
+resolve on every platform in practice — so the face `next/font` self-hosts on
+every page load was never reached, a Mac drew the whole product in SF Pro, and
+the two rules that named Inter directly (`.stat-numeral` and `.wordmark`) came
+out in a visibly different face from the interface around them. The argument
+for that order was that the reference's own rendered page reports `System-ui`
+in the inspector rather than the "SF Pro" its export names, so asking the
+platform for its UI face was the honest reading. It was the wrong call twice
+over: it made the app's two loudest objects mismatch everything else, and
+it meant loading a webfont nobody would ever see.
+
+Neither `.stat-numeral` nor `.wordmark` names a family any more — they inherit
+Inter like everything else, and each keeps only what is genuinely its own
+(tabular digits and tracking; the 900 weight).
 
 **The display face is still gone, and the number holding its place got
 smaller.** Instrument Sans ran page titles, the landing hero and the metric

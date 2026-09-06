@@ -467,14 +467,27 @@ describe("Final pass docs item 3: the minor untruths are corrected", () => {
     expect(doc).toMatch(/bg-foreground\/15/);
   });
 
-  it("both docs state Inter's real stack position (fifth), not 'Inter last' alone", () => {
-    expect(brandKit()).toMatch(/Inter fifth/);
+  it("both docs say Inter LEADS the stack, and neither still claims it is fifth", () => {
+    /**
+     * RE-POINTED TWICE, WHICH IS THE POINT OF PINNING IT.
+     *
+     * First it read "Inter last", corrected to "Inter fifth" when someone
+     * counted the stack. On 6 Sep the stack itself changed — Inter moved to
+     * the FRONT of `--font-sans` and `--font-display`, because a webfont in
+     * fifth place is a webfont nobody sees — so the true sentence inverted
+     * again. The assertion follows the code both times rather than being
+     * deleted.
+     *
+     * Sabotage: write "Inter fifth" back into either doc and this fails.
+     */
+    const brand = brandKit();
     const doc = designMd();
-    // Re-pointed in docs fix round 1: the prose now reads "Inter fifth in
-    // `--font-sans`" (lowercase, scoped to the role) rather than the old
-    // unqualified "Inter FIFTH", and it names the two rules that invert the
-    // order on purpose so the claim does not overstate again.
-    expect(doc).toMatch(/Inter fifth in `--font-sans`/);
+    expect(brand).toMatch(/Inter first/);
+    expect(brand).not.toMatch(/\*\*Inter fifth\*\*/);
+    expect(doc).toMatch(/\*\*Set in Inter\*\*/);
+    expect(doc).not.toMatch(/Inter fifth in `--font-sans`/);
+    // Both still have to name the two rules that used to invert the order, so
+    // the correction says what changed rather than quietly dropping them.
     expect(doc).toMatch(/\.stat-numeral/);
     expect(doc).toMatch(/\.wordmark/);
   });

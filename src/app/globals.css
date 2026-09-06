@@ -178,10 +178,20 @@
      was drawn against, which is exactly the "everything looks slightly off and
      nobody can say why" this file exists to prevent. Measured in the browser,
      not inferred. */
+  /* INTER LEADS, AND THAT IS THE WHOLE POINT OF LOADING IT.
+     These two lines listed Inter FIFTH, behind four keywords that resolve on
+     every shipping platform — so the font `next/font` self-hosts on every page
+     load was never reached, a Mac drew the product in SF Pro, and the only two
+     rules that named Inter directly (`.stat-numeral`, `.wordmark`) came out in
+     a visibly different face from the interface around them. That mismatch was
+     the bug; the loading half was always fine.
+     `var(--font-inter)` is not one family: next/font expands it to the hashed
+     face plus a metric-matched `Inter Fallback` cut from Arial, so the system
+     keywords behind it are reached only where the variable is undefined. */
   /* prettier-ignore */
-  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", var(--font-inter, "Inter"), sans-serif;
+  --font-sans: var(--font-inter, "Inter"), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   /* prettier-ignore */
-  --font-display: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", var(--font-inter, "Inter"), sans-serif;
+  --font-display: var(--font-inter, "Inter"), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   /* IDs, API keys, webhook URLs, code. System mono — nothing to load, and
      technical strings stop wearing the browser's fallback serif-mono mix. */
   --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
@@ -1301,17 +1311,16 @@ select:-webkit-autofill {
  * The 2 September re-theme deleted the display face on the argument that a
  * numeral at 36px and -0.03em against a 15px interface already carried the
  * separation size alone could pay for. The 4 September Figma names Inter
- * specifically for this one number — the only place the export calls out a
- * face by name — so the numeral gets its own `font-family` here rather than
- * reading `--font-display` (which stays system-ui-first for every OTHER
- * heading). The size drops with it: 28px, not 36, because the old size was
- * solved for a face this element no longer uses.
+ * specifically for this one number, and as of 6 September the WHOLE interface
+ * is Inter — `--font-sans` leads with it — so this rule no longer names a
+ * family at all. What is left here is what is genuinely particular to a
+ * ledger figure: tabular digits, tight tracking, 600. The size dropped with
+ * the re-theme: 28px, not 36.
  *
  * `tabular-nums` is not decoration: these numbers refresh in place, and
  * proportional figures make a tile twitch every time a 1 becomes a 4.
  */
 .stat-numeral {
-  font-family: var(--font-inter, "Inter"), var(--font-sans);
   font-feature-settings: "tnum";
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.03em;
@@ -1344,7 +1353,9 @@ select:-webkit-autofill {
  * wrong. The exception lives in exactly one rule in one file.
  */
 .wordmark {
-  font-family: var(--font-inter, "Inter"), var(--font-sans);
+  /* No `font-family`: `--font-sans` leads with Inter now, so naming it here
+     would be a second copy of a value with exactly one home. The 900 weight
+     below is the real exception, and it still lives only here. */
   font-size: 1.5rem; /* 24px */
   line-height: 1.375rem; /* 22px */
   font-weight: 900;

@@ -200,7 +200,35 @@ describe("the blue re-theme's supplied shape and type constants", () => {
     expect(Number(lh) * 16).toBe(40);
     const numeral = css.match(/\.stat-numeral\s*\{([\s\S]*?)\n\}/)?.[1] ?? "";
     expect(numeral, "the .stat-numeral rule is missing").toBeTruthy();
-    expect(numeral).toMatch(/font-family:\s*var\(--font-inter/);
+    /**
+     * RE-POINTED FOR "INTER EVERYWHERE" (6 Sep 2026). The numeral used to name
+     * Inter itself, because `--font-sans` led with `system-ui` and this rule
+     * would otherwise have rendered in SF Pro. The stack now leads with Inter
+     * — pinned in the `it` below — so the numeral INHERITS it, and naming a
+     * family here would be a second copy of a one-home value. The pin flips
+     * from "names Inter" to "no longer has to".
+     */
+    expect(numeral).not.toMatch(/font-family/);
+    expect(numeral).toMatch(/font-weight:\s*600;/);
+  });
+
+  it("leads both font roles with Inter, so the face the app loads is the face it draws", () => {
+    /**
+     * THE BUG THIS PINS. Both roles listed Inter FIFTH, behind four keywords
+     * that resolve on every shipping platform, so `next/font`'s self-hosted
+     * Inter was never reached and a Mac drew the product in SF Pro — while
+     * `.stat-numeral` and `.wordmark`, which named Inter directly, came out in
+     * a different face from the interface around them.
+     *
+     * Sabotage: move `var(--font-inter, "Inter")` back behind `system-ui` in
+     * either role and this fails naming that role.
+     */
+    for (const role of ["--font-sans", "--font-display"] as const) {
+      const value = css.match(new RegExp(`${role}:\\s*([^;]+);`))?.[1] ?? "";
+      expect(value, `${role} is missing`).toBeTruthy();
+      expect(value.indexOf("var(--font-inter"), `${role} does not lead with Inter`).toBe(0);
+      expect(value, `${role} lost its system fallback`).toMatch(/system-ui/);
+    }
   });
 
   it("gives the wordmark its own class — Inter 900, the one weight above 600", () => {

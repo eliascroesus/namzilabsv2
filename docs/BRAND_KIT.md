@@ -234,14 +234,17 @@ fine" tint. `--success` itself keeps doing status work everywhere else
 
 ## 3. Typography
 
-**`system-ui`**, with `-apple-system` and `BlinkMacSystemFont` behind it for
-older Safari and Chromium, `"Segoe UI"` behind that for older Windows, and
-**Inter fifth** — the stack's real order (`--font-sans` in `globals.css`),
-so Inter is the one name in it, not what most visitors actually see: every
-platform this stack meets resolves one of the first four keywords to its
-own UI face first. The reference's export names "SF Pro"; its rendered page
-reports `System-ui`. It is asking the platform for its UI face rather than
-naming Apple's, and `system-ui` is that request spelled correctly.
+**Inter first**, in both `--font-sans` and `--font-display` (`globals.css`),
+with `system-ui`, `-apple-system`, `BlinkMacSystemFont` and `"Segoe UI"`
+behind it as the fallback chain.
+
+Inter was **fifth** in both roles until 6 September 2026, behind four keywords
+that resolve everywhere in practice — so `next/font`'s self-hosted Inter was
+never reached and the product drew in the platform's own UI face, while
+`.stat-numeral` and `.wordmark` named Inter directly and so rendered in a
+different face from everything around them. `var(--font-inter)` expands to the
+hashed face plus a metric-matched `Inter Fallback` cut from Arial, so the
+system keywords behind it are only reached where the variable is undefined.
 
 **The display face is deleted.** Instrument Sans ran page titles, the landing
 hero and the metric numeral. The distinction this interface draws is between the
