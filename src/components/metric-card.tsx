@@ -60,7 +60,7 @@ export function MetricCard({
   title,
   /** Chips that qualify the name — a chart label, an overridden period. */
   titleSuffix,
-  /** The freshness marker: a 6px dot when fine, a pill when not. */
+  /** The freshness marker: a 4px dot when fine, a chip when not. */
   marker,
   /**
    * Pre-formatted. `null` prints the em-dash — "no answer for this period" and

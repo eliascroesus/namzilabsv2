@@ -477,9 +477,14 @@ circle that does. Below `md` the board itself renders one column
 
 ## 6. Components (`src/components/ui/`)
 
-`Button` (**12** variants × 7 sizes — every clickable; `xs` is the dense row's
-geometry, for a tile footline where `sm` would crowd out the timestamp; `default`
-is the reference's 32px and the **workhorse is a bordered card chip**, not a
+`Button` (**12** variants × 6 sizes — every clickable. There is ONE height for
+a button with a label, 32px at 14px type, spelled either `sm` or `default`
+(they are the same rung); `lg` is 40 for the landing's hero; the three icon
+rungs are icon-only affordances in dense rows. The `xs` rung — 24px at 12px —
+was deleted on 6 September 2026: it had ended up on the dashboard header's
+three buttons, which left them visibly shorter and quieter than the
+identical-looking buttons in the top bar above them. The **workhorse is a
+bordered card chip**, not a
 solid fill — which is what a console's ordinary act looks like, and which is why
 the PRIMARY act has to say so: `SubmitButton` defaults to `accent`, because a
 submit is the primary act by definition and "Save" rendering as the same object

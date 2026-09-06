@@ -405,3 +405,53 @@ describe("the kit's shape", () => {
     expect(hash).toBe("f91062cdf8b829755da7d3860bde2ca10da414fbba24abc89aa42629969c60bd");
   });
 });
+
+/**
+ * THE 6 SEP 2026 AXIS PASS — the owner's note on the live app was "fix the
+ * metric cards … with fewer like Y axis lines and text".
+ *
+ * Four divisions drew five gridlines and five numbers behind a mark that is
+ * usually three or four points long: a grid competing with the line it exists
+ * to measure. The Figma draws three labels, a dashed floor and a thicker
+ * series line.
+ *
+ * Source pins, plus one real call into `niceTicks` — which is where the
+ * "three labels" claim is actually decided, and so the only part of it worth
+ * asserting against behaviour rather than against text.
+ */
+describe("the axis reads three lines, and the floor is dashed", () => {
+  const cartesian = readFileSync(join(process.cwd(), "src/components/board-charts/cartesian.tsx"), "utf8");
+
+  it("asks niceTicks for two divisions, so both marks draw three labels", async () => {
+    // Sabotage: drop AXIS_DIVISIONS from either call and the count returns to 5.
+    expect(cartesian).toContain("const AXIS_DIVISIONS = 2;");
+    // Non-greedy across the nested `Math.min(...)` / `Math.max(...)` parens.
+    const calls = cartesian.match(/niceTicks\([\s\S]*?, AXIS_DIVISIONS\)/g) ?? [];
+    expect(calls, "both the line and the bar mark pass it").toHaveLength(2);
+
+    const { niceTicks } = await import("@/lib/board/scale");
+    // The Figma's own example: a percent series topping out at 100.
+    expect(niceTicks(0, 100, 2).ticks).toEqual([0, 50, 100]);
+    // A real headline (28.2%) still gets round numbers that bracket it.
+    const pickup = niceTicks(0, 28.2, 2);
+    expect(pickup.ticks).toHaveLength(3);
+    expect(pickup.lo).toBe(0);
+    expect(pickup.hi).toBeGreaterThanOrEqual(28.2);
+    // The utility's own default is untouched: four divisions, five ticks.
+    expect(niceTicks(0, 97).ticks).toHaveLength(5);
+  });
+
+  it("dashes the floor, and keeps zero heavy when zero is not the floor", () => {
+    const grid = cartesian.slice(cartesian.indexOf("function Gridlines"), cartesian.indexOf("A LINE, OR AN AREA UNDER IT"));
+    expect(grid, "the floor is what gets the dashes").toContain("const isFloor = t === lo;");
+    expect(grid).toContain('strokeDasharray={isFloor ? "4 4" : undefined}');
+    expect(grid, "the floor takes the muted rule").toContain('isFloor ? "var(--color-muted-foreground)"');
+    expect(grid, "a crossing series still reads magnitude against zero").toContain('t === 0 ? "var(--color-neutral-500)"');
+  });
+
+  it("draws the series line at the Figma's weight, not a hairline", () => {
+    // Sabotage: put 1.5 back and this fails.
+    expect(cartesian).toContain('strokeWidth="3"');
+    expect(cartesian, "the hairline weight is gone from the series path").not.toContain('strokeWidth="1.5"');
+  });
+});

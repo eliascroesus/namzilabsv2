@@ -243,8 +243,9 @@ grounds rather than carrying the old numbers on faith: `#00D492` clears
 the light theme's `#00734B` is unchanged at **5.91:1** on white.
 
 What survives untouched is the half of the rule that was doing the real work —
-**status is quiet when fine.** A healthy thing carries a 6px dot; only a thing
-that needs something wears a full `StatusPill`. A board where every card shows
+**status is quiet when fine.** A healthy thing carries a 4px dot in a 12px
+wash of its own colour — the Figma's geometry, tightened from 6-in-16 on
+6 September 2026; only a thing that needs something wears a full `StatusPill`. A board where every card shows
 a green badge is furniture reporting no news, and it buries the one card that
 matters.
 

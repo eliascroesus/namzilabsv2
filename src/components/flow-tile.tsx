@@ -456,7 +456,7 @@ export function NotLive({ flowId }: { flowId: string }) {
 /**
  * QUIET WHEN FINE, LOUD WHEN NOT.
  *
- * A healthy tile says so with a 6px dot; anything else wears the full pill.
+ * A healthy tile says so with a 4px dot; anything else wears a chip.
  * Every tile used to carry a green "Up to date" badge, which is a board full
  * of labels reporting no news — and it made the one tile that DID need
  * attention just another badge in a row of badges. Plain English throughout:
@@ -472,12 +472,15 @@ export function Freshness({ status }: { status: string }) {
   if (status === "fresh") {
     return (
       /**
-       * STILL A 6px DOT (docs/BRAND_KIT.md says so, and the quiet-when-fine
-       * rule depends on it staying small) — now sitting in a 16px wash of its
-       * own colour. A bare 6px dot at the corner of a 24px-padded card read as
-       * a speck of dust; the halo gives it a shape to be, at no extra ink.
-       * It is also what makes the healthy state and the pill states the same
-       * SIZE, so the head does not reflow when a tile goes stale.
+       * A 4px DOT IN A 12px WASH OF ITS OWN COLOUR — the Figma's exact
+       * geometry, tightened from 6-in-16 on 6 Sep 2026.
+       *
+       * The quiet-when-fine rule depends on this staying small: a healthy
+       * tile says so with a dot, and only a tile that needs you gets a chip.
+       * A bare dot at the corner of a padded card read as a speck of dust,
+       * so the halo gives it a shape to be at no extra ink — and it is what
+       * makes the healthy state and the chip states the same SIZE, so the
+       * head does not reflow when a tile goes stale.
        *
        * ITS OWN TOKEN, AS OF THE 4 SEP 2026 BLUE RETHEME — not `--success`
        * borrowed. `--freshness-dot`/`--freshness-halo` (globals.css) are a
@@ -486,12 +489,12 @@ export function Freshness({ status }: { status: string }) {
        * cannot dim what "goal met" means.
        */
       <span
-        className="mt-px flex size-4 shrink-0 items-center justify-center rounded-full bg-freshness-halo"
+        className="mt-px flex size-3 shrink-0 items-center justify-center rounded-full bg-freshness-halo"
         title="Up to date"
         role="img"
         aria-label="Up to date"
       >
-        <span className="size-1.5 rounded-full bg-freshness-dot" />
+        <span className="size-1 rounded-full bg-freshness-dot" />
       </span>
     );
   }

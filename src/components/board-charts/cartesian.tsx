@@ -46,6 +46,19 @@ const AXIS_LABEL = "tnum whitespace-nowrap text-xs leading-none text-muted-foreg
  */
 const AXIS_LABEL_X = "tnum whitespace-nowrap text-xs leading-4 text-muted-foreground";
 
+/**
+ * TWO DIVISIONS, SO THREE LABELS: the floor, the middle and the ceiling.
+ *
+ * `niceTicks` keeps its own default of 4 — it is a general utility and its
+ * tests pin that — and the chart asks for fewer. Four divisions drew five
+ * gridlines and five numbers behind a mark that is usually three or four
+ * points long, which is a grid competing with the line it exists to measure.
+ * The Figma draws three, and the values stay honest because `niceTicks` still
+ * chooses a round step and still brackets the data: a 0-to-28.2 series reads
+ * 0 / 20 / 40 rather than 0 / 10 / 20 / 30.
+ */
+const AXIS_DIVISIONS = 2;
+
 /** Where a value sits in the plot, as a percentage from the TOP. */
 const yPct = (v: number, lo: number, hi: number) => (hi === lo ? 100 : ((hi - v) / (hi - lo)) * 100);
 
@@ -103,20 +116,37 @@ function edgeLabels(buckets: string[], unit?: BucketUnit): string[] {
 function Gridlines({ ticks, lo, hi }: { ticks: number[]; lo: number; hi: number }) {
   return (
     <>
-      {ticks.map((t) => (
-        <line
-          key={t}
-          x1="0"
-          x2="100"
-          y1={yPct(t, lo, hi)}
-          y2={yPct(t, lo, hi)}
-          // The zero line is the one you read magnitude against, so it is a
-          // shade heavier than the rest.
-          stroke={t === 0 ? "var(--color-neutral-500)" : "var(--color-border)"}
-          strokeWidth="1"
-          vectorEffect="non-scaling-stroke"
-        />
-      ))}
+      {ticks.map((t) => {
+        /**
+         * THE FLOOR IS DASHED; EVERYTHING ABOVE IT IS A SOLID HAIRLINE.
+         *
+         * The Figma draws the baseline as a dashed muted rule and the lines
+         * above it as solid `--border`, which reads as "this is where the
+         * plot stops" rather than as one more measurement line. It is the
+         * axis floor rather than zero, because a series that never reaches
+         * zero has a floor somewhere else and that is still the edge of the
+         * drawing.
+         *
+         * Zero keeps its heavier stroke when it is NOT the floor — a series
+         * that crosses zero has one line you read magnitude against, and
+         * losing it would cost real information to match a mock whose data
+         * happened to start at zero.
+         */
+        const isFloor = t === lo;
+        return (
+          <line
+            key={t}
+            x1="0"
+            x2="100"
+            y1={yPct(t, lo, hi)}
+            y2={yPct(t, lo, hi)}
+            stroke={isFloor ? "var(--color-muted-foreground)" : t === 0 ? "var(--color-neutral-500)" : "var(--color-border)"}
+            strokeWidth="1"
+            strokeDasharray={isFloor ? "4 4" : undefined}
+            vectorEffect="non-scaling-stroke"
+          />
+        );
+      })}
     </>
   );
 }
@@ -152,7 +182,7 @@ export function LineChart({
   // The target bounds the axis in BOTH directions. Folded into the max alone,
   // a negative goal put the dashed line 250% below the viewBox — invisible,
   // with nothing to say the goal existed.
-  const { ticks, lo, hi } = niceTicks(Math.min(...values, target ?? Infinity), Math.max(...values, target ?? -Infinity));
+  const { ticks, lo, hi } = niceTicks(Math.min(...values, target ?? Infinity), Math.max(...values, target ?? -Infinity), AXIS_DIVISIONS);
   const x = (i: number) => (points.length === 1 ? 50 : (i / (points.length - 1)) * 100);
 
   /**
@@ -221,7 +251,7 @@ export function LineChart({
           d={runs.join(" ")}
           fill="none"
           stroke={accent}
-          strokeWidth="1.5"
+          strokeWidth="3"
           strokeLinejoin="round"
           strokeLinecap="round"
           vectorEffect="non-scaling-stroke"
@@ -231,7 +261,7 @@ export function LineChart({
           <circle cx="50" cy={yPct(points[0].value, lo, hi)} r="2" fill={accent} vectorEffect="non-scaling-stroke" />
         )}
         {/* Invisible hit bands — deliberately the full plot height and fatter
-            than the mark, because pointing at a 1.5px line is not a thing
+            than the mark, because pointing at a 3px line is not a thing
             anyone should be asked to do. */}
         {points.map((p, i) => (
           <rect
@@ -242,7 +272,7 @@ export function LineChart({
             height="100"
             fill="transparent"
             /* `data-x` / `data-y` ARE THE POINT, not the band. The band is a
-               fat invisible column so that pointing at a 1.5px line is not
+               fat invisible column so that pointing at a 3px line is not
                asked of anyone — but its own centre is NOT the point (the first
                and last bands are half-width and hang off their point), so a
                crosshair drawn from the rect's box would sit wrong at both ends.
@@ -290,7 +320,7 @@ export function BarsVertical({
   // The target bounds the axis in BOTH directions. Folded into the max alone,
   // a negative goal put the dashed line 250% below the viewBox — invisible,
   // with nothing to say the goal existed.
-  const { ticks, lo, hi } = niceTicks(Math.min(...values, target ?? Infinity), Math.max(...values, target ?? -Infinity));
+  const { ticks, lo, hi } = niceTicks(Math.min(...values, target ?? Infinity), Math.max(...values, target ?? -Infinity), AXIS_DIVISIONS);
   const zero = yPct(Math.max(lo, Math.min(hi, 0)), lo, hi);
   const slot = 100 / points.length;
 
