@@ -359,9 +359,14 @@ describe("The two new roles from the code pass are documented in every doc", () 
  * Figma's one colourless fill. Both docs previously claimed the glyph
  * "never changes colour" / "is not a coloured glyph", which is code that
  * does not exist. These pin the corrected claim and ban the retired one.
+ *
+ * DOCS-FIX ROUND 1: the same false claim ("a neutral --control fill, not a
+ * coloured icon/glyph") survived in three places in `/design` itself
+ * (the reference page), so this block now reads that file too.
  */
 describe("Both docs say the active nav glyph keeps its colour (two signals, not one)", () => {
   const designMd = () => readFileSync(join(root, "DESIGN.md"), "utf8");
+  const page = () => readFileSync(join(root, "src/app/design/page.tsx"), "utf8");
 
   it("DESIGN.md no longer claims the glyph's colour never changes", () => {
     const doc = designMd();
@@ -373,6 +378,37 @@ describe("Both docs say the active nav glyph keeps its colour (two signals, not 
     const doc = brandKit();
     expect(doc).not.toMatch(/not a coloured glyph/);
     expect(doc).toMatch(/text-marker/);
+  });
+
+  it("/design no longer claims the active row's glyph carries no colour", () => {
+    const src = page();
+    expect(src).not.toMatch(/not a coloured/);
+    expect(src).toMatch(/text-marker/);
+  });
+});
+
+/**
+ * DOCS FIX ROUND 1, ITEM 3: THE ACTIVE TAB'S RULE IS 1PX — SPEC, FIGMA AND
+ * NOW THE CODE.
+ *
+ * `border-b` in `src/app/dashboard/board-controls.tsx` and `after:h-px` in
+ * `src/components/ui/tabs.tsx` (commit 9d328f4) both draw the rule at 1px.
+ * `docs/BRAND_KIT.md` already said 1px in both places; `DESIGN.md` said 2px,
+ * which used to match the code before 9d328f4 and now does not.
+ */
+describe("The active tab's rule is pinned at 1px in both docs", () => {
+  const designMd = () => readFileSync(join(root, "DESIGN.md"), "utf8");
+
+  it("BRAND_KIT.md's roles paragraph and its PageHeader tab-strip sentence both say 1px", () => {
+    const doc = brandKit();
+    expect(doc).toMatch(/the active tab's 1px bottom rule/);
+    expect(doc).toMatch(/with a 1px\s+`border-tab-rule` bottom rule/);
+  });
+
+  it("DESIGN.md's furniture section says 1px, not 2px", () => {
+    const doc = designMd();
+    expect(doc).not.toMatch(/a 2px rule that\s+went from a green/);
+    expect(doc).toMatch(/a 1px rule that\s+went from a green/);
   });
 });
 
@@ -392,11 +428,16 @@ describe("Final pass docs item 3: the minor untruths are corrected", () => {
   const page = () => readFileSync(join(root, "src/app/design/page.tsx"), "utf8");
 
   it("DESIGN.md's 10px 'contains' list no longer includes the period track", () => {
-    expect(designMd()).not.toMatch(/popovers,\s*selects, the period track, tables/);
+    const doc = designMd();
+    expect(doc).not.toMatch(/popovers,\s*selects, the period track, tables/);
+    expect(doc).toMatch(/a select's own open menu/);
+    expect(doc).toMatch(/The period track is NOT in this group any more/);
   });
 
   it("/design's shape note no longer double-lists the period track under both 10px and 8px", () => {
-    expect(page()).not.toMatch(/popovers, selects, the period track\. Everything pressable is 8/);
+    const src = page();
+    expect(src).not.toMatch(/popovers, selects, the period track\. Everything pressable is 8/);
+    expect(src).toMatch(/a select's own open menu/);
   });
 
   it("BRAND_KIT.md states the phone board's one column as shipped fact, not a hedged future pass", () => {
@@ -413,17 +454,37 @@ describe("Final pass docs item 3: the minor untruths are corrected", () => {
 
   it("both docs state Inter's real stack position (fifth), not 'Inter last' alone", () => {
     expect(brandKit()).toMatch(/Inter fifth/);
-    expect(designMd()).toMatch(/Inter FIFTH/);
+    const doc = designMd();
+    // Re-pointed in docs fix round 1: the prose now reads "Inter fifth in
+    // `--font-sans`" (lowercase, scoped to the role) rather than the old
+    // unqualified "Inter FIFTH", and it names the two rules that invert the
+    // order on purpose so the claim does not overstate again.
+    expect(doc).toMatch(/Inter fifth in `--font-sans`/);
+    expect(doc).toMatch(/\.stat-numeral/);
+    expect(doc).toMatch(/\.wordmark/);
   });
 
   it("BRAND_KIT.md's hover bullet states the mirror depth rule instead of 'which recesses'", () => {
-    expect(brandKit()).not.toMatch(/hover:bg-muted`, which recesses/);
+    const doc = brandKit();
+    expect(doc).not.toMatch(/hover:bg-muted`, which recesses/);
+    expect(doc).toMatch(/a step UP from the surface/);
+    expect(doc).toMatch(/#ECECEC/);
   });
 
-  it("BRAND_KIT.md's Button count reads twelve variants by seven sizes, not eleven by six", () => {
+  it("BRAND_KIT.md's Button count matches the variant/size keys in button.tsx, not a stale literal", () => {
+    // DOCS FIX ROUND 1: counted from the source instead of pinned as a
+    // literal, so the doc and this pin go stale together the next time a
+    // variant or size lands, rather than the pin quietly outliving the code.
+    const buttonSrc = readFileSync(join(root, "src/components/ui/button.tsx"), "utf8");
+    const sizeBlockStart = buttonSrc.indexOf("size: {");
+    const topLevelKey = /^ {8}[A-Za-z]+: "/gm;
+    const variantCount = (buttonSrc.slice(0, sizeBlockStart).match(topLevelKey) ?? []).length;
+    const sizeCount = (buttonSrc.slice(sizeBlockStart).match(topLevelKey) ?? []).length;
+    expect(variantCount).toBeGreaterThan(0);
+    expect(sizeCount).toBeGreaterThan(0);
     const doc = brandKit();
     expect(doc).not.toMatch(/\*\*11\*\* variants × 6 sizes/);
-    expect(doc).toMatch(/\*\*12\*\* variants × 7 sizes/);
+    expect(doc).toMatch(new RegExp(`\\*\\*${variantCount}\\*\\* variants × ${sizeCount} sizes`));
   });
 
   it("/design's Buttons section reads twelve variants, not eleven", () => {
@@ -432,11 +493,17 @@ describe("Final pass docs item 3: the minor untruths are corrected", () => {
   });
 
   it("neither doc still calls the interaction chip a 'pill that now says something else'", () => {
-    expect(brandKit()).not.toMatch(/figure under a\s*pill that now says something else/);
-    expect(designMd()).not.toMatch(/figure under a pill that now says something else/);
+    const kit = brandKit();
+    const design = designMd();
+    expect(kit).not.toMatch(/figure under a\s*pill that now says something else/);
+    expect(design).not.toMatch(/figure under a pill that now says something else/);
+    expect(kit).toMatch(/figure under a\s*chip that now says something else/);
+    expect(design).toMatch(/figure under a chip that now says something else/);
   });
 
   it("BRAND_KIT.md's Chip entry no longer calls it a filter pill", () => {
-    expect(brandKit()).not.toMatch(/Chip`\s*\(filter pill/);
+    const doc = brandKit();
+    expect(doc).not.toMatch(/Chip`\s*\(filter pill/);
+    expect(doc).toMatch(/Chip`\s*\(filter chip/);
   });
 });

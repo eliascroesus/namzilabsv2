@@ -148,7 +148,7 @@ const DIRECTION: Array<{ rule: string; why: string }> = [
   },
   {
     rule: "One blue, two jobs",
-    why: "#007BFF replaces the cyan everywhere. It does two jobs, not three: a STROKE (--marker: links, the focus ring, a selected edge — NOT the active tab's rule, which is the grey --tab-rule role instead) at 6.65:1 down to 6.20:1 across the three dark surfaces, and a FILL (--primary, one step deeper at #0070E8) at 4.68:1 under white ink. The 'glyph is location' job the cyan carried is gone — the rail's active row is a neutral --control fill now, not a coloured icon, because that is what the Figma draws. Success is still NOT the brand: it keeps the green the brand vacated, because a DONE badge and a New-flow button being one colour puts the loudest state and the loudest act in one vocabulary. Warn and danger are the other two state hues, and status is still quiet when fine.",
+    why: "#007BFF replaces the cyan everywhere. It does two jobs, not three: a STROKE (--marker: links, the focus ring, a selected edge — NOT the active tab's rule, which is the grey --tab-rule role instead) at 6.65:1 down to 6.20:1 across the three dark surfaces, and a FILL (--primary, one step deeper at #0070E8) at 4.68:1 under white ink. The 'glyph is location' job the cyan carried folded into this one instead — the rail's active row takes a neutral --control fill UNDER the glyph, and RailChip keeps text-marker on the glyph itself, so location is now two signals rather than the Figma's one colourless fill. Success is still NOT the brand: it keeps the green the brand vacated, because a DONE badge and a New-flow button being one colour puts the loudest state and the loudest act in one vocabulary. Warn and danger are the other two state hues, and status is still quiet when fine.",
   },
   {
     rule: "Ten contains, eight presses",
@@ -328,9 +328,9 @@ export default function DesignPage() {
               the one thing the brand could not be — #eecf00 measures 1.55:1 on
               a light sheet, so a caps label in it was unreadable on the one
               page whose entire job is to be read, and `--marker-ink` existed to
-              carry exactly this case. The blue measures 6.59:1 on chrome,
-              6.20:1 on the dark panel this page renders on, 5.80:1 on white
-              and 5.46:1 on the light page. */}
+              carry exactly this case. The blue measures 6.59:1 on the chrome
+              this page's `bg-card` renders on, 6.20:1 on the dark panel,
+              5.80:1 on white and 5.46:1 on the light page. */}
           <p className="text-xs font-semibold uppercase tracking-widest text-marker">Brand kit</p>
           {/* THE TOGGLE IS GONE, along with the theme it toggled. It belonged on
               this page more than anywhere else while half the kit was role
@@ -749,7 +749,7 @@ export default function DesignPage() {
 
         <Section
           title="Rail"
-          note="A 56px icon column on --chrome (#111111), one step off the #0F1011 page beside it and separated by one hairline. These tiles are a swatch — the real markup lives in src/components/sidebar.tsx and nowhere else, and it has moved on from what is drawn here: the rail opens to 260px on hover with a workspace switcher at its head, a Main Menu caption and a Get Free Access row at its foot. The active row is a neutral --control fill, not a coloured glyph: the brand's 'location' job retired with the cyan, and the fill is spent on the New flow button in the foot."
+          note="A 56px icon column on --chrome (#111111), one step off the #0F1011 page beside it and separated by one hairline. These tiles are a swatch — the real markup lives in src/components/sidebar.tsx and nowhere else, and it has moved on from what is drawn here: the rail opens to 260px on hover with a workspace switcher at its head, a Main Menu caption and a Get Free Access row at its foot. The active row takes a neutral --control fill UNDER its glyph, and the glyph keeps text-marker on top of it — two signals, not the Figma's one — so the brand's 'location' job did not retire with the cyan after all; it just no longer carries the state alone."
         >
           <div className="flex items-stretch gap-4">
             {/* `bg-chrome`, which is what the real rail is painted. It was
@@ -760,12 +760,14 @@ export default function DesignPage() {
                 itself is long retired — see the retired-token table.) */}
             <div className="inline-flex items-start gap-3 rounded-card bg-chrome px-5 py-4">
               <span className="flex w-14 flex-col items-center">
-                {/* THE ACTIVE ROW IS NEUTRAL NOW. It was the brand, filled —
-                    the "glyph is location" job the cyan carried. The 4 Sep 2026
-                    Figma marks the active row with a `--control` fill and an
-                    ordinary ink glyph, which is what leaves the brand free to
-                    mean "this does something" everywhere else. */}
-                <span className="flex size-10 items-center justify-center rounded-control bg-control text-foreground">
+                {/* THE ACTIVE ROW IS NEUTRAL UNDER THE GLYPH, NOT INSTEAD OF
+                    IT. The 4 Sep 2026 Figma marks the active row with a
+                    `--control` fill and an uncoloured glyph — but RailChip
+                    (sidebar.tsx) overrules that on purpose, keeping
+                    `text-marker` on the glyph on top of the fill, per WCAG
+                    1.4.1: colour cannot carry state alone. Two signals, not
+                    the Figma's one. */}
+                <span className="flex size-10 items-center justify-center rounded-control bg-control text-marker">
                   <LayoutDashboard size={24} />
                 </span>
                 <span className="px-1 text-center text-xs font-medium leading-4 text-white">Active</span>

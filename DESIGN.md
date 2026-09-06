@@ -198,7 +198,7 @@ blue. See §7.
 there.* The ring that used to mark the rail's own mark left with the mark
 itself: the wordmark moved to the top bar as plain text (§2), and nothing
 rings it there. The active nav row's glyph did NOT lose its colour —
-`RailChip` still inks it `text-marker` (`#3D9BFF` on `#202020`, 5.72:1), the
+`RailChip` still inks it `text-marker` (`#3D9BFF` on `#202020`, 5.69:1), the
 same signal step a link or a focus ring uses — but the state is no longer
 that colour ALONE: the Figma's neutral `--control` fill goes under the
 whole row first, and the glyph's colour rides on top as a second signal,
@@ -274,8 +274,10 @@ none. Two flips with no stated reference produced a genuine "which one is
 right" argument each time; this file names the 4 September 2026 Figma as
 the reference specifically so a third flip needs a new design behind it,
 not a preference. `buttonVariants`' base class carries `rounded-control`
-(8px) rather than `rounded-full`; the period track's segments do the
-same. The WRAP exception the last flip needed — a control that wraps to
+(8px) rather than `rounded-full`; `PERIOD_TRACK` — the groove itself, not
+just `PERIOD_PILL`'s segments inside it — carries the same `rounded-control`
+class, so the container and what presses inside it share one radius rather
+than a bigger one clipping a smaller one. The WRAP exception the last flip needed — a control that wraps to
 two lines cannot be a pill, because a full radius on a two-line box
 renders as a circle around the words — does not reopen, because nothing
 here is a pill for that exception to be an exception to. `rounded-control`
@@ -330,10 +332,15 @@ white inset ring on dark.
 
 **Set in `system-ui`**, with `-apple-system` and `BlinkMacSystemFont` behind
 it for older Safari and Chromium, `"Segoe UI"` behind that for older Windows,
-and Inter FIFTH — the stack's actual reading order in `globals.css`, and
-Inter is the one name in it, not the workhorse: every platform this stack
-meets in practice resolves one of the first four keywords to its own UI
-face before Inter is ever reached. The reference's export names "SF Pro",
+and Inter fifth in `--font-sans` — that stack's actual reading order in
+`globals.css`, and Inter is the one name in it, not the workhorse: every
+platform this stack meets in practice resolves one of the first four
+keywords to its own UI face before `--font-sans`'s Inter is ever reached.
+Two rules invert that order on purpose: `.stat-numeral` (the tile's headline
+number) and `.wordmark` ("Namzilabs") both open with
+`var(--font-inter, "Inter")` first — the two places the Figma names Inter
+specifically rather than asking for the platform's own face, so those two
+alone put it first instead of fifth. The reference's export names "SF Pro",
 and this chased it with `-apple-system` first — but the reference's own
 rendered page reports `System-ui Semi-bold` in the inspector. It is asking
 the platform for its UI face, not naming Apple's. `system-ui` is the same
@@ -397,7 +404,7 @@ never `.css`.
 
 - **View strip** — the board's arrangements, Notion's view bar doing Notion's
   job. Real anchors, so a link pasted into Slack opens on the sender's view.
-  The active tab used to carry the state in colour ALONE — a 2px rule that
+  The active tab used to carry the state in colour ALONE — a 1px rule that
   went from a green measuring 1.78:1 on the light ground, to a violet at
   4.41:1, to a cyan that cleared its own bar with room to spare — and colour
   got QUIETER at the same time it got easier to read: the rule this Figma

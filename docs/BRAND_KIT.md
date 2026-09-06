@@ -531,9 +531,10 @@ slot — tab strip left (an active tab at 15px/600 in `--heading` with a 1px
 and a "…" menu; inactive tabs 15px/500, muted; a 28px `secondary` "+"
 square), the title itself centred at 26px/600
 with its pencil, and the actions right. The dashboard is the one caller,
-and its three actions are the export's: a **"Today" dropdown** (`secondary`
-`xs`, a 16px calendar glyph, the selected preset's label, a chevron) in
-place of the six-pill period track — same six presets, same `?range=` in
+and its three actions are the export's: a **"Today ▾" dropdown** (`secondary`
+`xs`, a 16px calendar glyph, the selected preset's label, a chevron — a
+`DropdownMenu` per spec ruling S4) in place of the old six-segment period
+track — same six presets, same `?range=` in
 the URL, a tenth of the width and no horizontal scroller; **"+ Add"** on
 the brand fill at `xs` with a 16px plus; and **"Refresh All"** `secondary`
 `xs` with a 16px refresh glyph. Blue is spent on "+ Add" and "New flow",
