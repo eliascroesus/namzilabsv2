@@ -43,11 +43,11 @@ export type CalendarMetric = {
  * actually uses. Both call this.
  *
  * WHAT IT MIXES INTO. `white`, until now — which is right for exactly one of
- * the two themes. Under `.dark` a violet-over-white square is a lit box inside
- * a near-black card, and the ramp's own top step was the brightest thing on
- * the page. `var(--card)` is the surface the square is actually cut out of, so
- * the ramp is the same GESTURE at both exposures instead of one theme's colour
- * pasted into the other.
+ * the two themes. Under `.dark` a violet-over-white square WAS a lit box
+ * inside a near-black card, and the ramp's own top step was the brightest
+ * thing on the page. `var(--card)` is the surface the square is actually cut
+ * out of, so the ramp is the same GESTURE at both exposures instead of one
+ * theme's colour pasted into the other.
  *
  * THE FLOOR AND THE RISE. 12% at the bottom, 56% at the top. It ran 8–38 and
  * before that 4–22, each pass finding the same thing: a heat map whose loudest

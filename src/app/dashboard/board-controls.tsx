@@ -617,9 +617,16 @@ export function ViewTab({
        * change on the label itself (`font-semibold text-heading`, argued
        * below) does the job now, so a hairline under a heavier word reads as
        * unmistakably as a thicker rule under an equal-weight one did, and the
-       * rule can go back to matching the reference exactly. The row's height
-       * is set by the 24px gap and the kebab beside it, not by the rule's own
-       * weight.
+       * rule can go back to matching the reference exactly.
+       *
+       * THE TAB BOX, NOT THE KEBAB, SETS THE ROW'S HEIGHT. `--text-sm`'s
+       * 22px line-height plus the anchor's `py-1` (4px top and bottom) plus
+       * this rule and the anchor's own matching top border (1px each) is
+       * 32px — taller than the 28px kebab (`size="iconSm"`) beside it, so the
+       * kebab sits inside the tab's own height rather than setting it. This
+       * pixel change shortened that box from 34px: the wrapper's rule and the
+       * anchor's compensating top border each dropped from 2px to 1px, 2px
+       * off the total.
        */
       /**
        * THE WEIGHT WAS THE WRONG WAY ROUND, and it was found because the note
@@ -694,7 +701,7 @@ export function ViewTab({
             e.preventDefault();
             go(href, { dim: "view", key });
           }}
-          /* 8px above, 4px below, 4px either side. Narrow horizontally on
+          /* 4px on every side (`px-1 py-1`). Narrow horizontally on
              purpose: a tab's hit area is its LABEL plus the rule under it, so
              padding here only pushes the names apart and the 24px row gap
              already does that.

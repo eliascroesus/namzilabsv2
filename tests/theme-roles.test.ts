@@ -27,6 +27,7 @@ const read = (p: string) => readFileSync(join(root, p), "utf8");
 const css = read("src/app/globals.css");
 const button = read("src/components/ui/button.tsx");
 const boardControls = read("src/app/dashboard/board-controls.tsx");
+const tabs = read("src/components/ui/tabs.tsx");
 
 /** globals.css with every comment removed, so prose cannot answer for a value. */
 const bare = css.replace(/\/\*[\s\S]*?\*\//g, "");
@@ -111,6 +112,40 @@ describe("board-controls.tsx's active view tab uses --tab-rule, not --marker", (
 
   it("carries no border-marker anywhere in the file", () => {
     expect(boardControls).not.toMatch(/border-marker/);
+  });
+});
+
+/**
+ * THE 1PX RULE, PINNED ON BOTH SIDES OF ITS OWN SYMMETRY TRICK.
+ *
+ * `9d328f4` (fix round 2) changed the wrapper's rule from `border-b-2` to
+ * `border-b` and the anchor's compensating top border from `border-t-2` to
+ * `border-t`, but landed no test — a revert of either one, or a plain
+ * deletion of the anchor's `border-t-transparent` colour (leaving a visible
+ * black rule on top of every tab), would have failed nothing. This pins all
+ * three, plus the vendored `line`-variant tab strip's own 1px mark on both
+ * its orientations.
+ *
+ * Sabotage-verified: reverting the wrapper to `border-b-2`, deleting
+ * `border-t-transparent` from the anchor, or reverting `tabs.tsx` to
+ * `after:h-0.5` each fail exactly the assertion that names them and no other.
+ */
+describe("the active tab's rule is 1px on the wrapper, the anchor and both tab orientations", () => {
+  it("the wrapper carries border-b, not border-b-2", () => {
+    expect(boardControls).toMatch(/border-b(?!-)/);
+    expect(boardControls).not.toMatch(/border-b-2/);
+  });
+
+  it("the anchor carries a matching 1px transparent top border", () => {
+    expect(boardControls).toContain("border-t border-t-transparent");
+    expect(boardControls).not.toMatch(/border-t-2/);
+  });
+
+  it("ui/tabs.tsx's line-variant mark is 1px on both orientations", () => {
+    expect(tabs).toMatch(/after:h-px/);
+    expect(tabs).not.toMatch(/after:h-0\.5/);
+    expect(tabs).toMatch(/after:w-px/);
+    expect(tabs).not.toMatch(/after:w-0\.5/);
   });
 });
 
