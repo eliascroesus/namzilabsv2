@@ -71,8 +71,9 @@ import { GROUP_COLOR_KEYS, groupBadge, groupInk } from "@/components/flow/node-a
  * on this ground there is no surface to lift it off. The SLOT is the hit area:
  * 32px tall, and as WIDE as the column is at the moment you press it, so an open
  * rail lets you click the name as well as the picture. Colour is spent in
- * exactly one place — the row you are standing on carries a blue glyph on a
- * raised chip and the other four are plain.
+ * exactly one place — the row you are standing on carries `--control` under
+ * the WHOLE ROW and a blue glyph (`text-marker`) on top of it, with no fill
+ * of its own under the chip, and the other four are plain.
  *
  * WHAT THE 48px COULD NOT HOLD, AND WHERE EACH THING WENT. Every one of these
  * came BACK with the hover panel; what follows is what the collapsed column
@@ -322,9 +323,10 @@ const ICON_COL = "flex size-8 shrink-0 items-center justify-center";
  * `focus-ring-light` IS GONE, and it went with the thing it was for. globals.css
  * draws one ring for the whole product in `--ring`; while that ring was violet
  * and this rail was the one dark surface in a light app, it was invisible here
- * and needed a sanctioned white twin. The ring is blue on a ground that is now
- * the SAME colour everywhere, so the product's own ring is the correct one and a
- * second spelling would be a second answer.
+ * and needed a sanctioned white twin. The ring is blue and reads clearly on
+ * every one of the product's three dark grounds now (6.65:1 on the page,
+ * 6.59:1 on the chrome, 6.20:1 on the panel), so the product's own ring is the
+ * correct one and a second spelling would be a second answer.
  *
  * 32px TALL, ON A 24px PICTURE. The reference's rows are the glyph plus 6px of
  * padding, which is 28px — over WCAG 2.2's 24px minimum by four pixels and
@@ -796,8 +798,9 @@ export function RailContent({
               carry. That argument resolves cleanly here: the workspace
               switcher's square at the head of the column is its own flat
               brand TINT (identity — see `Sidebar`'s head block above), the
-              active row is a brand GLYPH on a neutral chip (location), and
-              this is the single FILL (action). Three appearances of one
+              active row is a brand GLYPH on the row's own neutral fill
+              (location — the chip itself carries no fill; see the note
+              above), and this is the single FILL (action). Three appearances of one
               colour in three different shapes, each doing a different job,
               rather than three fills competing to be the thing you press.
 

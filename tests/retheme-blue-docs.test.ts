@@ -507,3 +507,34 @@ describe("Final pass docs item 3: the minor untruths are corrected", () => {
     expect(doc).toMatch(/Chip`\s*\(filter chip/);
   });
 });
+
+/**
+ * POST-REVIEW FIX PASS (I2, I3): the calendar heat ramp is blue, brand-600, in
+ * both themes — not the marker, not green, not 7.5:1 — and the ramp table
+ * attributes each hover step to its own real token.
+ */
+describe("Post-review fix pass: the heat ramp and the accent row tell the truth", () => {
+  it("BRAND_KIT.md names brand-600 for the heat ramp, not the marker or 7.5:1 or 'same hue'", () => {
+    const doc = brandKit();
+    expect(doc).not.toMatch(/7\.5:1/);
+    expect(doc).not.toMatch(/heat\s*ramp and `--success` are the same hue/);
+    expect(doc).not.toMatch(/in the marker — `color-mix/);
+    expect(doc).toMatch(/`color-mix\(in srgb,\s*var\(--color-brand-600\)/);
+    expect(doc).toMatch(/9\.35:1/);
+    expect(doc).toMatch(/9\.10:1/);
+  });
+
+  it("BRAND_KIT.md's ramp table maps --accent to its real token, #3A3A3A (neutral-700)", () => {
+    const doc = brandKit();
+    expect(doc).not.toMatch(/`neutral-800` \| `#333333` \| `--secondary` — grey buttons; `--accent` hover step/);
+    expect(doc).toMatch(/`neutral-700` \| `#3A3A3A` \| avatar \/ icon circles \(`--avatar`\); `--accent` hover step/);
+  });
+
+  it("globals.css no longer attributes --accent's hover step to neutral-800", () => {
+    const css = readFileSync(join(root, "src/app/globals.css"), "utf8");
+    expect(css).not.toMatch(/grey buttons \(`--secondary`\); `--accent`'s hover step/);
+    expect(css).toMatch(/`--accent`'s hover step/);
+    expect(css).not.toMatch(/hover a further step up \(800\)/);
+    expect(css).toMatch(/hover a further step up \(700\)/);
+  });
+});

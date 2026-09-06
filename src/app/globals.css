@@ -258,8 +258,8 @@
    * TWO NEW STEPS LAND BETWEEN EXISTING ONES rather than displacing them,
    * because both new surfaces sit between values the ramp already had: `925`
    * is the chrome, one count lighter than the page; `850` is the control fill,
-   * one count lighter than the panel. A `900` still means "recessed"; only the
-   * HEX under it moved.
+   * one count lighter than the panel. A `900` still marks that same panel
+   * step; only the HEX under it moved.
    *
    * THE SURFACE HALF (950 → 500) and THE INK HALF (450 → 50) are still
    * separated on purpose. `500` is the last step a LINE may be drawn in
@@ -283,7 +283,7 @@
    * DEPTH, STATED HONESTLY. This file used to say "a control recesses from a
    * card". That is not what either theme does now and the sentence is gone:
    * here, on the #111111 chrome and cards, a field is a step UP (850) and its
-   * hover a further step up (800); in `:root`, on white, a field is a step
+   * hover a further step up (700); in `:root`, on white, a field is a step
    * DOWN (#F4F4F4) and its hover a further step down (#ECECEC). The two
    * directions MIRROR each other, which is the invariant that actually holds —
    * "raised" and "recessed" do not survive the mirror and are not used.
@@ -292,8 +292,8 @@
   --color-neutral-925: #111111; /* THE CHROME — top bar, rail, AND the card fill */
   --color-neutral-900: #181818; /* THE PANEL — the content area under the top bar */
   --color-neutral-850: #202020; /* THE CONTROL — fields, the search box, the active nav row */
-  --color-neutral-800: #333333; /* grey buttons (`--secondary`); `--accent`'s hover step */
-  --color-neutral-700: #3a3a3a; /* avatar and icon circles (`--avatar`) */
+  --color-neutral-800: #333333; /* grey buttons (`--secondary`) */
+  --color-neutral-700: #3a3a3a; /* avatar and icon circles (`--avatar`); `--accent`'s hover step */
   --color-neutral-600: #343434; /* THE HAIRLINE — every separation in the product */
   --color-neutral-500: #4a4a4a; /* the heavier rule: switch track, table divider, ring track */
   --color-neutral-450: #6e6e6e; /* THE FAINT LABEL — "Main Menu" and nothing else; 3.70:1 on the chrome, never body copy */
@@ -407,7 +407,7 @@
    */
   --radius-xs: 0.25rem; /* 4px — the 10px caps badge, and the smallest chips */
   --radius-sm: 0.375rem; /* 6px */
-  --radius-md: 0.5rem; /* 8px — inputs, buttons, nav items, soft pills */
+  --radius-md: 0.5rem; /* 8px — inputs, buttons, nav items, every other control */
   --radius-lg: 0.625rem; /* 10px — EVERY card, panel, popover and select */
   --radius-xl: 0.75rem; /* 12px — vendored only */
   --radius-2xl: 1rem; /* 16px — vendored only */

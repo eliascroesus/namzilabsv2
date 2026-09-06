@@ -118,8 +118,8 @@ the row, it does not repeat the colour.
 | `neutral-925` (new) | `#111111` | `--chrome` — top bar, rail, **and** `--card` |
 | `neutral-900` | `#181818` | `--panel` — the content area under the top bar |
 | `neutral-850` (new) | `#202020` | `--control` — fields, the search box, the active nav row |
-| `neutral-800` | `#333333` | `--secondary` — grey buttons; `--accent` hover step |
-| `neutral-700` | `#3A3A3A` | avatar / icon circles (`--avatar`) |
+| `neutral-800` | `#333333` | `--secondary` — grey buttons |
+| `neutral-700` | `#3A3A3A` | avatar / icon circles (`--avatar`); `--accent` hover step |
 | `neutral-600` | `#343434` | `--border` — every hairline |
 | `neutral-500` | `#4A4A4A` | `--rule` — the heavier control edge (switch track, checkbox, table divider); the Figma's own "Main Menu" grey measures **2.13:1** here and is not text-safe |
 | `neutral-450` (new) | `#6E6E6E` | `--faint` — the caps section label only ("Main Menu"), **3.70:1** on `#111111`; never body copy |
@@ -285,7 +285,7 @@ if it is ever closed, is a job for a later pass, not this one. It sits
 in the top bar's left slot now; the rail's mark moved out with it (§5).
 
 **No new caption step.** The Figma's header actions ("+ Add", "Today",
-"Refresh All") set 12px/550, and its own body copy's inspector reports
+"Refresh all") set 12px/550, and its own body copy's inspector reports
 12.11px — both round to the kit's existing `text-xs` (13px) rather than
 earning a new named size: the header actions map to the kit's `xs` button
 size, and captions stay 13px, the closed scale's nearest step. A 12px step
@@ -536,7 +536,7 @@ and its three actions are the export's: a **"Today ▾" dropdown** (`secondary`
 `DropdownMenu` per spec ruling S4) in place of the old six-segment period
 track — same six presets, same `?range=` in
 the URL, a tenth of the width and no horizontal scroller; **"+ Add"** on
-the brand fill at `xs` with a 16px plus; and **"Refresh All"** `secondary`
+the brand fill at `xs` with a 16px plus; and **"Refresh all"** `secondary`
 `xs` with a 16px refresh glyph. Blue is spent on "+ Add" and "New flow",
 and on nothing else in the header.
 
@@ -697,18 +697,19 @@ was pinned white in dark by `dark:bg-white`, which changed the surface and not
 the ink, so every muted label on it measured **2.52:1** against 4.5 required.
 That was patched with a `tile-surface` class that re-pointed the whole role block
 at its light values for one subtree. Both the pin and the patch are gone, and
-with one theme the whole class of bug is unreachable: there is no second set of
+with both themes reading the same role tokens — no per-subtree override left —
+the whole class of bug is unreachable: there is no second set of
 role values for a surface to be pinned against.
 
 **Heat is magnitude, never judgement.** The calendar tints each day by its
-share of the month's largest day, in the marker — `color-mix(in srgb,
-var(--color-marker) 12–56%, var(--card))`, which keeps the numeral past
-7.5:1 at every step of the ramp. It is the marker rather than the brand for the
-same reason the bars are: a tint under a numeral is a SURFACE, the shape
-`--accent` already takes behind a selected row. Green-good/red-bad is the same
-mistake a coloured delta would be — and it is worth restating now that the heat
-ramp and `--success` are the same hue: this tint says HOW MUCH, never HOW WELL.
-The numeral clearing 7.5:1 at every step is what keeps it a surface. A **negative** value is the single exception and takes
+share of the month's largest day, in the brand — `color-mix(in srgb,
+var(--color-brand-600) 12–56%, var(--card))`, a blue ramp in both themes: white
+on the deepest dark cell (`#0070E8` at 56% over `#111111`) is 9.35:1, black on
+the deepest light cell is 9.10:1. It is a tint under a numeral, the shape
+`--accent` already takes behind a selected row — a SURFACE, not a verdict.
+Green-good/red-bad is the same mistake a coloured delta would be, which is why
+this stays the same hue as the fill rather than borrowing `--success`'s: HOW
+MUCH, never HOW WELL. A **negative** value is the single exception and takes
 `accent-orange`: below zero is a fact about the number, not an opinion about it.
 Days with nothing are recessed (`bg-muted/50`), not white — inside a white card
 an empty white square is the same material as the sheet, so the days that have

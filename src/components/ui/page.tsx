@@ -265,15 +265,15 @@ export function PageHeader({ title, lede, actions, tabs, back, className }: Page
    * centred beside a centred title) so the wash hugs the name in both cases,
    * because the name is what you press.
    *
-   * THE TITLE IS 24px (`text-display-xs`), `text-heading` NOT
+   * THE TITLE IS 26px (`text-display-xs`), `text-heading` NOT
    * `text-foreground`. It was `text-xl` (20px) while `/design` printed
    * `display-xs` beside "Page titles (PageHeader)" — the product's one h1 and
    * the page documenting it had drifted a step. `text-heading` is the one
    * place besides the metric numeral this product reaches past body ink on
    * purpose: a page title in the same grey as the sentence under it is not a
    * title, and it was `text-white` once, which was correct in a one-theme
-   * product and INVISIBLE the moment the light theme came back. 24/600 at
-   * 32px leading with 0.07px tracking is what the reference measures; no
+   * product and INVISIBLE the moment the light theme came back. 26/600 at
+   * 34px leading with 0.07px tracking is what the reference measures; no
    * `.font-display`, because that class's -0.022em tracking is TIGHTER than
    * the reference's own +0.07px and belongs to the landing's 48–64px hero
    * instead. The lede sits at 14px under an 8px gap — a SUBTITLE naming the
