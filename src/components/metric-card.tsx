@@ -40,10 +40,10 @@ import { Card } from "@/components/ui/card";
  * 4px of its group's colour on this edge, borrowed from the builder's step
  * card — the one device that let a tile floating loose in a coloured COLUMN
  * refer back to the tint it sat on. The Figma's default board draws no such
- * edge on any tile, so the strip is gone from here. `--tile-edge` is not:
- * the lane in `board-column.tsx` still sets it per group, unread by anything
- * on this board now, kept alive for the canvas board this spec does not
- * touch.
+ * edge on any tile, so the strip went. The `--tile-edge` property that fed it
+ * and the one-child flex wrapper that held it followed on 6 Sep 2026: the
+ * lane in `board-column.tsx` had gone on publishing the property for two
+ * days with no reader anywhere in the app, canvas board included.
  *
  * ── THE SPLIT THAT KEEPS A ROW FROM READING AS A PILE ───────────────────────
  *
@@ -94,77 +94,69 @@ export function MetricCard({
 } & Omit<React.ComponentProps<"div">, "title" | "children">) {
   return (
     <Card variant="tile" padding="none" className={cn("lift flex flex-col overflow-hidden", className)} {...rest}>
-      <div className="flex flex-1">
-        {/* NO EDGE, AS OF THE 4 SEP 2026 BLUE RETHEME — see the file note
-            above. `--tile-edge` stays defined and `board-column.tsx` still
-            sets it per lane; nothing in this shell reads it any more. This
-            wrapper is a one-child flex div now — harmless, and left alone
-            rather than reflowing every line below it for a width the edge no
-            longer needs. */}
-        <div className="flex min-w-0 flex-1 flex-col p-4">
-          <div className="flex min-h-0 flex-1 flex-col justify-center">
-            <div className="flex items-start justify-between gap-3">
-              {/* A CARD TITLE, NOT A MICRO-LABEL — AND MUTED AGAIN AS OF THE
-                  4 SEP 2026 BLUE RETHEME. This was 13px ALL-CAPS semibold
-                  muted, on the argument that a metric's name LABELS the figure
-                  under it and that caps-and-muted is what keeps the NUMBER the
-                  loud thing. The size half of that overcorrected: every tile
-                  read as a caption with a graph under it, two steps below the
-                  body text everywhere else in the product, so the name moved
-                  up to body size (`text-sm`, 15px) against a 28px numeral —
-                  still a two-step gap, the number is in no danger.
-                  THE INK HALF CAME BACK MUTED. The body-size name briefly
-                  carried `font-medium text-foreground`, on the argument that a
-                  name the customer wrote earned full ink; the Figma draws it
-                  `text-muted-foreground` at body weight instead, so the
-                  numeral stays the one full-ink object the card has. The
-                  micro-label voice is still the wrong one here — it is for a
-                  STATUS or a column head, strings you scan, not a name someone
-                  wrote — the size argument above still holds at 15px muted. */}
-              {/* `flex-1` IS WHAT MAKES `truncate` WORK. The h3 had `min-w-0`
-                  and its span had `truncate`, and a long name still wrapped to
-                  two lines — because without a flex basis the h3 sizes to its
-                  CONTENT inside a `justify-between` row, so there is no width
-                  for the ellipsis to trigger against. "Speed To Lead (Armaan)"
-                  was the case that showed it. */}
-              <h3 className="flex min-w-0 flex-1 items-baseline text-sm font-normal text-muted-foreground">
-                <span className="truncate">{title}</span>
-                {titleSuffix}
-              </h3>
-              {/* The same reserved lane the chart frame's header keeps — see the
-                  note there. The board's tile menu floats over this corner. */}
-              <span className="flex shrink-0 items-center pr-6">{marker}</span>
-            </div>
-
-            {headline !== undefined && (
-              <div className="mt-2 flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
-                {/* `text-heading`, SAID OUT LOUD. It used to inherit
-                    `--card-foreground` and looked right, because in the dark
-                    theme `--heading` and `--foreground` are the same white. In
-                    light they are not — #313131 against #000000 — and the spec
-                    asks for the heading step. `cn` still lets the em-dash case
-                    win: tailwind-merge drops `text-heading` when
-                    `text-muted-foreground` is appended for a null headline. */}
-                <p className={cn("stat-numeral text-display-md leading-none text-heading", headline == null && "text-muted-foreground")}>
-                  {headline ?? "—"}
-                </p>
-                {delta}
-              </div>
-            )}
-
-            {children}
-            {qualifications}
+      <div className="flex min-w-0 flex-1 flex-col p-4">
+        <div className="flex min-h-0 flex-1 flex-col justify-center">
+          <div className="flex items-start justify-between gap-3">
+            {/* A CARD TITLE, NOT A MICRO-LABEL — AND MUTED AGAIN AS OF THE
+                4 SEP 2026 BLUE RETHEME. This was 13px ALL-CAPS semibold
+                muted, on the argument that a metric's name LABELS the figure
+                under it and that caps-and-muted is what keeps the NUMBER the
+                loud thing. The size half of that overcorrected: every tile
+                read as a caption with a graph under it, two steps below the
+                body text everywhere else in the product, so the name moved
+                up to body size (`text-sm`, 15px) against a 28px numeral —
+                still a two-step gap, the number is in no danger.
+                THE INK HALF CAME BACK MUTED. The body-size name briefly
+                carried `font-medium text-foreground`, on the argument that a
+                name the customer wrote earned full ink; the Figma draws it
+                `text-muted-foreground` at body weight instead, so the
+                numeral stays the one full-ink object the card has. The
+                micro-label voice is still the wrong one here — it is for a
+                STATUS or a column head, strings you scan, not a name someone
+                wrote — the size argument above still holds at 15px muted. */}
+            {/* `flex-1` IS WHAT MAKES `truncate` WORK. The h3 had `min-w-0`
+                and its span had `truncate`, and a long name still wrapped to
+                two lines — because without a flex basis the h3 sizes to its
+                CONTENT inside a `justify-between` row, so there is no width
+                for the ellipsis to trigger against. "Speed To Lead (Armaan)"
+                was the case that showed it. */}
+            <h3 className="flex min-w-0 flex-1 items-baseline text-sm font-normal text-muted-foreground">
+              <span className="truncate">{title}</span>
+              {titleSuffix}
+            </h3>
+            {/* The same reserved lane the chart frame's header keeps — see the
+                note there. The board's tile menu floats over this corner. */}
+            <span className="flex shrink-0 items-center pr-6">{marker}</span>
           </div>
 
-          {(provenance || actions) && (
-            <div className="mt-4 flex items-center justify-between gap-2">
-              {provenance ?? <span />}
-              {/* Pulled right by its own padding so the last label's edge lines
-                  up with the content above it rather than with its hit area. */}
-              {actions && <span className="-mr-2.5 flex shrink-0 items-center gap-1">{actions}</span>}
+          {headline !== undefined && (
+            <div className="mt-2 flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+              {/* `text-heading`, SAID OUT LOUD. It used to inherit
+                  `--card-foreground` and looked right, because in the dark
+                  theme `--heading` and `--foreground` are the same white. In
+                  light they are not — #313131 against #000000 — and the spec
+                  asks for the heading step. `cn` still lets the em-dash case
+                  win: tailwind-merge drops `text-heading` when
+                  `text-muted-foreground` is appended for a null headline. */}
+              <p className={cn("stat-numeral text-display-md leading-none text-heading", headline == null && "text-muted-foreground")}>
+                {headline ?? "—"}
+              </p>
+              {delta}
             </div>
           )}
+
+          {children}
+          {qualifications}
         </div>
+
+        {(provenance || actions) && (
+          <div className="mt-4 flex items-center justify-between gap-2">
+            {provenance ?? <span />}
+            {/* Pulled right by its own padding so the last label's edge lines
+                up with the content above it rather than with its hit area. */}
+            {actions && <span className="-mr-2.5 flex shrink-0 items-center gap-1">{actions}</span>}
+          </div>
+        )}
       </div>
     </Card>
   );

@@ -470,26 +470,17 @@ export function BoardColumn({
           {...{ [LANE_ATTR]: g.id, [AXIS_ATTR]: "y", [ACCEPTS_ATTR]: "tile", [SORTED_ATTR]: sortedBy ? "1" : undefined }}
           className={`flex min-h-[140px] flex-col px-2.5 pb-2.5 transition-shadow duration-(--duration-fast) ${LANE_GAP}`}
           style={{
-            /**
-             * THE COLOUR EACH TILE WEARS ON ITS LEADING EDGE.
-             *
-             * Published as a CUSTOM PROPERTY rather than threaded as a prop,
-             * and that is the whole reason it works. The cards are rendered on
-             * the SERVER (`page.tsx` builds them as `node`), while which column
-             * a tile is in is decided on the CLIENT and changes on every drag —
-             * so there is no render at which the tile itself could be told its
-             * group. Inheritance does not care: the card reads
-             * `var(--tile-edge)` from whichever lane it currently sits in, so a
-             * tile dropped into another column changes allegiance on the frame
-             * it lands, with nothing passed anywhere.
-             *
-             * The ungrouped row above the columns sets nothing, so its tiles
-             * fall back to `--border` in `MetricCard` — the same geometry
-             * without claiming a group they are not in.
-             */
-            ["--tile-edge" as string]: groupAccent(g.color),
             // A SORTED LANE LIGHTS UP WHOLE, because it has no position to offer.
             // See the banner below.
+            //
+            // This object also published a `--tile-edge` custom property for
+            // every lane, so a card could read its group's colour by
+            // inheritance rather than by prop — the tile is rendered on the
+            // server, its column is decided on the client, and inheritance
+            // was the one channel that crossed that. The 4 Sep Figma took the
+            // coloured edge off the tile, and nothing has read the property
+            // since; it was deleted on 6 Sep along with the one-child wrapper
+            // in `MetricCard` that used to hold the strip.
             ...(dropping && sortedBy ? { boxShadow: `inset 0 0 0 2px ${groupAccent(g.color)}` } : {}),
           }}
         >

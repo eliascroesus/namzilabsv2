@@ -678,23 +678,22 @@ the default board.** Every tile on the groups board — a materialized flow
 Output and a legacy `metrics` row alike — renders through `MetricCard`. The
 Figma draws no coloured edge on a metric tile at all, and the kit follows
 it: the 4px `--tile-edge` strip is removed from the default board's
-rendering. The token is not deleted — the canvas board, where a step
-card's own leading edge is exactly this idea and is explicitly out of
-scope for this pass, still reads it, so `--tile-edge` stays defined and
-simply gains one fewer consumer. It had been three components that drifted
+rendering. The property went with it on 6 September 2026. It was kept for
+two days on the belief that the canvas board still read it — that turned
+out to be false, so the lane in `board-column.tsx` was publishing a custom
+property with no reader anywhere in the app, and the one-child flex wrapper
+in `MetricCard` that used to hold the strip went at the same time. It had
+been three components that drifted
 into three different cards in one grid, one of them carrying a comment
 claiming it was "kept in step with FlowTile's shape on purpose" while
 disagreeing on the shell, the padding, the title recipe and the footer.
 The reader cannot tell which table a number came from, and should not be
 able to.
 
-The card is one block of padding, `p-4`, with no coloured edge on the
-default board now — the leading-edge idea moves entirely to the canvas
-board, where a step card already draws exactly this, and `--tile-edge`
-stays wired for it: set by the lane in `board-column.tsx`, read by
-inheritance, so a tile dragged to another column on the canvas board
-changes allegiance on the frame it lands, with nothing threaded through a
-server-rendered node. Content still takes the slack (`flex-1
+The card is one block of padding, `p-4`, with no coloured edge. The
+leading-edge idea survives only in the builder, where a step card draws its
+group's colour directly and needs no inherited property to do it. Content
+still takes the slack (`flex-1
 justify-center`, so a bare scalar centres instead of hanging off the top
 of a stretched card) and the footline is still welded to the bottom,
 because a ragged row of footers is §5's difference between a board and a
