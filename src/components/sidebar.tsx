@@ -537,6 +537,14 @@ export function RailContent({
             `WorkspaceChip` here would answer a question ( "which of several" )
             that this row never asks.
 
+            THE FILL IS `bg-primary text-primary-foreground`, NOT THE EXPORT'S
+            `bg-brand-500/75`. White on `brand-500` at 75% composites to
+            2.83:1 over the light chrome — under AA for a 13px/600 glyph, and
+            in the collapsed rail this initial is the only thing on the row.
+            `bg-primary` (brand-600, solid) holds 4.68:1 in both themes; dark
+            gives up the 75% translucency the export drew, which cost nothing
+            it was relying on for legibility.
+
             IT OPENS THE SAME PANEL THE BAR'S OLD IDENTITY CONTROL DID —
             `account.panel`, built once in `app-shell.tsx` and unchanged by
             this move: only the trigger relocated, not the workspace list, the
@@ -589,7 +597,7 @@ export function RailContent({
                     <span className={ICON_COL}>
                       <span
                         aria-hidden
-                        className="flex size-7 shrink-0 items-center justify-center rounded-control bg-brand-500/75 text-xs font-semibold text-white"
+                        className="flex size-7 shrink-0 items-center justify-center rounded-control bg-primary text-xs font-semibold text-primary-foreground"
                       >
                         {initial}
                       </span>
@@ -609,7 +617,7 @@ export function RailContent({
                 <span className={ICON_COL}>
                   <span
                     aria-hidden
-                    className="flex size-7 shrink-0 items-center justify-center rounded-control bg-brand-500/75 text-xs font-semibold text-white"
+                    className="flex size-7 shrink-0 items-center justify-center rounded-control bg-primary text-xs font-semibold text-primary-foreground"
                   >
                     {initial}
                   </span>

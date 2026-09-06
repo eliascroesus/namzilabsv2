@@ -120,14 +120,24 @@ describe("the top bar below md", () => {
     expect(code(frame)).toMatch(/<TopBar[\s\S]{0,240}menu=\{<MobileDrawer/);
   });
 
-  it("draws the menu button at 32px, on the avatar circle", () => {
+  it("draws the menu button at 32px, on the avatar circle, with its light-theme outline", () => {
     // Comment-stripped for the same reason the slice above is: the prose
     // between the tags is not code, and should not be able to satisfy a
     // check about it.
     const stripped = code(drawer);
     const trigger = stripped.slice(stripped.indexOf("<SheetTrigger"), stripped.indexOf("<SheetContent"));
     expect(trigger).toContain('size="icon"');
-    expect(trigger).toContain("rounded-full bg-avatar");
+    // `border border-input` is the edge: in light, `--avatar` is white on a
+    // white bar and the circle is invisible without it; in dark `--input`
+    // aliases `--border` and the outline costs nothing. Bare `bg-avatar`
+    // with no outline is the pre-fix bug (I1) and must not come back.
+    expect(trigger).toContain("rounded-full border border-input bg-avatar");
+  });
+
+  it("draws the bar's bell and avatar circles with the same outline", () => {
+    const stripped = code(bar);
+    expect(stripped).toContain("relative rounded-full border border-input bg-avatar");
+    expect(stripped).toContain("rounded-full border border-input bg-avatar text-xs font-semibold text-foreground");
   });
 
   it("drops the greeting below sm and both acts below md", () => {

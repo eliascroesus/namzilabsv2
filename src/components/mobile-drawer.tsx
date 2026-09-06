@@ -89,7 +89,7 @@ export function MobileDrawer({
           variant="ghost"
           size="icon"
           aria-label="Open the navigation"
-          className="shrink-0 rounded-full bg-avatar text-foreground hover:bg-accent active:bg-accent md:hidden"
+          className="shrink-0 rounded-full border border-input bg-avatar text-foreground hover:bg-accent active:bg-accent md:hidden"
         >
           <Menu />
         </Button>

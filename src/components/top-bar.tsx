@@ -167,7 +167,7 @@ export function TopBar({
           variant="ghost"
           size="icon"
           aria-label={unread > 0 ? `Notifications — ${unread} unread` : "Notifications"}
-          className="relative rounded-full bg-avatar text-foreground hover:bg-accent active:bg-accent"
+          className="relative rounded-full border border-input bg-avatar text-foreground hover:bg-accent active:bg-accent"
         >
           <Bell />
           {unread > 0 && (
@@ -183,7 +183,7 @@ export function TopBar({
             aria-label="Your profile"
             className={cn(
               buttonVariants({ variant: "ghost", size: "icon" }),
-              "rounded-full bg-avatar text-xs font-semibold text-foreground hover:bg-accent active:bg-accent",
+              "rounded-full border border-input bg-avatar text-xs font-semibold text-foreground hover:bg-accent active:bg-accent",
             )}
           >
             {account.avatarUrl ? (

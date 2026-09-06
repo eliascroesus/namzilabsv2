@@ -212,6 +212,26 @@ describe("the console's supplied constants", () => {
     expect(chip).toMatch(/style=\{\{\s*background: groupBadge\(key\),\s*color: groupInk\(key\)\s*\}\}/);
     expect(chip, "an ink class can outlive the fill it was solved against").not.toMatch(/text-white|text-background/);
   });
+
+  it("draws the workspace switcher's initial on the solid fill, not the translucent tint", () => {
+    /**
+     * White on `bg-brand-500/75` composites to 2.83:1 over the light chrome —
+     * under AA for a 13px/600 glyph, and in the collapsed rail this initial
+     * is the only thing on the row (I1). `bg-primary text-primary-foreground`
+     * is brand-600 under white ink, 4.68:1 in both themes; dark gives up the
+     * 75% translucency the export drew.
+     */
+    const stripped = sidebar.replace(/\/\*[\s\S]*?\*\//g, "");
+    const discs = [...stripped.matchAll(/className="([^"]*rounded-control[^"]*)"/g)]
+      .map((m) => m[1])
+      .filter((c) => /\bsize-7\b/.test(c) && /\bfont-semibold\b/.test(c));
+    expect(discs.length, "expected the two switcher-initial discs (open account, no account)").toBe(2);
+    for (const disc of discs) {
+      expect(disc).toMatch(/\bbg-primary\b/);
+      expect(disc).toMatch(/\btext-primary-foreground\b/);
+    }
+    expect(stripped, "the 2.83:1 tint must not come back").not.toMatch(/bg-brand-500\/75/);
+  });
 });
 
 /**
