@@ -551,7 +551,12 @@ describe("the frame's new shape — a full-width bar over [rail | panel]", () =>
 describe("the rail's re-dress — a workspace switcher, Main Menu, a search field, Get Free Access", () => {
   it("builds its switcher from workspace and account, not a per-workspace hue", () => {
     expect(sidebar).toMatch(/workspace\?:\s*string/);
-    expect(sidebar).toMatch(/bg-brand-500\/75/);
+    // Post-review fix pass (I1): the flat brand tint moved from
+    // `bg-brand-500/75` (2.83:1 white-on-tint in light, under AA) to
+    // `bg-primary` (brand-600 solid, 4.68:1 in both themes) — still one flat
+    // fill for the one workspace you are in, not `WorkspaceChip`'s
+    // per-workspace hue, which is the fact this assertion exists to pin.
+    expect(sidebar).toMatch(/bg-primary/);
     expect(sidebar).not.toMatch(/const PRODUCT = "Namzilabs"/);
   });
 
@@ -561,7 +566,12 @@ describe("the rail's re-dress — a workspace switcher, Main Menu, a search fiel
     // this badge included, tops out at `font-semibold` — and a badge is
     // precisely where "it is not really prose" would be argued next, so the
     // rule is pinned at the one call site most likely to bend it.
-    expect(sidebar).toMatch(/rounded-control bg-brand-500\/75 text-xs font-semibold text-white/);
+    //
+    // Post-review fix pass (I1) re-pointed the fill itself from
+    // `bg-brand-500/75 text-white` to `bg-primary text-primary-foreground`
+    // (the switcher's own 2.83:1 fix in `tests/console-theme.test.ts`); this
+    // assertion keeps pinning the WEIGHT, not the fill, so it follows.
+    expect(sidebar).toMatch(/rounded-control bg-primary text-xs font-semibold text-primary-foreground/);
     expect(sidebar, "no heavy weight anywhere in the rail").not.toMatch(/\bfont-(?:bold|black)\b/);
   });
 
