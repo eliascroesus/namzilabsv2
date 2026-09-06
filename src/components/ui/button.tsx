@@ -157,68 +157,50 @@ const buttonVariants = cva(
       },
       size: {
         /**
-         * THE DENSE ROW'S SIZE, and it is a size because it was already being
-         * used as one.
+         * ONE CONTROL HEIGHT: 32px, at 14px type.
          *
-         * The metric tile's tray spelled it inline — `size="sm"` plus
-         * `className="h-7 gap-1.5 px-2.5 text-xs [&_svg]:size-3.5"`, twice,
-         * once for Refresh and once for Open. That is a sixth button geometry
-         * invented at a call site, which is exactly the drift `cva` is here to
-         * prevent, and the next dense row would have re-typed it slightly
-         * differently.
+         * The ladder was 28 / 36 / 44 / 52 when this was a roomy light app.
+         * The Figma draws EVERY control at 32 — date picker, selects,
+         * segmented groups, buttons — and that number is not decoration: the
+         * period control, the inputs and this button all line up in one page
+         * header, and 44 beside 32 reads as two systems in one row.
          *
-         * It cannot simply become `sm`: at a real tile width (three columns
-         * inside 1152px) two 36px-tall buttons push the tray's timestamp into
-         * "1 hour …", and the provenance is the half of that row that carries a
-         * product rule. So the geometry the tray actually needs is named here
-         * once and the override is deleted.
-         */
-        /**
-         * EVERY RUNG CAME DOWN, AND `default` IS THE REFERENCE'S 32px.
+         * THE TYPE DID NOT COME DOWN WITH THE HEIGHTS. `default` shipped at
+         * `text-xs` for one commit, on the reasoning that a 32px control is a
+         * small control. The Figma is explicit that it is not: its 32px date
+         * picker carries 12px because it is a DROPDOWN, and its actual buttons
+         * carry 14. 14 on 32 leaves 6px above and below the cap height, which
+         * is the proportion the whole interface is set at. Getting this wrong
+         * does not read as "the button is small" — it reads as every button in
+         * the product sitting a step quieter than the text beside it.
          *
-         * The ladder was 28 / 36 / 44 / 52, cut for a roomy light app. The
-         * reference draws EVERY control — its date picker, its selects, its
-         * segmented groups — at exactly 32, and that number is not decoration:
-         * the period track, the inputs and this button all have to line up in a
-         * page header, and 44 beside 32 is the near-miss that reads as two
-         * systems in one row.
+         * `xs` (24px / 12px) IS GONE, 6 Sep 2026. It was the dense row's rung,
+         * and it ended up on the three buttons in the dashboard header —
+         * "+ Add", the period dropdown and "Refresh all" — where it put them a
+         * full 8px shorter and two type steps quieter than the identical-
+         * looking buttons in the top bar directly above them. That is the
+         * near-miss this table exists to prevent, and it shipped: the owner
+         * caught it on the live app. Everything that spelled `xs` now stands
+         * at 32, the metric tile's tray included.
+         *
+         * `sm` AND `default` ARE ONE RUNG, and have been since the heights came
+         * down. `sm` also carried `gap-1.5`, which the base class list already
+         * sets — a second copy of one value, deleted. Both NAMES survive
+         * because ~90 call sites spell one or the other and renaming them all
+         * is churn with no rendered difference; what is not allowed is them
+         * drifting apart again without an argument written here.
          *
          * `lg` survives at 40 for the landing's hero and for a form that
-         * genuinely wants air. It is deliberately NOT 44: nothing else in the
-         * product is 44 any more, and a lone rung nobody else stands on is how
-         * the ladder grew a sixth step last time.
+         * genuinely wants air. Deliberately NOT 44: nothing else in the product
+         * is 44 any more, and a lone rung nobody stands on is how the ladder
+         * grew a sixth step last time.
+         *
+         * The three icon rungs are icon-ONLY affordances inside dense rows — a
+         * tile menu, a table row, a dialog's dismiss — where a 32px square
+         * beside 32px of text crowds the row it sits in. They carry no label,
+         * so they are not on this ladder and 32 is not owed to them.
          */
-        /**
-         * THE HEIGHTS CAME DOWN; THE TYPE SHOULD NOT HAVE COME WITH THEM.
-         *
-         * `default` shipped at `text-xs` for one commit, on the reasoning that a
-         * 32px control is a small control. The reference says otherwise and is
-         * explicit about it: its 32px date picker carries 12px because it is a
-         * DROPDOWN — a compact control in a header — and its actual buttons
-         * carry 14px. 14 on 32 leaves 6px above and below the cap height, which
-         * is the proportion the whole interface is set at.
-         *
-         * The visible effect of getting this wrong is not "the button is small",
-         * it is that every button in the product reads a step quieter than the
-         * body text beside it, and the whole screen feels shrunk.
-         */
-        /**
-         * `sm` IS 32px, WHICH IS `default`'s HEIGHT, AND THAT IS THE POINT.
-         *
-         * It was 28. Measured across a rendered page the app was running EIGHT
-         * control heights — 48, 40, 36, 32, 28, 26, 24, 18 — and 28-beside-32
-         * was the worst of them, because it is a near-miss: two buttons in one
-         * row, four pixels apart, which reads as a rendering fault rather than
-         * as a size choice. `sm` is used ~40 times and every one of those is a
-         * console control that should stand at the console's height.
-         *
-         * The two names survive because the CALL SITES mean different things by
-         * them and one of them will grow a real difference again (a dense table
-         * row is a genuine case). What is not allowed is them differing by four
-         * pixels with nothing to say about why.
-         */
-        xs: "h-6 gap-1 px-2 text-xs [&_svg]:size-3.5",
-        sm: "h-8 gap-1.5 px-3 text-sm [&_svg]:size-4",
+        sm: "h-8 px-3 text-sm [&_svg]:size-4",
         default: "h-8 px-3 text-sm [&_svg]:size-4",
         lg: "h-10 px-4 text-sm [&_svg]:size-4",
         icon: "size-8 [&_svg]:size-[18px]",

@@ -203,12 +203,7 @@ export function RangeMenu({
             and "Refresh All" in a header slot with real width limits, and a
             future preset with a long name should ellipsize rather than push
             its neighbours off the row. */}
-        <Button
-          variant="secondary"
-          size="xs"
-          className="[&_svg]:size-4"
-          aria-label={`Period — ${label}`}
-        >
+        <Button variant="secondary" aria-label={`Period — ${label}`}>
           <CalendarDays aria-hidden />
           <span className="truncate max-w-40">{label}</span>
           <ChevronDown aria-hidden />

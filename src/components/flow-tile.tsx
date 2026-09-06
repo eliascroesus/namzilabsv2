@@ -202,27 +202,29 @@ export function FlowTile({ row, rangeKey }: { row: FlowResultRow; rangeKey?: str
           </span>
         ) : null
       }
-      /* Two matched ghost pills. They were a link-variant button beside a bare
-         anchor — the same weight, two different components, neither with a hit
-         area bigger than its word. `size="xs"` is the kit's own dense geometry
-         now; it used to be `sm` plus a four-class override, retyped here twice.
+      /* Two matched ghost buttons. They were a link-variant button beside a
+         bare anchor — the same weight, two different components, neither with
+         a hit area bigger than its word. They stand at the kit's one control
+         height (32px, 14px) as of 6 Sep 2026; the `xs` rung they used to
+         spell is gone, because it was what made the dashboard header's
+         buttons shorter than the identical ones in the top bar.
 
-         NO YELLOW HERE, and it is the fill/stroke split rather than scarcity
-         that keeps it out: a ghost pill is a WORD, and the brand as text
-         measures 1.55:1 on this card. Yellow needs an object to fill and dark
-         ink to carry; two bare labels in a footline are neither. The single
-         spot of colour a tile spends is the marker's ink, which arrives under
-         the pointer on `Open`. */
+         NO COLOUR FILL HERE, and it is the fill/stroke split rather than
+         scarcity that keeps it out: a ghost button is a WORD, and the brand
+         as text measures 1.55:1 on this card. A fill needs an object to carry
+         it; two bare labels in a footline are not that. The single spot of
+         colour a tile spends is the marker's ink, which arrives under the
+         pointer on `Open`. */
       actions={
         <>
           <form action={refreshFlowAction}>
             <input type="hidden" name="flowId" value={row.flowId} />
             {/* A submit, so it stays a real button. */}
-            <Button type="submit" variant="ghost" size="xs" title="Recompute this tile now">
+            <Button type="submit" variant="ghost" title="Recompute this tile now">
               Refresh
             </Button>
           </form>
-          <Button asChild variant="ghost" size="xs" className="hover:text-accent-foreground">
+          <Button asChild variant="ghost" className="hover:text-accent-foreground">
             <Link href={`/dashboard/flows/${row.flowId}`}>Open</Link>
           </Button>
         </>

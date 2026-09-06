@@ -898,7 +898,7 @@ function AddChartMenu({
            the kit has no variant literally named `primary`. `xs` with a
            16px glyph, the same rung and the same override as "Refresh all"
            beside it. */
-        <Button variant="accent" size="xs" className="[&_svg]:size-4" onClick={() => setOpen(!open)} disabled={busy} aria-haspopup="menu" aria-expanded={open}>
+        <Button variant="accent" onClick={() => setOpen(!open)} disabled={busy} aria-haspopup="menu" aria-expanded={open}>
           <Plus />
           Add
         </Button>

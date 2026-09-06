@@ -1101,8 +1101,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
               <form action={refreshAllFlowsAction} className="shrink-0">
                 <SubmitButton
                   variant="secondary"
-                  size="xs"
-                  className="[&_svg]:size-4"
                   pendingLabel="Refreshing…"
                   title="Recompute every published metric now"
                 >
@@ -1405,7 +1403,7 @@ function MetricTile({ tile }: { tile: Tile }) {
       qualifications={tile.kind === "error" ? <p className="mt-2 text-xs text-warn-ink">{tile.error}</p> : null}
       actions={
         tile.kind === "aggregate" ? (
-          <Button asChild variant="ghost" size="xs" className="hover:text-accent-foreground">
+          <Button asChild variant="ghost" className="hover:text-accent-foreground">
             <Link href={`/dashboard/metrics/${metric.id}`}>Drill in</Link>
           </Button>
         ) : null

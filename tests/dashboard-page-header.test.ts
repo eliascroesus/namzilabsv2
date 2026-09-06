@@ -46,13 +46,17 @@ describe("the dashboard's page header, 4 Sep 2026 blue retheme", () => {
     expect(page, "and so are its imports").not.toMatch(/PERIOD_PILL/);
   });
 
-  it("dresses that dropdown as a secondary xs control with a 16px calendar glyph", () => {
+  it("dresses that dropdown as a secondary control at the kit's one height, with a 16px calendar glyph", () => {
     const controls = read("src/app/dashboard/board-controls.tsx");
     const menu = controls.slice(controls.indexOf("export function RangeMenu"));
     expect(menu, "RangeMenu was found").not.toBe("");
     expect(menu).toContain('variant="secondary"');
-    expect(menu).toContain('size="xs"');
-    expect(menu).toContain("[&_svg]:size-4");
+    // RE-POINTED 6 SEP 2026: `xs` (24px/12px) is deleted from the size table.
+    // It made this trigger shorter and quieter than the top bar's buttons.
+    // The default rung is 32px at 14px and brings `[&_svg]:size-4` with it,
+    // so both the size prop and the icon override are gone.
+    expect(menu, "no retired xs rung").not.toContain('size="xs"');
+    expect(menu, "and no override of a class the rung already sets").not.toContain("[&_svg]:size-4");
     expect(menu).toContain("<CalendarDays");
     expect(menu).toContain("<ChevronDown");
     // The presets are the same six, and they still select through the URL.
@@ -83,8 +87,10 @@ describe("the dashboard's page header, 4 Sep 2026 blue retheme", () => {
     const custom = read("src/app/dashboard/custom-board.tsx");
     const add = custom.slice(custom.indexOf("function AddChartMenu"));
     expect(add).toContain('variant="accent"');
-    expect(add).toContain('size="xs"');
-    expect(add).toContain("[&_svg]:size-4");
+    // RE-POINTED 6 SEP 2026 with its two neighbours: "the header's own size"
+    // is the kit's one control height now, not the deleted `xs` rung.
+    expect(add, "no retired xs rung").not.toContain('size="xs"');
+    expect(add, "and no override of a class the rung already sets").not.toContain("[&_svg]:size-4");
     expect(add, "the white variant it borrowed is gone from this control").not.toContain('variant="white"');
   });
 
