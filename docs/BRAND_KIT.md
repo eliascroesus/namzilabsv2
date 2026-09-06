@@ -285,7 +285,8 @@ if it is ever closed, is a job for a later pass, not this one. It sits
 in the top bar's left slot now; the rail's mark moved out with it (§5).
 
 **No new caption step.** The Figma's header actions ("+ Add", "Today",
-"Refresh all") set 12px/550, and its own body copy's inspector reports
+"Refresh All" — set in sentence case in the shipped kit, "Refresh all") set
+12px/550, and its own body copy's inspector reports
 12.11px — both round to the kit's existing `text-xs` (13px) rather than
 earning a new named size: the header actions map to the kit's `xs` button
 size, and captions stay 13px, the closed scale's nearest step. A 12px step

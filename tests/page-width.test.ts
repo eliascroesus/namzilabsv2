@@ -555,8 +555,14 @@ describe("the rail's re-dress — a workspace switcher, Main Menu, a search fiel
     // `bg-brand-500/75` (2.83:1 white-on-tint in light, under AA) to
     // `bg-primary` (brand-600 solid, 4.68:1 in both themes) — still one flat
     // fill for the one workspace you are in, not `WorkspaceChip`'s
-    // per-workspace hue, which is the fact this assertion exists to pin.
-    expect(sidebar).toMatch(/bg-primary/);
+    // per-workspace hue. A bare `/bg-primary/` match would be vacuous here
+    // (the token appears throughout the rail — "New flow", the unread badge,
+    // the active nav row); the switcher's OWN two discs are counted and
+    // anchored to their exact class literal in
+    // `tests/console-theme.test.ts` ("draws the workspace switcher's initial
+    // on the solid fill, not the translucent tint"), which is where that
+    // claim is actually pinned. This test's own remit stays the rail's
+    // structure, not the switcher's fill.
     expect(sidebar).not.toMatch(/const PRODUCT = "Namzilabs"/);
   });
 
@@ -569,8 +575,12 @@ describe("the rail's re-dress — a workspace switcher, Main Menu, a search fiel
     //
     // Post-review fix pass (I1) re-pointed the fill itself from
     // `bg-brand-500/75 text-white` to `bg-primary text-primary-foreground`
-    // (the switcher's own 2.83:1 fix in `tests/console-theme.test.ts`); this
-    // assertion keeps pinning the WEIGHT, not the fill, so it follows.
+    // (the switcher's own 2.83:1 fix); `tests/console-theme.test.ts` counts
+    // both discs and anchors each to that exact fill. This assertion is
+    // anchored to the SAME exact literal, both fill and weight together, so
+    // a weight-only sabotage (`font-bold`/`font-black` in place of
+    // `font-semibold`) fails it directly rather than relying on the
+    // whole-file negative check below to catch it by coincidence.
     expect(sidebar).toMatch(/rounded-control bg-primary text-xs font-semibold text-primary-foreground/);
     expect(sidebar, "no heavy weight anywhere in the rail").not.toMatch(/\bfont-(?:bold|black)\b/);
   });
