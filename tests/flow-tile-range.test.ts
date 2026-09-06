@@ -99,10 +99,11 @@ describe("a range the stored tile has no entry for", () => {
     expect(html).toContain("Get data: the connection was revoked.");
     expect(html).toContain("Error");
     expect(html).toContain("Fix in the editor");
-    // Provenance and the way out of it: when it was last true, and a recompute.
+    // Provenance: when it was last true. The two ways OUT of it — Refresh and
+    // Open — are no longer on the card; the 6 Sep 2026 export draws a two-row
+    // tile with no footline and they moved to the tile's hover menu. That they
+    // still exist is pinned in `board-tile-menu.test.ts` rather than dropped.
     expect(html).toContain("2 hr ago");
-    expect(html).toContain("Refresh");
-    expect(html).toContain("Open");
   });
 
   /**
@@ -113,8 +114,10 @@ describe("a range the stored tile has no entry for", () => {
    * contradictory things an inch apart, with the reassuring one in green. The
    * freshness marker describes the ROW; the customer asked about a RANGE, and
    * for that there is no answer. Everything that helps them act still renders:
-   * what the flow is, that its draft has moved on, when it last ran, and both
-   * ways out.
+   * what the flow is, that its draft has moved on, and when it last ran. Both
+   * ways OUT of it are still reachable, one gesture away in the tile's hover
+   * menu — they left this card with the footline on 6 Sep 2026 and are pinned
+   * in `board-tile-menu.test.ts`.
    *
    * The loud states are NOT withheld — an errored row keeps its red pill above
    * (see the test before this one), because "this failed" stays true whichever
@@ -127,8 +130,6 @@ describe("a range the stored tile has no entry for", () => {
     expect(html).toContain("Not computed yet for this range");
     expect(html).toContain("Edited since publishing");
     expect(html).toContain("2 hr ago");
-    expect(html).toContain("Refresh");
-    expect(html).toContain("Open");
   });
 
   it("still shows the healthy marker once the range has an answer", () => {

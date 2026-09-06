@@ -2,8 +2,6 @@ import Link from "next/link";
 import { PencilLine } from "lucide-react";
 import { formatDateTime, formatMetricValue, relativeTime } from "@/lib/format";
 import { isForwardRange } from "@/lib/metrics/range";
-import { refreshFlowAction } from "@/app/dashboard/flows/actions";
-import { Button } from "@/components/ui/button";
 import { MetricCard } from "@/components/metric-card";
 import { StatusPill, type StatusPillProps } from "@/components/ui/badge";
 import { Delta, GroupBars, ImportProgress, Sparkbars, TargetBar } from "@/components/charts";
@@ -202,33 +200,12 @@ export function FlowTile({ row, rangeKey }: { row: FlowResultRow; rangeKey?: str
           </span>
         ) : null
       }
-      /* Two matched ghost buttons. They were a link-variant button beside a
-         bare anchor — the same weight, two different components, neither with
-         a hit area bigger than its word. They stand at the kit's one control
-         height (32px, 14px) as of 6 Sep 2026; the `xs` rung they used to
-         spell is gone, because it was what made the dashboard header's
-         buttons shorter than the identical ones in the top bar.
-
-         NO COLOUR FILL HERE, and it is the fill/stroke split rather than
-         scarcity that keeps it out: a ghost button is a WORD, and the brand
-         as text measures 1.55:1 on this card. A fill needs an object to carry
-         it; two bare labels in a footline are not that. The single spot of
-         colour a tile spends is the marker's ink, which arrives under the
-         pointer on `Open`. */
-      actions={
-        <>
-          <form action={refreshFlowAction}>
-            <input type="hidden" name="flowId" value={row.flowId} />
-            {/* A submit, so it stays a real button. */}
-            <Button type="submit" variant="ghost" title="Recompute this tile now">
-              Refresh
-            </Button>
-          </form>
-          <Button asChild variant="ghost" className="hover:text-accent-foreground">
-            <Link href={`/dashboard/flows/${row.flowId}`}>Open</Link>
-          </Button>
-        </>
-      }
+      /* NO `actions` HERE ANY MORE — the 6 Sep 2026 export's card is two rows
+         and has no footline to hang them from. Refresh and Open are in the
+         tile's hover MENU now (`board-tile-menu.tsx`), which is where this
+         board already keeps its per-tile acts; they are not deleted, because
+         "the only way into this flow" is not a decoration to drop on a
+         drawing's say-so. See the note in `metric-card.tsx`. */
       qualifications={
         <>
           {/* Directly under the number, because it is about the number:

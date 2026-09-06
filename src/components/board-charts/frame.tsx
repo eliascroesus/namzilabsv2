@@ -164,7 +164,12 @@ export function ChartFrame({
           )}
         </span>
       </CardHeader>
-      <div className="flex min-h-0 flex-1 flex-col p-4">
+      {/* NO TOP PADDING — the header above already opened the card's 16px box
+          and stopped, so a `p-4` here would insert a second 16px between the
+          name and the figure. The export sets the numeral directly under the
+          name; 16px of air there is what made the head look like a band even
+          after its rule came off. */}
+      <div className="flex min-h-0 flex-1 flex-col px-4 pb-4">
 
       {/* THE PAYOFF, AND THE COMPARISON SITS UNDER IT RATHER THAN BESIDE IT.
           A delta on the numeral's own baseline competes with the figure for the
@@ -172,7 +177,22 @@ export function ChartFrame({
           size, it reads as what it is: the sentence qualifying the number. */}
       {headline !== undefined && (
         <div>
-          <p className={cn("stat-numeral text-display-md leading-none", headline == null && "text-muted-foreground")}>
+          {/* NO `leading-none`. The step's own line-height is 40px
+              (`--text-display-md--line-height`) and that is exactly what the
+              export measures on a chart card's figure — the metric card is
+              the one that overrides it, down to 36. `leading-none` was 28 on
+              both, which is why the name and the number sat welded together
+              with no air between them.
+
+              `text-heading` for the same reason the metric card says it out
+              loud: in dark it is the same white as the inherited ink and
+              nothing catches it, in light it is #313131 against #000000. */}
+          <p
+            className={cn(
+              "stat-numeral text-display-md text-heading",
+              headline == null && "text-muted-foreground",
+            )}
+          >
             {headline ?? "—"}
           </p>
           {delta && <div className="mt-1.5">{delta}</div>}

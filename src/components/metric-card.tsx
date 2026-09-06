@@ -45,16 +45,36 @@ import { Card } from "@/components/ui/card";
  * lane in `board-column.tsx` had gone on publishing the property for two
  * days with no reader anywhere in the app, canvas board included.
  *
- * ── THE SPLIT THAT KEEPS A ROW FROM READING AS A PILE ───────────────────────
+ * ── TWO ROWS, AND NO FOOTLINE AT ALL, AS OF THE 6 SEP 2026 FIGMA ────────────
  *
- * Content takes the slack; the footline does not. Dropping the tray also drops
- * the thing that pinned the two acts to the bottom edge, and the first draft
- * let each card's footline sit wherever its content happened to end — three
- * cards in a row, three heights for "Refresh". §5 of the kit is explicit that a
- * ragged row of footers is the difference between a board and a pile. So the
- * body is `flex-1 justify-center` (a bare scalar centres its figure instead of
- * hanging it off the top of a stretched card, which is the dead space the old
- * card had) and the footline is its sibling, welded to the bottom.
+ * The card had THREE rows: a name, a figure, and a footline carrying the
+ * timestamp beside Refresh and Open. The `node-id=14:4` frame draws two, and
+ * the arithmetic is exact rather than approximate — 16px of padding, a 22px
+ * name, 16px of air, a 36px numeral, 16px of padding, inside a 1px border:
+ *
+ *     1 + 16 + 22 + 16 + 36 + 16 + 1  =  108px
+ *
+ * which is the height the export measures (108.22). Every one of those six
+ * numbers was different here, and the sum was 92 — a card that read as the
+ * right idea at the wrong size.
+ *
+ * WHERE THE TWO ACTS WENT. The footline's timestamp moves UP, onto the name's
+ * own line beside the freshness dot, which is where the export puts it and
+ * which is what buys the third row back. Refresh and Open moved to the tile's
+ * hover MENU (`board-tile-menu.tsx`) rather than being deleted: the export
+ * draws no footline, but "the only way into this flow" is not a decoration to
+ * drop on a drawing's say-so. The menu is where this board already keeps its
+ * per-tile acts, so they cost the card no height and stay one gesture away.
+ *
+ * SO THERE IS NO `actions` PROP ANY MORE. A prop whose only renderer has been
+ * deleted still reads as a feature to whoever finds it next — the same reason
+ * the metrics-setup ring's count chain went out of `TopBar` in one commit
+ * instead of being left exported.
+ *
+ * The body stays `flex-1 justify-center`: a bare scalar centres its figure
+ * instead of hanging it off the top of a stretched card, which is the dead
+ * space the old card had. On a tile taller than 108px (the canvas board lets
+ * one span four rows) that is what keeps the figure looking placed.
  */
 export function MetricCard({
   title,
@@ -74,10 +94,12 @@ export function MetricCard({
   children,
   /** Beside the number, never instead of it — errors, imports, undated rows. */
   qualifications,
-  /** Bottom left. A relative timestamp, or nothing where there is none. */
+  /**
+   * A relative timestamp, or nothing where there is none. It sits on the
+   * NAME's line beside `marker` — see the file note. It used to head a
+   * footline, and moving it is what lets the card be two rows.
+   */
   provenance,
-  /** Bottom right. Refresh / Open, or a single Drill in. */
-  actions,
   className,
   ...rest
 }: {
@@ -89,74 +111,97 @@ export function MetricCard({
   children?: ReactNode;
   qualifications?: ReactNode;
   provenance?: ReactNode;
-  actions?: ReactNode;
   className?: string;
 } & Omit<React.ComponentProps<"div">, "title" | "children">) {
   return (
     <Card variant="tile" padding="none" className={cn("lift flex flex-col overflow-hidden", className)} {...rest}>
-      <div className="flex min-w-0 flex-1 flex-col p-4">
-        <div className="flex min-h-0 flex-1 flex-col justify-center">
-          <div className="flex items-start justify-between gap-3">
-            {/* A CARD TITLE, NOT A MICRO-LABEL — AND MUTED AGAIN AS OF THE
-                4 SEP 2026 BLUE RETHEME. This was 13px ALL-CAPS semibold
-                muted, on the argument that a metric's name LABELS the figure
-                under it and that caps-and-muted is what keeps the NUMBER the
-                loud thing. The size half of that overcorrected: every tile
-                read as a caption with a graph under it, two steps below the
-                body text everywhere else in the product, so the name moved
-                up to body size (`text-sm`, 15px) against a 28px numeral —
-                still a two-step gap, the number is in no danger.
-                THE INK HALF CAME BACK MUTED. The body-size name briefly
-                carried `font-medium text-foreground`, on the argument that a
-                name the customer wrote earned full ink; the Figma draws it
-                `text-muted-foreground` at body weight instead, so the
-                numeral stays the one full-ink object the card has. The
-                micro-label voice is still the wrong one here — it is for a
-                STATUS or a column head, strings you scan, not a name someone
-                wrote — the size argument above still holds at 15px muted. */}
-            {/* `flex-1` IS WHAT MAKES `truncate` WORK. The h3 had `min-w-0`
-                and its span had `truncate`, and a long name still wrapped to
-                two lines — because without a flex basis the h3 sizes to its
-                CONTENT inside a `justify-between` row, so there is no width
-                for the ellipsis to trigger against. "Speed To Lead (Armaan)"
-                was the case that showed it. */}
-            <h3 className="flex min-w-0 flex-1 items-baseline text-sm font-normal text-muted-foreground">
-              <span className="truncate">{title}</span>
-              {titleSuffix}
-            </h3>
-            {/* The same reserved lane the chart frame's header keeps — see the
-                note there. The board's tile menu floats over this corner. */}
-            <span className="flex shrink-0 items-center pr-6">{marker}</span>
-          </div>
+      {/* ── THE NAME'S ROW ───────────────────────────────────────────────
+          `pt-4 px-4` AND NO BOTTOM PADDING, which is the export's own split:
+          the header opens the 16px box and the body below closes it, so the
+          air between the name and the figure is the BODY's `p-4` rather than
+          a gap either row owns. Spelling it as `p-4` here and `pt-0` there
+          would measure the same and read as two decisions instead of one. */}
+      <div className="flex min-w-0 items-start justify-between gap-3 px-4 pt-4">
+        {/* A CARD TITLE, NOT A MICRO-LABEL — AND MUTED AGAIN AS OF THE
+            4 SEP 2026 BLUE RETHEME. This was 13px ALL-CAPS semibold
+            muted, on the argument that a metric's name LABELS the figure
+            under it and that caps-and-muted is what keeps the NUMBER the
+            loud thing. The size half of that overcorrected: every tile
+            read as a caption with a graph under it, two steps below the
+            body text everywhere else in the product, so the name moved
+            up to body size (`text-sm`, 15px) against a 28px numeral —
+            still a two-step gap, the number is in no danger.
+            THE INK HALF CAME BACK MUTED. The body-size name briefly
+            carried `font-medium text-foreground`, on the argument that a
+            name the customer wrote earned full ink; the Figma draws it
+            `text-muted-foreground` at body weight instead, so the
+            numeral stays the one full-ink object the card has. The
+            micro-label voice is still the wrong one here — it is for a
+            STATUS or a column head, strings you scan, not a name someone
+            wrote — the size argument above still holds at 15px muted. */}
+        {/* `flex-1` IS WHAT MAKES `truncate` WORK. The h3 had `min-w-0`
+            and its span had `truncate`, and a long name still wrapped to
+            two lines — because without a flex basis the h3 sizes to its
+            CONTENT inside a `justify-between` row, so there is no width
+            for the ellipsis to trigger against. "Speed To Lead (Armaan)"
+            was the case that showed it. */}
+        <h3 className="flex min-w-0 flex-1 items-baseline text-sm font-normal text-muted-foreground">
+          <span className="truncate">{title}</span>
+          {titleSuffix}
+        </h3>
+        {/* THE FRESHNESS AND THE TIME, ON ONE LINE, IN THAT ORDER — the pair
+            the export draws in this corner, 6px apart. The time used to head
+            a footline; see the file note for what moving it buys.
 
-          {headline !== undefined && (
-            <div className="mt-2 flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
-              {/* `text-heading`, SAID OUT LOUD. It used to inherit
-                  `--card-foreground` and looked right, because in the dark
-                  theme `--heading` and `--foreground` are the same white. In
-                  light they are not — #313131 against #000000 — and the spec
-                  asks for the heading step. `cn` still lets the em-dash case
-                  win: tailwind-merge drops `text-heading` when
-                  `text-muted-foreground` is appended for a null headline. */}
-              <p className={cn("stat-numeral text-display-md leading-none text-heading", headline == null && "text-muted-foreground")}>
-                {headline ?? "—"}
-              </p>
-              {delta}
-            </div>
-          )}
+            `pr-6` IS THE KEBAB'S LANE, reserved rather than negotiated: the
+            board floats a 28px tile menu at `right-2 top-2`, which lands
+            inside this row's own 16px padding and straight on top of the
+            timestamp. The two components cannot see each other — the menu
+            belongs to the board's cell wrapper and this to the card — so the
+            width is bought unconditionally. Same reservation, same reason, as
+            the chart frame's header. */}
+        <span className="flex shrink-0 items-center gap-1.5 pr-6 text-xs text-muted-foreground">
+          {marker}
+          {provenance}
+        </span>
+      </div>
 
-          {children}
-          {qualifications}
-        </div>
+      {/* ── THE FIGURE'S ROW ─────────────────────────────────────────────
+          `justify-between`, NOT a baseline row with a gap. The export sets the
+          numeral against the card's left edge and the delta against its RIGHT
+          one, with the whole width between them; the chip trailing the number
+          by 10px is a different object — it reads as a suffix on the figure
+          rather than as the card's second column. */}
+      <div className="flex min-h-0 flex-1 flex-col justify-center p-4">
+        {headline !== undefined && (
+          <div className="flex items-center justify-between gap-3">
+            {/* `text-heading`, SAID OUT LOUD. It used to inherit
+                `--card-foreground` and looked right, because in the dark
+                theme `--heading` and `--foreground` are the same white. In
+                light they are not — #313131 against #000000 — and the spec
+                asks for the heading step. `cn` still lets the em-dash case
+                win: tailwind-merge drops `text-heading` when
+                `text-muted-foreground` is appended for a null headline.
 
-        {(provenance || actions) && (
-          <div className="mt-4 flex items-center justify-between gap-2">
-            {provenance ?? <span />}
-            {/* Pulled right by its own padding so the last label's edge lines
-                up with the content above it rather than with its hit area. */}
-            {actions && <span className="-mr-2.5 flex shrink-0 items-center gap-1">{actions}</span>}
+                `leading-9` IS 36px, AND IT IS THE CARD'S HEIGHT. The step's
+                own line-height is 40 (`--text-display-md--line-height`) and
+                the chart card takes it unchanged; this card's export measures
+                36, which is the 4px that makes the sum come to 108. It was
+                `leading-none` — 28px — which is neither. */}
+            <p
+              className={cn(
+                "stat-numeral text-display-md leading-9 text-heading",
+                headline == null && "text-muted-foreground",
+              )}
+            >
+              {headline ?? "—"}
+            </p>
+            {delta}
           </div>
         )}
+
+        {children}
+        {qualifications}
       </div>
     </Card>
   );

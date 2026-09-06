@@ -420,7 +420,27 @@ describe("the rail's pinned mode", () => {
   const frame = read("src/components/app-frame.tsx");
 
   it("is read on the server, from a cookie, and threaded to the rail", () => {
-    expect(shell).toMatch(/cookies\(\)\)\.get\("rail"\)\?\.value === "pinned"/);
+    /**
+     * OPEN IS THE DEFAULT, SO THE TEST READS THE OTHER WAY — `!== "hover"`,
+     * not `=== "pinned"`.
+     *
+     * The 6 Sep 2026 export (`node-id=14:4`) draws a 260px rail with labels on
+     * it, and its own toggle is the node NAMED "Button - Collapse the
+     * navigation" — the label this control only carries WHILE PINNED. The
+     * frame was taken open, so an account that has never touched the toggle
+     * gets the open rail now.
+     *
+     * It is a LAYOUT fact, not a preference detail, which is why it is pinned
+     * here: every measurement in that export is taken against a 1660px content
+     * column, which is 1920 less a 260px rail. At the old 56px default the
+     * same board draws 589px chart cards where the export draws 521.33.
+     *
+     * What has NOT changed is the shape of the read: still a cookie, still on
+     * the server, still threaded to the rail as `railPinned`, and still
+     * degrading to the default on a missing or corrupted value — the whole
+     * point of the paragraph above this describe block.
+     */
+    expect(shell).toMatch(/cookies\(\)\)\.get\("rail"\)\?\.value !== "hover"/);
     expect(shell).toMatch(/railPinned=/);
     expect(frame).toMatch(/pinned=\{railPinned\}/);
   });

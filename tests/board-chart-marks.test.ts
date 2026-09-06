@@ -409,9 +409,28 @@ describe("the kit's shape", () => {
      * behaviour the markup has never implemented (the spec's own Deferred
      * list records that drift; this pass only stopped the comment claiming
      * otherwise). None of it changes what a single bar or wash renders.
+     *
+     * AN EIGHTH TIME ON 6 SEP 2026, FOR THE `node-id=14:4` OVERVIEW PASS —
+     * one class removed and the rest prose. `font-medium` came off the chip's
+     * OUTER span: it set the whole pill a weight above the body text it
+     * qualifies, including the "vs yesterday" half, where the two-tone is
+     * supposed to be built by RAISING the magnitude and never by lifting the
+     * label with it. The magnitude keeps its own `font-semibold`, so the only
+     * visible change is that the trailing half sits at the regular weight the
+     * export draws it at. Padding, gap and radius were already the export's
+     * 8/4/full and did not move.
+     *
+     * COLOUR STILL DID NOT MOVE, AND THIS TIME THE EXPORT ARGUES OTHERWISE.
+     * `node-id=14:4` paints the chip red under "−50%" and green under "+50%",
+     * and it does it on a SPEED TO LEAD tile — where −50% means the team
+     * halved its response time and is the best news on the board. That is the
+     * exact failure the direction-blind rule exists to prevent, drawn out in
+     * the reference itself, so the geometry was adopted and the colour was
+     * not. Confirmed with the owner before the change. The wash stays neutral
+     * until a tile can record which direction is good.
      */
     const hash = createHash("sha256").update(readFileSync(join(process.cwd(), "src/components/charts.tsx"))).digest("hex");
-    expect(hash).toBe("7a309e4dbac615d7b8a9385780d27d91527fa14f43dee2a40de276fed54f160f");
+    expect(hash).toBe("5efb3afab3501918cb33444ce8718163a48d3c064c452dcdb786119cca40cfad");
   });
 });
 

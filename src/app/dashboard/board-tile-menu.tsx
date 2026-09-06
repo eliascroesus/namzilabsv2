@@ -1,13 +1,35 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowDown, ArrowUp, Check, MoreHorizontal, Plus } from "lucide-react";
+import Link from "next/link";
+import { ArrowDown, ArrowUp, ArrowUpRight, Check, MoreHorizontal, Plus, RefreshCw } from "lucide-react";
 import type { BoardTile } from "@/lib/board/types";
 import { Button } from "@/components/ui/button";
 import { SectionHeading } from "@/components/ui/page";
 import { Popover } from "@/components/flow/controls/Popover";
 import { cn } from "@/lib/utils";
+import { refreshFlowAction } from "@/app/dashboard/flows/actions";
 import { MENU_ATTR, TILE_ATTR } from "./board-drag";
+
+/**
+ * WHAT THIS TILE IS, READ OFF ITS OWN KEY.
+ *
+ * `BoardTile.key` is the board's identity for a cell and it already encodes
+ * the kind — `flow:<flowId>:<outputNodeId>` or `metric:<metricId>` — so the
+ * acts this menu can offer are derivable here rather than threaded down as
+ * two more props from a page that has already handed over `title`, `value`
+ * and `unitKey` for the same object.
+ *
+ * The parse is deliberately total: anything that is neither shape returns
+ * null and the menu simply opens on "Move to", which is what a future third
+ * kind of tile should do until someone teaches this function about it.
+ */
+function tileTarget(key: string): { kind: "flow"; flowId: string } | { kind: "metric"; metricId: string } | null {
+  const [prefix, id] = key.split(":");
+  if (prefix === "flow" && id) return { kind: "flow", flowId: id };
+  if (prefix === "metric" && id) return { kind: "metric", metricId: id };
+  return null;
+}
 
 /**
  * A MENU ROW'S SHAPE, SPELLED ONCE.
@@ -173,6 +195,9 @@ export function TileSlot({
    */
   const [instant, setInstant] = useState(false);
 
+  /** Which acts this tile can offer — see `tileTarget`. */
+  const target = tileTarget(tile.key);
+
   // A member who may not rearrange gets the card and nothing else — not a
   // disabled control advertising something it will refuse. The identifying
   // attribute goes too: nothing here can be a drop target for anyone.
@@ -274,6 +299,51 @@ export function TileSlot({
               inherits it — so the whole dropdown claimed to be draggable while
               you were reading it. A menu is pointed at, not picked up. */}
           <div {...{ [MENU_ATTR]: "" }} className="cursor-default overflow-y-auto p-1.5">
+            {/* ── THE TILE'S OWN ACTS ──────────────────────────────────────
+                They were two ghost buttons in the card's footline until the
+                6 Sep 2026 export drew a card with no footline (see
+                `metric-card.tsx`). They are HERE rather than gone: "Open" is
+                the only way from a number into the flow that computes it, and
+                a drawing that omits a footer is not an argument for deleting
+                the path. The menu is where this board already keeps the acts
+                that belong to one tile, so they cost the card no height.
+
+                Refresh is a real form post, exactly as it was in the footline
+                — a server action, so it keeps working with no JS — and the
+                menu closes itself on submit rather than sitting open over a
+                number that is about to change. */}
+            {target && (
+              <>
+                <SectionHeading className={MENU_LABEL}>{tile.title}</SectionHeading>
+                {target.kind === "flow" ? (
+                  <>
+                    <form action={refreshFlowAction} onSubmit={() => setOpen(false)}>
+                      <input type="hidden" name="flowId" value={target.flowId} />
+                      <Button type="submit" variant="ghost" className={MENU_ROW} title="Recompute this tile now">
+                        <RefreshCw />
+                        Refresh
+                      </Button>
+                    </form>
+                    <Button asChild variant="ghost" className={MENU_ROW}>
+                      <Link href={`/dashboard/flows/${target.flowId}`}>
+                        <ArrowUpRight />
+                        Open
+                      </Link>
+                    </Button>
+                  </>
+                ) : (
+                  <Button asChild variant="ghost" className={MENU_ROW}>
+                    <Link href={`/dashboard/metrics/${target.metricId}`}>
+                      <ArrowUpRight />
+                      Drill in
+                    </Link>
+                  </Button>
+                )}
+
+                <div className="my-1.5 h-px bg-border" />
+              </>
+            )}
+
             {/* The same eyebrow the column's menu wears over its own sections —
                 `SectionHeading` is the app's one small-caps label, and two
                 menus on one board spelling it two ways is how a product ends up

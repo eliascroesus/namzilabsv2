@@ -32,6 +32,12 @@ vi.mock("@/app/dashboard/board-actions", () => ({
   setTilePlacementsAction: async () => ({ ok: true }),
 }));
 
+// The tile MENU carries Refresh now (it left the card's footline with the
+// 6 Sep 2026 two-row export), so this module reaches the client graph through
+// `board-tile-menu.tsx` and brings `server-only` with it. Same reason, same
+// shape, as the board-actions mock above.
+vi.mock("@/app/dashboard/flows/actions", () => ({ refreshFlowAction: async () => {} }));
+
 const { BoardLayout } = await import("@/app/dashboard/board-layout");
 
 const tile = (key: string, title: string): BoardTile => ({

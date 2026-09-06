@@ -77,40 +77,54 @@ export function Card({ className, variant, padding, ...props }: CardProps) {
 }
 
 /**
- * THE RULED HEAD — the reference's signature, and the shape this kit did not
- * have.
+ * THE CARD'S HEAD — AND THE RULE UNDER IT IS GONE.
  *
- * Every card in the reference is two bands: a 16px header closed by a hairline,
- * then the content. That rule is doing something the old card had no way to
- * express — it separates a card's NAME from a card's CONTENT without spending
- * a size step or a weight on it, which is what let the reference set every card
- * title at the same 14px/500 as its body text and still have them read as
- * titles.
+ * This block used to open "THE RULED HEAD — the reference's signature", and
+ * described every card as two bands: a 16px header closed by a hairline, then
+ * the content. That was read off an earlier reference and it is not what the
+ * 6 Sep 2026 export draws. `node-id=14:4` sets the header's frame to
+ * `border-0` on all four sides, and the rendered PNG confirms it — "Pickup
+ * Rate" sits directly above "28.2%" on one uninterrupted surface, with no
+ * seam anywhere between the card's top edge and its chart.
  *
- * Before this, a card that wanted a heading spelled one at its call site, and
- * eleven of them did, in about six ways.
+ * The rule was carrying a real argument — it let a card's NAME separate from
+ * its CONTENT without spending a size step or a weight — and the export
+ * answers that argument a different way: the name is MUTED (`#7e7e7e`) and
+ * the figure under it is full-ink white at 28px. Ink and scale do the
+ * separating, so the hairline is redundant, and a redundant hairline on a
+ * board of twelve tiles is twelve lines of furniture in a product whose whole
+ * thesis is quiet chrome.
  *
- * `padding="none"` ON THE CARD IS THE PAIRING. A `CardHeader` inside a padded
- * Card draws its rule 16px short of the card's own edge, which reads as a
- * mistake rather than as a band. The header and the body bring their own
- * padding; the card brings none.
+ * So this is `px-4 pt-4` with no bottom padding: the header opens the 16px
+ * box and the body below it closes it, which is the same split `MetricCard`
+ * spells inline. `padding="none"` on the Card is still the pairing — the
+ * header and the body bring their own padding, the card brings none.
  */
 export function CardHeader({ className, children, ...props }: React.ComponentProps<"div">) {
   return (
-    <div className={cn("flex items-start justify-between gap-4 border-b border-border p-4", className)} {...props}>
+    <div className={cn("flex items-start justify-between gap-4 px-4 pt-4", className)} {...props}>
       {children}
     </div>
   );
 }
 
 /**
- * A card's name. 14px/500 in the body ink — the SAME size and weight as the
- * text below it, because the rule under it is what makes it a title. Set two
- * steps up it would be a page heading inside a card, which is the thing that
+ * A card's name — 15px REGULAR, MUTED, which is the same recipe `MetricCard`
+ * sets on its own h3 and the same one the export draws (`#7e7e7e`, 15px/22,
+ * SF Pro Regular).
+ *
+ * It was `font-medium text-foreground` on the argument that the rule under it
+ * was what made it a title. The rule is gone (see `CardHeader`), and the
+ * export's answer is that the name does not need to be a title: it LABELS the
+ * figure below it, and the figure is the loud thing. Full-ink medium was also
+ * the exact disagreement that had a chart card and a metric card — two tiles
+ * side by side in one grid — drawing their names two different ways.
+ *
+ * Set two steps up it would be a page heading inside a card, which is what
  * makes a board of ten cards read as ten pages.
  */
 export function CardTitle({ className, ...props }: React.ComponentProps<"h3">) {
-  return <h3 className={cn("truncate text-sm font-medium text-foreground", className)} {...props} />;
+  return <h3 className={cn("truncate text-sm font-normal text-muted-foreground", className)} {...props} />;
 }
 
 /** The line under it: 12px/400, one rung down the ink ramp at 6.78:1. */

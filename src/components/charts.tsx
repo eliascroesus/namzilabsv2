@@ -229,8 +229,28 @@ export function Delta({
          * does not scan this file, so this is a decision rather than a
          * survivor it missed.
          */
-        "inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium",
-        // COLOURED BY WHETHER IT MOVED, NEVER BY WHICH WAY.
+        /**
+         * THE EXPORT'S OWN GEOMETRY: 8px of side padding, 2px of top and
+         * bottom, a 4px gap, a full radius, at label size. `py-0.5` is 2px and
+         * `gap-1` is 4px, so the only thing that moved is the WEIGHT — the
+         * chip carried `font-medium` on the whole pill, which put the "vs
+         * yesterday" half a step above the body text it qualifies. The
+         * magnitude keeps its own `font-semibold` below; the rest is regular,
+         * which is what the export draws.
+         */
+        "inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs",
+        // COLOURED BY WHETHER IT MOVED, NEVER BY WHICH WAY — AND THE 6 SEP
+        // 2026 EXPORT DISAGREES, DELIBERATELY UNRESOLVED IN THE CODE'S FAVOUR.
+        //
+        // `node-id=14:4` draws this pill in a red wash (rgba(255,85,85,.15))
+        // under "−50%" and a green one (rgba(0,212,146,.15)) under "+50%". The
+        // tile it draws the red one on is SPEED TO LEAD, where −50% is the
+        // best news on the board: the team halved its response time. That is
+        // precisely the failure the file note above describes, drawn out in
+        // the reference itself, so the geometry of that pill was adopted here
+        // and its colour was not. The wash stays neutral until a tile can say
+        // which direction is good; when tiles carry a polarity, this is still
+        // the one place that has to change.
         //
         // The rule above bans a green/red pill and that was read as banning
         // colour, which left this the only grey object beside a 36px number.

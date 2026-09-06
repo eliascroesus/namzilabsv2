@@ -176,9 +176,25 @@ export async function AppShell({
          260px of the LAYOUT, so the width has to be known in the first paint or
          the bar and the page snap sideways a frame later. localStorage cannot
          be read during render; a cookie can.
-         Anything other than "pinned" is the hover behaviour, so a missing or
-         corrupted value degrades to the default rather than to a broken one. */
-      railPinned={(await cookies()).get("rail")?.value === "pinned"}
+
+         OPEN IS THE DEFAULT NOW, AS OF THE 6 SEP 2026 EXPORT. It was closed —
+         `=== "pinned"` — so an account that had never touched the toggle got
+         the 56px icon rail, and `node-id=14:4` draws a 260px rail with labels
+         on it. That is not an inference from the picture: the export's own
+         toggle is the node NAMED "Button - Collapse the navigation", which is
+         the label this control only carries WHILE PINNED (see `Sidebar`) — the
+         frame was taken open, and the only reading on which the default is
+         closed is one where the reference screen is not the resting state.
+
+         It also settles the geometry. Every measurement in that frame is taken
+         against a 1660px content column, which is 1920 less a 260px rail; at
+         56px the same board draws 589px chart cards where the export draws
+         521.33. One default decides whether the whole page matches.
+
+         Anything other than "hover" is the pinned behaviour, so a missing or
+         corrupted value degrades to the default rather than to a broken one —
+         the same degradation as before, now pointing the other way. */
+      railPinned={(await cookies()).get("rail")?.value !== "hover"}
       workspace={workspace}
       views={await railViewsP}
       account={{

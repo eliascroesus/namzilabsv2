@@ -8,7 +8,7 @@ import { AppShell } from "@/components/app-shell";
 import { MetricCard } from "@/components/metric-card";
 import { EmptyBoard } from "@/components/board-empty";
 import { SubmitButton } from "@/components/ui/submit-button";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { PageContainer, PageHeader } from "@/components/ui/page";
 import { Sparkbars, TargetBar } from "@/components/charts";
 import { FreshnessPoller } from "@/components/freshness-poller";
@@ -1384,8 +1384,13 @@ function MetricTile({ tile }: { tile: Tile }) {
      * Everything structural now comes from `MetricCard`, so the only things
      * left here are the ones genuinely particular to a `metrics` row: it has no
      * `computedAt` (it is computed live on this render, so a timestamp would be
-     * furniture saying "now"), no freshness marker for the same reason, and one
-     * act rather than two.
+     * furniture saying "now") and no freshness marker for the same reason.
+     *
+     * "DRILL IN" IS IN THE TILE MENU NOW, with the flow tile's own Refresh and
+     * Open — the 6 Sep 2026 export's card has two rows and no footline to hang
+     * an act from. Both kinds of tile are `BoardTile.node` inside the same
+     * `TileCard`, so one menu serves both and the two stop differing on where
+     * their acts live. See `board-tile-menu.tsx`.
      */
     <MetricCard
       title={metric.name}
@@ -1401,13 +1406,6 @@ function MetricTile({ tile }: { tile: Tile }) {
         ) : null
       }
       qualifications={tile.kind === "error" ? <p className="mt-2 text-xs text-warn-ink">{tile.error}</p> : null}
-      actions={
-        tile.kind === "aggregate" ? (
-          <Button asChild variant="ghost" className="hover:text-accent-foreground">
-            <Link href={`/dashboard/metrics/${metric.id}`}>Drill in</Link>
-          </Button>
-        ) : null
-      }
     >
       {tile.kind === "aggregate" && tile.result.kind === "series" && (
         <Sparkbars series={tile.result.series} format={{ format: "number", precision: 2 }} />

@@ -738,9 +738,23 @@ export function RailContent({
                   cursor, which is the fix, not a re-litigation of the old
                   argument (the row it labels simply always reserves the
                   space now, seen or not). */}
-              <p className={cn("px-1 pb-1 pt-3 text-xs font-semibold uppercase tracking-wide text-faint", REVEAL)}>
-                Main Menu
-              </p>
+              {/* SENTENCE CASE, NOT CAPS — the export draws "Main Menu", and
+                  it is the one caption in the product that does. The kit's
+                  caps recipe (`SectionHeading`) is untouched and still right
+                  for a column head or a menu's eyebrow; this label sits in the
+                  chrome, where the argument for caps ("it makes a 12px string
+                  read as a label rather than a very small sentence") is
+                  answered instead by the eight ROWS under it, which are the
+                  only other thing in this column and are unmistakably a list.
+
+                  THE INK STAYS `--faint`, WHICH IS THE ONE VALUE HERE THAT
+                  DELIBERATELY DOES NOT MATCH. The export sets this string in
+                  #4A4A4A, which measures 2.13:1 on the chrome — not a label
+                  anyone can read. `--faint` (#6E6E6E) is the tested substitute
+                  at 3.70:1, and globals.css names the same deviation on the
+                  role itself. Casing is a drawing decision and was adopted;
+                  contrast is not, and was not. */}
+              <p className={cn("px-1 pb-1 pt-3 text-xs font-normal text-faint", REVEAL)}>Main Menu</p>
               {items
                 .map(({ label, href, icon: Icon }) => {
                   const active = pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
@@ -942,8 +956,15 @@ export function Sidebar({
    * the exact failure `tests/page-width.test.ts` exists for, and a
    * preference is not worth reintroducing it. `AppShell` reads the cookie;
    * this only toggles it.
+   *
+   * THE FALLBACK IS OPEN, matching the cookie's own default — see the note in
+   * `app-shell.tsx` for why the 6 Sep 2026 export settles that. It matters
+   * beyond tidiness: `/design` and `/design/overview` mount this frame without
+   * passing the prop, so a `false` here drew the kit and the reference screen
+   * at a rail width the product no longer uses, which is the one thing those
+   * pages exist not to do.
    */
-  pinned: initialPinned = false,
+  pinned: initialPinned = true,
   workspace,
   account,
 }: {

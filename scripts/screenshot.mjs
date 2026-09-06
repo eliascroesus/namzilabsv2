@@ -19,10 +19,23 @@ import { chromium } from "playwright";
 const [path = "/design", out = "shot.png", height, scrollY] = process.argv.slice(2);
 const base = process.env.SHOT_BASE ?? "http://localhost:3000";
 
+/**
+ * THE THEME THIS TOOL COULD NOT SEE.
+ *
+ * The theme is `system` by default and lives in localStorage, so a headless
+ * browser always reported "light" — which means every screenshot ever taken
+ * with this script was of the LIGHT theme, including the ones used to sign off
+ * a re-theme whose reference export is a DARK frame. That is the same failure
+ * the header above describes: it exits 0 and hands you a picture of the wrong
+ * thing.
+ *
+ *   SHOT_SCHEME=dark pnpm shot /design/overview out.png
+ */
 const browser = await chromium.launch();
 const page = await browser.newPage({
   viewport: { width: Number(process.env.SHOT_WIDTH ?? 1440), height: Number(height) || 900 },
   deviceScaleFactor: 2,
+  colorScheme: process.env.SHOT_SCHEME === "dark" ? "dark" : "light",
 });
 const res = await page.goto(`${base}${path}`, { waitUntil: "networkidle", timeout: 60_000 });
 if (!res || res.status() >= 400) {
