@@ -38,8 +38,8 @@ import { GROUP_COLOR_KEYS, groupBadge, groupInk } from "@/components/flow/node-a
  * pins the two together.
  *
  * AND IT OPENS. Point at it and the column widens IN PLACE to 240px and the
- * names fade in beside the chips: the wordmark, the two caps headings, every
- * destination, the ⌘K keycap. The reference is VoltOps, and the reason to copy
+ * names fade in beside the chips: the wordmark, the two caps headings and
+ * every destination. The reference is VoltOps, and the reason to copy
  * it is that it settles the argument the notes below used to lose — an icon
  * rail is unreadable until you have learned it, and the six names are the one
  * thing 70px genuinely could not hold. It holds them now, for as long as you
@@ -96,10 +96,11 @@ import { GROUP_COLOR_KEYS, groupBadge, groupInk } from "@/components/flow/node-a
  *   264px-wide link to `/dashboard/settings` carrying no number — the rail
  *   still goes to Settings, one row down, so nothing became unreachable and
  *   the only loss is a signpost pointing at a door that is still in view.
- * · THE ⌘K KEYCAP. Back on the search row, where it was before the rail
- *   shrank. It is `aria-hidden` and the shortcut is announced properly by
- *   `aria-keyshortcuts`, so the keycap is a picture of a shortcut rather than
- *   part of the control's name.
+ * · THE ⌘K KEYCAP. GONE AGAIN, 6 SEP 2026, at the owner's word — it came
+ *   back with the panel and went out with the export, which draws a search
+ *   field carrying a magnifier and a word and nothing else. The binding is
+ *   untouched: `aria-keyshortcuts` on the button is the announced fact, and
+ *   the chip was `aria-hidden`, so it was never part of the control's name.
  * · THE TOOLTIPS. GONE, all seven, and that is a decision rather than an
  *   omission. They existed to name a glyph for a pointer user; the panel now
  *   names it, at the same moment, from the same string. Worse, they were
@@ -341,7 +342,7 @@ const ICON_COL = "flex size-8 shrink-0 items-center justify-center";
  * down again above the breakpoint, so the rail keeps its density and the
  * drawer keeps its targets from one string.
  */
-const SLOT = "group flex h-9 min-h-11 w-full shrink-0 items-center justify-start gap-2.5 rounded-control md:min-h-0";
+const SLOT = "group flex h-9 min-h-11 w-full shrink-0 items-center justify-start gap-2.5 rounded-control text-left md:min-h-0";
 
 /**
  * THE GUTTER, WRITTEN DOWN.
@@ -593,7 +594,12 @@ export function RailContent({
                   <Button
                     variant="ghost"
                     size="iconSm"
-                    className={cn(SLOT, "hover:bg-transparent active:bg-transparent [&_svg]:size-3")}
+                    /* `h-10` — 40px, which is what the export measures on this
+                       one row (its search and its nav rows are 36). The head of
+                       the column is the only thing above the search field, so
+                       it carries the extra four pixels rather than the rail
+                       opening on a row the same size as everything below it. */
+                    className={cn(SLOT, "h-10 hover:bg-transparent active:bg-transparent [&_svg]:size-3")}
                     aria-label={`${workspace} — workspace and account`}
                   >
                     <span className={ICON_COL}>
@@ -668,7 +674,13 @@ export function RailContent({
           */}
         <nav
           aria-label="Primary"
-          className={cn("quiet-scroll flex min-h-0 flex-1 flex-col gap-2 overflow-x-hidden overflow-y-auto pt-3 pb-4", GUTTER)}
+          /* `pt-1`, NOT `pt-3`. The head block above is exactly 60px (it has to
+             be — it is what makes the rail's rule and the top bar's rule one
+             seam, pinned by tests/page-width.test.ts), so this padding is the
+             only thing deciding where the search field lands. At 12px it put
+             the field at 132; the export draws it at 124, and every row below
+             inherited the same 8px of slack. */
+          className={cn("quiet-scroll flex min-h-0 flex-1 flex-col gap-2 overflow-x-hidden overflow-y-auto pt-1 pb-4", GUTTER)}
         >
               {/* THE SEARCH CONTROL OPENS THE COLUMN, which is where all
                   three references (Miro, Figma, Make) put it: the fastest way
@@ -719,15 +731,16 @@ export function RailContent({
                   <Search aria-hidden className="size-[18px] text-muted-foreground" />
                 </span>
                 <RailLabel className="text-muted-foreground group-hover:text-foreground">Search</RailLabel>
-                <span
-                  aria-hidden
-                  className={cn(
-                    "ml-auto rounded-xs border border-border px-1.5 py-0.5 text-2xs font-medium text-muted-foreground",
-                    REVEAL,
-                  )}
-                >
-                  ⌘K
-                </span>
+                {/* THE ⌘K KEYCAP IS GONE, 6 SEP 2026, at the owner's word. It
+                    was a 20px bordered chip on the right of the field — the
+                    only object in the rail wearing a second border inside an
+                    already-bordered box — and the export draws a search field
+                    with a magnifier and a word in it and nothing else.
+                    The shortcut itself is untouched: `aria-keyshortcuts` on
+                    the button above is the ANNOUNCED fact, and it was always
+                    the half that carried the meaning — the chip was
+                    `aria-hidden`, so removing it takes nothing away from a
+                    screen reader and nothing away from the binding. */}
               </Button>
               {/* THE CAPS LABEL IS BACK, ON THE FIGMA'S OWN TERMS THIS TIME.
                   It was removed because a heading reserved at 70px pushed
@@ -754,7 +767,7 @@ export function RailContent({
                   at 3.70:1, and globals.css names the same deviation on the
                   role itself. Casing is a drawing decision and was adopted;
                   contrast is not, and was not. */}
-              <p className={cn("px-1 pb-1 pt-3 text-xs font-normal text-faint", REVEAL)}>Main Menu</p>
+              <p className={cn("px-1 pb-1 pt-2 text-xs font-normal text-faint", REVEAL)}>Main Menu</p>
               {items
                 .map(({ label, href, icon: Icon }) => {
                   const active = pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
@@ -853,6 +866,13 @@ export function RailContent({
             href="/dashboard/flows"
             className={cn(
               SLOT,
+              /* 32px, NOT the rail's 36. This is a filled BUTTON wearing a
+                 row's shape, and the owner's rule is that everything with a
+                 background stands at 32 — the top bar's buttons, the header's
+                 three, and this. The export measures it at 32 in the foot
+                 while the row above it ("Get Free Access") stays 36, which is
+                 the same split: one is an act, the other is a destination. */
+              "h-8",
               "transition-colors duration-(--duration-fast) ease-(--ease-standard)",
               "group-hover/rail:-mx-1 group-hover/rail:w-[calc(100%+0.5rem)] group-hover/rail:justify-center group-hover/rail:rounded-control group-hover/rail:bg-primary group-hover/rail:px-1",
               "group-focus-within/rail:-mx-1 group-focus-within/rail:w-[calc(100%+0.5rem)] group-focus-within/rail:justify-center group-focus-within/rail:rounded-control group-focus-within/rail:bg-primary group-focus-within/rail:px-1",
@@ -888,7 +908,11 @@ export function RailContent({
                 control read at two weights depending on which end of the chrome
                 you looked at, which is exactly the drift the kit exists to
                 stop. */}
-            <RailLabel className="font-semibold text-primary-foreground">New flow</RailLabel>
+            {/* `text-button` — 14px, because when the rail is open this row IS
+                a filled button and the kit's filled controls are all 14. The
+                rail's other labels stay at the body's 15: they are
+                destinations, not controls. */}
+            <RailLabel className="text-button font-semibold text-primary-foreground">New flow</RailLabel>
           </Link>
 
           {/* GET FREE ACCESS — the upsell row the old bell placeholder becomes.

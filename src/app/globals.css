@@ -368,6 +368,26 @@
   --text-2xs--line-height: 1rem;
   --text-xs: 0.8125rem; /* 13px — labels, captions, dense controls */
   --text-xs--line-height: 1.125rem;
+  /**
+   * 14px — A BUTTON'S LABEL, AND THE STEP THE KIT HAS BEEN CLAIMING IT HAD.
+   *
+   * `ui/button.tsx` has said "ONE CONTROL HEIGHT: 32px, at 14px type" since the
+   * heights came down, and went on to argue the point in a paragraph — "14 on
+   * 32 leaves 6px above and below the cap height, which is the proportion the
+   * whole interface is set at". The scale had no 14. Every rung spelled
+   * `text-sm`, so every button in the product drew at FIFTEEN and the prose
+   * describing it was documentation of a step that did not exist.
+   *
+   * NOT `--text-control`, which is the name this wants: `--color-control` is
+   * already a role, so `text-control` compiles to a COLOUR and the font size is
+   * silently dropped. Named for the object instead.
+   *
+   * A button's label is the one string in the product that sits INSIDE a filled
+   * box rather than on the page, and 15px in a 32px box is the near-miss that
+   * reads as a control a size too big for its own chrome.
+   */
+  --text-button: 0.875rem; /* 14px — every labelled button, at every rung */
+  --text-button--line-height: 1.25rem;
   --text-sm: 0.9375rem; /* 15px — the app's default body */
   --text-sm--line-height: 1.375rem;
   --text-md: 1.0625rem; /* 17px — long-form reading prose, and the `lg` button */

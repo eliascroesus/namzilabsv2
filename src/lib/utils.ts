@@ -31,8 +31,16 @@ const twMerge = extendTailwindMerge({
        * ONE SPELLING PER SIZE, matching the scale in globals.css.
        *
        * `xs`/`sm`/`lg`/`xl` are already in tailwind-merge's own default
-       * font-size group, so they need no help — but `md`, the four `display-*`
-       * steps and `banner` are NOT stock Tailwind sizes. Anything missing from
+       * font-size group, so they need no help — but `button`, `md`, the four
+       * `display-*` steps and `banner` are NOT stock Tailwind sizes.
+       *
+       * `button` (14px, added 6 Sep 2026) walked straight into this file's own
+       * bug within a minute of existing: `buttonVariants` composes
+       * `text-primary-foreground` from the variant with `text-button` from the
+       * size, and with the name unregistered the merger read the size as a
+       * second COLOUR and dropped the first — white ink gone from every filled
+       * button in the product. `tests/cn-merge.test.ts` caught it, which is
+       * exactly what it is for. Anything missing from
        * this list is treated as a text COLOUR and silently eats the colour
        * before it, which is the bug in this file's header.
        *
@@ -42,7 +50,7 @@ const twMerge = extendTailwindMerge({
        * this list would make `cn()` quietly accept a class that now compiles to
        * nothing, which is the one thing the gate is supposed to make visible.
        */
-      "font-size": [{ text: ["md", "display-xs", "display-sm", "display-md", "display-lg", "banner"] }],
+      "font-size": [{ text: ["button", "md", "display-xs", "display-sm", "display-md", "display-lg", "banner"] }],
       /**
        * THE KIT'S RADIUS NAMES, FOR EXACTLY THE SAME REASON AS THE SIZES.
        *

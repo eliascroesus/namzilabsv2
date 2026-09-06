@@ -36,7 +36,6 @@ import type { ImportCoverage } from "@/connectors/types";
  */
 export function ChartFrame({
   title,
-  chartLabel,
   rangeLabel,
   headline,
   delta,
@@ -53,14 +52,13 @@ export function ChartFrame({
 }: {
   title: string;
   /**
-   * WHAT THIS TILE IS DRAWN AS, beside the metric's name.
-   *
-   * Two tiles of one metric drawn two ways carry the same title and the same
-   * number, and were indistinguishable at a glance — the whole point of a
-   * custom view is putting exactly that pair side by side.
+   * ACCEPTED AND NO LONGER DRAWN. It said what a tile was drawn AS — "Line",
+   * "Bars" — under a picture of exactly that. Kept in the type because
+   * `custom-tile.tsx` passes it, and removing it would mean editing call
+   * sites to say nothing.
    */
   chartLabel?: string;
-  /** Set only when this tile overrides the board's period. See the header. */
+  /** Set ONLY when this tile overrides the board's period — see the header. */
   rangeLabel?: string;
   /**
    * Pre-formatted, because the formatter lives where the data does. `null`
@@ -97,25 +95,22 @@ export function ChartFrame({
     // it is load-bearing arithmetic, not taste (see `tests/board-blocks.test.ts`
     // — at ROW_UNIT_PX 48 (24px gap) the cartesian floor is measured against it).
     /**
-     * THE RULED HEAD — the reference's card shape, and the thing this tile did
-     * not have.
+     * THE HEAD, WHICH IS NO LONGER RULED — see `CardHeader` in ui/card.tsx.
      *
-     * It was a 13px ALL-CAPS muted label sitting inline at the top of a 16px
-     * padded box, with the chart kind and the freshness on the same line. That
-     * is the micro-label voice, and it is the wrong voice for a card's NAME:
-     * every tile on the board read as a caption with a graph under it, at a
-     * size two steps below the body text everywhere else in the product.
+     * This block used to open "THE RULED HEAD" and describe every card as two
+     * bands closed by a hairline. That was read off an earlier reference;
+     * `node-id=14:4` sets the header frame `border-0` and the render confirms
+     * it, so the rule came off and the NAME went muted to do the separating
+     * that the rule had been doing.
      *
-     * The reference draws every card as two bands — a 16px header closed by a
-     * hairline, then the content — and sets the title at the SAME 14px/500 as
-     * body text. The rule is what makes it a title, which is exactly why the
-     * size does not have to. `CardHeader`/`CardTitle`/`CardDescription` were
-     * built for this and were not being used by the one surface that needed
-     * them most.
+     * What survives from the old argument is the shape: the title is not a
+     * caps micro-label. It was 13px ALL-CAPS with the chart kind and the
+     * freshness on one line, which made every tile read as a caption with a
+     * graph under it, two steps below the body text everywhere else.
      *
-     * `padding="none"` is the pairing: the header and the body bring their own
-     * 16px, so a `CardHeader` inside a padded Card would draw its rule 16px
-     * short of the card's edge and read as a mistake rather than a band.
+     * `padding="none"` is still the pairing: the header and the body each
+     * bring their own 16px, so a `CardHeader` inside an already-padded Card
+     * would sit its content 32px in from the card's edge.
      */
     <Card data-tile-card variant="tile" padding="none" className="flex h-full flex-col overflow-hidden">
       <CardHeader className="gap-2">
@@ -131,19 +126,19 @@ export function ChartFrame({
               bar's own caption out through the bottom edge. `truncate` here is
               therefore a height guarantee rather than a width preference. */}
           <CardTitle title={title}>{title}</CardTitle>
-          {/* THE QUALIFIERS ARE A DESCRIPTION NOW, NOT A SECOND CAPS LABEL on
-              the title's own line. They used to share that line, with
-              `truncate` on the name so the markers survived — which is how a
-              tile ended up headed "PICK…". The reference puts exactly this
-              material under the title at 13px/400, where it costs the header a
-              line it can afford and costs the NAME nothing. */}
-          {(chartLabel || rangeLabel) && (
-            <CardDescription className="truncate">
-              {chartLabel}
-              {chartLabel && rangeLabel && " · "}
-              {rangeLabel}
-            </CardDescription>
-          )}
+          {/* THE CHART-KIND LINE IS GONE, 6 SEP 2026 — "I dont want to have
+              the chart type text on the cards". It read "Line · Today" under
+              the name: the tile describing the picture directly beneath it.
+
+              `rangeLabel` STAYS, AND THE DISTINCTION IS THE WHOLE POINT. It is
+              not decoration and it is not the chart's kind — it is set only
+              when THIS TILE OVERRIDES THE BOARD'S PERIOD, so without it a tile
+              reading "Last 7 days" sits in a board set to Today and says
+              nothing about the difference. `tests/custom-tile-render.test.ts`
+              calls a silent override "the failure", and it is right: the two
+              labels were sharing one line, so removing the noisy half is what
+              lets the honest half be seen at all. */}
+          {rangeLabel && <CardDescription className="truncate">{rangeLabel}</CardDescription>}
         </div>
         {/* `pr-6` IS THE KEBAB'S LANE, and it is reserved rather than negotiated.
             The board floats a tile menu at `absolute right-2 top-2` — 8px in,

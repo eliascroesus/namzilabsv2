@@ -428,9 +428,21 @@ describe("the kit's shape", () => {
      * the reference itself, so the geometry was adopted and the colour was
      * not. Confirmed with the owner before the change. The wash stays neutral
      * until a tile can record which direction is good.
+     *
+     * A NINTH TIME, SAME DAY, FOR THE CHIP'S INK. One class: the magnitude's
+     * `text-foreground` came off and the pill's own `text-foreground` went to
+     * `text-muted-foreground`, so BOTH halves now sit at the muted step. The
+     * owner put our card beside the export's and the difference was loudness,
+     * not colour — there both halves are `#7e7e7e` and the chip is plainly a
+     * caption, where ours was a small WHITE sentence competing with a 28px
+     * white numeral eight pixels away. Two full-ink objects on a 108px card is
+     * one too many. The two-tone survives on WEIGHT alone (`font-semibold` on
+     * the magnitude), which is the same device the flat state always used.
+     * Still no honesty rule moved: zero-anchoring, `formatMetricValue` and the
+     * direction-blind wash are untouched.
      */
     const hash = createHash("sha256").update(readFileSync(join(process.cwd(), "src/components/charts.tsx"))).digest("hex");
-    expect(hash).toBe("5efb3afab3501918cb33444ce8718163a48d3c064c452dcdb786119cca40cfad");
+    expect(hash).toBe("83bbf1d2962a544099966f56cc208fd4806ffa222f12c558b0000398289716c7");
   });
 });
 

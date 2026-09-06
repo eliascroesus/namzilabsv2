@@ -174,6 +174,14 @@ const buttonVariants = cva(
          * does not read as "the button is small" — it reads as every button in
          * the product sitting a step quieter than the text beside it.
          *
+         * AND FOR THREE WEEKS THAT PARAGRAPH DESCRIBED A STEP THE SCALE DID
+         * NOT HAVE. Every rung here spelled `text-sm`, which is FIFTEEN — so
+         * the file argued for 14 and shipped 15, and the owner read the
+         * difference off the live app ("every button that has a background
+         * colour, font size 14 instead of 15"). `--text-button` exists now
+         * (globals.css) and every rung takes it. The heights were already
+         * right; only the type was lying.
+         *
          * `xs` (24px / 12px) IS GONE, 6 Sep 2026. It was the dense row's rung,
          * and it ended up on the three buttons in the dashboard header —
          * "+ Add", the period dropdown and "Refresh all" — where it put them a
@@ -200,9 +208,9 @@ const buttonVariants = cva(
          * beside 32px of text crowds the row it sits in. They carry no label,
          * so they are not on this ladder and 32 is not owed to them.
          */
-        sm: "h-8 px-3 text-sm [&_svg]:size-4",
-        default: "h-8 px-3 text-sm [&_svg]:size-4",
-        lg: "h-10 px-4 text-sm [&_svg]:size-4",
+        sm: "h-8 px-3 text-button [&_svg]:size-4",
+        default: "h-8 px-3 text-button [&_svg]:size-4",
+        lg: "h-10 px-4 text-button [&_svg]:size-4",
         icon: "size-8 [&_svg]:size-[18px]",
         iconSm: "size-7 [&_svg]:size-4",
         iconXs: "size-6 [&_svg]:size-3.5",

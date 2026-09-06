@@ -116,7 +116,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             on every single navigation. Hidden until focused (globals.css). */}
         <a
           href="#main"
-          className="skip-link rounded-control bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-panel"
+          /* A FILLED CONTROL, SO IT STANDS WHERE THEY ALL STAND: 32px at 14px.
+             It was `py-2 text-sm` — 38px at 15 — which nobody saw, because it
+             only appears under keyboard focus. That is exactly why it drifted:
+             the one control in the product no reviewer ever looks at. */
+          className="skip-link inline-flex h-8 items-center rounded-control bg-primary px-4 text-button font-semibold text-primary-foreground shadow-panel"
         >
           Skip to content
         </a>

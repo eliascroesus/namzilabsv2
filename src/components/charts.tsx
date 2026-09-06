@@ -265,22 +265,34 @@ export function Delta({
         // on a full dashboard, each shouting about a secondary fact. The delta
         // qualifies the figure above it; it does not compete with it.
         //
-        // So both states take the same quiet wash and the difference is the
-        // INK: full-strength foreground when something moved, muted when it
-        // did not. Grey still means "nothing moved" — it just no longer costs
-        // the tile its composure to say so.
-        flat ? "bg-muted text-muted-foreground" : "bg-muted text-foreground",
+        // So both states take the same quiet wash, and AS OF 6 SEP 2026 both
+        // take the same MUTED ink too.
+        //
+        // The chip used to lift its magnitude to full foreground when
+        // something had moved, on the reading that "it moved" was worth
+        // saying loudly. Beside the export's own chip that reads wrong: there,
+        // BOTH halves are `#7e7e7e` and the pill is unmistakably a caption
+        // sitting next to the number, where ours was a small white sentence
+        // competing with a 28px white numeral eight pixels away. Two full-ink
+        // objects on a 108px card is one too many, and the number is the one
+        // this product exists to show.
+        //
+        // The two-tone survives, carried by WEIGHT alone — see the magnitude's
+        // own `font-semibold` below. That is the same device the flat state
+        // has always used and it is enough at this size.
+        "bg-muted text-muted-foreground",
       )}
       title={`${formatMetricValue(previous, format)} ${since}`}
     >
       <Icon size={12} aria-hidden />
-      {/* THE TWO-TONE IS BUILT BY RAISING THE NUMBER, never by sinking the
-          label. `since` carries "vs yesterday" — the half that says what the
-          comparison is against — and it has twice been dimmed into
-          unreadability (2.84:1 at one point) by someone reaching for hierarchy
-          with opacity. It inherits the chip's own ink; only the magnitude is
-          lifted, by WEIGHT. */}
-      <span className="tnum font-semibold text-foreground">{magnitude}</span>
+      {/* THE TWO-TONE IS BUILT BY WEIGHT, never by sinking the label. `since`
+          carries "vs yesterday" — the half that says what the comparison is
+          against — and it has twice been dimmed into unreadability (2.84:1 at
+          one point) by someone reaching for hierarchy with opacity. Both
+          halves take the chip's own muted ink and the magnitude is separated
+          by `font-semibold`, which is exactly what the export draws: its
+          "−50%" is bold and its "vs compared" is not, and neither is white. */}
+      <span className="tnum font-semibold">{magnitude}</span>
       <span>{since}</span>
     </span>
   );
