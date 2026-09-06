@@ -404,8 +404,8 @@ never `.css`.
 
 - **View strip** — the board's arrangements, Notion's view bar doing Notion's
   job. Real anchors, so a link pasted into Slack opens on the sender's view.
-  The active tab used to carry the state in colour ALONE — a 1px rule that
-  went from a green measuring 1.78:1 on the light ground, to a violet at
+  The active tab used to carry the state in colour ALONE — a 2px rule at the
+  time, that went from a green measuring 1.78:1 on the light ground, to a violet at
   4.41:1, to a cyan that cleared its own bar with room to spare — and colour
   got QUIETER at the same time it got easier to read: the rule this Figma
   draws is a grey role, `--tab-rule` (`--muted-foreground` on dark,

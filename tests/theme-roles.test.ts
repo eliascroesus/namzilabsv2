@@ -132,7 +132,13 @@ describe("board-controls.tsx's active view tab uses --tab-rule, not --marker", (
  */
 describe("the active tab's rule is 1px on the wrapper, the anchor and both tab orientations", () => {
   it("the wrapper carries border-b, not border-b-2", () => {
-    expect(boardControls).toMatch(/border-b(?!-)/);
+    // R3-1: `/border-b(?!-)/` alone is satisfied by `border-border` (a
+    // `border-b` prefix followed by `o`, not `-`) — the file has two of
+    // those plus two comment mentions, so that regex passed even with
+    // `border-b` deleted from the wrapper entirely. An exact literal of the
+    // wrapper's real class string is the only thing that pins the rule is
+    // actually there, not just that `border-b-2` is gone.
+    expect(boardControls).toContain("items-center border-b text-sm");
     expect(boardControls).not.toMatch(/border-b-2/);
   });
 

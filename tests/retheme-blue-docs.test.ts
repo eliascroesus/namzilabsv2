@@ -233,6 +233,14 @@ describe("fix round 1 — ratios and the gate's own rule count are pinned, not j
     expect(brandKit()).toMatch(/5\.01:1/);
   });
 
+  it("D2: DESIGN.md pins the active rail glyph's ratio at 5.69:1, not the stale 5.72:1", () => {
+    // Copied out of sidebar.tsx once already and rotted to 5.72:1 there with
+    // nothing to catch it (fix round 2's finding). Pinned directly this time.
+    const doc = readFileSync(join(root, "DESIGN.md"), "utf8");
+    expect(doc).not.toMatch(/5\.72:1/);
+    expect(doc).toMatch(/5\.69:1/);
+  });
+
   it("the danger trio's three surface ratios are pinned", () => {
     const doc = brandKit();
     expect(doc).toMatch(/5\.00:1/);
@@ -405,10 +413,17 @@ describe("The active tab's rule is pinned at 1px in both docs", () => {
     expect(doc).toMatch(/with a 1px\s+`border-tab-rule` bottom rule/);
   });
 
-  it("DESIGN.md's furniture section says 1px, not 2px", () => {
+  it("DESIGN.md's furniture section states the LIVE rule at 1px and its own history honestly (it was 2px, then 3px, at the time)", () => {
+    // D1: the historical clause's subject is the rule DURING the green/
+    // violet/cyan eras, which `git log -L` shows was `border-b-3` then
+    // `border-b-2` — never 1px until this week's `9d328f4`. A fix round
+    // over-corrected the past-tense number; "a 1px rule that went from a
+    // green" was a true number applied to the wrong era. §7's live sentence
+    // (below, unpinned by this `it`) carries 1px; this clause carries 2px,
+    // "at the time".
     const doc = designMd();
-    expect(doc).not.toMatch(/a 2px rule that\s+went from a green/);
-    expect(doc).toMatch(/a 1px rule that\s+went from a green/);
+    expect(doc).not.toMatch(/a 1px rule that\s+went from a green/);
+    expect(doc).toMatch(/a 2px rule at the\s+time, that\s+went from a green/);
   });
 });
 
@@ -487,9 +502,27 @@ describe("Final pass docs item 3: the minor untruths are corrected", () => {
     expect(doc).toMatch(new RegExp(`\\*\\*${variantCount}\\*\\* variants × ${sizeCount} sizes`));
   });
 
-  it("/design's Buttons section reads twelve variants, not eleven", () => {
+  it("D3: /design's Buttons section reads the variant count's WORD form, derived from the same source count as BRAND_KIT's numeral pin above — not a hardcoded 'twelve'", () => {
+    // The BRAND_KIT pin two `it`s up reads button.tsx's own variant keys at
+    // test time, so a 13th variant fails it. `/design`'s "One component,
+    // twelve variants" sentence was still a literal — the same sabotage
+    // (add a 13th variant) tripped BRAND_KIT's pin and left this one green,
+    // which is the exact drift the numeral upgrade was made to stop. Mapping
+    // the SAME count to its word form closes that gap: a 13th variant now
+    // fails both documents.
+    const buttonSrc = readFileSync(join(root, "src/components/ui/button.tsx"), "utf8");
+    const sizeBlockStart = buttonSrc.indexOf("size: {");
+    const topLevelKey = /^ {8}[A-Za-z]+: "/gm;
+    const variantCount = (buttonSrc.slice(0, sizeBlockStart).match(topLevelKey) ?? []).length;
+    const NUMBER_WORDS = [
+      "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+      "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen",
+      "nineteen", "twenty",
+    ];
+    const word = NUMBER_WORDS[variantCount];
+    expect(word, `no word mapped for ${variantCount} variants — extend NUMBER_WORDS above`).toBeDefined();
     expect(page()).not.toMatch(/One component, eleven variants/);
-    expect(page()).toMatch(/One component, twelve variants/);
+    expect(page()).toMatch(new RegExp(`One component, ${word} variants`));
   });
 
   it("neither doc still calls the interaction chip a 'pill that now says something else'", () => {
