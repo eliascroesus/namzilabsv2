@@ -392,8 +392,17 @@ describe("the kit's shape", () => {
      * AND MOVED A SIXTH TIME IN THE HEADER FIX ROUND'S FIRST REVIEW PASS —
      * a radius and a documentation fix, no behaviour and no further colour
      * change. The delta chip was still `rounded-full`, missed when the fifth
-     * move repainted the marks; it is `rounded-control` now, the spec's own
-     * "8px corners" for a delta chip. The rest of the diff is prose: the
+     * move repainted the marks; it went to `rounded-control` on the reading
+     * that the spec's "8px corners" covered it.
+     *
+     * A SEVENTH TIME ON 6 SEP 2026, WHICH PUT THAT RADIUS BACK. The owner's
+     * metric-card export draws the delta at a full radius, and the shape rule
+     * it was squared against is the CONTROL ladder — things that get pressed.
+     * A status caption is not one, so the chip is a pill again, deliberately
+     * and with the reason written at the call site. Colour did not move: it
+     * is still the neutral wash, never red or green, because down is good for
+     * Speed to Lead and bad for Booked Leads and nothing on a tile records
+     * which. The rest of the diff is prose: the
      * file-level vocabulary and the `Sparkbars` comments still said "5% wash"
      * and "25% yellow line" after the fifth move repainted them blue at 12%,
      * and the "LATEST BUCKET IN INK" comment still described a black-emphasis
@@ -402,7 +411,7 @@ describe("the kit's shape", () => {
      * otherwise). None of it changes what a single bar or wash renders.
      */
     const hash = createHash("sha256").update(readFileSync(join(process.cwd(), "src/components/charts.tsx"))).digest("hex");
-    expect(hash).toBe("f91062cdf8b829755da7d3860bde2ca10da414fbba24abc89aa42629969c60bd");
+    expect(hash).toBe("7a309e4dbac615d7b8a9385780d27d91527fa14f43dee2a40de276fed54f160f");
   });
 });
 

@@ -215,7 +215,21 @@ export function Delta({
   return (
     <span
       className={cn(
-        "inline-flex shrink-0 items-center gap-1 rounded-control px-2 py-0.5 text-xs font-medium",
+        /**
+         * A PILL, AND THE ONE THING ON A TILE THAT IS ALLOWED TO BE.
+         *
+         * "8px, no pills" is the shape rule for the CONTROL ladder — buttons,
+         * inputs, selects, tabs, nav rows, the period groove. This is not on
+         * that ladder: it is a status caption that is never pressed, and the
+         * 6 Sep 2026 metric-card export draws it at a full radius. It flipped
+         * to `rounded-control` in an earlier round on the reading that the
+         * rule covered everything; the export settles that it does not.
+         *
+         * The five-file pill sweep in `console-theme.test.ts` deliberately
+         * does not scan this file, so this is a decision rather than a
+         * survivor it missed.
+         */
+        "inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium",
         // COLOURED BY WHETHER IT MOVED, NEVER BY WHICH WAY.
         //
         // The rule above bans a green/red pill and that was read as banning
