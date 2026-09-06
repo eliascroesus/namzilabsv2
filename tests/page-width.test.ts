@@ -616,7 +616,7 @@ describe("the rail's re-dress — a workspace switcher, Main Menu, a search fiel
    * `button.tsx`, composed at render time from whichever `size` prop (or its
    * absence) the caller passes — so the only thing checkable here, at the
    * source, is that a `size` was actually given. Scoped to the switcher's own
-   * trigger, because `size="iconSm"` and `[&_svg]:size-3` both exist
+   * trigger, because `size="iconSm"` and `[&_svg]:size-5` both exist
    * elsewhere in this file too (the search button below, other rows' icons),
    * so a whole-file `toContain` would pass even with this ONE Button left
    * un-sized — which is exactly the bug this exists to catch.
@@ -629,7 +629,7 @@ describe("the rail's re-dress — a workspace switcher, Main Menu, a search fiel
     const code = sidebar.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
     const trigger = code.slice(code.indexOf("<DropdownMenuTrigger asChild>"), code.indexOf("</DropdownMenuTrigger>"));
     expect(trigger).toContain('size="iconSm"');
-    expect(trigger).toContain("[&_svg]:size-3");
+    expect(trigger).toContain("[&_svg]:size-5");
   });
 
   /**
@@ -637,7 +637,7 @@ describe("the rail's re-dress — a workspace switcher, Main Menu, a search fiel
    *
    * A descendant rule beats a plain utility on the element itself for
    * specificity no matter which order the two are written in, so the
-   * switcher's chevron (wants `size-3`) and the search field's magnifier
+   * switcher's chevron (wants `size-5`) and the search field's magnifier
    * (wants `size-[18px]`) both silently rendered at whatever their OWN
    * button's size variant shipped (`size-4` either way) until overridden at
    * the same level, on the button that owns the rule.
@@ -653,7 +653,10 @@ describe("the rail's re-dress — a workspace switcher, Main Menu, a search fiel
   it("overrides both size variants' own icon rule, for the chevron and the magnifier", () => {
     const code = sidebar.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
     const switcherTrigger = code.slice(code.indexOf("<DropdownMenuTrigger asChild>"), code.indexOf("</DropdownMenuTrigger>"));
-    expect(switcherTrigger).toContain("[&_svg]:size-3");
+    // 20px, up from 12 on 6 Sep 2026 — the export draws this chevron at 24 and
+    // 20 is the kit's nearest rung. At 12 the row read as a name with a speck
+    // after it rather than as a control.
+    expect(switcherTrigger).toContain("[&_svg]:size-5");
     const searchButton = code.slice(code.indexOf('aria-keyshortcuts="Meta+K"'), code.indexOf('aria-keyshortcuts="Meta+K"') + 300);
     expect(searchButton).toContain("[&_svg]:size-[18px]");
   });
@@ -667,10 +670,17 @@ describe("the rail's re-dress — a workspace switcher, Main Menu, a search fiel
      * it; both are checked against here so neither regression comes back.
      * A chip raised INSIDE an already-raised row would be one signal drawn
      * twice, which is why the chip (`RailChip`, above) carries no fill of
-     * its own at all — only the glyph's own `text-marker` colour.
+     * its own at all.
+     *
+     * THE GLYPH IS WHITE AND FILLED NOW, not `text-marker`. It was the brand
+     * stroke, defended as WCAG 1.4.1's second signal; the row's own
+     * `--control` fill IS that signal, and it is a SURFACE change rather than
+     * a hue anyone has to be able to distinguish. The owner asked for white
+     * directly. See `RailChip`.
      */
     expect(sidebar).toContain('className={cn(SLOT, active && "bg-control")}');
-    expect(sidebar).toMatch(/tone === "active"\s*\n\s*\? "text-marker"/);
+    expect(sidebar).toMatch(/tone === "active"\s*\n\s*\? "text-foreground \[&_svg\]:fill-current"/);
+    expect(sidebar, "the active glyph must not go back to the brand").not.toMatch(/\? "text-marker"/);
     expect(sidebar, "the fill must not land back on the chip").not.toMatch(/"bg-control text-marker"/);
     expect(sidebar, "the hover step must not come back as the active fill").not.toMatch(/"bg-accent text-marker"/);
   });
@@ -696,13 +706,20 @@ describe("the rail's re-dress — a workspace switcher, Main Menu, a search fiel
     expect(sidebar).not.toMatch(/Notifications/);
   });
 
-  it("keeps both rail columns 8px apart", () => {
-    // Regression for console-theme.test.ts's own pin — not this file's test,
-    // but broken by exactly the kind of edit this task makes if the wrapper
-    // gap classes are touched.
+  it("spaces the NAV at 8px and the FOOT at 16, which the export draws apart", () => {
+    /**
+     * These were both 8. `node-id=14:44` gives the nav block `gap-[8px]` and
+     * the foot `gap-[16px]`, and the difference is not arbitrary: the nav is a
+     * LIST, where a tight rhythm is what makes seven rows read as one column,
+     * and the foot is TWO FILLED BUTTONS, which at 8px apart stack close
+     * enough to read as one two-line control.
+     *
+     * Still a regression guard for console-theme.test.ts's own pin — the two
+     * files agree, they just no longer agree on a single number.
+     */
     const gaps = [...sidebar.matchAll(/flex[^"]*\bflex-col\b[^"]*\bgap-(\S+)/g)].map((m) => m[1]);
     expect(gaps.length).toBeGreaterThanOrEqual(2);
-    for (const g of gaps) expect(g).toBe("2");
+    for (const g of gaps) expect(["2", "4"], `an off-scale rail column gap: ${g}`).toContain(g);
   });
 });
 

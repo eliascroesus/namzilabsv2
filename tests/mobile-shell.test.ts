@@ -140,10 +140,18 @@ describe("the top bar below md", () => {
     expect(stripped).toContain("rounded-full border border-input bg-avatar text-xs font-semibold text-foreground");
   });
 
-  it("drops the greeting below sm and both acts below md", () => {
-    // One span carries both rules: `max-sm:hidden` for the phone and the
-    // pre-existing peer rule for the builder's portalled toolbar.
-    expect(code(bar)).toMatch(/max-sm:hidden[^"]*peer-\[:not\(:empty\)\]:hidden|peer-\[:not\(:empty\)\]:hidden[^"]*max-sm:hidden/);
+  it("drops both acts below md, and has no greeting left to drop", () => {
+    /**
+     * THERE IS NO GREETING ANY MORE, 6 SEP 2026. This used to assert that one
+     * span carried `max-sm:hidden` (the phone) plus `peer-[:not(:empty)]:
+     * hidden` (yielding the centre to the builder's portalled toolbar). The
+     * owner had "Welcome back!" removed outright, so the span, both rules and
+     * the `peer` they arbitrated are gone — a phone rule for an element that
+     * does not render is a rule nobody can evaluate.
+     *
+     * What the phone still owes is below: the two ACTS step aside at `md`.
+     */
+    expect(code(bar), "no greeting to hide").not.toContain("Welcome back");
     // Exactly two controls step aside at `md` — Invite members and New flow.
     // Counted over the CODE: the note above them names both by hand, and a
     // rule that can read its own explanation counts to four.

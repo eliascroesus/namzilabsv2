@@ -8,6 +8,7 @@ import { FlowTile, type FlowResultRow } from "@/components/flow-tile";
 import { ChartFrame } from "@/components/board-charts/frame";
 import { BarsVertical, LineChart } from "@/components/board-charts/cartesian";
 import { accentOf } from "@/lib/board/tile-config";
+import { Delta } from "@/components/charts";
 import { GRID_COLS, GRID_GAP_PX, ROW_UNIT_PX } from "@/lib/board/grid";
 
 /**
@@ -210,7 +211,18 @@ export default function OverviewLab() {
         >
           {CHARTS.map((c, i) => (
             <div key={`chart-${i}`} style={{ gridColumn: "span 4", gridRow: "span 10" }}>
-              <ChartFrame title={c.title} headline={c.headline} status="fresh" computedAt={HOUR_AGO}>
+              {/* A DELTA ON A CHART CARD, WHICH IS THE CASE THAT WENT WRONG.
+                  The export puts the chip at the far end of the figure's own
+                  row; the frame was stacking it UNDERNEATH, and this page could
+                  not show it because it passed no `delta` at all. It does now —
+                  the one tile shape most likely to carry one. */}
+              <ChartFrame
+                title={c.title}
+                headline={c.headline}
+                status="fresh"
+                computedAt={HOUR_AGO}
+                delta={<Delta current={30} previous={5} format={FMT[c.shape]} since="vs prior" />}
+              >
                 {c.shape === "bar" ? (
                   <BarsVertical series={SERIES} format={FMT[c.shape]} accent={accentOf()} />
                 ) : (

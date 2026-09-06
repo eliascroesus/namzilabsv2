@@ -156,13 +156,21 @@ describe("the console's supplied constants", () => {
     expect(select, "the trigger must not go back to a pill").not.toMatch(/rounded-full/);
   });
 
-  it("spaces the rail's icons 8px apart, in both of its groups", () => {
-    // The rail has TWO stacks — the scrolling nav and the pinned foot — and
-    // they have to agree, or the gap changes halfway down a single column of
-    // icons. Both were `gap-0.5` (2px).
+  it("spaces the rail's two stacks on the scale, 8px in the nav and 16 in the foot", () => {
+    /**
+     * The rail has TWO stacks — the scrolling nav and the pinned foot. Both
+     * were `gap-0.5` (2px), then both 8, and the argument for making them
+     * agree was that "the gap changes halfway down a single column of icons".
+     *
+     * `node-id=14:44` splits them, because by then they are not one column of
+     * icons: the nav is a LIST of seven destinations at 8px, and the foot is
+     * TWO FILLED BUTTONS at 16. At 8 the pair stacked close enough to read as
+     * one two-line control. What is still pinned is that neither invents a
+     * value off the scale.
+     */
     const gaps = [...sidebar.matchAll(/flex[^"]*\bflex-col\b[^"]*\bgap-(\S+)/g)].map((m) => m[1]);
     expect(gaps.length).toBeGreaterThanOrEqual(2);
-    for (const g of gaps) expect(g, "a rail column that is not 8px apart").toBe("2");
+    for (const g of gaps) expect(["2", "4"], `a rail column at an off-scale gap: ${g}`).toContain(g);
   });
 
   it("still defines the white button literally, though + Add moved off it", () => {

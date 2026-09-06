@@ -42,15 +42,16 @@ import { cn } from "@/lib/utils";
 
 export function TopBar({
   account,
-  firstName,
   menu,
   unread = 1,
 }: {
   account?: { initials: string; avatarUrl?: string | null; panel: ReactNode };
   /**
-   * The greeting's name. Optional, and the fallback is a greeting with NO name
-   * in it — "Welcome back!" — rather than "Welcome back, there!". A product
-   * that guesses at your name is worse than one that does not use it.
+   * ACCEPTED AND UNREAD. It was the greeting's name; the greeting is gone (see
+   * the centre zone below). Kept on the type because `AppShell` passes it and
+   * removing it would mean editing the caller to say nothing — and because the
+   * bar is where a greeting would come back if one ever should. Deliberately
+   * NOT destructured, so it cannot look like a value this component uses.
    */
   firstName?: string;
   /**
@@ -68,7 +69,6 @@ export function TopBar({
   /** Unread notifications. Placeholder until notifications have a store. */
   unread?: number;
 }) {
-  const greeting = firstName ? `Welcome back, ${firstName}!` : "Welcome back!";
 
   return (
     // The prose sits ABOVE the tag deliberately: tests/page-width.test.ts
@@ -100,28 +100,25 @@ export function TopBar({
           `FlowToolbar.tsx`) returns null and the toolbar renders nowhere at
           all.
 
-          THE GREETING IS THE OTHER OCCUPANT, and it steps aside rather than
-          sharing: `peer` + `:not(:empty)` lets the slot's own contents do the
-          hiding — `empty:hidden` on the slot is what stops an EMPTY one
-          claiming the centre from the greeting, and `peer-[:not(:empty)]:
-          hidden` on the greeting below is what yields it the moment the slot
-          has something in it — so no page has to remember to tell this bar
-          what it is doing. */}
+          THE GREETING IS GONE, 6 SEP 2026, at the owner's word. "Welcome
+          back!" sat in the centre of the bar on every page of the product —
+          the most prominent horizontal position on the screen, spent on a
+          string that says nothing, changes never, and is read once. The slot
+          keeps the centre for the one thing that has something to say there:
+          the builder's toolbar.
+
+          THE PEER MACHINERY WENT WITH IT. `peer` + `empty:hidden` +
+          `peer-[:not(:empty)]:hidden` existed for exactly one reason — to let
+          an occupied slot push the greeting aside without any page having to
+          say which was which. With one occupant there is nothing to arbitrate,
+          and a `peer` with no sibling reading it is a rule that looks load-
+          bearing to whoever finds it next. `empty:hidden` stays: it is what
+          keeps an unfilled slot from claiming width in this row.
+
+          `firstName` stays on the signature — `AppShell` passes it, and the
+          bar is where a greeting would return if one ever should. */}
       <div className="flex min-w-0 flex-1 items-center justify-center">
-        <div id="topbar-slot" className="peer flex min-w-0 flex-1 items-center gap-2 empty:hidden" />
-        {/* `max-sm:hidden`, NOT `hidden sm:block`, AND THE DIFFERENCE IS A
-            BUG AVOIDED. This span already carries `peer-[:not(:empty)]:hidden`
-            — the rule that gets out of the builder's way when its toolbar
-            portals into the slot beside it. A base `hidden` plus `sm:block`
-            would put a responsive variant into a fight with that peer rule
-            that is settled by Tailwind's own emission order rather than by
-            anything written here, and the losing case is a greeting sitting
-            on top of the builder's toolbar. One `max-` variant hides it below
-            `sm` and leaves the peer rule the only thing deciding anything at
-            `sm` and above. */}
-        <span className="truncate text-sm font-medium text-foreground max-sm:hidden peer-[:not(:empty)]:hidden">
-          {greeting}
-        </span>
+        <div id="topbar-slot" className="flex min-w-0 flex-1 items-center gap-2 empty:hidden" />
       </div>
 
       {/* ── WHAT YOU CAN START ───────────────────────────────────────────

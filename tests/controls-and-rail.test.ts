@@ -18,6 +18,82 @@ const button = read("src/components/ui/button.tsx");
 const globals = read("src/app/globals.css");
 const sidebar = read("src/components/sidebar.tsx");
 const frame = read("src/components/board-charts/frame.tsx");
+const topBar = read("src/components/top-bar.tsx");
+
+/**
+ * THE THIRD ROUND, 6 SEP 2026 — read off `node-id=14:44`, the rail's own frame,
+ * plus four things the owner named directly.
+ */
+describe("the rail wears one fill for both selected and hovered", () => {
+  it("raises the whole row to --control under the pointer", () => {
+    // The rail had TWO raises: `--control` (#202020) for the active row and
+    // `--accent` (#3A3A3A) for hover — so a hovered row looked more selected
+    // than the selected one.
+    expect(code(sidebar)).toMatch(/const SLOT = "[^"]*hover:bg-control/);
+  });
+
+  it("leaves no --accent hover anywhere in the column", () => {
+    // The nested view rows and the "Show all" fold each carried their own.
+    const rail = code(sidebar).replace(/absolute -top-3[\s\S]{0,400}?"/g, ""); // the collapse toggle floats OUTSIDE the rail
+    expect(rail).not.toMatch(/hover:bg-accent/);
+  });
+
+  it("marks the active row in WHITE and filled, never in the brand", () => {
+    /**
+     * "when a like nav thing is active it shouldnt be blue it should be white
+     * and completely filled in color". The chip drew `text-marker` — the brand
+     * stroke — which the file's own long note defended as WCAG 1.4.1's second
+     * signal. The row's `--control` fill IS that second signal, and it is a
+     * surface change rather than a hue anyone has to distinguish.
+     */
+    const chip = code(sidebar).slice(code(sidebar).indexOf("function RailChip"));
+    expect(chip.slice(0, 600), "the active glyph is not the brand").not.toContain("text-marker");
+    expect(chip.slice(0, 600), "it is filled, not outlined").toContain("[&_svg]:fill-current");
+  });
+
+  it("gives the foot a present, not a bell, on a filled secondary button", () => {
+    // A bell is the top bar's glyph for real unread notifications; spending it
+    // on an upsell put one picture on two unrelated things in one chrome.
+    const c = code(sidebar);
+    expect(c).toMatch(/<Gift \/>/);
+    expect(c, "Get Free Access is a filled button, not a nav row").toMatch(
+      /variant="secondary"[\s\S]{0,300}Get Free Access/,
+    );
+    expect(c, "the bell is gone from the rail").not.toMatch(/<Bell\b/);
+  });
+});
+
+describe("the top bar's centre belongs to the builder, not to a greeting", () => {
+  it("says no Welcome back", () => {
+    expect(topBar).not.toContain("Welcome back");
+  });
+
+  it("keeps the portal slot, which is the whole reason that zone exists", () => {
+    // Losing `#topbar-slot` does not degrade the flow builder, it breaks it:
+    // `getElementById` returns null and its toolbar renders nowhere.
+    expect(code(topBar)).toContain('id="topbar-slot"');
+    expect(code(topBar), "an empty slot still claims no width").toContain("empty:hidden");
+  });
+
+  it("drops the peer machinery that only existed to arbitrate the two", () => {
+    // A `peer` with no sibling reading it looks load-bearing to whoever finds
+    // it next.
+    expect(code(topBar)).not.toContain("peer-[:not(:empty)]:hidden");
+  });
+});
+
+describe("a chart card's delta sits BESIDE its number, at the far end", () => {
+  it("puts the figure and the chip on one justify-between row", () => {
+    /**
+     * It was stacked underneath on `mt-1.5`. The export draws the same row the
+     * metric card does — figure hard left, chip hard right, the whole width
+     * between them — and that gap is what stops the two competing.
+     */
+    const c = code(frame);
+    expect(c).toMatch(/<div className="flex items-center justify-between gap-3">[\s\S]{0,400}\{delta\}/);
+    expect(c, "the stacked wrapper is gone").not.toMatch(/\{delta && <div className="mt-1\.5">/);
+  });
+});
 
 describe("a button's label is 14px, which the kit only now actually has", () => {
   it("defines --text-button at 14px", () => {

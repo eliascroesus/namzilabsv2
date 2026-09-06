@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Bell, ChevronDown, LayoutDashboard, PanelLeftClose, PanelLeftOpen, Plug, Plus, Radio, Search, Settings, UserPlus, Workflow } from "lucide-react";
+import { ChevronDown, Gift, LayoutDashboard, PanelLeftClose, PanelLeftOpen, Plug, Plus, Radio, Search, Settings, UserPlus, Workflow } from "lucide-react";
 import { Fragment, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -240,9 +240,31 @@ function RailChip({ tone, children }: { tone: "rest" | "active"; children: React
     <span
       className={cn(
         "flex size-8 items-center justify-center rounded-control transition-colors duration-(--duration-fast) ease-(--ease-standard) [&_svg]:size-[18px]",
+        /**
+         * WHITE, NOT BLUE, AS OF 6 SEP 2026 — the owner's call, and the long
+         * note above this component is what it overrules.
+         *
+         * That note defends a blue glyph as the second signal WCAG 1.4.1 asks
+         * for, on the reading that the row's fill alone is "colour carrying
+         * state on its own". It is not: `--control` under the whole row is a
+         * SURFACE change, which is a non-colour signal in exactly the way a
+         * hue swap between two grey icons is not, and the label goes to full
+         * ink beside it. So the active row still carries two signals — a fill
+         * and an ink step — and neither of them is a hue anybody has to be
+         * able to distinguish. `aria-current="page"` is unchanged.
+         *
+         * `[&_svg]:fill-current` is the "completely filled" half: lucide draws
+         * these as outlines, and the export's active glyph is solid. Filling
+         * from the same `currentColor` keeps it one decision.
+         *
+         * NO HOVER FILL ON THE CHIP. It carried `group-hover:bg-accent` — a
+         * 32px square lighting up under the pointer INSIDE a row that now
+         * lights up as a whole. Two nested raises for one hover; the row's is
+         * the one that survives (see `SLOT`'s own hover).
+         */
         tone === "active"
-          ? "text-marker"
-          : "text-foreground group-hover:bg-accent",
+          ? "text-foreground [&_svg]:fill-current"
+          : "text-foreground",
       )}
     >
       {children}
@@ -342,16 +364,23 @@ const ICON_COL = "flex size-8 shrink-0 items-center justify-center";
  * down again above the breakpoint, so the rail keeps its density and the
  * drawer keeps its targets from one string.
  */
-const SLOT = "group flex h-9 min-h-11 w-full shrink-0 items-center justify-start gap-2.5 rounded-control text-left md:min-h-0";
+const SLOT = "group flex h-9 min-h-11 w-full shrink-0 items-center justify-start gap-2.5 rounded-control text-left transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:bg-control md:min-h-0";
 
 /**
  * THE GUTTER, WRITTEN DOWN.
  *
- * 12px, which is the reference's own rail padding and also exactly what is left
- * when a 24px chip sits in a 48px column. It has to be a number rather than an
- * `items-center` because the rows are full-width — centring a 216px row centres
- * nothing — and it is the one measurement that keeps the open panel's chips
- * standing exactly where the closed one's were.
+ * 16px, which is what `node-id=14:44` measures on the open rail: its nav block
+ * is `px-[16px]` and its 226.9px rows sit inside a 260px column. It was 14
+ * (`px-3.5`) — a value carried over from the 48px collapsed rail, where it was
+ * "exactly what is left when a 24px chip sits in a 48px column". That
+ * arithmetic stopped applying the day the rail defaulted open, and two pixels
+ * is enough to put every glyph in this column off the vertical line the page's
+ * own 24px gutter sets up beside it.
+ *
+ * It has to be a number rather than an `items-center` because the rows are
+ * full-width — centring a 216px row centres nothing — and it is the one
+ * measurement that keeps the open panel's chips standing exactly where the
+ * closed one's were.
  *
  * THE MARK'S BLOCK SPELLS IT OUT INSTEAD OF READING IT, and that is not an
  * oversight to tidy up. tests/page-width.test.ts matches that block's class
@@ -360,7 +389,7 @@ const SLOT = "group flex h-9 min-h-11 w-full shrink-0 items-center justify-start
  * there matches nothing and fails the file with "could not find the rail's top
  * block". Two spellings of 12px, and this is the note that keeps them in step.
  */
-const GUTTER = "px-3.5";
+const GUTTER = "px-4";
 
 /**
  * THE RAIL'S CONTENT — one tree, rendered in two places.
@@ -484,9 +513,15 @@ export function RailContent({
                  out to the parent's label, which is where it started. */
               className={cn(
                 "flex h-8 min-h-11 items-center rounded-control pl-4 pr-2 text-sm transition-colors duration-(--duration-fast) md:min-h-0",
+                /* `bg-control` (#202020) FOR BOTH, which is the rule the whole
+                   rail follows now: the row you are on and the row under the
+                   pointer wear the SAME fill. `--accent` (#3A3A3A) was a second,
+                   stronger raise reserved for hover, and having two of them
+                   meant a hovered row looked more selected than the selected
+                   one. See `SLOT`. */
                 on
-                  ? "bg-accent font-medium text-foreground"
-                  : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                  ? "bg-control font-medium text-foreground"
+                  : "text-muted-foreground hover:bg-control hover:text-foreground",
               )}
             >
               {/* A DASH, DRAWN RATHER THAN TYPED. It marks these rows as
@@ -514,7 +549,7 @@ export function RailContent({
                16px by their dash and its margin, so this is level with their
                NAMES. A fold that starts left of the names it folds reads as
                belonging to the section rather than to them. */
-            className="h-8 min-h-11 w-full justify-start rounded-control pl-8 pr-2 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground active:bg-accent md:min-h-0"
+            className="h-8 min-h-11 w-full justify-start rounded-control pl-8 pr-2 text-xs font-medium text-muted-foreground hover:bg-control hover:text-foreground active:bg-control md:min-h-0"
           >
             {allViews ? "Show less" : `Show all ${ordered.length}`}
           </Button>
@@ -565,7 +600,7 @@ export function RailContent({
             and 600 already reads as a badge at 13px. `.wordmark` stays the ONE
             exception above 600 (see globals.css), and it needs no gate change
             because its weight is declared in CSS. */}
-        <div className="flex h-[60px] shrink-0 items-center px-3.5">
+        <div className="flex h-[60px] shrink-0 items-center px-4">
           {workspace &&
             (account ? (
               <DropdownMenu>
@@ -584,13 +619,16 @@ export function RailContent({
                       row's actual size, the same way they already do for the
                       search button.
 
-                      `[&_svg]:size-3` is not decoration: every size variant
+                      `[&_svg]:size-5` is not decoration: every size variant
                       ships its own `[&_svg]:size-*` (`iconSm`'s is `size-4`),
-                      and that descendant rule beats the chevron's own
-                      `size-3` on specificity no matter which order the two
-                      are written in — overriding at the same level, on the
-                      button that owns the rule, is the only spelling that
-                      actually lands. */}
+                      and that descendant rule beats the chevron's own class on
+                      specificity no matter which order the two are written in
+                      — overriding at the same level, on the button that owns
+                      the rule, is the only spelling that actually lands. The
+                      export draws this chevron at 24; 20 is the kit's nearest
+                      rung and the one every other chevron in the product
+                      stands on. It was 12, which is why the row read as a name
+                      with a speck after it rather than as a control. */}
                   <Button
                     variant="ghost"
                     size="iconSm"
@@ -599,7 +637,7 @@ export function RailContent({
                        the column is the only thing above the search field, so
                        it carries the extra four pixels rather than the rail
                        opening on a row the same size as everything below it. */
-                    className={cn(SLOT, "h-10 hover:bg-transparent active:bg-transparent [&_svg]:size-3")}
+                    className={cn(SLOT, "h-10 [&_svg]:size-5")}
                     aria-label={`${workspace} — workspace and account`}
                   >
                     <span className={ICON_COL}>
@@ -610,9 +648,14 @@ export function RailContent({
                         {initial}
                       </span>
                     </span>
-                    <span className={cn("flex min-w-0 flex-1 items-center gap-1", REVEAL)}>
-                      <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{workspace}</span>
-                      <ChevronDown aria-hidden className="size-3 shrink-0 text-muted-foreground" />
+                    {/* `justify-between`, so the chevron sits on the rail's own
+                        right edge rather than trailing the name. The export
+                        draws the trigger as two ends of a full-width row: the
+                        chip and the name together on the left, the chevron
+                        alone on the right. */}
+                    <span className={cn("flex min-w-0 flex-1 items-center justify-between gap-2", REVEAL)}>
+                      <span className="min-w-0 truncate text-sm font-semibold text-foreground">{workspace}</span>
+                      <ChevronDown aria-hidden className="shrink-0 text-muted-foreground" />
                     </span>
                   </Button>
                 </DropdownMenuTrigger>
@@ -817,7 +860,10 @@ export function RailContent({
             actually shipped, and dropping it while two themes existed would
             have left the light one reachable only by changing the operating
             system's. There is one theme, so the control has nothing to say. */}
-        <div className={cn("mt-auto flex shrink-0 flex-col gap-2 pb-4", GUTTER)}>
+        {/* `gap-4 pb-6` — the export's own 16px between the foot's two acts and
+            24px under them. It was 8 and 16, which stacked two filled buttons
+            close enough to read as one two-line control. */}
+        <div className={cn("mt-auto flex shrink-0 flex-col gap-4 pb-6", GUTTER)}>
           {/* THE "+" IS THE COLUMN'S ONE FILLED OBJECT, AND THAT IS WHY IT CAN
               BE THE ONLY BRAND FILL IN THE RAIL.
               It has been a yellow slab, then a white chip with a hairline, and
@@ -920,16 +966,27 @@ export function RailContent({
               when pressed; this is the row the export actually draws at the
               foot of the rail, and it goes to the same place the dropped plan
               card used to: Settings, where billing lives. */}
-          <Link
-            href="/dashboard/settings"
-            className={cn(SLOT, "text-muted-foreground hover:bg-accent hover:text-foreground")}
-          >
-            <span className={cn(ICON_COL, "relative")}>
-              <Bell className="size-[18px]" />
-              <span aria-hidden className="absolute top-1 right-1 size-2 rounded-full bg-brand-500" />
-            </span>
-            <RailLabel className="text-muted-foreground group-hover:text-foreground">Get Free Access</RailLabel>
-          </Link>
+          {/* A FILLED BUTTON, NOT A NAV ROW, and a PRESENT rather than a bell.
+              `node-id=14:44` draws this as `bg-[#333]` at 32px with its glyph
+              and label centred — the kit's `secondary` exactly — sitting under
+              the blue "New flow" as the second of two acts in the foot. It was
+              a `SLOT` row wearing a bell with a blue dot, which read as a
+              notification you had missed rather than as an offer, and put a
+              third left-aligned destination under two centred buttons.
+
+              The bell is also the top bar's own glyph for actual unread
+              notifications, so spending it here meant one picture for two
+              unrelated things in one chrome. A gift says what the row does.
+
+              `size="sm"` and `w-full`: the kit's filled rung is already 32px
+              at 14px type, so the height and the label size come from the
+              button rather than being spelled again here. */}
+          <Button asChild variant="secondary" size="sm" className="w-full">
+            <Link href="/dashboard/settings">
+              <Gift />
+              <RailLabel className="text-button font-medium text-secondary-foreground">Get Free Access</RailLabel>
+            </Link>
+          </Button>
           {/* INVITE MEMBERS, WHICH IS A GUEST OF THIS FOOT RATHER THAN A
               RESIDENT. It is a top-bar control; below `md` the bar has room
               for a menu button, the mark and your avatar and nothing else, so
@@ -938,7 +995,7 @@ export function RailContent({
           {invite && (
             <Link
               href="/dashboard/settings"
-              className={cn(SLOT, "text-muted-foreground hover:bg-accent hover:text-foreground")}
+              className={cn(SLOT, "text-muted-foreground hover:text-foreground")}
             >
               <span className={ICON_COL}>
                 <UserPlus className="size-[18px]" />

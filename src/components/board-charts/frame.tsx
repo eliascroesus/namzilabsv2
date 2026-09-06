@@ -166,12 +166,20 @@ export function ChartFrame({
           after its rule came off. */}
       <div className="flex min-h-0 flex-1 flex-col px-4 pb-4">
 
-      {/* THE PAYOFF, AND THE COMPARISON SITS UNDER IT RATHER THAN BESIDE IT.
-          A delta on the numeral's own baseline competes with the figure for the
-          first read, and on a narrow tile it wrapped into it. Under, at label
-          size, it reads as what it is: the sentence qualifying the number. */}
+      {/* THE PAYOFF AND ITS COMPARISON, ON ONE ROW, PUSHED TO OPPOSITE ENDS.
+          The delta used to sit UNDER the numeral (`mt-1.5`) on the argument
+          that a chip on the number's own baseline competes with it for the
+          first read. The export settles it the other way and it is the same
+          row the metric card already draws: the figure against the card's left
+          edge, the chip against its RIGHT one, with the whole width between
+          them. That gap is what stops them competing — a chip trailing the
+          number by six pixels is a suffix on the figure, a chip at the far end
+          of the row is the card's second column.
+
+          `justify-between` with no gap of its own, exactly as `MetricCard`
+          spells it, so the two cards cannot drift apart again. */}
       {headline !== undefined && (
-        <div>
+        <div className="flex items-center justify-between gap-3">
           {/* NO `leading-none`. The step's own line-height is 40px
               (`--text-display-md--line-height`) and that is exactly what the
               export measures on a chart card's figure — the metric card is
@@ -190,7 +198,7 @@ export function ChartFrame({
           >
             {headline ?? "—"}
           </p>
-          {delta && <div className="mt-1.5">{delta}</div>}
+          {delta}
         </div>
       )}
 
