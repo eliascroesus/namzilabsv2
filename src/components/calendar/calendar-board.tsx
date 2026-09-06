@@ -51,18 +51,20 @@ export type CalendarMetric = {
  *
  * THE FLOOR AND THE RISE. 12% at the bottom, 56% at the top. It ran 8–38 and
  * before that 4–22, each pass finding the same thing: a heat map whose loudest
- * day is a pale wash is a table with extra steps. The ceiling was decided by
- * ink: 56% of the violet still carried the numeral at 7.5:1, and going deeper
- * would have cost the figure that the square exists to show.
+ * day is a pale wash is a table with extra steps. The ceiling is decided by
+ * ink: the figure and the records line printed on the deepest cell have to
+ * stay readable at 56%, and going deeper would cost that. See `heatFill`
+ * below for why no fixed ratio is asserted here for what that figure actually
+ * reads at — the ramp has changed hue twice since 12–56 was set, each time
+ * moving how much headroom 56% leaves, and a number pinned to one hue goes
+ * stale at the next.
  *
- * THE NUMBERS MOVED WITH THE HUE AND THE RANGE DID NOT, deliberately. On the
- * brand's yellow the same 56% carries that numeral at 13.47:1, so the old
- * constraint is no longer the binding one and the ramp could run deeper than
- * it does. It is left where it is because the range was tuned against the EYE
- * as well as the ratio — 12–56 is where the five legend stops separate — and
- * re-cutting a working ramp on the grounds that a new hue would permit it is
- * how a settled thing gets unsettled for nothing. The headroom is recorded
- * here rather than spent.
+ * THE RANGE ITSELF DID NOT MOVE WITH THE HUE, deliberately, even though each
+ * hue has held a different amount of that headroom at the same 56% ceiling.
+ * It stays because it was tuned against the EYE as well as against ink —
+ * 12–56 is where the five legend stops separate — and re-cutting a working
+ * ramp on the grounds that a new hue would permit it is how a settled thing
+ * gets unsettled for nothing.
  */
 const HEAT_FLOOR = 12;
 const HEAT_RISE = 44;
@@ -84,10 +86,12 @@ function heatFill(share: number, negative = false): string {
   // `foreground/80`) sit against whatever this mix lands on at each day's
   // share, so the read varies with the day rather than holding one fixed
   // ratio — a number worth checking against the rendered page rather than
-  // reasserting here as a constant. What still holds: the ceiling below is
-  // set by ink contrast at the pale end and by the eye at the deep end (see
-  // the note above `HEAT_FLOOR`), and a paler hue keeps more room under it
-  // than a saturated one would.
+  // reasserting here as a constant. What still holds is the note above
+  // `HEAT_FLOOR`: the CEILING (56%) is set by ink contrast — how much of the
+  // fill the printed figure can still sit on — and the overall RANGE (where
+  // that ceiling sits above the floor) is separately tuned by the eye, so a
+  // paler hue keeps more ink headroom under the same ceiling than a
+  // saturated one would without moving the ceiling itself.
   //
   // NEGATIVE STAYS ORANGE. Two warm hues are closer than violet-and-orange
   // were, but they part company exactly where it matters: at the deep end,
@@ -137,13 +141,14 @@ function Slot({ id, children }: { id: string; children: ReactNode }) {
  * here: the boundaries a value was filed under are UTC, and a browser in
  * Auckland deciding locally which square is "today" would ring the wrong one.
  *
- * WHERE THE COLOUR GOES, now that there is some. The sheet's rule is that
- * YELLOW FILLS AND VIOLET DRAWS, and this view spends both. Today's date is a
- * filled yellow chip — the same object as the rail's active row and the period
- * control's lit pill, so all three "you are here" marks in the product are
- * spelled one way. Today's square is edged in violet, because an edge is a
- * line. The heat ramp is violet too, as a wash rather than a fill: it has to be
- * something the yellow chip can sit ON without disappearing into. The best day
+ * WHERE THE COLOUR GOES, now that there is some. The kit's rule is that a
+ * FILL carries the brand and a STROKE carries the marker, and this view spends
+ * both. Today's date is a filled brand chip — the same object as the rail's
+ * active row and the period control's lit pill, so all three "you are here"
+ * marks in the product are spelled one way. Today's square is edged in
+ * `--marker`'s blue, because an edge is a line. The heat ramp is the brand
+ * too, as a wash rather than a fill (see `heatFill` above): it has to be
+ * something the chip can sit ON without disappearing into. The best day
  * takes ink, not the brand — see `DayCell`. And the accent set appears exactly
  * once more: orange, on the chip beside the picker.
  *
@@ -314,8 +319,9 @@ export function CalendarBoard({
           //
           // `variant="accent"`, not `variant="yellow"`: that variant existed
           // because the primary was violet and the hero act needed a colour the
-          // primary could not give it. Yellow IS the primary now, so the two
-          // resolved to one object under two names and one of them had to go.
+          // primary could not give it. The primary is blue now, and `accent`
+          // carries it, so the two resolved to one object under two names and
+          // one of them had to go.
           <Button asChild variant="accent">
             <Link href="/dashboard/flows">Go to flows</Link>
           </Button>
@@ -562,12 +568,12 @@ export function CalendarBoard({
             {/* BLACK, WHICH IS WHAT THE SHEET SAYS DOES THE WORK. It was a
                 bordered secondary — a grey outline on a pale wash, the least
                 decisive control on the page attached to the only sentence
-                asking to be acted on. Not the yellow, and the reason survived
-                the rebrand intact: a brand fill inside a warn banner is a
-                second coloured object inside a coloured surface, and it reads
-                as another piece of the state rather than as the way out of it.
-                The empty state above spends the yellow, because there is no
-                wash there for it to argue with. */}
+                asking to be acted on. Not the brand fill, and the reason has
+                survived every rebrand intact: a brand fill inside a warn
+                banner is a second coloured object inside a coloured surface,
+                and it reads as another piece of the state rather than as the
+                way out of it. The empty state above spends the brand fill,
+                because there is no wash there for it to argue with. */}
             <SubmitButton size="sm" pendingLabel="Computing…">
               Compute now
             </SubmitButton>
@@ -738,8 +744,8 @@ function StatChip({ label, children }: { label: string; children: ReactNode }) {
  * paints a day green or red by whether the trader made money, and that reading
  * cannot be borrowed: up is good for Booked Leads and bad for Speed to Lead,
  * and nothing stored on a tile says which — the same reason `Delta` refuses to
- * colour itself on the dashboard. So the fill is a heat ramp in the sheet's
- * violet, keyed to the day's share of the month's largest day: it says "this is
+ * colour itself on the dashboard. So the fill is a heat ramp in the brand's
+ * blue, keyed to the day's share of the month's largest day: it says "this is
  * a big day for this metric" and stops there.
  *
  * A NEGATIVE DAY IS THE SECOND SERIES, AND IT IS NOW ORANGE RATHER THAN RED.
@@ -807,9 +813,10 @@ function DayCell({
       <div className="flex items-center gap-1">
         {/* THE BEST DAY IS MARKED IN INK, NOT IN THE BRAND. The summary strip
             already names it and its number; this is where that sentence points.
-            It carried the kit's decorative `yellow` once, and that tone has been
-            deleted — a second yellow beside the primary was two colours four
-            counts apart that could never be kept in step.
+            It carried the kit's decorative `yellow` once, a token that has
+            since been deleted from the kit entirely — a second colour beside
+            the primary was always going to be a colour that drifted from it,
+            and it did.
             The brand does not inherit the job either, and the square itself is
             the argument: the best day CAN BE TODAY, and today's date already
             wears a filled brand chip 20px away. Two filled chips on one square

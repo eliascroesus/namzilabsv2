@@ -82,11 +82,12 @@ function TabsList({
  * THE TWO TAB STRIPS, AND WHY THE ACTIVE STATE IS SPELLED IN TWO COLOURS.
  *
  * `default` is the segmented control: a pill slides under the active label.
- * That is a FILLED object, so it is the brand — `--primary` carrying near-black
- * at 11.24:1. `line` is the underlined strip, and everything it draws is the
- * OTHER half of the split: the mark is a 1px rule and the label beside it is a
- * word. Neither may be yellow. #eecf00 measures 1.42:1 as a stroke on the app's
- * ground, which is not dim, it is gone.
+ * That is a FILLED object, so it is the brand — white on `--primary`
+ * (#0070E8) at 4.68:1. `line` is the underlined strip, and everything it
+ * draws is the OTHER half of the split: the mark is a 1px rule and the label
+ * beside it is a word. Neither may be the kit's retired yellow: `#eecf00`
+ * measured 1.42:1 as a stroke on the app's ground, which is not dim, it is
+ * gone.
  *
  * So the rule takes `--tab-rule` — a grey, not the brand stroke:
  * `--muted-foreground` dark, `--heading` light — and the TEXT carries the
@@ -95,9 +96,11 @@ function TabsList({
  * contrast claim the way `--marker` did, so the word is what says SELECTED
  * now, not the line under it.
  *
- * That is the whole rule the rebrand cares about, in one component: fills are
- * yellow, lines and words are violet, and a strip that renders both has to say
- * both.
+ * That is the whole rule this one component holds, for both variants at
+ * once: `default`'s active state is a FILL and takes the brand; `line`'s
+ * active state is a RULE and takes `--tab-rule`, a grey with no brand claim
+ * to defend. One file draws both variants, so both languages live in it side
+ * by side.
  *
  * The four class strings below stay as four arguments because Tailwind resolves
  * them by variant count, not by source order: the `line` overrides carry two
