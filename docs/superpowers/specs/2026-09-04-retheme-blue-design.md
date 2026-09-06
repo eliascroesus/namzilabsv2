@@ -50,7 +50,7 @@ Figma artefact — it is set in the UI face at 15px/600).
 | 200 | `#99CBFF` | | — |
 | 300 | `#66B2FF` | | 8.51:1 on `#0F1011` |
 | 400 | `#3D9BFF` | THE DARK STROKE (`--marker` in `.dark`): links, focus ring, selected edge. NOT the active tab's rule — see `--tab-rule` below (amended 5 Sep: the Figma draws that rule in grey) | 6.65:1 on `#0F1011`, 6.59:1 on `#111111`, 6.20:1 on `#181818` |
-| 500 | `#007BFF` | THE BRAND: hover of the fill, the workspace initial tint (`rgb(0 123 255 / .75)`), decorative dots, chart series default | 4.79:1 as a stroke on `#0F1011` |
+| 500 | `#007BFF` | THE BRAND: hover of the fill (dark), decorative dots, chart series default. NOT the workspace initial any more — that disc is `--primary` (600) under white ink, 4.68:1 in both themes (amended 6 Sep: the `.75` tint composited to 2.83:1 over white) | 4.79:1 as a stroke on `#0F1011` |
 | 600 | `#0070E8` | THE FILL (`--primary`, both themes) under WHITE ink | 4.68:1 white-on-fill; the Figma's `#007BFF` measures 3.98:1 under white, under the 4.5 a 15px label owes — one step deeper, indistinguishable beside it |
 | 700 | `#0069D9` | pressed | 5.22:1 under white |
 | 800 | `#0062CC` | THE LIGHT STROKE (`--marker` in `:root`): links, ring, active rule on white | 5.80:1 on white |
@@ -197,8 +197,9 @@ Every fractional Figma measurement is rounded to a whole pixel (Elias, 4 Sep):
   moment the one below it is.
 - **Rail**: stays the hover rail (decision 3). At rest 56px of icons on
   `--chrome`. Expanded (260px), top to bottom: the workspace switcher row (28px
-  `rounded-control` square tinted `rgb(0 123 255 / .75)` with the initial in
-  white 13/**600** — `font-semibold`, the kit's own top weight; the Figma's 700
+  `rounded-control` square on `--primary` (brand-600; the earlier
+  `rgb(0 123 255 / .75)` tint composited to 2.83:1 over white — amended 6 Sep)
+  with the initial in white 13/**600** — `font-semibold`, the kit's own top weight; the Figma's 700
   here is one of the several the kit does not follow, and `.wordmark` stays the
   ONE exception above 600 — the name 15/600, a chevron), a search FIELD-styled
   control (`--control` fill, `--border`
@@ -242,8 +243,11 @@ cannot do). The re-theme ships one.
 
 - **Shell.** Below `md` the rail is not rendered. The top bar becomes: a 32px
   menu button (`--avatar` circle, hamburger glyph) then the wordmark on the
-  left, the avatar circle on the right; the greeting is hidden below `sm`;
-  Invite members and New flow leave the bar. The menu button opens a left
+  left, the bell and the avatar circle on the right (the bell stays at every
+  width because the plan section it opens is reachable nowhere else on a
+  phone — amended 6 Sep); the greeting is hidden below `sm`; Invite members
+  and New flow leave the bar. Every `--avatar` circle carries the `--input`
+  outline in both themes; on light the outline is the whole device. The menu button opens a left
   **drawer** built on the kit's `ui/sheet.tsx` (`side="left"`, 280px wide,
   `--chrome` fill, `--border` edge) holding exactly the rail's expanded
   content: workspace switcher, search (opens ⌘K), "Main Menu", the nav with
@@ -294,8 +298,9 @@ cannot do). The re-theme ships one.
   light theme; `accent`/`primary` fills use `--primary` with white ink; sizes
   unchanged (32px default).
 - `card.tsx`: `--card` fill, `--border` edge, `--shadow-card`.
-- `tabs.tsx` line variant: active rule uses `--heading`'s companion
-  `--rule`; corners 8px.
+- `tabs.tsx` line variant: the active mark is the `--tab-rule` role (see the
+  Tokens section, 5 Sep), 1px on both orientations; corners 8px. (Amended 6
+  Sep: this bullet used to name `--rule`, contradicting the amendment.)
 - `avatar.tsx`: fallback and group-count fills both `--avatar`.
 - `input.tsx`: textarea takes `rounded-control` (the comment/code mismatch is
   resolved toward 8px); stale "9999px" comments corrected.
