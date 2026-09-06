@@ -215,7 +215,7 @@ export function WorkspaceChip({ id, name, className }: { id?: string; name: stri
  * covers nothing for someone who can see the screen perfectly well and simply
  * cannot separate those two hues.
  *
- * So the colour stays — `text-marker`, 5.72:1 on `--control` in dark
+ * So the colour stays — `text-marker`, 5.69:1 on `--control` in dark
  * (`#3D9BFF` on `#202020`), up from ≈4.0:1 on the `--accent` fill this
  * replaced — and `--control` goes under the WHOLE ROW (the `<Link
  * className={SLOT}>` below, not this chip): the SAME fill the search field

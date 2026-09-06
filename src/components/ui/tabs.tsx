@@ -84,7 +84,7 @@ function TabsList({
  * `default` is the segmented control: a pill slides under the active label.
  * That is a FILLED object, so it is the brand — `--primary` carrying near-black
  * at 11.24:1. `line` is the underlined strip, and everything it draws is the
- * OTHER half of the split: the mark is a 2px rule and the label beside it is a
+ * OTHER half of the split: the mark is a 1px rule and the label beside it is a
  * word. Neither may be yellow. #eecf00 measures 1.42:1 as a stroke on the app's
  * ground, which is not dim, it is gone.
  *
@@ -152,7 +152,7 @@ function TabsTrigger({
         // dark, `--heading` light) — because the Figma draws this rule in grey,
         // not in the brand. `--marker` stays reserved for links, the focus ring
         // and a selected edge, which is what it draws everywhere else in the kit.
-        "after:absolute after:bg-tab-rule after:opacity-0 after:transition-opacity group-data-[orientation=horizontal]/tabs:after:inset-x-0 group-data-[orientation=horizontal]/tabs:after:bottom-[-5px] group-data-[orientation=horizontal]/tabs:after:h-0.5 group-data-[orientation=vertical]/tabs:after:inset-y-0 group-data-[orientation=vertical]/tabs:after:-right-1 group-data-[orientation=vertical]/tabs:after:w-0.5 group-data-[variant=line]/tabs-list:data-[state=active]:after:opacity-100",
+        "after:absolute after:bg-tab-rule after:opacity-0 after:transition-opacity group-data-[orientation=horizontal]/tabs:after:inset-x-0 group-data-[orientation=horizontal]/tabs:after:bottom-[-5px] group-data-[orientation=horizontal]/tabs:after:h-px group-data-[orientation=vertical]/tabs:after:inset-y-0 group-data-[orientation=vertical]/tabs:after:-right-1 group-data-[orientation=vertical]/tabs:after:w-0.5 group-data-[variant=line]/tabs-list:data-[state=active]:after:opacity-100",
         className
       )}
       {...props}

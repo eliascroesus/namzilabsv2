@@ -606,19 +606,20 @@ export function ViewTab({
        * this row DEPENDS on, not in what it looks like: both marks are still
        * here.
        *
-       * `border-b-3` sits on the wrapper rather than on the anchor so the
+       * `border-b` sits on the wrapper rather than on the anchor so the
        * kebab, which is a sibling inside this span, rides the same rule instead
        * of hanging off the end of a shorter one.
        *
-       * THREE PIXELS, AND CLOSER TO THE WORD. At 2px, eight below the label,
-       * the rule was thinner than the tint under the period pills sitting one
-       * row above it and read as a hairline the tab happened to be standing on
-       * rather than as the mark of where you are. A tab's underline is the only
-       * thing on this row carrying the state, so it has to be the heavier of the
-       * two lines, and it has to belong to the word: the anchor's bottom padding
-       * drops from 8px to 4px (`pb-1`, keeping `pt-2`), which pulls the rule up
-       * under the label without moving the label itself — the row's height is
-       * set by the 24px gap and the kebab beside it, not by this padding.
+       * ONE PIXEL, AS THE FIGMA DRAWS IT (amended 5 Sep 2026). This ran 2px
+       * for one round, on the reasoning that the underline was the only thing
+       * on this row carrying the state and so had to be the heavier of the
+       * two lines. It no longer has to carry that alone: the weight-and-ink
+       * change on the label itself (`font-semibold text-heading`, argued
+       * below) does the job now, so a hairline under a heavier word reads as
+       * unmistakably as a thicker rule under an equal-weight one did, and the
+       * rule can go back to matching the reference exactly. The row's height
+       * is set by the 24px gap and the kebab beside it, not by the rule's own
+       * weight.
        */
       /**
        * THE WEIGHT WAS THE WRONG WAY ROUND, and it was found because the note
@@ -638,7 +639,7 @@ export function ViewTab({
        * every other selected thing in the product runs.
        */
       className={cn(
-        "inline-flex shrink-0 items-center border-b-2 text-sm transition-colors duration-(--duration-fast)",
+        "inline-flex shrink-0 items-center border-b text-sm transition-colors duration-(--duration-fast)",
         // THE ACTIVE TAB IS HEAVIER AS WELL AS WHITER. `--tab-rule` is a grey,
         // not a measured brand stroke, so it carries no contrast claim of its
         // own — the weight and the ink are what say WHERE YOU ARE now. The
@@ -699,22 +700,23 @@ export function ViewTab({
              already does that.
              4px top AND bottom, and the symmetry is the point. The underline
              sits UNDER THE WORD at 4px rather than floating a line below it —
-             see the note on `border-b-3` above — but the padding also has to be
+             see the note on `border-b` above — but the padding also has to be
              EQUAL, because the row this tab lives on centres its two halves
              against each other. With 8px above and 4px below, the box centre
              and the text centre were 2px apart, so centring the boxes left the
              labels visibly off from the action pills beside them. Equal padding
              makes the two centres the same point.
-             The transparent 3px TOP border is the other half of that: the
+             The transparent 1px TOP border is the other half of that: the
              underline is a bottom border, so it lengthens the box downward
-             only, and equal padding inside an unequal box still leaves the text
-             1.5px high. A matching invisible border on top restores the
-             symmetry without drawing anything.
+             only, and equal padding inside an unequal box still leaves the
+             text off-centre by half the border's own width. A matching
+             invisible border on top restores the symmetry without drawing
+             anything.
              It is spelled on the anchor, which every tab renders, so active and
              idle labels stay on one baseline; putting it on the active branch
              alone would make the row twitch by 4px each time you changed
              views. */
-          className={cn("inline-flex items-center gap-1.5 border-t-2 border-t-transparent px-1 py-1", editable && "pr-0.5")}
+          className={cn("inline-flex items-center gap-1.5 border-t border-t-transparent px-1 py-1", editable && "pr-0.5")}
         >
           {renamed ?? children}
         </a>
