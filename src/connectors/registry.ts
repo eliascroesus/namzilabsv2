@@ -10,6 +10,7 @@ import { stripeConnector } from "./stripe";
 import { calcomConnector } from "./calcom";
 import { aircallConnector } from "./aircall";
 import { pipedriveConnector } from "./pipedrive";
+import { typeformConnector } from "./typeform";
 
 const registry = new Map<string, Connector>();
 
@@ -34,6 +35,7 @@ for (const connector of [
   calcomConnector,
   aircallConnector,
   pipedriveConnector,
+  typeformConnector,
 ]) {
   registerConnector(connector);
 }

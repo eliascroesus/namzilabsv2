@@ -842,6 +842,33 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
     eventTypeLabels: { opportunity_created: "Deal created", deal_stage_changed: "Deal moved stage", deal_won: "Deal won", deal_lost: "Deal lost", lead_created: "Person added" },
     commonFields: ["status", "stage_id", "pipeline_id", "value", "currency", "person_id", "previous_stage_id", "lost_reason"],
   },
+  {
+    source: "typeform",
+    name: "Typeform",
+    description: "Form submissions (and forms started, for a completion rate), one form per step.",
+    brand: { color: "#262627", short: "Tf" },
+    connect: "apiKey",
+    instant: true,
+    poll: true,
+    sync: "incremental",
+    syncNote: "Completed responses are read; a partial (unfinished) response reaches this connection only through its webhook.",
+    autoWebhook: false,
+    docs: { url: "https://www.typeform.com/developers/responses/reference/retrieve-responses/", readOn: "2026-09-08", webhooks: "https://www.typeform.com/developers/webhooks/secure-your-webhooks/" },
+    verified: { live: null },
+    // typeform.com/developers/get-started (read 2026-09-08): "For the Create and Responses
+    // APIs, you can send two requests per second, per Typeform account."
+    rateLimits: { "responses.list": { requestsPerMinute: 120 } },
+    credentialFields: [
+      { key: "apiKey", label: "Personal access token (Account → Personal tokens)", placeholder: "tfp_…" },
+      { key: "webhookSecret", label: "Webhook secret (the one you set on the form's webhook)", placeholder: "…" },
+    ],
+    flowFields: [{ key: "formId", label: "Form", required: true, dynamic: true, placeholder: "Choose a form…", hint: "Each step reads one form." }],
+    eventTypeLabels: { form_submitted: "Form submitted", form_started: "Form started" },
+    commonFields: ["form_id", "answers_by_field", "hidden", "metadata.referer", "landed_at", "submitted_at"],
+    webhookSetup:
+      "In Typeform, open the form → Connect → Webhooks, add the URL below and set a secret; paste the same secret " +
+      "as the webhook secret on this connection. A delivery triggers an immediate refresh of that form's step.",
+  },
 ];
 
 export function catalogEntry(source: string): ConnectorCatalogEntry | undefined {
