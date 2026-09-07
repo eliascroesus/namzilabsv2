@@ -11,6 +11,7 @@ import { calcomConnector } from "./calcom";
 import { aircallConnector } from "./aircall";
 import { pipedriveConnector } from "./pipedrive";
 import { typeformConnector } from "./typeform";
+import { tallyConnector } from "./tally";
 
 const registry = new Map<string, Connector>();
 
@@ -36,6 +37,7 @@ for (const connector of [
   aircallConnector,
   pipedriveConnector,
   typeformConnector,
+  tallyConnector,
 ]) {
   registerConnector(connector);
 }

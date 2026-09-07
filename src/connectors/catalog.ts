@@ -869,6 +869,31 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
       "In Typeform, open the form → Connect → Webhooks, add the URL below and set a secret; paste the same secret " +
       "as the webhook secret on this connection. A delivery triggers an immediate refresh of that form's step.",
   },
+  {
+    source: "tally",
+    name: "Tally",
+    description: "Form submissions, completed and partial, one form per step.",
+    brand: { color: "#0D0D0D", short: "Ta" },
+    connect: "apiKey",
+    instant: true,
+    poll: true,
+    sync: "incremental",
+    autoWebhook: false,
+    docs: { url: "https://developers.tally.so/api-reference/endpoint/forms/submissions/list", readOn: "2026-09-08", webhooks: "https://tally.so/help/webhooks" },
+    verified: { live: null },
+    // developers.tally.so/api-reference/introduction (read 2026-09-08): "100 per minute".
+    rateLimits: { "submissions.list": { requestsPerMinute: 100 } },
+    credentialFields: [
+      { key: "apiKey", label: "API key (Settings → API keys)", placeholder: "tly-…" },
+      { key: "webhookSecret", label: "Webhook signing secret (the one you set on the form's webhook)", placeholder: "…" },
+    ],
+    flowFields: [{ key: "formId", label: "Form", required: true, dynamic: true, placeholder: "Choose a form…", hint: "Each step reads one form." }],
+    eventTypeLabels: { form_submitted: "Form submitted", form_partial: "Form partially filled" },
+    commonFields: ["formId", "isCompleted", "fields_by_label", "respondentId", "submittedAt"],
+    webhookSetup:
+      "In Tally, open the form → Integrations → Webhooks, add the URL below with a signing secret, and paste the same " +
+      "secret as the webhook signing secret on this connection. A delivery triggers an immediate refresh of that form's step.",
+  },
 ];
 
 export function catalogEntry(source: string): ConnectorCatalogEntry | undefined {
