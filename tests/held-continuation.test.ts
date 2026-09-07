@@ -3,7 +3,8 @@ import { eq } from "drizzle-orm";
 import { createTestDb, seedConnection } from "./helpers/testdb";
 import { connections, sourceStreams } from "@/db/schema";
 import { syncStream } from "@/lib/sync/streams";
-import { registerConnector } from "@/connectors/registry";
+import { registerConnector, getConnector } from "@/connectors/registry";
+import { CONNECTOR_CATALOG } from "@/connectors/catalog";
 import { BASE_INTERVAL_MS, decideCadence } from "@/lib/sync/cadence";
 import { calendlyConnector } from "@/connectors/calendly";
 import { closeConnector } from "@/connectors/close";
@@ -183,6 +184,16 @@ describe("which connectors hold a perishable continuation", () => {
   it("gcal and gsheets declare none — their cursors are not mid-walk continuations", () => {
     expect(googleCalendarConnector.holdsContinuation).toBeUndefined();
     expect(googleSheetsConnector.holdsContinuation).toBeUndefined();
+  });
+  it("every registered connector either declares none, or answers false for null and for a bare mark", () => {
+    for (const e of CONNECTOR_CATALOG) {
+      const c = getConnector(e.source);
+      expect(c, e.source).toBeDefined();
+      if (!c!.holdsContinuation) continue;
+      expect(c!.holdsContinuation(null), e.source).toBe(false);
+      expect(c!.holdsContinuation("2026-08-03T10:00:00Z"), e.source).toBe(false);
+      expect(c!.holdsContinuation("{not json"), e.source).toBe(false);
+    }
   });
 });
 

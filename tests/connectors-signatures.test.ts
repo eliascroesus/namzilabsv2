@@ -5,8 +5,8 @@ import { calendlyConnector } from "@/connectors/calendly";
 import { closeConnector } from "@/connectors/close";
 import { instantlyConnector } from "@/connectors/instantly";
 import { catchHookConnector } from "@/connectors/catch-hook";
-import { googleSheetsConnector } from "@/connectors/google-sheets";
-import { googleCalendarConnector } from "@/connectors/google-calendar";
+import { CONNECTOR_CATALOG } from "@/connectors/catalog";
+import { getConnector } from "@/connectors/registry";
 
 describe("Calendly signature (t=,v1= HMAC over `${t}.${body}`)", () => {
   const secret = "cal_signing_key";
@@ -208,15 +208,12 @@ describe("which connectors may accept an unsigned request", () => {
      * and the fleet's shared — Google quota. A contract test that samples the
      * population cannot catch the member it skipped.
      */
-    const open = [
-      ["webhook", catchHookConnector],
-      ["calendly", calendlyConnector],
-      ["close", closeConnector],
-      ["instantly", instantlyConnector],
-      ["gsheets", googleSheetsConnector],
-      ["gcal", googleCalendarConnector],
-    ]
-      .filter(([, c]) => (c as { verifySignature: (a: typeof unsigned) => boolean }).verifySignature(unsigned))
+    const open = CONNECTOR_CATALOG.map((e) => {
+      const c = getConnector(e.source);
+      expect(c, `${e.source} is in the catalog but not the registry`).toBeDefined();
+      return [e.source, c!] as const;
+    })
+      .filter(([, c]) => c.verifySignature(unsigned))
       .map(([name]) => name);
     expect(open).toEqual(["webhook"]);
   });
