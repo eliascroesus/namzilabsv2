@@ -657,8 +657,19 @@ describe("the rail's re-dress — a workspace switcher, Main Menu, a search fiel
     // 20 is the kit's nearest rung. At 12 the row read as a name with a speck
     // after it rather than as a control.
     expect(switcherTrigger).toContain("[&_svg]:size-5");
-    const searchButton = code.slice(code.indexOf('aria-keyshortcuts="Meta+K"'), code.indexOf('aria-keyshortcuts="Meta+K"') + 300);
-    expect(searchButton).toContain("[&_svg]:size-[18px]");
+    /**
+     * RE-POINTED 7 SEP 2026, THE MAGNIFIER HALF ONLY. `[&_svg]:size-[18px]`
+     * existed to beat `iconSm`'s own `[&_svg]:size-4`, a descendant rule that
+     * wins on specificity whichever order the two are written in. There is no
+     * size variant to beat any more: the search row is an `<Input>` and the
+     * magnifier is its SIBLING, sized directly. The rail's icon scale is what
+     * the pin was really about — 18px, like the seven glyphs below it — so
+     * that is what it checks, still scoped to the search control's own slice.
+     */
+    const searchField = code.slice(code.indexOf('aria-keyshortcuts="Meta+K"') - 800, code.indexOf('aria-keyshortcuts="Meta+K"') + 300);
+    expect(searchField, "the magnifier stands at the rail's own icon scale").toMatch(
+      /<Search[\s\S]{0,300}size-\[18px\]/,
+    );
   });
 
   it("fills the active row itself with --control, not the 32px chip inside it", () => {
@@ -696,9 +707,28 @@ describe("the rail's re-dress — a workspace switcher, Main Menu, a search fiel
     expect(sidebar).toMatch(/Main Menu/);
   });
 
-  it("dresses the search row as a bordered field, not a nav row", () => {
+  it("IS a bordered field now, not a row dressed as one", () => {
+    /**
+     * RE-POINTED 7 SEP 2026. This asserted `border border-border bg-control`
+     * within 200 chars of the shortcut attribute, because the row was a
+     * `<Button>` hand-spelling a field's clothes. It is an `<Input>` now — the
+     * owner's "why is the search a button and not an input field?" — so the
+     * border, the fill and the radius come from the kit's own FIELD recipe and
+     * are no longer written in this file at all. Asserting them here again
+     * would be asserting a second spelling of `ui/input.tsx`.
+     *
+     * What replaces it is the fact the old pin was really protecting: this
+     * control is a FIELD and not a nav row. A real `<Input>`, carrying the
+     * shortcut it announces, with the rail's own row geometry composed in
+     * (`SLOT`, so the 44px touch minimum is not re-typed) and its left padding
+     * opened for the magnifier standing in the icon column.
+     */
     const code = sidebar.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
-    expect(code).toMatch(/aria-keyshortcuts="Meta\+K"[\s\S]{0,200}border border-border bg-control/);
+    expect(code, "the search row is an Input").toMatch(/<Input\b[\s\S]{0,600}aria-keyshortcuts="Meta\+K"/);
+    expect(code, "wearing the rail's row geometry").toMatch(/cn\(SLOT, "border-border pl-9/);
+    expect(code, "and it is no longer a Button pretending").not.toMatch(
+      /<Button[^>]*aria-keyshortcuts="Meta\+K"/,
+    );
   });
 
   it("replaces the inert bell row with Get Free Access", () => {

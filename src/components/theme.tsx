@@ -37,7 +37,14 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-const CHOICES = [
+/**
+ * EXPORTED, because the rail's search offers the same three and a second copy
+ * of them would drift — a fourth choice, or a renamed one, has to reach both
+ * surfaces or the palette starts lying about what the product can do. The rail
+ * imports the values and picks its own glyphs; `Icon` rides along for callers
+ * that want the same picture this control draws.
+ */
+export const CHOICES = [
   { value: "light", label: "Light", Icon: Sun },
   { value: "dark", label: "Dark", Icon: Moon },
   { value: "system", label: "System", Icon: Monitor },

@@ -430,9 +430,10 @@ bottom: a workspace switcher row (a 28px `rounded-control` square tinted
 `rgb(0 123 255 / .75)` carrying the initial in white at 13px/**600** — the
 kit's own top weight; the export's 700 here is one of the several §3 does
 not follow — the workspace name at 15px/600, and a chevron), a
-search field styled exactly like a real `Input` (`--control` fill,
-`--border` outline, a magnifier, "Search", a ⌘K hint) that opens the same
-command palette a real search box would, a "Main Menu" caps label in
+search field that IS a real `Input` (`--control` fill, `--border` outline, a
+magnifier, "Search") — you type into it, and the column below swaps its rows
+for the matches: pages, the workspace's views, and the theme trio. ⌘K focuses
+it. It was a Button styled as a field, opening a palette nobody had built, a "Main Menu" caps label in
 `--faint` at 13px (`text-xs` — the scale has no 12px step, per §3), nav
 rows at 36px with 18px icons (the active row takes a `--control` fill
 UNDER its glyph, which keeps `text-marker` on top — two signals, not the
