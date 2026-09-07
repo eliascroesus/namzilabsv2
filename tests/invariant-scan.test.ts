@@ -332,17 +332,17 @@ describe("a Close walk aging toward the provider's 30-day cliff", () => {
   it("flags the steady-state form: a bare ISO watermark 26 days old", async () => {
     const conn = await seedClose(daysAgo(26));
     const report = await scanInvariants(db);
-    expect(report.closeCursorLag).toHaveLength(1);
-    expect(report.closeCursorLag[0].connectionId).toBe(conn.id);
-    expect(report.closeCursorLag[0].ageDays).toBe(26);
+    expect(report.cursorLag).toHaveLength(1);
+    expect(report.cursorLag[0].connectionId).toBe(conn.id);
+    expect(report.cursorLag[0].ageDays).toBe(26);
     expect(report.anyFindings).toBe(true);
   });
 
   it("flags the mid-walk JSON form — the busy workspace IS the lagging case", async () => {
     await seedClose(JSON.stringify({ hw: daysAgo(27), cont: "tok-123", maxSeen: daysAgo(1) }));
     const report = await scanInvariants(db);
-    expect(report.closeCursorLag).toHaveLength(1);
-    expect(report.closeCursorLag[0].ageDays).toBe(27);
+    expect(report.cursorLag).toHaveLength(1);
+    expect(report.cursorLag[0].ageDays).toBe(27);
   });
 
   it("stays quiet inside the margin, for other sources, and for cursors it cannot read", async () => {
@@ -352,13 +352,13 @@ describe("a Close walk aging toward the provider's 30-day cliff", () => {
     await seedClose("not-a-date"); // malformed → a different bug, not a lag
     await seedClose(JSON.stringify({ hw: null, floor: daysAgo(90) })); // first sync — no mark yet
 
-    expect((await scanInvariants(db)).closeCursorLag).toHaveLength(0);
+    expect((await scanInvariants(db)).cursorLag).toHaveLength(0);
   });
 
   it("ignores disabled connections — a disconnected account has no walk to lag", async () => {
     const conn = await seedClose(daysAgo(29));
     await db.update(connections).set({ status: "disabled", disabledAt: new Date() }).where(eq(connections.id, conn.id));
-    expect((await scanInvariants(db)).closeCursorLag).toHaveLength(0);
+    expect((await scanInvariants(db)).cursorLag).toHaveLength(0);
   });
 });
 

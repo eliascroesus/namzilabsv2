@@ -559,6 +559,21 @@ export interface Connector {
    * connector is never pinned.
    */
   holdsContinuation?(cursor: string | null): boolean;
+  /**
+   * How much of a first import this stored cursor represents — the coverage
+   * the connection page shows as "covering 12 of 30 days". Null once the
+   * import has settled, or for a cursor this connector cannot read. Declared
+   * here so `import-status` never has to know a source by name.
+   */
+  importProgress?(cursor: string | null, now?: number): ImportCoverage | null;
+  /**
+   * The provider FORGETS its own history after `days` (Close keeps ~30 days
+   * of event log). The nightly scan alarms when a connection's watermark is
+   * older than `alarmAfterDays`, because data behind the mark is about to
+   * become unfetchable. `watermarkOf` reads the mark out of this connector's
+   * own cursor grammar. Omit it for providers that keep everything.
+   */
+  retention?: { days: number; alarmAfterDays: number; watermarkOf: (cursor: string | null) => string | null };
   /** Optional: list live choices for a dynamic flow-level field (spreadsheets, tabs, calendars…). */
   listOptions?(key: string, args: ListOptionsArgs): Promise<SourceOption[]>;
   /** Optional: latest N records for the connect-time preview. */

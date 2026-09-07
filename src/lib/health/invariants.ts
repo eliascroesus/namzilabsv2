@@ -2,7 +2,7 @@ import { and, eq, gte, isNull, like, lt, ne, or, sql } from "drizzle-orm";
 import { connections, deadLetter, events, sourceStreams, syncState, usageLedger } from "@/db/schema";
 import type { DB } from "@/db/types";
 import { isMirrorSource } from "@/connectors/catalog";
-import { parseCloseCursor } from "@/connectors/close";
+import { getConnector } from "@/connectors/registry";
 import { stalledJobs } from "@/lib/backfill/jobs";
 import { rejectingConnections } from "@/lib/webhooks/rejections";
 
@@ -112,7 +112,7 @@ export type InvariantReport = {
   /** Paged scans whose stored continuation keeps being refused, so they never advance. */
   restartingScans: Array<{ streamId: string; connectionId: string; source: string; restarts: number }>;
   /** Close connections whose watermark is aging toward the provider's 30-day event-log cliff. */
-  closeCursorLag: Array<{ connectionId: string; hw: string; ageDays: number }>;
+  cursorLag: Array<{ source: string; connectionId: string; hw: string; ageDays: number }>;
   /** True when any check found something. Lets a caller alert without re-deriving it. */
   anyFindings: boolean;
 };
@@ -294,33 +294,33 @@ async function emptyMirrors(db: DB, now: Date) {
  * `connections.lastError`, because `recordSuccess` wipes that on every clean
  * poll — and a lagging walk IS polling cleanly; that is the whole problem.
  */
-const CLOSE_HW_LAG_MS = 25 * 24 * HOUR_MS;
-
-async function closeCursorLag(db: DB, now: Date) {
+/**
+ * A connection whose watermark has fallen too far behind for a provider that
+ * FORGETS its history. Which providers, and how far, is the connector's to
+ * say (`Connector.retention`); this only walks the ones that said so.
+ */
+async function cursorLag(db: DB, now: Date) {
   const rows = await db
-    .select({ connectionId: connections.id, cursor: syncState.cursor })
+    .select({ connectionId: connections.id, source: connections.source, cursor: syncState.cursor })
     .from(connections)
     .innerJoin(syncState, eq(syncState.connectionId, connections.id))
-    .where(and(eq(connections.source, "close"), eq(connections.status, "active"), isNull(connections.disabledAt)))
+    .where(and(eq(connections.status, "active"), isNull(connections.disabledAt)))
     .limit(REPORT_LIMIT * 4);
-  const findings: Array<{ connectionId: string; hw: string; ageDays: number }> = [];
+  const findings: Array<{ source: string; connectionId: string; hw: string; ageDays: number }> = [];
   for (const row of rows) {
-    // Both stored forms — the bare ISO string of the steady state and the
-    // JSON {hw, cont, …} of a walk in flight — through the connector's own
-    // parser. A null hw is a first sync that has not established a mark
-    // (the {floor} form); a stuck first sync is the unswept/failing checks'
-    // problem, not a lag. Unparseable dates are ignored for the same reason
-    // the whole scan is reads-only: a malformed cursor is a different bug,
-    // and misfiling it here would bury it.
-    const hw = parseCloseCursor(row.cursor)?.hw ?? null;
+    const retention = getConnector(row.source)?.retention;
+    if (!retention) continue;
+    const hw = retention.watermarkOf(row.cursor);
     if (!hw) continue;
     const t = Date.parse(hw);
     if (!Number.isFinite(t)) continue;
     const ageMs = now.getTime() - t;
-    if (ageMs <= CLOSE_HW_LAG_MS) continue;
+    if (ageMs <= retention.alarmAfterDays * 24 * HOUR_MS) continue;
     const ageDays = Math.floor(ageMs / (24 * HOUR_MS));
-    console.warn(`[close-lag] connection=${row.connectionId} hw=${hw} ageDays=${ageDays} — Close deletes its event log at 30 days; data older than the mark is at risk`);
-    findings.push({ connectionId: row.connectionId, hw, ageDays });
+    console.warn(
+      `[cursor-lag] source=${row.source} connection=${row.connectionId} hw=${hw} ageDays=${ageDays} — the provider keeps ${retention.days} days; data older than the mark is at risk`,
+    );
+    findings.push({ source: row.source, connectionId: row.connectionId, hw, ageDays });
     if (findings.length >= REPORT_LIMIT) break;
   }
   return findings;
@@ -369,7 +369,7 @@ export async function scanInvariants(db: DB, now = new Date()): Promise<Invarian
 
   const throttled = await throttledConnections(db, now);
   const stalledScans = await restartingScans(db);
-  const closeLag = await closeCursorLag(db, now);
+  const lag = await cursorLag(db, now);
 
   const report: Omit<InvariantReport, "anyFindings"> = {
     unsweptStreams: unswept,
@@ -385,7 +385,7 @@ export async function scanInvariants(db: DB, now = new Date()): Promise<Invarian
     throttledConnections: throttled,
     restartingScans: stalledScans,
     rejectingEndpoints: rejecting,
-    closeCursorLag: closeLag,
+    cursorLag: lag,
   };
   return {
     ...report,
@@ -398,6 +398,6 @@ export async function scanInvariants(db: DB, now = new Date()): Promise<Invarian
       report.throttledConnections.length > 0 ||
       report.restartingScans.length > 0 ||
       report.rejectingEndpoints.length > 0 ||
-      report.closeCursorLag.length > 0,
+      report.cursorLag.length > 0,
   };
 }

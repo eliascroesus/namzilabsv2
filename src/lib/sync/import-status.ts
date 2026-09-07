@@ -1,6 +1,6 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { backfillJobs, connections, sourceStreams, syncState } from "@/db/schema";
-import { closeImportProgress } from "@/connectors/close";
+import { getConnector } from "@/connectors/registry";
 import { importProgressByStreamRef } from "@/lib/backfill/jobs";
 import { isStreamScoped } from "@/connectors/catalog";
 import { importProgressNote } from "@/lib/sync/streams";
@@ -132,7 +132,7 @@ export async function connectionImportStatuses(db: DB, orgId: string, connection
         continue;
       }
       // Close is the one source whose cursor carries measured coverage.
-      const coverage = c.source === "close" ? closeImportProgress(raw) : null;
+      const coverage = getConnector(c.source)?.importProgress?.(raw) ?? null;
       if (coverage) {
         out.set(c.id, { state: "importing", coverage, note: importProgressNote(coverage) });
       } else if (cursorSaysImporting(raw)) {

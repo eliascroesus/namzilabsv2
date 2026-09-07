@@ -170,7 +170,7 @@ type CloseCursor = {
 };
 
 /**
- * Exported for the nightly invariant scan (`closeCursorLag` in
+ * Exported for the nightly invariant scan (`cursorLag` in
  * lib/health/invariants.ts), which needs to read `hw` out of stored cursors —
  * ONE definition of the cursor grammar, two readers, rather than the scan
  * re-implementing a parse that would silently drift the day this changes.
@@ -455,6 +455,8 @@ export const closeConnector: Connector = {
    * so `cursor != null` would pin this connection at base cadence forever.
    */
   holdsContinuation: holdsWindowContinuation,
+  importProgress: closeImportProgress,
+  retention: { days: 30, alarmAfterDays: 25, watermarkOf: (cursor) => parseCloseCursor(cursor).hw },
 
   /**
    * The Pipeline picker in the Get data step. ONE bounded request: an org has
