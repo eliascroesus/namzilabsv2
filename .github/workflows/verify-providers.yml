@@ -175,6 +175,14 @@ jobs:
             exit 1
           fi
 
+      - name: Every other connector — its generated prober, if its key is set
+        if: ${{ inputs.providers == 'all' }}
+        continue-on-error: true
+        env:
+          SECRETS_JSON: ${{ toJSON(secrets) }}
+        run: |
+          set -uo pipefail
+          pnpm tsx scripts/verify-all.ts
       - name: Summary
         if: ${{ always() }}
         run: |

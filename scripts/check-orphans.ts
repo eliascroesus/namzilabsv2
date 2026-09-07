@@ -48,6 +48,10 @@ const ALLOWLIST: Record<string, string> = {
   epochToDate: "connector kit — first consumer: Stripe (connectors batch 1)",
   ymd: "connector kit — first consumer: Typeform (connectors batch 1)",
   isoOrNull: "connector kit — first consumer: Cal.com (connectors batch 1)",
+  createProbe: "prober harness — first consumer: the Stripe prober (connectors batch 1)",
+  attemptJson: "prober harness — first consumer: the Stripe prober (connectors batch 1)",
+  requireEnv: "prober harness — first consumer: the Stripe prober (connectors batch 1)",
+  pace: "prober harness — first consumer: the Smartlead prober (connectors batch 1)",
   // A.2, by design: identifiers are extracted and stored now so that identity
   // resolution can be built later WITHOUT a schema change or a backfill. The
   // spec explicitly deferred the reader ("no persons table now").

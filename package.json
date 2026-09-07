@@ -13,6 +13,8 @@
     "check:orphans": "tsx scripts/check-orphans.ts",
     "check:ui": "tsx scripts/check-ui.ts",
     "db:generate": "drizzle-kit generate",
+    "connector:new": "tsx scripts/new-connector.ts",
+    "connector:inventory": "tsx scripts/connector-inventory.ts",
     "inngest:dev": "npx inngest-cli@latest dev",
     "shot": "node scripts/screenshot.mjs",
     "board:drag": "node scripts/board-drag-check.mjs",
