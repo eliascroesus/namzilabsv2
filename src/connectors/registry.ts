@@ -7,6 +7,8 @@ import { whopConnector } from "./whop";
 import { googleSheetsConnector } from "./google-sheets";
 import { googleCalendarConnector } from "./google-calendar";
 import { stripeConnector } from "./stripe";
+import { calcomConnector } from "./calcom";
+import { aircallConnector } from "./aircall";
 
 const registry = new Map<string, Connector>();
 
@@ -28,6 +30,8 @@ for (const connector of [
   googleSheetsConnector,
   googleCalendarConnector,
   stripeConnector,
+  calcomConnector,
+  aircallConnector,
 ]) {
   registerConnector(connector);
 }

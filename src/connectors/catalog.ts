@@ -768,6 +768,53 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
       "checkout.session.completed, invoice.paid, refund.created and customer.subscription.*, and paste the endpoint's " +
       "signing secret (whsec_…) as the webhook signing secret on this connection. Polling covers the last 30 days either way.",
   },
+  {
+    source: "calcom",
+    name: "Cal.com",
+    description: "Meetings booked, cancelled, rescheduled, marked no-show, and held.",
+    brand: { color: "#292929", short: "Cal" },
+    connect: "apiKey",
+    instant: true,
+    poll: true,
+    sync: "incremental",
+    autoWebhook: true,
+    webhookOptional: true,
+    docs: { url: "https://cal.com/docs/api-reference/v2/bookings/get-all-bookings", readOn: "2026-09-08", webhooks: "https://cal.com/docs/developing/guides/automation/webhooks" },
+    verified: { live: null },
+    // https://cal.com/docs/api-reference/v2/introduction (read 2026-09-08): "the default
+    // rate limit is 120 requests per minute" per API key; 200 on request, 800 with charges.
+    rateLimits: { "bookings.list": { requestsPerMinute: 120 } },
+    credentialFields: [
+      { key: "apiKey", label: "API key (Settings → Developer → API keys)", placeholder: "cal_live_…" },
+      { key: "baseUrl", label: "API base URL (self-hosted only)", placeholder: "https://api.cal.com/v2" },
+    ],
+    eventTypeLabels: { booked: "Meeting booked", canceled: "Meeting cancelled", rescheduled: "Meeting rescheduled", no_show: "No-show", meeting_held: "Meeting held" },
+    commonFields: ["status", "start", "end", "eventType.slug", "attendees.0.email", "createdAt", "rescheduledFromUid"],
+  },
+  {
+    source: "aircall",
+    name: "Aircall",
+    description: "Calls dialled, answered, completed (talk time in seconds), missed, tagged.",
+    brand: { color: "#00B388", short: "Ai" },
+    connect: "apiKey",
+    instant: true,
+    poll: true,
+    sync: "incremental",
+    autoWebhook: true,
+    docs: { url: "https://developers.aircall.io/api-references", readOn: "2026-09-08", webhooks: "https://developer.aircall.io/tutorials/webhooks-guide/" },
+    verified: { live: null },
+    // developers.aircall.io/api-references (read 2026-09-08): "Aircall limits the number of
+    // requests to its Public API to 120 requests per minute per company."
+    rateLimits: { "calls.list": { requestsPerMinute: 120 } },
+    credentialFields: [
+      { key: "apiId", label: "API ID (Company settings → Integrations & API)", placeholder: "…" },
+      { key: "apiToken", label: "API token", placeholder: "…" },
+    ],
+    // call_logged / call_connected / call_completed are Close's keys; the humanizer already renders them
+    // "Call logged" etc., and one declarer per key keeps the org-wide picker unambiguous.
+    eventTypeLabels: { call_missed: "Call missed", call_tagged: "Call tagged", voicemail_left: "Voicemail left" },
+    commonFields: ["direction", "status", "user.email", "missed_call_reason", "talk_seconds", "ring_seconds", "tags"],
+  },
 ];
 
 export function catalogEntry(source: string): ConnectorCatalogEntry | undefined {
