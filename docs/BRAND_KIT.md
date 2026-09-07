@@ -557,7 +557,18 @@ and on nothing else in the header.
   **not** re-spell a ring and must **not** set `outline-none` — that switches
   the shared rule off. There were 122 hand-written copies of this one idea
   before it was centralised, at four different alphas, with four controls
-  carrying no focus state at all. Dark surfaces add `.focus-ring-light`.
+  carrying no focus state at all. There is no `.focus-ring-light` any more —
+  it existed when the ring was violet and one surface was charcoal; every
+  surface is that surface now.
+- **The pointer does not ring.** `input-modality.tsx` stamps the last input
+  device on `<html>`, and a twin rule beside the outline silences it under
+  `html[data-modality="pointer"]`. This is not a softening of the rule above:
+  after a Tab, an arrow or any typed key the ring returns in full. It exists
+  because `:focus-visible` fires under a pointer in two cases this app hits
+  constantly — Radix moves real DOM focus onto a menu row on `pointermove` and
+  back to the trigger on close, and a clicked control keeps focus until the
+  next keydown re-tests it. The two selectors are pinned equal by
+  `tests/focus-modality.test.ts`; a control that rings must be able to stop.
   Text fields are the one exception, and keep border-plus-halo (`ui/input.tsx`):
   a field is a place you are *in*, not a thing you pressed.
 - **A filter answers on the press, not on the response.** Anything that

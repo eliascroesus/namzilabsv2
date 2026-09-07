@@ -27,6 +27,7 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
 
 import { ThemeProvider } from "@/components/theme";
+import { InputModality } from "@/components/input-modality";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthKitProvider } from "@workos-inc/authkit-nextjs/components";
 import { withAuth } from "@workos-inc/authkit-nextjs";
@@ -111,6 +112,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     // Measured with getComputedStyle, not inferred.
     <html lang="en" className={inter.variable} suppressHydrationWarning>
       <body>
+        {/* WHICH DEVICE IS DRIVING, stamped on <html> for globals.css to read.
+            It renders nothing; it exists so the shared focus ring can stay off
+            under a pointer and on under a keyboard. Mounted HERE because the
+            root layout is the one tree every route shares — a listener in the
+            rail would miss the landing, the legal pages and the builder. */}
+        <InputModality />
         {/* The first stop on every tab order. Without it, reaching a page's
             content by keyboard means tabbing the whole navigation rail again
             on every single navigation. Hidden until focused (globals.css). */}
