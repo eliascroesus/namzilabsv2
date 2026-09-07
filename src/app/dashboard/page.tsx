@@ -54,7 +54,7 @@ import {
   type AggregateResult,
   type FunnelResult,
 } from "@/lib/metrics/compute";
-import { resolveRange, RANGE_OPTIONS } from "@/lib/metrics/range";
+import { resolveRange } from "@/lib/metrics/range";
 import { withDerivedRange } from "@/lib/metrics/derive-range";
 import { CustomRangeCompute } from "./custom-range-compute";
 import { formatMetricValue } from "@/lib/format";
@@ -1128,7 +1128,14 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                    `shrink-0` to let it. A 24px dropdown needs neither. */
                 <RangeMenu
                   activeRange={rangeKey}
-                  options={RANGE_OPTIONS.map((r) => ({ key: r.key, label: r.label, href: qs({ range: r.key }) }))}
+                  /* The board's own URL, so a picked window keeps the view and
+                     the source rather than throwing you back to the default
+                     board. `qs({})` is that URL with the current range in it. */
+                  href={qs({})}
+                  /* Today, from the SERVER's clock. The picker renders on both
+                     sides of the hydration boundary and must not compute the
+                     current UTC day twice — see its own header. */
+                  now={new Date()}
                 />
               )}
               {/* REFRESH ALL, LAST, AND ON EVERY VIEW — the groups board, a

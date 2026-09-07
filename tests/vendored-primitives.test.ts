@@ -22,6 +22,9 @@ const files = readdirSync(UI).filter((f) => f.endsWith(".tsx"));
 /** The kit's own primitives, which were never vendored and keep their own rules. */
 const OURS = new Set([
   "badge.tsx",
+  // Written here, not vendored: the period control's calendar. A `shadcn add
+  // --overwrite` has nothing to replace it with.
+  "date-range-picker.tsx",
   "button.tsx",
   "card.tsx",
   "chip.tsx",

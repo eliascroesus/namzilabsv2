@@ -2,14 +2,13 @@ import { AppFrame } from "@/components/app-frame";
 import { PageContainer, PageHeader } from "@/components/ui/page";
 import { BoardControls, RangeMenu, ViewStrip, ViewTitle } from "@/app/dashboard/board-controls";
 import { Button } from "@/components/ui/button";
-import { RANGE_OPTIONS } from "@/lib/metrics/range";
 import { Plus, RefreshCw } from "lucide-react";
 import { FlowTile, type FlowResultRow } from "@/components/flow-tile";
 import { ChartFrame } from "@/components/board-charts/frame";
 import { BarsVertical, LineChart } from "@/components/board-charts/cartesian";
 import { accentOf } from "@/lib/board/tile-config";
 import { Delta } from "@/components/charts";
-import { customRangeKey } from "@/lib/metrics/range";
+import { customRangeKey, resolveRange } from "@/lib/metrics/range";
 import { withDerivedRange } from "@/lib/metrics/derive-range";
 import { GRID_COLS, GRID_GAP_PX, ROW_UNIT_PX } from "@/lib/board/grid";
 
@@ -159,7 +158,22 @@ const FMT = {
   bar: { format: "number" as const, precision: 0 },
 };
 
-export default function OverviewLab() {
+export default async function OverviewLab({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  /**
+   * THE HARNESS READS `?range=` TOO, so the picker's round trip can be SEEN
+   * here: pick two days, the URL changes, the trigger re-reads it and prints
+   * the dates. Without this the control would push a window and then go on
+   * reading "Today", which is the one thing a public harness for it must not
+   * do — it would hide exactly the bug it exists to catch.
+   */
+  const sp = await searchParams;
+  const rangeParam = Array.isArray(sp.range) ? sp.range[0] : sp.range;
+  const activeRange = resolveRange(rangeParam || "today", HOUR_AGO).key;
+
   /**
    * `activeView={null}`, NOT `"default"` — `ViewTab` derives its key from
    * `viewId ?? ""`, so the default view's key is the empty string and only a
@@ -219,8 +233,13 @@ export default function OverviewLab() {
                   Add
                 </Button>
                 <RangeMenu
-                  activeRange="today"
-                  options={RANGE_OPTIONS.map((r) => ({ key: r.key, label: r.label, href: "#" }))}
+                  activeRange={activeRange}
+                  /* THIS ROUTE'S OWN PATH, not "#". `new URL("#", base)` has an
+                     empty pathname, so applying a window would push the harness
+                     to the site root and there would be nothing left to
+                     screenshot. */
+                  href="/design/overview"
+                  now={HOUR_AGO}
                 />
                 <Button variant="secondary">
                   <RefreshCw />

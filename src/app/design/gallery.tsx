@@ -32,6 +32,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Chip } from "@/components/ui/chip";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
 import {
   Command,
   CommandEmpty,
@@ -198,6 +199,18 @@ export function Gallery() {
    */
   const [toast, setToast] = useState(false);
   const [query, setQuery] = useState("");
+  /**
+   * A FIXED "TODAY" FOR THE SPECIMEN, not `new Date()`. This page renders on
+   * the server and hydrates, and the picker's whole contract is that the two
+   * sides agree on which UTC day is today — a live clock here would be the one
+   * place in the product that breaks it, on the page that exists to prove it
+   * does not. The date is the one the kit was drawn on.
+   */
+  const KIT_NOW = new Date("2026-09-07T12:00:00.000Z");
+  const [pickedRange, setPickedRange] = useState<{ from: string; to: string } | null>({
+    from: "2026-08-03",
+    to: "2026-08-12",
+  });
 
   return (
     <TooltipProvider>
@@ -676,6 +689,18 @@ export function Gallery() {
                 </div>
               </Modal>
             )}
+          </Spec>
+        </Family>
+
+        {/* ── DATE RANGE PICKER ───────────────────────────────────────── */}
+        <Family name="Date range" file="date-range-picker.tsx">
+          <Spec
+            name="the period control's calendar"
+            note="Two clicks make a window; the same day twice makes one day. Days after today are disabled — a tile is a result, and the forward view is the Calendar. Every date is UTC, like the rest of the product: `now` arrives as a prop so the server and the client cannot disagree across a midnight."
+          >
+            <div className="w-fit rounded-surface border border-border p-3">
+              <DateRangePicker now={KIT_NOW} value={pickedRange} onPick={(from, to) => setPickedRange({ from, to })} />
+            </div>
           </Spec>
         </Family>
 

@@ -2,18 +2,21 @@
 
 import { createContext, useContext, useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { CalendarDays, Check, ChevronDown, Copy as CopyIcon, MoreHorizontal, PenLine, Trash2 } from "lucide-react";
+import { CalendarDays, ChevronDown, Copy as CopyIcon, MoreHorizontal, PenLine, Trash2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Popover } from "@/components/flow/controls/Popover";
 import { deleteViewAction, duplicateViewAction, renameViewAction, setViewPositionsAction } from "./board-actions";
 import { MENU_ROW } from "./board-tile-menu";
 import { BOARD_GRID } from "@/components/ui/page";
 import { cn } from "@/lib/utils";
-import { labelForRange } from "@/lib/metrics/range";
+import { customRangeKey, labelForRange, parseCustomRange } from "@/lib/metrics/range";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
+/* ALIASED, because this file already imports the BUILDER's hand-rolled
+   `Popover` for the view-tab menus. Two components, one word — the alias
+   is what keeps which-is-which readable at the call site. */
+import { Popover as Anchored, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { COLUMN_W, LANE_GAP } from "./board-shape";
 import { canvasCells, type GridBox } from "@/lib/board/grid";
 import { keyBetween } from "@/lib/board/order";
@@ -177,73 +180,74 @@ export function RangeLink({
  * which is where every other link on the board gets one.
  */
 export function RangeMenu({
-  options,
   activeRange,
+  /** The board's own URL, so a picked window keeps the view and the source. */
+  href,
+  /** Today, from the server — see `DateRangePicker` on why this is not read here. */
+  now,
 }: {
-  options: { key: string; label: string; href: string }[];
   activeRange: string;
+  href: string;
+  now: Date;
 }) {
   const { pending, go, picked } = useBoard();
+  const [open, setOpen] = useState(false);
   // The optimistic answer is only trusted WHILE the transition is in
   // flight, exactly as `RangeLink` does it — a failed or redirected
   // navigation must not leave the trigger reading a range nobody is on.
   const active = pending && picked?.dim === "range" ? picked.key : activeRange;
-  // `options[0]?.label`, NOT `options[0].label` — `RANGE_OPTIONS` is a fixed,
-  // non-empty constant today, so this should never run against an empty
-  // array, but the trigger reading "Period" instead of throwing is a cheaper
-  // failure than a crashed header if a future edit ever empties it.
   /**
-   * `labelForRange`, NOT a lookup in `options`. The control can now be standing
-   * on a window the customer drew — `2026-08-03..2026-08-14` — which is in no
-   * option list and would have fallen back to the first preset's label, so the
-   * trigger would have read "Today" over a fortnight of numbers. One function
-   * answers both: a preset's own words, or the dates.
+   * `labelForRange`, NOT a lookup in a list of presets. The control can now be
+   * standing on a window the customer drew — `2026-08-03..2026-08-14` — which
+   * is in no option list and would have fallen back to the first preset's
+   * label, so the trigger would have read "Today" over a fortnight of numbers.
+   * One function answers both: a preset's own words, or the dates.
    */
-  const label = labelForRange(active);
+  const label = labelForRange(active, now);
+  const current = parseCustomRange(active, now) ?? { key: "", start: 0, end: 0 };
+  const value = current.key ? { from: current.key.slice(0, 10), to: current.key.slice(12) } : null;
+
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        {/* `xs` with the icons pushed to 16px: the rung ships
-            `[&_svg]:size-3.5`, and the export draws 16. The override is on
-            the button because the size variant's own descendant rule beats
-            a class on the svg whichever order they are written in.
-            `truncate max-w-40` on the label: the trigger sits beside "+ Add"
-            and "Refresh All" in a header slot with real width limits, and a
-            future preset with a long name should ellipsize rather than push
-            its neighbours off the row. */}
+    <Anchored open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        {/* THE TRIGGER IS UNCHANGED — `secondary` at the kit's one control
+            height, a 16px calendar glyph, the window's label, a chevron. Only
+            what it OPENS changed: six presets became a calendar, at the owner's
+            word ("not preset ranges but … a calendar dropdown thing").
+            `truncate max-w-40` because a dated label is longer than a preset's
+            and this trigger shares a header slot with "+ Add" and "Refresh
+            all". */}
         <Button variant="secondary" aria-label={`Period — ${label}`}>
           <CalendarDays aria-hidden />
           <span className="truncate max-w-40">{label}</span>
           <ChevronDown aria-hidden />
         </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-44">
-        {options.map((o) => {
-          const isActive = o.key === active;
-          return (
-            <DropdownMenuItem key={o.key} asChild>
-              {/* A REAL ANCHOR, asChild — see the file note above. The click
-                  handler is `RangeLink`'s own: let the browser take every
-                  click that means "somewhere else" (a new tab, a download, a
-                  non-primary button), and only take over — optimistic pill,
-                  no page reload — for the plain press this menu exists for. */}
-              <Link
-                href={o.href}
-                aria-current={isActive ? "true" : undefined}
-                onClick={(e) => {
-                  if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
-                  e.preventDefault();
-                  go(o.href, { dim: "range", key: o.key });
-                }}
-              >
-                <span className="min-w-0 flex-1 truncate">{o.label}</span>
-                {isActive && <Check aria-hidden />}
-              </Link>
-            </DropdownMenuItem>
-          );
-        })}
-      </DropdownMenuContent>
-    </DropdownMenu>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-auto p-3">
+        <DateRangePicker
+          now={now}
+          value={value}
+          onPick={(from, to) => {
+            setOpen(false);
+            /**
+             * THE URL IS STILL THE TRUTH. The window rides in `?range=` exactly
+             * as the presets did, so back and forward work and a link pasted
+             * into Slack opens on the window the sender was looking at —
+             * `go()` is the same optimistic transition the pills used, so the
+             * board skeletons on the press rather than after the round trip.
+             *
+             * Built off the board's own href so the view and the source ride
+             * along; a picked window must not throw you back to the default
+             * board.
+             */
+            const url = new URL(href, "http://board.local");
+            const key = customRangeKey(from, to);
+            url.searchParams.set("range", key);
+            go(`${url.pathname}${url.search}`, { dim: "range", key });
+          }}
+        />
+      </PopoverContent>
+    </Anchored>
   );
 }
 

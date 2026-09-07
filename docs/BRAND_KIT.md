@@ -543,9 +543,12 @@ square), the title itself centred at 26px/600
 with its pencil, and the actions right. The dashboard is the one caller,
 and its three actions are the export's: a **"Today ▾" dropdown** (`secondary`
 `xs`, a 16px calendar glyph, the selected preset's label, a chevron — a
-`DropdownMenu` per spec ruling S4) in place of the old six-segment period
-track — same six presets, same `?range=` in
-the URL, a tenth of the width and no horizontal scroller; **"+ Add"** on
+`Popover` holding a month grid) in place of the old six-segment period track.
+It lists no presets as of 7 Sep 2026 — it opens a CALENDAR, and a window is two
+clicks (or the same day twice). The window still rides in `?range=`, spelled
+`YYYY-MM-DD..YYYY-MM-DD`; a picked pair that happens to equal one of the six
+precomputed windows is canonicalised back to that preset, so the common cases
+stay instant and two URLs never cache one answer twice; **"+ Add"** on
 the brand fill at `xs` with a 16px plus; and **"Refresh all"** `secondary`
 `xs` with a 16px refresh glyph. Blue is spent on "+ Add" and "New flow",
 and on nothing else in the header.

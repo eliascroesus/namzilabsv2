@@ -59,28 +59,47 @@ describe("the dashboard's page header, 4 Sep 2026 blue retheme", () => {
     expect(menu, "and no override of a class the rung already sets").not.toContain("[&_svg]:size-4");
     expect(menu).toContain("<CalendarDays");
     expect(menu).toContain("<ChevronDown");
-    // The presets are the same six, and they still select through the URL.
-    expect(menu).toContain("options.map");
+    /**
+     * RE-POINTED 7 SEP 2026. This asserted `options.map` — the six presets the
+     * dropdown listed. The owner replaced them with a calendar ("not preset
+     * ranges but … a calendar dropdown thing"), so there is no option list to
+     * map over. Everything this test is NAMED for is unchanged: the trigger is
+     * still `secondary` at the kit's one height, with a 16px calendar glyph and
+     * a chevron, and a pick still selects through the URL.
+     */
+    expect(menu, "the calendar replaces the preset list").toContain("<DateRangePicker");
+    expect(menu, "and the six-preset list is gone").not.toContain("options.map");
     expect(menu).toContain('dim: "range"');
   });
 
-  it("draws each preset as a real link, not a radio item with no href", () => {
+  it("puts the picked window in the URL, keeping the view and the source", () => {
     /**
-     * FIXED IN THE FIRST REVIEW ROUND. `DropdownMenuRadioItem` renders a
-     * `role="menuitemradio"` div with an `onSelect` handler — no `href`,
-     * so a modifier-click, a middle-click or "open in a new tab" all did
-     * nothing, and a no-JS viewer got a menu that opened onto nothing.
-     * `RangeLink`'s own comment defended exactly this for the pill track
-     * this menu replaced; the dropdown's items owe the same defence, which
-     * is why each one is `asChild` around a real `next/link` `Link` reading
-     * `href={o.href}`.
+     * RE-POINTED 7 SEP 2026, AND THIS KEEPS THE HALF THAT MATTERED.
+     *
+     * It asserted six real `<Link href>` anchors, and the reason was good:
+     * `DropdownMenuRadioItem` renders a `role="menuitemradio"` div with an
+     * `onSelect` and no `href`, so a modifier-click, a middle-click or "open in
+     * a new tab" all did nothing. Six presets are six destinations, and a
+     * destination owes an anchor.
+     *
+     * A calendar has no destinations to enumerate — the window is drawn, not
+     * chosen from a list — so the anchors are gone and the REASON is asserted
+     * directly instead: the window lands in `?range=`, built off the board's
+     * own href so the active view and source ride along, and applied through
+     * the same optimistic transition the pills used. Back, forward and a link
+     * pasted into Slack all still work, which is what the anchors were for.
+     *
+     * The two regressions this now guards: a picked window that throws you back
+     * to the default board, and one that lives in component state and cannot be
+     * shared at all.
      */
     const controls = read("src/app/dashboard/board-controls.tsx");
     const menu = controls.slice(controls.indexOf("export function RangeMenu"), controls.indexOf("export function ViewStrip"));
-    expect(menu, "each item is a real anchor").toMatch(/<Link\s+href=\{o\.href\}/);
-    expect(menu, "the radio group it replaced is gone").not.toContain("DropdownMenuRadioGroup");
+    expect(menu, "the window rides in the URL").toMatch(/searchParams\.set\("range", key\)/);
+    expect(menu, "built off the board's own href, not a bare /dashboard").toMatch(/new URL\(href,/);
+    expect(menu, "and applied through the board's own transition").toMatch(/dim: "range", key/);
+    expect(menu, "the radio group it replaced is still gone").not.toContain("DropdownMenuRadioGroup");
     expect(menu, "and so is the radio item").not.toContain("DropdownMenuRadioItem");
-    expect(menu, "the active preset says so to assistive tech").toContain('aria-current={isActive ? "true" : undefined}');
   });
 
   it("promotes + Add to the brand fill at the header's own size", () => {

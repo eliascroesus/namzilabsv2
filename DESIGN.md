@@ -423,11 +423,15 @@ never `.css`.
   spend a full-width 32px bordered `--control` groove on six mutually
   exclusive range buttons — Today, Yesterday, 7d, 30d, this month, last
   month — filling it edge to edge as segments, capsule inside capsule. The
-  Figma draws a single `secondary` `xs` button instead: a 16px calendar
-  glyph, the selected preset's own label, a chevron. What it DOES has not
-  changed — it lists the same six presets and selects them the same way,
-  through `?range=` in the URL — only the control's shape did, from a groove
-  that had to fight a narrow screen for width to a button a tenth as wide
+  Figma draws a single `secondary` button instead: a 16px calendar
+  glyph, the window's own label, a chevron. As of 7 Sep 2026 it also does
+  something different — it opens a CALENDAR rather than a list of six. A
+  window is a first click, a second click, and the same day twice for one day;
+  it rides in `?range=` as `YYYY-MM-DD..YYYY-MM-DD`, and a pair that happens to
+  equal one of the six precomputed windows is canonicalised back to it. The six
+  survive as the windows every stored tile carries, not as a menu. What did not
+  change is the control's shape, from a groove that had to fight a narrow
+  screen for width to a button a tenth as wide
   and never touching a horizontal scroller.
 
   *The groove is not gone, only reassigned.* `PERIOD_TRACK` and
