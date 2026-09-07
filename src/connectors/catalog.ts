@@ -815,6 +815,33 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
     eventTypeLabels: { call_missed: "Call missed", call_tagged: "Call tagged", voicemail_left: "Voicemail left" },
     commonFields: ["direction", "status", "user.email", "missed_call_reason", "talk_seconds", "ring_seconds", "tags"],
   },
+  {
+    source: "pipedrive",
+    name: "Pipedrive",
+    description: "Deals created, moved between stages, won and lost; people added.",
+    brand: { color: "#017737", short: "Pd" },
+    connect: "apiKey",
+    instant: true,
+    poll: true,
+    sync: "incremental",
+    syncNote: "The poll sees each deal's current stage; every intermediate hop arrives by webhook. Archived deals are not listed.",
+    autoWebhook: true,
+    webhookOptional: true,
+    docs: { url: "https://developers.pipedrive.com/docs/api/v1/Deals", readOn: "2026-09-08", webhooks: "https://pipedrive.readme.io/docs/guide-for-webhooks-v2" },
+    verified: { live: null },
+    // pipedrive.readme.io/docs/core-api-concepts-rate-limiting (read 2026-09-08): burst
+    // "20 requests per 2 seconds" per token on Lite (600/min), and a daily budget of
+    // "30,000 base tokens × plan multiplier × seats" where a list costs 20 tokens — so
+    // the day, not the minute, is the binding limit. 300/min keeps a sweep to a few
+    // hundred tokens; the observed layer reads x-ratelimit-* and x-daily-requests-left.
+    rateLimits: { "deals.list": { requestsPerMinute: 300 } },
+    credentialFields: [
+      { key: "apiToken", label: "API token (Settings → Personal preferences → API)", placeholder: "…" },
+      { key: "companyDomain", label: "Company domain (the part before .pipedrive.com; optional)", placeholder: "acme" },
+    ],
+    eventTypeLabels: { opportunity_created: "Deal created", deal_stage_changed: "Deal moved stage", deal_won: "Deal won", deal_lost: "Deal lost", lead_created: "Person added" },
+    commonFields: ["status", "stage_id", "pipeline_id", "value", "currency", "person_id", "previous_stage_id", "lost_reason"],
+  },
 ];
 
 export function catalogEntry(source: string): ConnectorCatalogEntry | undefined {

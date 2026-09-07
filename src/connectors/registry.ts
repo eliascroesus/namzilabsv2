@@ -9,6 +9,7 @@ import { googleCalendarConnector } from "./google-calendar";
 import { stripeConnector } from "./stripe";
 import { calcomConnector } from "./calcom";
 import { aircallConnector } from "./aircall";
+import { pipedriveConnector } from "./pipedrive";
 
 const registry = new Map<string, Connector>();
 
@@ -32,6 +33,7 @@ for (const connector of [
   stripeConnector,
   calcomConnector,
   aircallConnector,
+  pipedriveConnector,
 ]) {
   registerConnector(connector);
 }

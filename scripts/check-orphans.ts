@@ -32,7 +32,6 @@ const ALLOWLIST: Record<string, string> = {
   // task there DELETES the entry for the helper it consumes. Added 8 Sep 2026.
   standardWebhooksVerify: "connector kit — first consumer: Retell (connectors batch 1)",
   sharedTokenVerify: "connector kit — first consumer: Lemlist (connectors batch 1)",
-  headerKeyClient: "connector kit — first consumer: OnceHub (connectors batch 1)",
   naturalOrHash: "connector kit — first consumer: Typeform (connectors batch 1)",
   ymd: "connector kit — first consumer: Typeform (connectors batch 1)",
   pace: "prober harness — first consumer: the Smartlead prober (connectors batch 1)",
