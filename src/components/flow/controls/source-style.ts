@@ -1,22 +1,16 @@
+import { catalogEntry } from "@/connectors/catalog";
+
 /**
- * Brand styling for data sources, used by the rebuilt control system (pills, data
- * browser, node cards). App-agnostic: known connectors get their brand colour + a short
- * label; unknown/future sources fall back to a neutral badge derived from the key.
+ * Brand styling for data sources, used by the rebuilt control system (pills,
+ * data browser, node cards). The colours live on the catalog entry now, so a
+ * new connector registers its mark in the same place as everything else;
+ * unknown sources fall back to a neutral badge derived from the key.
  */
 export type SourceStyle = { label: string; color: string; short: string };
 
-const SOURCE_STYLE: Record<string, SourceStyle> = {
-  calendly: { label: "Calendly", color: "#006BFF", short: "Ca" },
-  close: { label: "Close", color: "#1E88E5", short: "Cl" },
-  instantly: { label: "Instantly", color: "#7C3AED", short: "In" },
-  whop: { label: "Whop", color: "#FF6243", short: "Wh" },
-  gsheets: { label: "Google Sheets", color: "#0F9D58", short: "Sh" },
-  gcal: { label: "Google Calendar", color: "#4285F4", short: "GC" },
-  webhook: { label: "Webhook", color: "#64748B", short: "Wh" },
-};
-
 export function sourceStyle(source?: string | null): SourceStyle {
-  if (source && SOURCE_STYLE[source]) return SOURCE_STYLE[source];
+  const entry = source ? catalogEntry(source) : undefined;
+  if (entry?.brand) return { label: entry.brand.label ?? entry.name, color: entry.brand.color, short: entry.brand.short };
   const key = (source ?? "").trim();
   return { label: key || "App", color: "#64748B", short: (key || "ap").slice(0, 2).replace(/^\w/, (c) => c.toUpperCase()) };
 }

@@ -75,12 +75,37 @@ export type FlowConfigField = {
  */
 export type SyncGuarantee = "mirror" | "incremental" | "derived-mirror" | "webhook-only";
 
+/**
+ * The connector's brand tile: the vendor's colour and a one-or-two letter
+ * mark. Lives here, not in the builder, so one entry is the whole
+ * registration; `sourceStyle` reads it. `label` overrides the display name
+ * only where the mark's tooltip has always said something shorter than the
+ * catalog name ("Close", "Webhook").
+ */
+export type ConnectorBrand = { color: string; short: string; label?: string };
+
+/**
+ * Where the facts in this entry came from and when they were read. Every
+ * rate limit, endpoint and field name a connector relies on is a claim about
+ * a provider, and a claim with a date can be re-checked; one without a date
+ * is folklore. Required by tests for every entry added after the kit.
+ */
+export type ConnectorDocs = { url: string; readOn: string; webhooks?: string };
+
+/** `live` is the date the connector's prober last ran against the real API, or null: unprobed. */
+export type ConnectorVerification = { live: string | null };
+
 export type ConnectorCatalogEntry = {
   source: string;
   name: string;
   description: string;
-  /** How the user connects: paste an API key/token, or Google OAuth. */
-  connect: "apiKey" | "google";
+  /** How the user connects: paste a key, Google's flow, or another provider's OAuth (see `oauthProvider`). */
+  connect: "apiKey" | "google" | "oauth";
+  /** The `OAUTH_PROVIDERS` key when `connect` is "oauth". */
+  oauthProvider?: string;
+  brand?: ConnectorBrand;
+  docs?: ConnectorDocs;
+  verified?: ConnectorVerification;
   instant: boolean;
   poll: boolean;
   /** Guarantee class (defaults: poll sources "incremental", else "webhook-only"). */
@@ -227,6 +252,7 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
   {
     source: "calendly",
     name: "Calendly",
+    brand: { color: "#006BFF", short: "Ca" },
     description: "Booked and canceled meetings, no-shows and routing forms.",
     connect: "apiKey",
     // HYBRID: the poll stays primary (reliable reconciliation, per-stream
@@ -310,6 +336,7 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
   {
     source: "close",
     name: "Close CRM",
+    brand: { color: "#1E88E5", short: "Cl", label: "Close" },
     description: "Leads, opportunities, calls and SMS from the Close event log.",
     connect: "apiKey",
     instant: true,
@@ -484,6 +511,7 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
   {
     source: "instantly",
     name: "Instantly",
+    brand: { color: "#7C3AED", short: "In" },
     description: "Campaign performance — sent, opens, replies, bounces — per campaign.",
     connect: "apiKey",
     instant: true,
@@ -576,6 +604,7 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
   {
     source: "whop",
     name: "Whop",
+    brand: { color: "#FF6243", short: "Wh" },
     description: "Payments and memberships from your Whop company.",
     connect: "apiKey",
     instant: true,
@@ -604,6 +633,7 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
   {
     source: "gsheets",
     name: "Google Sheets",
+    brand: { color: "#0F9D58", short: "Sh" },
     description: "Rows from any spreadsheet, mirrored faithfully.",
     connect: "google",
     instant: false,
@@ -650,6 +680,7 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
   {
     source: "gcal",
     name: "Google Calendar",
+    brand: { color: "#4285F4", short: "GC" },
     description: "Calendar events via incremental sync.",
     connect: "google",
     instant: false,
@@ -689,6 +720,7 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
   {
     source: "webhook",
     name: "Custom Webhook",
+    brand: { color: "#64748B", short: "Wh", label: "Webhook" },
     description: "Catch events from any app that can POST a webhook.",
     connect: "apiKey",
     instant: true,
