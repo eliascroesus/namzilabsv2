@@ -1,37 +1,30 @@
 import { randomBytes } from "node:crypto";
+import { oauthProvider, oauthProviderFor } from "@/lib/oauth/providers";
 
-/** Short-lived, httpOnly cookie that binds the OAuth state nonce to the browser session. */
 export const OAUTH_STATE_COOKIE = "g_oauth_state";
 
-export type GoogleSource = "gsheets" | "gcal";
+export type OAuthState = { nonce: string | null; provider: string | null; source: string | null };
 
-/** Create a cryptographically random state carrying a nonce + the (non-sensitive) source. */
-export function createOAuthState(source: GoogleSource): { state: string; nonce: string } {
+export function createOAuthState(s: { provider: string; source: string }): { state: string; nonce: string } {
   const nonce = randomBytes(24).toString("base64url");
-  const state = Buffer.from(JSON.stringify({ nonce, source })).toString("base64url");
+  const state = Buffer.from(JSON.stringify({ nonce, provider: s.provider, source: s.source })).toString("base64url");
   return { state, nonce };
 }
 
-/** Parse a returned state param. `nonce` is null when the state is malformed. */
-export function parseOAuthState(state: string | null): { nonce: string | null; source: GoogleSource } {
+/** Nulls for anything unreadable — a null field sends the callback to `state_mismatch`. */
+export function parseOAuthState(state: string | null): OAuthState {
   try {
-    const parsed = JSON.parse(Buffer.from(state ?? "", "base64url").toString("utf8")) as {
-      nonce?: unknown;
-      source?: unknown;
-    };
-    return {
-      nonce: typeof parsed.nonce === "string" && parsed.nonce.length > 0 ? parsed.nonce : null,
-      source: parsed.source === "gcal" ? "gcal" : "gsheets",
-    };
+    const parsed = JSON.parse(Buffer.from(state ?? "", "base64url").toString("utf8")) as { nonce?: unknown; provider?: unknown; source?: unknown };
+    const nonce = typeof parsed.nonce === "string" && parsed.nonce.length > 0 ? parsed.nonce : null;
+    const provider = typeof parsed.provider === "string" && oauthProvider(parsed.provider) ? parsed.provider : null;
+    const source =
+      typeof parsed.source === "string" && provider && oauthProviderFor(parsed.source)?.key === provider ? parsed.source : null;
+    return { nonce, provider, source };
   } catch {
-    return { nonce: null, source: "gsheets" };
+    return { nonce: null, provider: null, source: null };
   }
 }
 
-/**
- * Validate the returned state against the nonce stored in the session cookie.
- * Rejects missing, malformed, or mismatched state (CSRF protection).
- */
 export function isValidOAuthState(stateParam: string | null, cookieNonce: string | undefined): boolean {
   const { nonce } = parseOAuthState(stateParam);
   if (!nonce || !cookieNonce) return false;

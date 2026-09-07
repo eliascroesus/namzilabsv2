@@ -12,8 +12,8 @@ import { integrationsErrorMessage } from "@/app/integrations/error-messages";
  */
 describe("every error code a redirect can carry has human copy", () => {
   const emitters = [
-    "src/app/api/oauth/google/callback/route.ts",
-    "src/app/api/oauth/google/start/route.ts",
+    "src/app/api/oauth/[provider]/callback/route.ts",
+    "src/app/api/oauth/[provider]/start/route.ts",
   ];
 
   it("finds the known codes in the callback source (guards the regex going stale)", () => {

@@ -83,7 +83,7 @@ export const googleSheetsConnector: Connector = {
    * `modifiedTime` in a few hundred bytes.
    *
    * No re-consent: `drive.readonly` is already in the gsheets grant
-   * (`src/lib/google-oauth.ts`) and this connector already calls the Drive API
+   * (`src/lib/oauth/providers.ts`) and this connector already calls the Drive API
    * with the same token for the spreadsheet picker.
    */
   async poll(args: PollArgs): Promise<PollResult> {

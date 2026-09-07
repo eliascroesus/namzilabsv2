@@ -125,7 +125,12 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
     connectedCount: countBySource[entry.source] ?? 0,
     // Google's connectors leave the app to connect, so there is nothing to type
     // and no dialog to open: the card links straight out to the consent screen.
-    oauthHref: entry.connect === "google" ? `/api/oauth/google/start?source=${entry.source}` : undefined,
+    oauthHref:
+      entry.connect === "google"
+        ? `/api/oauth/google/start?source=${entry.source}`
+        : entry.connect === "oauth" && entry.oauthProvider
+          ? `/api/oauth/${entry.oauthProvider}/start?source=${entry.source}`
+          : undefined,
     form: entry.connect === "apiKey" ? <ConnectForm entry={entry} /> : undefined,
   }));
 

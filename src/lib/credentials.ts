@@ -1,7 +1,8 @@
 import { eq } from "drizzle-orm";
 import { connections } from "@/db/schema";
 import { encrypt, decrypt, getEncryptionKey } from "@/lib/crypto";
-import { refreshGoogleToken } from "@/lib/google-oauth";
+import { oauthProviderFor } from "@/lib/oauth/providers";
+import { refreshTokens } from "@/lib/oauth/flow";
 import { HttpError } from "@/lib/http-client";
 import type { DB } from "@/db/types";
 
@@ -26,13 +27,13 @@ export function decryptCredentials(conn: { credentialsEncrypted: string | null }
 export async function getConnectionCredentials(db: DB, conn: CredConnection): Promise<Record<string, unknown>> {
   const creds = decryptCredentials(conn);
 
-  const isGoogle = conn.source === "gsheets" || conn.source === "gcal";
+  const provider = oauthProviderFor(conn.source);
   const expiresAt = typeof creds.expiresAt === "number" ? creds.expiresAt : 0;
   const refreshToken = typeof creds.refreshToken === "string" ? creds.refreshToken : null;
 
-  if (isGoogle && refreshToken && expiresAt < Date.now() + 60_000) {
+  if (provider?.refresh === "standard" && refreshToken && expiresAt < Date.now() + 60_000) {
     try {
-      const refreshed = await refreshGoogleToken(refreshToken);
+      const refreshed = await refreshTokens(provider, refreshToken);
       const merged = { ...creds, ...refreshed };
       await db
         .update(connections)
@@ -48,7 +49,7 @@ export async function getConnectionCredentials(db: DB, conn: CredConnection): Pr
       // breaker (recordProviderError/tripBreaker in ingestion/reconcile.ts)
       // and must reach it unchanged.
       if (err instanceof HttpError && err.body.includes("invalid_grant")) {
-        throw new Error("Google access has expired or been revoked. Reconnect this Google account from Integrations.");
+        throw new Error(`${provider.name} access has expired or been revoked. Reconnect this ${provider.name} account from Integrations.`);
       }
       throw err;
     }

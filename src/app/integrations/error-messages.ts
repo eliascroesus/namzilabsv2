@@ -26,6 +26,8 @@ export function integrationsErrorMessage(code: string): string {
       // The URL code stays `rank_forbidden` — it is a wire value that older
       // links and redirects already carry. Only the sentence says "role".
       return "Your role doesn't allow managing integrations, so nothing was connected. Ask a workspace admin.";
+    case "oauth_unknown":
+      return "That sign-in link doesn't match any app we can connect, so nothing was connected. Start again from the app's card.";
     default:
       return "Something went wrong connecting that account. Nothing was connected — please try again.";
   }

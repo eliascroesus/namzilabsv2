@@ -158,7 +158,7 @@ export type ConnectorCatalogEntry = {
    * to the customer: Calendly's 60/min is that account's 60/min, and one
    * customer cannot spend another's. Google is the opposite. Sheets and
    * Calendar authorize through a single `GOOGLE_CLIENT_ID`
-   * (`src/lib/google-oauth.ts`), so the quota is charged to our Cloud project
+   * (`src/lib/oauth/providers.ts`), so the quota is charged to our Cloud project
    * and the fleet shares one bucket. Ten connections each politely under a
    * per-connection budget can still take the project over its limit together,
    * and the failure mode is not one customer throttled — it is every Google

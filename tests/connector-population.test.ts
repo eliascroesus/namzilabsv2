@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { CONNECTOR_CATALOG } from "@/connectors/catalog";
 import { getConnector } from "@/connectors/registry";
+import { oauthProvider } from "@/lib/oauth/providers";
 
 /** The seven that predate the kit; everything after them must carry provenance. */
 const LEGACY = new Set(["calendly", "close", "instantly", "whop", "gsheets", "gcal", "webhook"]);
@@ -23,7 +24,7 @@ describe("every catalog entry and every registered connector agree", () => {
       const c = getConnector(e.source)!;
       if (e.connect === "google" || e.connect === "oauth") expect(c.authType, e.source).toBe("oauth2");
       else expect(["apiKey", "secret"], e.source).toContain(c.authType);
-      if (e.connect === "oauth") expect(typeof e.oauthProvider, `${e.source}: oauthProvider`).toBe("string");
+      if (e.connect === "oauth") expect(oauthProvider(e.oauthProvider), `${e.source}: registered oauthProvider`).toBeDefined();
     }
   });
   it("capabilities the entry advertises exist on the connector", () => {

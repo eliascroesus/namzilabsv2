@@ -10,7 +10,7 @@ import type { DB } from "@/db/types";
  * "provider failed" forever.
  *
  * `getConnectionCredentials` refreshes an expiring Google token through
- * `refreshGoogleToken` -> `fetchJson`, which throws a typed `HttpError` on any
+ * `refreshTokens` -> `fetchJson`, which throws a typed `HttpError` on any
  * non-2xx response (http-client.test.ts). Google's token endpoint answers a
  * revoked or expired refresh token with 400 `invalid_grant` — a permanent
  * state no retry will ever fix — so that one case is reworded into something
@@ -21,14 +21,14 @@ import type { DB } from "@/db/types";
  */
 
 const KEY = randomBytes(32).toString("base64");
-// refreshGoogleToken always throws in these tests, before getConnectionCredentials
+// refreshTokens always throws in these tests, before getConnectionCredentials
 // ever touches `db` — so a real database is unnecessary ceremony here (same cast
 // used in tests/helpers/testdb.ts and src/lib/sync/locks.ts).
 const fakeDb = {} as unknown as DB;
 
 beforeAll(() => {
   process.env.ENCRYPTION_KEY = KEY;
-  // refreshGoogleToken's own reqEnv() guard throws before ever reaching fetch
+  // refreshTokens's own reqEnv() guard throws before ever reaching fetch
   // if these are missing — set once, same as any other deployment would have.
   process.env.GOOGLE_CLIENT_ID = "test-client-id";
   process.env.GOOGLE_CLIENT_SECRET = "test-client-secret";

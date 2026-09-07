@@ -609,7 +609,7 @@ describe("F.1 (fleet) — a shared credential means a shared ceiling", () => {
  * the real spend for every stream-scoped source.
  *
  * It matters most for Google, whose quota is per Cloud PROJECT: one OAuth
- * client shared by every customer (`GOOGLE_CLIENT_ID`, google-oauth.ts:33), so
+ * client shared by every customer (`GOOGLE_CLIENT_ID`, src/lib/oauth/providers.ts), so
  * an under-count is not one account's problem but the whole fleet's.
  */
 describe("stream-scoped spend is settled after the fact", () => {
