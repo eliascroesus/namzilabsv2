@@ -95,6 +95,11 @@ Declared in `src/connectors/catalog.ts` (`sync` field; UI copy states the class)
 | **incremental** | Cursor-forward polling with an overlap window; nothing is stranded (windows are drained to their end, deeper windows resume next sweep). Edits older than the overlap surface on a full re-sync. | Close (5-min overlap, continuation cursor), Google Calendar (sync token, ±window bound on first sync), Calendly, Instantly raw-emails streams |
 | **webhook-only** | No list endpoint to reconcile against: data is as complete as the webhooks that arrived. Weakest class; the connection UI must say so. | Custom webhook |
 
+New connectors are built on `src/connectors/kit/` and documented in
+`docs/ADDING_A_CONNECTOR.md`; their catalog entries carry `docs.readOn` (when
+the provider's documentation was read) and `verified.live` (when a live prober
+last ran, or null).
+
 ### What `derived-mirror` does NOT promise
 
 The other classes mirror *records we hold*. This one mirrors *the provider's

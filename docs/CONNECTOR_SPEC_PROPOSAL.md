@@ -1,8 +1,10 @@
 # The live verification gate, and a declarative connector spec
 
-**PROPOSAL.** Nothing in §1–§5 is built. The Close fix in §6 is written and sits
-on branch `close/date-updated`, held until the live check in §1.5 has run —
-which is the rule this document proposes, applied to itself.
+**STATUS (8 Sep 2026).** The duplicated code §2 measures was extracted as
+functions rather than as a typed spec (`src/connectors/kit/`, spec in
+`docs/superpowers/specs/2026-09-07-connector-kit-and-first-twenty-design.md`).
+The live gate of §1 survives as a generated prober per connector and the
+`verified.live` date on its catalog entry. §6's Close fix shipped separately.
 
 Written after the Close event-log investigation cost four rounds, a production
 deploy and a custom prober to find something stated in the first paragraph of

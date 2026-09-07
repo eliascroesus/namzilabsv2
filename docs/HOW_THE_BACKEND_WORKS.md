@@ -131,6 +131,11 @@ Google login, etc.).
 - Their passwords/keys are **encrypted before touching the database**
   (AES-256, the standard banks use). Nobody reading the database can see
   them.
+- Apps that sign in with OAuth (Google today; more to come) share one flow:
+  `/api/oauth/<provider>/start` sends the customer to the provider,
+  `/api/oauth/<provider>/callback` brings them back and stores the tokens
+  encrypted like any other key. Adding a provider is one table entry plus its
+  client id and secret in the environment.
 - Connecting automatically registers the webhook with the provider where
   supported, and immediately starts a first sync — so data shows up right
   away, not at the next sweep.
