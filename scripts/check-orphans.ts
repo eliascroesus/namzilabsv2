@@ -30,27 +30,14 @@ const ALLOWLIST: Record<string, string> = {
   // Written before its consumers on purpose: the first connectors built on it
   // land in docs/superpowers/plans/2026-09-07-connectors-batch-1.md, and each
   // task there DELETES the entry for the helper it consumes. Added 8 Sep 2026.
-  windowedWalk: "connector kit — first consumer: Stripe (connectors batch 1)",
-  parseWalkCursor: "connector kit — first consumer: Stripe (connectors batch 1)",
-  serializeWalkCursor: "connector kit — first consumer: Stripe (connectors batch 1)",
-  walkImportProgress: "connector kit — first consumer: Stripe (connectors batch 1)",
   standardWebhooksVerify: "connector kit — first consumer: Retell (connectors batch 1)",
-  timestampedHmacVerify: "connector kit — first consumer: Stripe (connectors batch 1)",
   hmacHeaderVerify: "connector kit — first consumer: Cal.com (connectors batch 1)",
   sharedTokenVerify: "connector kit — first consumer: Lemlist (connectors batch 1)",
-  providerClient: "connector kit — first consumer: Stripe, through bearerClient (connectors batch 1)",
-  bearerClient: "connector kit — first consumer: Stripe (connectors batch 1)",
   basicClient: "connector kit — first consumer: Aircall (connectors batch 1)",
   headerKeyClient: "connector kit — first consumer: OnceHub (connectors batch 1)",
-  requireCredential: "connector kit — first consumer: Stripe (connectors batch 1)",
-  eventId: "connector kit — first consumer: Stripe (connectors batch 1)",
   naturalOrHash: "connector kit — first consumer: Typeform (connectors batch 1)",
-  epochToDate: "connector kit — first consumer: Stripe (connectors batch 1)",
   ymd: "connector kit — first consumer: Typeform (connectors batch 1)",
   isoOrNull: "connector kit — first consumer: Cal.com (connectors batch 1)",
-  createProbe: "prober harness — first consumer: the Stripe prober (connectors batch 1)",
-  attemptJson: "prober harness — first consumer: the Stripe prober (connectors batch 1)",
-  requireEnv: "prober harness — first consumer: the Stripe prober (connectors batch 1)",
   pace: "prober harness — first consumer: the Smartlead prober (connectors batch 1)",
   // A.2, by design: identifiers are extracted and stored now so that identity
   // resolution can be built later WITHOUT a schema change or a backfill. The

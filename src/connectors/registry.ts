@@ -6,6 +6,7 @@ import { instantlyConnector } from "./instantly";
 import { whopConnector } from "./whop";
 import { googleSheetsConnector } from "./google-sheets";
 import { googleCalendarConnector } from "./google-calendar";
+import { stripeConnector } from "./stripe";
 
 const registry = new Map<string, Connector>();
 
@@ -26,6 +27,7 @@ for (const connector of [
   whopConnector,
   googleSheetsConnector,
   googleCalendarConnector,
+  stripeConnector,
 ]) {
   registerConnector(connector);
 }

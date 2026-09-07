@@ -730,6 +730,44 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
     webhookSetup:
       "Point any app's outbound webhook at the URL below. Optionally sign the body with HMAC-SHA256 using the secret shown.",
   },
+  {
+    source: "stripe",
+    name: "Stripe",
+    description: "Payments, refunds, invoices paid, checkouts, subscriptions started and cancelled.",
+    brand: { color: "#635BFF", short: "St" },
+    connect: "apiKey",
+    instant: true,
+    poll: true,
+    sync: "incremental",
+    historyNote: "Stripe keeps 30 days of events, so the first import reaches back 30 days.",
+    autoWebhook: false,
+    docs: { url: "https://docs.stripe.com/api/events/list", readOn: "2026-09-08", webhooks: "https://docs.stripe.com/webhooks" },
+    verified: { live: null },
+    // https://docs.stripe.com/rate-limits (read 2026-09-08): "Individual API endpoints
+    // (unless otherwise noted): 25 requests per second" = 1,500/min; the account-wide
+    // 100/s is never the binding one. Separately, read requests must average ≤ 500 per
+    // transaction over a rolling 30 days (minimum 10,000/month) — a ten-minute sweep is
+    // ~4,300 reads/month per connection, inside the floor.
+    rateLimits: { "events.list": { requestsPerMinute: 1_500 } },
+    credentialFields: [
+      { key: "apiKey", label: "Restricted or secret key", placeholder: "rk_live_…" },
+      { key: "webhookSecret", label: "Webhook signing secret (from the endpoint you add in Stripe)", placeholder: "whsec_…" },
+    ],
+    eventTypeLabels: {
+      payment_succeeded: "Payment succeeded",
+      checkout_completed: "Checkout completed",
+      invoice_paid: "Invoice paid",
+      payment_refunded: "Refund",
+      subscription_created: "Subscription started",
+      subscription_updated: "Subscription changed",
+      subscription_canceled: "Subscription cancelled",
+    },
+    commonFields: ["type", "data.object.amount", "data.object.currency", "data.object.customer", "data.object.status", "livemode"],
+    webhookSetup:
+      "In Stripe → Developers → Webhooks, add an endpoint with the URL below, select the events charge.succeeded, " +
+      "checkout.session.completed, invoice.paid, refund.created and customer.subscription.*, and paste the endpoint's " +
+      "signing secret (whsec_…) as the webhook signing secret on this connection. Polling covers the last 30 days either way.",
+  },
 ];
 
 export function catalogEntry(source: string): ConnectorCatalogEntry | undefined {
