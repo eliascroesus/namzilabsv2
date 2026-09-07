@@ -13,6 +13,7 @@ import { deleteViewAction, duplicateViewAction, renameViewAction, setViewPositio
 import { MENU_ROW } from "./board-tile-menu";
 import { BOARD_GRID } from "@/components/ui/page";
 import { cn } from "@/lib/utils";
+import { labelForRange } from "@/lib/metrics/range";
 import { COLUMN_W, LANE_GAP } from "./board-shape";
 import { canvasCells, type GridBox } from "@/lib/board/grid";
 import { keyBetween } from "@/lib/board/order";
@@ -191,7 +192,14 @@ export function RangeMenu({
   // non-empty constant today, so this should never run against an empty
   // array, but the trigger reading "Period" instead of throwing is a cheaper
   // failure than a crashed header if a future edit ever empties it.
-  const label = options.find((o) => o.key === active)?.label ?? options[0]?.label ?? "Period";
+  /**
+   * `labelForRange`, NOT a lookup in `options`. The control can now be standing
+   * on a window the customer drew — `2026-08-03..2026-08-14` — which is in no
+   * option list and would have fallen back to the first preset's label, so the
+   * trigger would have read "Today" over a fortnight of numbers. One function
+   * answers both: a preset's own words, or the dates.
+   */
+  const label = labelForRange(active);
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>

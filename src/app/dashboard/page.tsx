@@ -55,6 +55,8 @@ import {
   type FunnelResult,
 } from "@/lib/metrics/compute";
 import { resolveRange, RANGE_OPTIONS } from "@/lib/metrics/range";
+import { withDerivedRange } from "@/lib/metrics/derive-range";
+import { CustomRangeCompute } from "./custom-range-compute";
 import { formatMetricValue } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { ImportCoverage } from "@/connectors/types";
@@ -143,8 +145,27 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
    * `cache()`d, so AppShell shares this very promise and attaches its own
    * handler.
    */
+  /**
+   * THE NORMALIZED KEY, not the one in the URL. `resolveRange` already falls
+   * back to "7d" for anything it does not recognise, and the raw string used
+   * to be handed to the tiles anyway — so `?range=lastweek` selected the 7-day
+   * WINDOW for every computation on the page while every tile looked its own
+   * stored ranges up under "lastweek", found nothing, and reported "not
+   * computed yet" about data that was computed and sitting right there. A
+   * typo in a shared link became a statement about the customer's numbers.
+   *
+   * IT IS DERIVED BEFORE THE TILE READ NOW, because the read depends on it: a
+   * window the customer drew on the calendar is answered by SUMMING the stored
+   * day values, and those are stripped from the query unless someone asks for
+   * them. `preset` is null for exactly those windows — see `resolveRange`,
+   * which canonicalises a picked pair back to a preset when it happens to
+   * equal one, so this is only true of a window the six cannot express.
+   */
+  const { key: rangeKey, preset: rangePreset, range } = resolveRange(one(sp.range) || "7d");
+  const customRange = rangePreset == null;
+
   const accessP = requestAccess(orgId, userId, role);
-  const flowRowsP = publishedFlowTiles(db, orgId).catch((e) => {
+  const flowRowsP = publishedFlowTiles(db, orgId, { withDays: customRange }).catch((e) => {
     console.error("[dashboard] published tiles read failed", e);
     return null;
   });
@@ -162,16 +183,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
    */
   const resultsVersionP = resultsVersion(db, orgId).catch(() => undefined);
 
-  /**
-   * THE NORMALIZED KEY, not the one in the URL. `resolveRange` already falls
-   * back to "7d" for anything it does not recognise, and the raw string used
-   * to be handed to the tiles anyway — so `?range=lastweek` selected the 7-day
-   * WINDOW for every computation on the page while every tile looked its own
-   * stored ranges up under "lastweek", found nothing, and reported "not
-   * computed yet" about data that was computed and sitting right there. A
-   * typo in a shared link became a statement about the customer's numbers.
-   */
-  const { key: rangeKey, range } = resolveRange(one(sp.range) || "7d");
   const boardSource = one(sp.source) || null;
   /**
    * WHICH VIEW, from the URL, beside the range and the source.
@@ -394,7 +405,21 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     // fell to the catch below with `flowTiles` still empty — so every published
     // number vanished from the dashboard and nothing said why. An import badge is
     // an annotation on a number; it must not be able to take the number with it.
-    flowTiles = rows.map((r) => ({ ...r }));
+    /**
+     * A WINDOW THE CUSTOMER DREW, ANSWERED HERE OR HANDED ON.
+     *
+     * `withDerivedRange` writes the summed slot INTO the row when the tile can
+     * answer it out of its stored day values — a count metric inside the
+     * two-month horizon. Upstream of the components on purpose: three of them
+     * read `byRange` (`FlowTile`, `CustomTile` and `tileValueForRange`, which
+     * the board's value sort calls), and a branch in one would leave the other
+     * two disagreeing about what the same tile is worth under the same window.
+     *
+     * A row it cannot answer is left exactly as it was, so the tile renders its
+     * own "not computed for this range" state — and `pendingCustom` below names
+     * those flows for the client to ask the server about.
+     */
+    flowTiles = rows.map((r) => (customRange ? withDerivedRange({ ...r }, rangeKey) : { ...r }));
 
     /**
      * A NUMBER COMPUTED FROM A DIFFERENT VERSION OF THE FLOW.
@@ -462,6 +487,30 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
    * reference.
    */
   const hasTiles = activeKind === "custom" || tiles.length > 0 || flowTiles.length > 0;
+
+  /**
+   * THE FLOWS A DRAWN WINDOW STILL OWES AN ANSWER.
+   *
+   * After `withDerivedRange`, a tile either carries a slot for the active range
+   * or genuinely cannot answer it here — a rate or an average, which may not be
+   * folded across days, or a span older than the stored day horizon. Those are
+   * the ones `CustomRangeCompute` asks the server to materialize.
+   *
+   * A row that has never computed (`status` other than fresh) is left out: it
+   * has nothing to window, and asking would re-run a flow to reproduce the same
+   * failure. Deduped by flow, because one flow can publish several tiles and
+   * one run answers all of them.
+   */
+  const pendingCustomFlows = customRange
+    ? [
+        ...new Set(
+          flowTiles
+            .filter((r) => r.status === "fresh")
+            .filter((r) => (r.tile as { byRange?: Record<string, unknown> } | null)?.byRange?.[rangeKey] == null)
+            .map((r) => r.flowId),
+        ),
+      ]
+    : [];
 
   /**
    * NO VIEWS — the Get-started card, and none of this page's chrome.
@@ -958,6 +1007,14 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             share a client boundary so the press can land before the server
             answers — see board-controls.tsx. `PageHeader` is INSIDE it because
             the period pills are `RangeLink`s and read that context. */}
+        {/* THE DRAWN WINDOW'S SECOND HALF. Renders nothing; it asks the
+            server for the ranges the tiles could not answer from what they
+            already carried, then refreshes. Inside the board's own branch so
+            it never mounts on an empty workspace. See `derive-range.ts` for
+            which windows reach it and why. */}
+        {pendingCustomFlows.length > 0 && (
+          <CustomRangeCompute rangeKey={rangeKey} flowIds={pendingCustomFlows} />
+        )}
         <BoardControls>
         {/* ── THE PAGE HEADER ───────────────────────────────────────────────
             THE TITLE IS BACK, and the argument that removed it is what returns

@@ -16,6 +16,7 @@ import { forgetTilePlacements } from "@/lib/board/store";
 import { sampleAppFields } from "@/lib/flow/engine";
 import { materializeFlow, materializeStaleAll } from "@/lib/flow/materialize";
 import { parseGraph } from "@/lib/flow/types";
+import { parseCustomRange } from "@/lib/metrics/range";
 import { createTestRun, executeAndSettleTestRun, getTestRun, type NodeTestDTO, type TestRunState } from "@/lib/flow/test-run";
 import { ensureStreamsForGraph, primeStream, pruneOrphanStreams } from "@/lib/sync/streams";
 import { hasStreamConfig } from "@/lib/sync/stream-hash";
@@ -387,6 +388,46 @@ export async function refreshFlowAction(formData: FormData): Promise<void> {
   }
   revalidatePath("/dashboard");
   // The calendar is a view of /dashboard now — covered above.
+}
+
+/**
+ * ANSWER A WINDOW THE CUSTOMER DREW, for the flows that cannot answer it from
+ * what they already carry.
+ *
+ * The calendar's period control can name any window. A flow tile answers most
+ * of them instantly — `deriveRangeSlot` sums the stored day values when the
+ * metric is a COUNT and the window sits inside the two-month day horizon — but
+ * a rate, an average, or an older span has to be computed, because folding
+ * those across days would report a number that is not the metric.
+ *
+ * So this runs the flow for those tiles and stores the one extra window in
+ * `byRange`, where every later render reads it like any preset. It is the same
+ * inline `materializeFlow` the per-tile Refresh button has always used, under
+ * the same 60s segment budget (see `maxDuration` in dashboard/page.tsx) — not a
+ * new architecture, the existing one asked a different question.
+ *
+ * BOUNDED, because a board can hold many flows and this is a request path. Ten
+ * per call, chosen by the caller as the ones actually on screen without a slot;
+ * a board with more than ten such tiles fills in over successive renders rather
+ * than holding one request open for all of them.
+ *
+ * A VIEWER'S ACT, like Refresh: no `create_flows` needed, but gated on the same
+ * per-metric visibility, so a rank-restricted member cannot compute — or learn
+ * the existence of — a flow the board hides from them.
+ */
+export async function computeRangeAction(rangeKey: string, flowIds: string[]): Promise<void> {
+  const ctx = await requireOrg();
+  const { orgId } = ctx;
+  // Parsed here as well as inside `materializeFlow`: this is a public endpoint,
+  // and a key that is not a real window should cost nothing at all.
+  if (!parseCustomRange(rangeKey)) return;
+  const db = getDb();
+  const access = await effectiveAccess(db, ctx);
+  const allowed = flowIds.filter((id) => id && access.canSeeMetric(`flow:${id}`)).slice(0, 10);
+  for (const id of allowed) {
+    await materializeFlow(db, orgId, id, { extraRanges: [rangeKey] });
+  }
+  revalidatePath("/dashboard");
 }
 
 /**

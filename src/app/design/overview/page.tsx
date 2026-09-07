@@ -9,6 +9,8 @@ import { ChartFrame } from "@/components/board-charts/frame";
 import { BarsVertical, LineChart } from "@/components/board-charts/cartesian";
 import { accentOf } from "@/lib/board/tile-config";
 import { Delta } from "@/components/charts";
+import { customRangeKey } from "@/lib/metrics/range";
+import { withDerivedRange } from "@/lib/metrics/derive-range";
 import { GRID_COLS, GRID_GAP_PX, ROW_UNIT_PX } from "@/lib/board/grid";
 
 /**
@@ -99,6 +101,40 @@ const METRICS: FlowResultRow[] = [
     tile: { name: "Total Leads (Arman)", viz: "number", format: "number", precision: 0, value: 30, byRange: pair(30, 20) },
   }),
 ];
+
+/**
+ * A COUNT TILE CARRYING A DAY MAP, so the DERIVE half of the custom-range path
+ * can be seen on a public route with no database behind it.
+ *
+ * `withDerivedRange` sums the days a drawn window covers when the metric is a
+ * count. This row proves that draws a real number and a day series — the half
+ * the dashboard answers instantly. The COMPUTE half needs a real flow and a
+ * session, so it is checked on the dashboard itself.
+ */
+const DERIVE_DAYS = 12;
+const DERIVED_KEY = customRangeKey(
+  new Date(HOUR_AGO.getTime() - (DERIVE_DAYS - 1) * 86_400_000).toISOString().slice(0, 10),
+  new Date(HOUR_AGO.getTime()).toISOString().slice(0, 10),
+);
+const DERIVED_ROW = withDerivedRange(
+  row("Leads Claimed (Mohamed)", 15, {
+    tile: {
+      name: "Leads Claimed (Mohamed)",
+      viz: "number",
+      format: "number",
+      precision: 0,
+      value: 15,
+      facts: { kind: "count", shape: "scalar" },
+      byDay: Object.fromEntries(
+        Array.from({ length: DERIVE_DAYS }, (_, i) => [
+          new Date(HOUR_AGO.getTime() - (DERIVE_DAYS - 1 - i) * 86_400_000).toISOString().slice(0, 10),
+          { value: i + 1 },
+        ]),
+      ),
+    },
+  }),
+  DERIVED_KEY,
+);
 
 const SERIES = [
   { bucket: "Aug 26", value: 4 },
@@ -237,6 +273,11 @@ export default function OverviewLab() {
               <FlowTile row={r} rangeKey="today" />
             </div>
           ))}
+          {/* THE DERIVED WINDOW, beside the presets: twelve days summed out of
+              the tile's own stored days, with no database and no flow run. */}
+          <div style={{ gridColumn: "span 3", gridRow: "span 3" }}>
+            <FlowTile row={DERIVED_ROW} rangeKey={DERIVED_KEY} />
+          </div>
         </div>
       </PageContainer>
     </AppFrame>

@@ -197,8 +197,44 @@ export function isForwardRange(key: string | undefined): boolean {
  * materializer's `future` flag and the tile's delta guard — both correct and
  * both currently inert.
  */
-export function resolveRange(key: string | undefined): { key: RangeKey; range: DateRange } {
-  const now = new Date();
+export function resolveRange(
+  key: string | undefined,
+  now: Date = new Date(),
+): { key: string; preset: RangeKey | null; range: DateRange } {
+  /**
+   * A CUSTOM WINDOW FIRST, AND A PRESET-EQUAL ONE CANONICALISED BACK.
+   *
+   * Picking today twice on the calendar spells `2026-09-07..2026-09-07`, which
+   * IS "Today" — and "Today" has a precomputed slot on every stored tile while
+   * the dated spelling has none. Answering with the preset means the picker can
+   * write dates and the board still answers instantly, with the trigger reading
+   * the preset's own label. It also keeps the URL honest: two spellings of one
+   * window would otherwise be stored, computed and cached separately, forever.
+   *
+   * `all` is never matched — its window opens at the epoch, so no calendar can
+   * draw it and no picked pair can equal it.
+   */
+  const custom = parseCustomRange(key, now);
+  if (custom) {
+    const range = { from: new Date(custom.start), to: new Date(custom.end) };
+    for (const { key: p } of RANGE_OPTIONS) {
+      if (p === "all") continue;
+      const preset = resolvePreset(p, now);
+      if (preset.from.getTime() === custom.start && preset.to.getTime() === custom.end) {
+        return { key: p, preset: p, range: preset };
+      }
+    }
+    return { key: custom.key, preset: null, range };
+  }
+  return resolvePresetResult(key, now);
+}
+
+/** The six, unchanged — split out so `resolveRange` can compare against them. */
+function resolvePreset(key: RangeKey, now: Date): DateRange {
+  return resolvePresetResult(key, now).range;
+}
+
+function resolvePresetResult(key: string | undefined, now: Date): { key: RangeKey; preset: RangeKey; range: DateRange } {
   const startOfToday = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
   // 23:59:59.999 — the same last instant `calendarDayRanges` gives every one of
   // its squares, and the same hygiene "Yesterday" already used against "Today":
@@ -208,13 +244,128 @@ export function resolveRange(key: string | undefined): { key: RangeKey; range: D
   const k: RangeKey =
     key === "today" || key === "yesterday" || key === "30d" || key === "90d" || key === "all" ? key : "7d";
 
-  if (k === "all") return { key: k, range: { from: new Date(0), to: endOfToday } };
+  if (k === "all") return { key: k, preset: k, range: { from: new Date(0), to: endOfToday } };
   if (k === "yesterday") {
     return {
       key: k,
+      preset: k,
       range: { from: new Date(startOfToday - DAY_MS), to: new Date(startOfToday - 1) },
     };
   }
   // today | 7d | 30d | 90d — n whole days back from tonight, today included.
-  return { key: k, range: { from: new Date(startOfToday - (WINDOW_DAYS[k] - 1) * DAY_MS), to: endOfToday } };
+  return { key: k, preset: k, range: { from: new Date(startOfToday - (WINDOW_DAYS[k] - 1) * DAY_MS), to: endOfToday } };
+}
+
+/**
+ * A WINDOW THE CUSTOMER DREW, RATHER THAN ONE OF THE SIX.
+ *
+ * The six presets above are what every stored tile is PRECOMPUTED for. They are
+ * not the only windows anyone wants: the owner asked for "a calendar dropdown
+ * thing and the user can pick the ranges … click on one date and then to
+ * another date or same day". This is the spelling that carries such a window.
+ *
+ * `YYYY-MM-DD..YYYY-MM-DD`, two dots. Unreserved in a URL, unmistakable beside
+ * the six words, and the same `dayKey` spelling `byDay` and the bucket keys
+ * already use — which is what lets a custom window be answered out of stored
+ * day values instead of a database read (see `lib/metrics/derive-range.ts`).
+ * A single day is the same date twice.
+ */
+const CUSTOM_RANGE_RE = /^(\d{4}-\d{2}-\d{2})\.\.(\d{4}-\d{2}-\d{2})$/;
+
+/**
+ * THE SPAN PAST WHICH A TREND CANNOT BE ASSEMBLED, and therefore the span past
+ * which this refuses a window at all. `bucketWindowsFor` returns [] beyond 1200
+ * days (engine.ts), so a wider range would render a figure with no chart and no
+ * unit — the kind of half-answer this module's own comments spend a page
+ * arguing against. One number, named once, rather than two that drift.
+ */
+export const CUSTOM_RANGE_MAX_DAYS = 1200;
+
+/** `2026-08-03` to the UTC midnight that starts it, or NaN if it is not a real day. */
+function dayStartMs(iso: string): number {
+  const [y, m, d] = iso.split("-").map(Number);
+  const ms = Date.UTC(y, m - 1, d);
+  // ROUND-TRIP, because `Date.UTC(2026, 1, 30)` is happily 2 March. A date the
+  // customer cannot have meant must not silently become one they did not pick.
+  return new Date(ms).toISOString().slice(0, 10) === iso ? ms : NaN;
+}
+
+/** Orders a pair into the one spelling this module stores and compares. */
+export function customRangeKey(from: string, to: string): string {
+  return from <= to ? `${from}..${to}` : `${to}..${from}`;
+}
+
+/**
+ * Parse a custom key into a real window, or `null` if it is not one.
+ *
+ * The rules, in order, and each of them is a decision rather than a guard:
+ *   · both halves must be REAL days (see `dayStartMs`);
+ *   · a reversed pair is normalised rather than rejected — dragging right to
+ *     left across a calendar is the same window, and refusing it would be the
+ *     interface disagreeing with the gesture that produced it;
+ *   · an end past today is CLAMPED to today. The picker never produces one, so
+ *     this is for a hand-edited URL: a tile is a RESULT, the forward surface is
+ *     the Calendar, and a window ending past tonight would have to carry
+ *     `future` through the materializer's crossing arithmetic to avoid freezing
+ *     `nextChangeAt` in the far future (see `isForwardRange`);
+ *   · a span wider than `CUSTOM_RANGE_MAX_DAYS` is refused, not truncated.
+ *
+ * The window itself is midnight-to-last-millisecond in UTC, exactly like every
+ * preset and every calendar square — so no record lands in two windows and none
+ * falls between them.
+ */
+export function parseCustomRange(
+  key: string | undefined,
+  now: Date = new Date(),
+): { key: string; start: number; end: number } | null {
+  const m = key?.match(CUSTOM_RANGE_RE);
+  if (!m) return null;
+  let start = dayStartMs(m[1]);
+  let endDay = dayStartMs(m[2]);
+  if (!Number.isFinite(start) || !Number.isFinite(endDay)) return null;
+  if (endDay < start) [start, endDay] = [endDay, start];
+  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  if (endDay > today) endDay = today;
+  if (start > endDay) start = endDay;
+  if ((endDay - start) / DAY_MS + 1 > CUSTOM_RANGE_MAX_DAYS) return null;
+  return {
+    key: customRangeKey(new Date(start).toISOString().slice(0, 10), new Date(endDay).toISOString().slice(0, 10)),
+    start,
+    end: endDay + DAY_MS - 1,
+  };
+}
+
+/**
+ * What the period control says on its face.
+ *
+ * NOT `formatDate` from lib/format: that formats in LOCAL time, and every
+ * window here is a UTC day — west of Greenwich it would print the day before
+ * the one the customer picked. `calendar.ts`'s `monthLabel` pins `timeZone`
+ * for the same reason.
+ *
+ * Named `labelForRange` rather than `rangeLabel` deliberately: two call sites
+ * (`metrics/[id]/page.tsx`, `custom-tile.tsx`) already hold a local `const
+ * rangeLabel`, and an import shadowing one of those is a temporal-dead-zone
+ * error at the exact moment someone reaches for this.
+ */
+export function labelForRange(key: string | undefined, now: Date = new Date()): string {
+  const preset = RANGE_OPTIONS.find((r) => r.key === key);
+  if (preset) return preset.label;
+  const parsed = parseCustomRange(key, now);
+  if (!parsed) return RANGE_OPTIONS.find((r) => r.key === "7d")!.label;
+  const day = (ms: number, withYear: boolean) =>
+    new Date(ms).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      ...(withYear ? { year: "numeric" } : {}),
+      timeZone: "UTC",
+    });
+  const [a, b] = parsed.key.split("..");
+  if (a === b) return day(parsed.start, true);
+  // The year is stated once when both ends share it, and on both when they do
+  // not — "Dec 28, 2025 – Jan 4, 2026" is the case that needs it twice.
+  const sameYear = a.slice(0, 4) === b.slice(0, 4);
+  return sameYear
+    ? `${day(parsed.start, false)} – ${day(parsed.end, true)}`
+    : `${day(parsed.start, true)} – ${day(parsed.end, true)}`;
 }

@@ -14,7 +14,7 @@ import {
 import { compileEnabled } from "./compile/flags";
 import { getPublishedVersion, graphFingerprint, graphForFingerprint } from "./store";
 import { parseGraph, seedMetricFormat, seedMetricFacts, type TileSpec } from "./types";
-import { resolveRange, isForwardRange, MATERIALIZED_RANGES } from "@/lib/metrics/range";
+import { resolveRange, isForwardRange, parseCustomRange, MATERIALIZED_RANGES } from "@/lib/metrics/range";
 import { calendarDayRanges } from "@/lib/metrics/calendar";
 import { streamRefsOfGraph } from "@/lib/sync/streams";
 
@@ -209,7 +209,27 @@ function withTrends(
  * (fast dashboard reads). Runs on publish, on a manual refresh, or when relevant
  * data changes. Never blocks the dashboard render.
  */
-export async function materializeFlow(db: DB, orgId: string, flowId: string): Promise<{ ok: boolean; error?: string }> {
+export async function materializeFlow(
+  db: DB,
+  orgId: string,
+  flowId: string,
+  /**
+   * WINDOWS THE CUSTOMER DREW, ANSWERED ON THIS RUN.
+   *
+   * The six presets are not the only windows anyone wants — the period control
+   * is a calendar now. A window that cannot be summed out of `byDay` (a rate, an
+   * average, or a span older than the two-month day horizon) has to be computed,
+   * and the cheapest honest place is HERE: the flow has already been run, the
+   * records are already in memory, and `tileByRange` re-does only the final
+   * arithmetic per window. One more entry in that array costs a windowing pass,
+   * never another query.
+   *
+   * The keys are `YYYY-MM-DD..YYYY-MM-DD`; anything else is ignored rather than
+   * trusted, because this reaches a server action. A window equal to a preset
+   * never arrives — `resolveRange` canonicalises those back before anyone asks.
+   */
+  opts?: { extraRanges?: string[] },
+): Promise<{ ok: boolean; error?: string }> {
   const published = await getPublishedVersion(db, orgId, flowId);
   if (!published) return { ok: false, error: "Flow is not published." };
   const { version, graph } = published;
@@ -340,7 +360,7 @@ export async function materializeFlow(db: DB, orgId: string, flowId: string): Pr
      * and re-does only the arithmetic — see its docstring.
      */
     const ranges = MATERIALIZED_RANGES.map((key) => {
-      const { range } = resolveRange(key);
+      const { range } = resolveRange(key, asOf);
       return {
         key,
         start: range.from.getTime(),
@@ -357,6 +377,25 @@ export async function materializeFlow(db: DB, orgId: string, flowId: string): Pr
         // an unchanged tile. See the note where `rollingMsOf` used to live.
       };
     });
+    /**
+     * THE REQUESTED WINDOWS, BESIDE THE SIX.
+     *
+     * Parsed rather than trusted (this arrives from a server action), stamped
+     * with `requestedAt` further down so `keptCustomRanges` can retire the ones
+     * nobody has asked for lately, and given no `future` flag — `parseCustomRange`
+     * clamps an end to today, so a custom window can never reach past tonight
+     * and poison the crossing arithmetic that decides `nextChangeAt`.
+     *
+     * They DO track crossings, unlike the calendar's day windows: a custom range
+     * is a window the board is actually showing, so when its number can next
+     * change is a fact the tile's own expiry should know.
+     */
+    const customRanges = (opts?.extraRanges ?? [])
+      .map((k) => parseCustomRange(k, asOf))
+      .filter((r): r is NonNullable<typeof r> => r != null)
+      .filter((r) => !ranges.some((p) => p.key === r.key))
+      .map((r) => ({ key: r.key, start: r.start, end: r.end }));
+
     /**
      * THE CALENDAR'S DAYS, ON THE SAME RUN.
      *
@@ -406,8 +445,12 @@ export async function materializeFlow(db: DB, orgId: string, flowId: string): Pr
      */
     const trendKeys = new Set(dayKeys);
     const trendRanges: typeof dayRanges = [];
-    for (const r of ranges) {
-      if (r.all) continue;
+    // A requested window gets its buckets on the same terms as a preset — its
+    // trend is assembled by `withTrends` below from exactly these.
+    for (const r of [...ranges, ...customRanges]) {
+      // `all` opens at the epoch — six hundred windows for a chart nobody asked
+      // for. A custom range can never be `all` (no calendar can draw the epoch).
+      if ("all" in r && r.all) continue;
       for (const b of bucketWindowsFor(r.start, r.end)) {
         if (trendKeys.has(b.key)) continue;
         trendKeys.add(b.key);
@@ -421,7 +464,7 @@ export async function materializeFlow(db: DB, orgId: string, flowId: string): Pr
     for (const t of tiles) {
       const spec = presentationOf.get(t.nodeId);
       const derived = spec
-        ? tileByRange(graph, nodes, t.nodeId, spec, [...ranges, ...dayRanges, ...trendRanges])
+        ? tileByRange(graph, nodes, t.nodeId, spec, [...ranges, ...customRanges, ...dayRanges, ...trendRanges])
         : undefined;
       // `nextChangeAt` rides in the tile jsonb, so no migration — and the
       // expiry can read it in SQL. See its docstring in types.ts.
@@ -432,7 +475,7 @@ export async function materializeFlow(db: DB, orgId: string, flowId: string): Pr
               // The SUPERSET, so no bucket key can leak into `byRange` and mint
               // a phantom pill. `byDay` still takes `dayKeys` alone, so the
               // calendar's own payload is unchanged.
-              byRange: withTrends(dashboardRanges(derived.byRange, trendKeys), derived.byRange, ranges),
+              byRange: withTrends(dashboardRanges(derived.byRange, trendKeys), derived.byRange, [...ranges, ...customRanges]),
               byDay: dayValues(derived.byRange, dayKeys),
               nextChangeAt: nextChangeAtIso(derived.nextChangeMs, slidingCapMs, asOf),
             }
@@ -575,7 +618,26 @@ export async function markStaleForSource(
  * records and all, for every published tile) just to find the one row it
  * wanted.
  */
-export async function publishedFlowTiles(db: DB, orgId: string, opts?: { flowId?: string }) {
+export async function publishedFlowTiles(
+  db: DB,
+  orgId: string,
+  /**
+   * `withDays` KEEPS THE DAY MAP, and only a custom range asks for it.
+   *
+   * The projection below exists to strip `byDay` — sixty-odd numbers per tile
+   * the dashboard never reads. A window the customer drew on the calendar is
+   * the one case that does read them: `deriveRangeSlot` sums the days it covers
+   * and answers instantly, with no flow run and no second query, which is the
+   * entire reason the hybrid path is worth having. The bytes are paid for
+   * exactly on the renders that spend them.
+   *
+   * ONE QUERY WITH A CONDITIONAL FRAGMENT, not two selects: both branches are
+   * typed identically, so the row type is unchanged — `src/lib/mcp/tools/
+   * metrics.ts` derives `PublishedTileRow` from this function's return type,
+   * and a union there would ripple into the MCP parity table for nothing.
+   */
+  opts?: { flowId?: string; withDays?: boolean },
+) {
   return db
     .select({
       flowId: flowResults.flowId,
@@ -593,7 +655,10 @@ export async function publishedFlowTiles(db: DB, orgId: string, opts?: { flowId?
        * never computed is NULL, `NULL - 'byDay'` is NULL, and every caller
        * already treats that as "no stored tile".
        */
-      tile: sql<Record<string, unknown> | null>`${flowResults.tile} - 'byDay'`.as("tile"),
+      tile: (opts?.withDays
+        ? sql<Record<string, unknown> | null>`${flowResults.tile}`
+        : sql<Record<string, unknown> | null>`${flowResults.tile} - 'byDay'`
+      ).as("tile"),
       status: flowResults.status,
       error: flowResults.error,
       computedAt: flowResults.computedAt,
