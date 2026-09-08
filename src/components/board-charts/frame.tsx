@@ -48,6 +48,7 @@ export function ChartFrame({
   unpublished,
   importing,
   footer,
+  legend,
   children,
 }: {
   title: string;
@@ -80,6 +81,20 @@ export function ChartFrame({
   importing?: ImportCoverage;
   /** An honesty line the mark itself computed — "Top 4 of 11", excluded slices. */
   footer?: ReactNode;
+  /**
+   * ONE ENTRY PER SERIES THE CHART ACTUALLY DRAWS.
+   *
+   * Both 8 September frames put a legend under every chart card (nodes 58:6094,
+   * 58:6157, 58:6713) — a dot in the series' own colour and the period it
+   * covers, centred on the card's floor.
+   *
+   * The Figma shows TWO entries on two of the three cards, because it draws a
+   * period-over-period comparison. This product computes a delta but plots one
+   * line, so a two-entry legend here would name a series that is not on the
+   * card. The array is what the card DRAWS: one entry today, two the day a
+   * comparison series exists, and nothing at all for a scorecard.
+   */
+  legend?: Array<{ color: string; label: string }>;
   children: ReactNode;
 }) {
   const blocked = unavailable ?? emptyReason;
@@ -228,6 +243,29 @@ export function ChartFrame({
           children
         )}
       </div>
+
+      {/* THE LEGEND — the Figma's own geometry: centred on the card's floor, an
+          8px dot in a 12px box, the label at 12px muted, 10px between entries.
+          `pb-4` rather than a margin, so a card with no legend loses the space
+          entirely instead of keeping a gap where one would have been. */}
+      {legend && legend.length > 0 && (
+        <ul className="flex list-none flex-wrap items-center justify-center gap-x-2.5 gap-y-1 pb-4 pt-2">
+          {legend.map((entry) => (
+            <li key={entry.label} className="flex items-center gap-1.5 pr-2">
+              {/* `aria-hidden`: the colour is a pointer BACK to the mark, not a
+                  fact of its own, and the label beside it already names the
+                  series. A screen reader announcing "green, Today" reads the
+                  swatch as data. */}
+              <span
+                aria-hidden
+                className="size-2 shrink-0 rounded-full"
+                style={{ backgroundColor: entry.color }}
+              />
+              <span className="text-xs text-muted-foreground">{entry.label}</span>
+            </li>
+          ))}
+        </ul>
+      )}
 
       {footer}
 

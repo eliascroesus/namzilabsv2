@@ -393,6 +393,27 @@ export function CustomTile({
   const delta =
     chart === "number" && config.showDelta !== false ? deriveDelta(stored, { ...stored, ...w }, rangeKey) : null;
 
+  /**
+   * THE LEGEND — ONE ENTRY, BECAUSE ONE SERIES IS DRAWN.
+   *
+   * Both 8 September frames put a legend on the card's floor (nodes 58:6094,
+   * 58:6157, 58:6713): a dot in the series' colour and the period it covers.
+   * Two of the three cards show TWO entries, because the Figma draws a
+   * period-over-period comparison — this product computes that comparison as a
+   * DELTA but plots a single line, so a second entry would name a series that
+   * is not on the card. The third card (bars) shows exactly one, which is what
+   * every card here draws.
+   *
+   * Only for marks that plot a SERIES over time. A scorecard has no line for a
+   * swatch to point at, and a breakdown, funnel, pipeline and table already
+   * name every row beside its own colour — a legend there would be the same
+   * labels a second time.
+   */
+  const legend =
+    hasSeries && (chart === "line" || chart === "area" || chart === "bar")
+      ? [{ color: accent, label: RANGE_OPTIONS.find((r) => r.key === rangeKey)?.label ?? "This period" }]
+      : undefined;
+
   const tableRows = hasSeries
     ? w.series!.map((p) => ({ label: bucketLabel(p.bucket, unit), value: fmt(p.value) }))
     : (w.groups ?? []).map((g) => ({ label: g.label, value: fmt(g.value) }));
@@ -424,6 +445,7 @@ export function CustomTile({
        */
       chartLabel={chart === "number" || cols < 4 ? undefined : (CHARTS.find((c) => c.id === chart) ?? CHARTS[0]).label}
       rangeLabel={rangeLabel}
+      legend={legend}
       /* A funnel, a pipeline and a table have no single figure to head. */
       headline={
         chart === "funnel" || chart === "pipeline" || chart === "table" ? undefined : w.unavailable ? null : fmt(w.value)

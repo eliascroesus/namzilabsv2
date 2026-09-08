@@ -7,7 +7,6 @@ import { FlowTile, type FlowResultRow } from "@/components/flow-tile";
 import { ChartFrame } from "@/components/board-charts/frame";
 import { BarsVertical, LineChart } from "@/components/board-charts/cartesian";
 import { accentOf } from "@/lib/board/tile-config";
-import { Delta } from "@/components/charts";
 import { customRangeKey, resolveRange } from "@/lib/metrics/range";
 import { withDerivedRange } from "@/lib/metrics/derive-range";
 import { GRID_COLS, GRID_GAP_PX, ROW_UNIT_PX } from "@/lib/board/grid";
@@ -272,17 +271,21 @@ export default async function OverviewLab({
         >
           {CHARTS.map((c, i) => (
             <div key={`chart-${i}`} style={{ gridColumn: "span 4", gridRow: "span 10" }}>
-              {/* A DELTA ON A CHART CARD, WHICH IS THE CASE THAT WENT WRONG.
-                  The export puts the chip at the far end of the figure's own
-                  row; the frame was stacking it UNDERNEATH, and this page could
-                  not show it because it passed no `delta` at all. It does now —
-                  the one tile shape most likely to carry one. */}
+              {/* A LEGEND, NOT A DELTA — and this page had it backwards.
+                  It passed a `delta` on every chart card "as the one tile shape
+                  most likely to carry one", which was a guess about the design
+                  rather than a reading of it. Both 8 September frames draw a
+                  chart card as title, freshness, figure, mark, LEGEND — no chip
+                  anywhere on it — and put the chip on the stat tiles below
+                  instead. The real tiles agree and always did: `custom-tile`
+                  only derives a delta when `chart === "number"`, so this page
+                  was the ONLY place a chart card ever carried one. */}
               <ChartFrame
                 title={c.title}
                 headline={c.headline}
                 status="fresh"
                 computedAt={HOUR_AGO}
-                delta={<Delta current={30} previous={5} format={FMT[c.shape]} since="vs prior" />}
+                legend={[{ color: accentOf(), label: "Today" }]}
               >
                 {c.shape === "bar" ? (
                   <BarsVertical series={SERIES} format={FMT[c.shape]} accent={accentOf()} />
