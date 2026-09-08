@@ -8,6 +8,28 @@ reviewer claim to be refuted or fixed, not a defect of record.
 Two were checked by hand and ARE real (see CRITICAL below); the rest are open.
 These thirteen connectors are committed but deliberately NOT pushed.
 
+## Status, 8 Sep 2026
+
+**Both criticals are FIXED** in `19f746b`, each re-verified against the vendor's
+own documentation first rather than taken on the reviewer's word:
+
+- **ThriveCart rebills.** Confirmed and fixed. The docs' own examples settle it:
+  `order.success` and the `order.subscription_payment` that follows both read
+  `order_id=1514394`, while `invoice_id` moves `000000004` → `000000004-2` and
+  `recurring_payment_idx` counts the payment. A recurring charge is now keyed on
+  the invoice; one-off orders keep their ids byte-for-byte so nothing already
+  stored re-ingests as a duplicate.
+- **Smartlead double-count.** Confirmed as a LATENT defect and removed at the
+  root. It could not fire today — the webhook is a doorbell for a stream-scoped
+  source, so `normalize` was unreachable — but it would have fired the moment
+  anyone made that path reachable, which was exactly the repair the other
+  Smartlead finding proposed. The unreachable mapper and its event vocabulary
+  are deleted, with a test that fails if either returns before the two paths are
+  made to agree on identity. The `lead_interested` label went with it.
+
+The **43 remaining findings below are still unverified**, and the two Smartlead
+entries further down are superseded by the fix above.
+
 
 ## CRITICAL
 
