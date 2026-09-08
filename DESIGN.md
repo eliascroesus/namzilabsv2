@@ -2,13 +2,13 @@
 name: Namzilabs
 tagline: Six tools disagree; this one answers in a figure you can defend.
 register: quiet chrome, loud numbers
-surfaces: [page, chrome (top bar + rail + card), panel (the content area), control, raised, floating]
+surfaces: [page + chrome + panel (one colour), card (the only step), control, raised, floating]
 themes: dark (the console) + light · per device · defaults to the OS
-accent: one blue (#007BFF) · 400 strokes on dark, 800 strokes on light · 600 fills on both
-neutral: one ramp, re-cut for three darks (#0F1011 / #111111 / #181818) — eight surface steps below the gap, five defined steps above it (two role-bearing), one caps-label-only step between them
-type: SF Pro (system) / Inter · 11 · 13 · 15 · 17 · 18 · 20 · 26 · 28 · 30 · 48
-radius: 4 badge · 8 field, button and chip · 10 everything that contains something · full avatar, bell badge, freshness dot and active-count numeral
-status: chrome, furniture and primitives SETTLED · metric card and chart card IN PROGRESS
+accent: one lime (#B6FF56) · a FILL under near-black ink (#2C2C2C) · the same value draws on dark · a solved-down #4F7A00 draws on light
+neutral: one ramp — one ground (#121214) carrying page, bar and rail, one card (#191919) a hair above it, and one hairline (#343434) doing every separation that remains
+type: Inter · 11 · 12 · 14 · 15 · 17 · 18 · 20 · 26 · 28 · 30 · 48
+radius: 8 on everything that contains something · full on the delta chip, the freshness dot and the avatar
+status: chrome, furniture and primitives SETTLED · the chart card's two-series legend NOT built (needs a comparison series the product does not have)
 ---
 
 # The Namzilabs design language
@@ -39,68 +39,59 @@ Furniture that shouts is why most operational tools are exhausting by 4pm.
 
 ---
 
-## 2. Three surfaces, and the hairline that is still structural
+## 2. One surface, and the hairline that is now the only structure
 
-The product's identity was **a single near-black surface** two days ago —
-`#1B191A` carrying a 56px icon rail, a 60px bar and the page inside them,
-all one colour. The 4 September 2026 Figma draws three: the page is
-`#0F1011`, the top bar and the rail (and every card) are `#111111`, and
-the content panel sitting under the top bar — where the board and its
-tiles live — is `#181818`. **This reverses the reversal.** The one-surface
-thesis was this file's own central argument two days ago, made
-deliberately (a 40-point luminance step needs no help finding its own
-edge, and a rule drawn where two identical surfaces meet does nothing);
-it is reversed again here, just as deliberately, because the surfaces are
-no longer identical and the hairline has a job to do that it did not have
-before.
+The product's identity has been argued three ways in a week, and it is worth
+recording all three because the argument keeps landing in the same place from
+different directions.
 
-The three are close on purpose, not despite the purpose: `#111111` on
-`#0F1011` measures **1.01:1**, and `#181818` on `#0F1011` measures
-**1.07:1** — both TIGHTER than the 1.14:1 gap the previous surface ran
-between its ground and its cards. **The hairline is doing more work now,
-not less.** Every separation that is not one of those two steps is the
-same 1px `#343434` rule as before, recut for the new ground:
+It was **a single near-black surface** — `#1B191A` carrying a 56px icon rail, a
+60px bar and the page inside them, all one colour, every separation a 1px rule.
+The 4 September Figma drew **three**: page `#0F1011`, chrome `#111111`, panel
+`#181818`. This file called that a reversal, deliberately, and it was.
 
-- The rail's `border-r` and the bar's `border-b` are unchanged in kind —
-  they take a real pixel each, and `ShellSkeleton` mirrors both for the
-  same reason it always did: a ghost without them jumps the content at
-  hydration.
-- **The notch is back — on dark.** `--radius-frame` was 0 because a corner
-  cut into `#1B191A` to reveal `#1B191A` draws nothing. The panel it now
-  cuts into is `#181818`, sitting beside a rail and under a bar that are
-  `#111111` — a real, if narrow, colour change — so the same argument that
-  retired the notch two days ago is exactly the argument that reinstates
-  it here: a radius reveals whatever is behind it, and there is something
-  behind it again. Only on dark: in light, `--panel` is `--background`
-  (`#F7F8F9`) — the page's own colour — so the identical cut still reveals
-  nothing there. The frame is a dark-theme device, not a universal one.
-- **The rail's glyphs still sit on nothing at rest** — the surface behind
-  them is `--chrome`, and a bare icon measures the same 14+:1 it always
-  did against a near-black ground, chrome or otherwise.
-- **The focus ring is still one ring.** It is blue at `--marker`'s new
-  measurement — 6.65:1 on the page, 6.59:1 on the chrome, 6.20:1 on the
-  panel — on every one of the three surfaces rather than the one this
-  file used to have to cover.
+The 8 September Figma (node 49:5268) draws **one**. The page, the top bar, the
+rail and the content area are all `#121214`. **This is the second reversal, and
+it is as deliberate as the first.** The three surfaces were not a mistake that
+has been corrected; they were what that Figma drew, and this one draws
+something else.
 
-**Cards still need their border, and for almost the same reason as two
-days ago — just not the one you'd guess.** `--card` is `#111111`: on the
-`#0F1011` page that is **1.01:1**, and on the `#181818` panel a card
-usually sits on, it is **1.06:1** — lighter to darker rather than the old
-"cards step up" direction, and close enough either way that eye and
-instrument disagree about which one is which. A card without its border
-is still not a flatter card, it is an invisible one; what changed is that
-there are now three surfaces this is true of instead of one, and the
-border has to say so on all three.
+**What actually changed is the hairline's job, and it narrowed rather than
+shrank.** Under three surfaces the `#343434` rule drew three seams that were
+each too small to see unaided. There are no such seams now — a rule drawn where
+two identical surfaces meet draws nothing at all, which is the one-surface
+argument in its original form, and the reason it was right the first time.
 
-The rail carries no labels at rest, same as two days ago, and it still
-opens: point at it and the column widens in place to 260px. What sits
-inside the open column changed — a tinted switcher badge, a search field,
-a "Main Menu" label, nav rows on a neutral fill with the active row's glyph
-still carrying its own colour on top (§4) — and the written kit's own
-Layout section is where that is itemised; the mechanism itself (hover, a
-cookie, a fixed 56px rest state) did not move.
+What is left is **the card**, at `#191919`, and it measures **1.06:1** on the
+page. That is not a step you can see; it is barely a step you can measure. So
+the hairline is not doing less work, it is doing *all* of the work, on the one
+edge in the product that still has two materials on either side of it. A card
+without its border is not a flatter card, it is an invisible one — the same
+sentence as under every scheme, now with exactly one place left to apply it.
 
----
+Three things follow, and each is the mirror of a decision made four days ago:
+
+- **The notch retires, again, by its own argument.** `--radius-frame` was 0
+  when everything was one colour, because a corner cut into `#1B191A` to reveal
+  `#1B191A` draws nothing. It came back at 8px when the panel appeared. The
+  panel is gone, so the cut reveals `#121214` against `#121214`. The token stays
+  defined so `rounded-frame` remains a legal spelling for whatever comes next.
+- **`--chrome` survives as a role with no visible job on dark.** It holds the
+  same hex as the page here. It is kept because `:root` still has a real
+  chrome/page step — white on `#F7F8F9` — and a role declared in one theme must
+  be declared in both, or the dark theme's vocabulary becomes a subset of the
+  light one and `design-swatches.test.ts` fails.
+- **The rail's glyphs still sit on nothing at rest**, and the focus ring is
+  still one ring — lime at 15.53:1 on the ground, which is the brightest stroke
+  this product has ever drawn.
+
+**The rail no longer opens, because it is never shut.** It rested at 56px and
+widened to 260px on hover, held open by a cookie the server read so the width
+would be right in the first paint. The Figma draws one width. The mechanism —
+`REVEAL`, the overlay panel, the pin, the toggle — is gone entirely, and
+`page-width.test.ts` asserts its absence rather than its behaviour, because a
+mechanism that subtle gets reintroduced by a well-meaning "restore the
+collapse".
 
 ## 3. Eight steps below the gap, and three more above it
 
@@ -111,20 +102,20 @@ handful of defined steps, still only two of them read by a role.
 
 | Token | Hex | Job |
 |---|---|---|
-| `neutral-950` | `#0F1011` | **the page** |
-| `neutral-925` | `#111111` | **the chrome** — top bar, rail, and the card fill |
-| `neutral-900` | `#181818` | **the panel** — the content area under the top bar |
+| `neutral-950` | `#121214` | **the page** — and the chrome, and the panel |
+| `neutral-925` | `#121214` | **the chrome** — top bar and rail. The same hex here; a real step in light |
+| `neutral-900` | `#191919` | **the card** — the one surface that steps away, at 1.06:1 |
 | `neutral-850` | `#202020` | **a control** — fields, the search box, the active nav row |
 | `neutral-800` | `#333333` | grey buttons (`--secondary`) |
 | `neutral-700` | `#3A3A3A` | `--accent` — the hover/press step above a grey button (amended 5 Sep); also avatar and icon circles (`--avatar`) |
 | `neutral-600` | `#343434` | **the hairline** |
 | `neutral-500` | `#4A4A4A` | the heavier rule a switch track or checkbox owes |
 | `neutral-450` | `#6E6E6E` | the caps section label only — never a sentence |
-| `neutral-400` | `#858585` | the first step body TEXT may be set in |
+| `neutral-400` | `#828282` | the first step body TEXT may be set in — 4.87:1 on the page, 4.58:1 on a card |
 | `neutral-200` | `#FFFFFF` | body, headings and card titles alike |
 
-The first three are the three grounds from §2, one to three counts apart
-from each other. **500 is still the last step a LINE may be drawn in, and
+The first two hold one hex between them — the ground of §2 — and the third is
+the single card step above it. **500 is still the last step a LINE may be drawn in, and
 400 the first that TEXT may be set in** — the gap between them used to be
 one step and is now two, because `450` sits inside it for exactly one
 job: a caps section caption ("Main Menu") that has to read quieter than
@@ -132,8 +123,9 @@ body text without being mistaken for a rule. A sentence set at `450`
 would be the same bug a sentence set at `500` always was.
 
 **Depth is stated as a mirror now, not as a rule about which way things
-go.** On dark, a field on the `#111111` chrome is a step UP (`--control`
-`#202020`) and its hover a further step up (`--accent` `#3A3A3A`); on
+go.** On dark, a field on the `#191919` card is a step UP (`--control`
+`#202020`, 1.08:1) and its hover a further step up (`--accent` `#3A3A3A`,
+1.55:1); on
 light a field on white is a step DOWN (`#F4F4F4`) and its hover a
 further step down (`#ECECEC`). Neither is "recessed" — that was a
 sentence about one theme stated as a rule about both, and the Figma
@@ -152,112 +144,60 @@ value.)
 
 ---
 
-## 4. One blue, two jobs
+## 4. One lime, and the ink that had to invert
 
-The kit ran **"yellow FILLS, violet DRAWS"** for one reason, and it is worth
-recording because the reason is now gone rather than forgotten. `#EECF00`
-measures **1.55:1** as a stroke on white and **11.24:1** as a fill under
-near-black ink. That is not a dim line and a bright box, it is an *absent* line
-and a superb box — so the brand could only ever safely do one of the two jobs, a
-second colour had to hold the other, and `check-ui.ts` needed a rule to stop
-them swapping places.
+The kit ran **"yellow FILLS, violet DRAWS"** for one reason, worth keeping on
+the record because the reason keeps coming back. `#EECF00` measures **1.55:1**
+as a stroke on white and **11.24:1** as a fill under near-black ink. That is not
+a dim line and a bright box, it is an *absent* line and a superb box — so the
+brand could only ever do one of the two jobs, and a second colour had to hold
+the other.
 
-Across the three dark surfaces, as a **stroke** (`--marker`, step 400):
+Blue retired that split. `#007BFF` cleared its bar both ways, and the kit ran
+two rungs of one ramp: `--marker` drew, `--primary` filled one step deeper
+because blue under WHITE was tight at 3.98:1.
 
-| | |
+**Lime springs the yellow's trap exactly halfway, and that decides everything
+below.**
+
+| | measured |
 |---|---|
-| on the page `#0F1011` | **6.65:1** |
-| on the chrome `#111111` | **6.59:1** |
-| on the panel `#181818` | **6.20:1** |
+| `#B6FF56` under `#2C2C2C` ink | **11.59:1** |
+| `#B6FF56` as a stroke on `#121214` | **15.53:1** |
+| `#B6FF56` under WHITE ink | **1.20:1** |
+| `#B6FF56` as a stroke on WHITE | **1.20:1** |
 
-and as a **fill** (`--primary`, step 600) under white ink: **4.68:1** — one
-step deeper than the Figma's own `#007BFF`, which measures 3.98:1 under
-white and falls short of the 4.5 a 15px label owes, so the fill sits one
-rung below the colour it is named after rather than at it.
+Two consequences, and neither is cosmetic:
 
-All four numbers clear their bar with room, so the split has nothing left to
-prevent. `--primary` fills and `--marker` draws, and they are **two steps of one
-ramp** rather than two colours holding each other's job open. The
-`yellow-as-stroke` gate rule retired with the token it policed, two re-themes
-ago now.
+**The ink inverted.** Blue was a fill under white. Lime cannot be — white on
+lime is 1.20:1, which is not a dim label but an unreadable one. So
+`--primary-foreground` is **near-black in both themes**. The RULE did not
+change: a primary button is one object and its ink does not vary by theme. What
+changed is which end of the ramp supplies that ink.
 
-What the split shares the rail with — **shape** — has one fewer job on it
-than it did two days ago:
+**The split moved rather than retiring.** On dark, one value does everything —
+`brand-400` is the fill, the stroke *and* the default chart series, where blue
+needed two rungs. On white, lime has the yellow's problem precisely, so light
+alone keeps a solved-down `brand-800` (`#4F7A00`, 5.10:1) for its stroke. The
+split is no longer fill-versus-stroke inside a theme; it is dark-versus-light.
 
 | | job | where |
 |---|---|---|
 | a **stroke** | signal | links, the focus ring, a selected edge, the active nav row's glyph |
-| a **fill** | action | the "+" in the header, "New flow", every primary button |
+| a **fill** | action | "+ Add", the rail's "New", every primary button |
 
-*The active tab's rule is not this stroke.* It reads `--tab-rule` instead —
-grey in both themes, `--muted-foreground` on dark and `--heading` on light,
-bridged as `border-tab-rule` — because the Figma draws that rule in grey, not
-blue. See §7.
+*The active tab's rule is not this stroke.* It reads `--tab-rule` — grey in both
+themes — because the Figma draws that rule in grey, not in the brand.
 
-*Identity left this table; location folded into the job that was already
-there.* The ring that used to mark the rail's own mark left with the mark
-itself: the wordmark moved to the top bar as plain text (§2), and nothing
-rings it there. The active nav row's glyph did NOT lose its colour —
-`RailChip` still inks it `text-marker` (`#3D9BFF` on `#202020`, 5.69:1), the
-same signal step a link or a focus ring uses — but the state is no longer
-that colour ALONE: the Figma's neutral `--control` fill goes under the
-whole row first, and the glyph's colour rides on top as a second signal,
-not the only one. Two jobs still do the work three used to — signal now
-covers the glyph as well as the stroke, and action stays the fill's alone.
-
-**Hover still walks UP the ramp on dark, and DOWN on light.** On a light
-page the fill darkens under the pointer (`600` → `700`), because
-brightening a colour moves it toward the white behind it and the label's
-contrast falls at the moment of the press. On near-black the argument
-inverts with the surface: raised means lighter, so dark's hover is `500`
-— the brand's own named step, once too light to fill and exactly right to
-lighten toward. Because a component may not spell `dark:`, that direction is
-a role, `--primary-hover` (brand-500 in `.dark`, brand-700 in `:root`,
-bridged as `bg-primary-hover`), and the pressed step is `--primary-active`
-(brand-700 in both, `bg-primary-active`). White under the fill measures
-**3.98:1** at dark's hover and **5.22:1** at light's — dark trades a hair of
-contrast for the lighten-on-raise feel, a documented trade rather than an
-oversight.
-
-### The collision that used to be here, and why it is gone
-
-This section used to argue the opposite of what it argues now, and the reversal
-is instructive rather than embarrassing.
-
-While the brand was green, **success and the brand were the same colour** and
-the kit conceded it: a success green four counts from the brand green would have
-been indistinguishable on screen and guaranteed to drift, so the rule became
-"green means good-or-brand" and state gave up its own vocabulary.
-
-That concession was conditional on a hue, and the hue has changed twice since.
-**The brand is blue; success keeps the green the brand vacated two re-themes
-ago.** Restoring the split was not a reversal of the reasoning but the same
-reasoning under new facts, and the facts have not moved since: a DONE badge
-and a New-flow button sharing one colour still puts the loudest *state* and
-the loudest *act* in one vocabulary. Warn and danger are the other two state
-hues.
-
-The green is not a fresh cut, and this pass re-measured it against three new
-grounds rather than carrying the old numbers on faith: `#00D492` clears
-**9.83:1** on the page, **9.74:1** on the chrome, **9.16:1** on the panel;
-the light theme's `#00734B` is unchanged at **5.91:1** on white.
-
-What survives untouched is the half of the rule that was doing the real work —
-**status is quiet when fine.** A healthy thing carries a 4px dot in a 12px
-wash of its own colour — the Figma's geometry, tightened from 6-in-16 on
-6 September 2026; only a thing that needs something wears a full `StatusPill`. A board where every card shows
-a green badge is furniture reporting no news, and it buries the one card that
-matters.
-
-`TargetBar` is the component that paid for the collision: it drew "goal met" in
-`--success` and "in progress" in `--marker`, which was a real distinction while
-the marker was violet and became two identical greens. Those two are different
-colours again — but the fix outlived the bug on its own merits. It draws the
-unmet meter in **greyscale** and lets colour *arrive* when the goal lands, which
-is the honest reading regardless of palette: a bar at 40% is not good, it is
-40%.
-
----
+**And two controls are white, which this file has to own rather than explain
+away.** "Today" and "Refresh All" are drawn as white pills with `#4A4A4A` ink
+(nodes 49:5429 and 49:5439), adjacent, unambiguous. On a `#121214` console a
+white fill is the loudest object on the screen after the lime itself, and
+"quiet chrome, loud numbers" is this document's first sentence. They were
+shipped as drawn. The thesis survives in the half that carries meaning — the
+brand still marks only the two controls that ADD something — but a reader
+comparing §1 to the dashboard header deserves to be told this was a decision
+and not a drift.
 
 ## 5. Shape
 
@@ -355,7 +295,7 @@ Inter like everything else, and each keeps only what is genuinely its own
 smaller.** Instrument Sans ran page titles, the landing hero and the metric
 numeral; the distinction this interface draws is between the chrome and the
 NUMBER, and that argument does not need the numeral to be 36px to work —
-this Figma draws it at **28px**, Inter 600, and 28 against a 15px interface
+this Figma draws it at **28px**, Inter 600, and 28 against a 14px interface
 still reads as the loudest thing on the tile. A second family was buying
 separation the size step had already paid for, at 36 or at 28 either one.
 
@@ -519,33 +459,41 @@ character:
   answer.
 - **Heat is magnitude, never judgement.**
 - **The kit measures its own source.** This is not a one-time finding; the same
-  gap reopened with the new Figma and was caught the same way. Its own dimmest
-  ink is `#7E7E7E`, and it measures **4.37:1** on its own `#181818` panel,
-  against the 4.5:1 body text owes. Ours is `#858585` — one step up, same
-  hue — clearing **4.81:1** on the panel and **5.12:1** on a card. Copying a
-  value because it came from the comp is how a design system inherits
-  somebody else's bug, twice now.
+  gap reopened with the 8 September Figma and was caught the same way, for the
+  third time. Its own dimmest ink is `#7E7E7E`, and on the `#191919` card its
+  own card titles sit on, that measures **4.33:1** against the 4.5:1 body text
+  owes. Ours is `#828282` — four values up, same hue, indistinguishable beside
+  it — clearing **4.87:1** on the page and **4.58:1** on a card.
+
+  The same Figma sets its inactive tabs in `#4A4A4A`, which is **2.11:1** on
+  this ground: below even the 3:1 a non-text graphic owes, on a control you are
+  meant to click. Those read `--muted-foreground` instead. Copying a value
+  because it came from the comp is how a design system inherits somebody else's
+  bug — three passes running, now.
 
 ---
 
 ## 10. What is not settled
 
-**The metric card and the chart card.** They are mid-rework, and they are
-explicitly *not* derived from the reference — it is an observability console
-with no numbers on it at all, so there is nothing there to copy for the one
-screen this product exists to draw. What is agreed so far: they take the surface
-and the hairline like everything else, they carry the micro-label voice, the
-figure is the loudest thing on them, and a row of them lines its footers up.
-What is still open: how a comparison series is drawn, whether a tile carries its
-own controls, and how a mark fills a tall tile.
+**The chart card's two-series legend.** Node 49:5268 draws a legend under each
+chart naming two dates — the period and the one it is compared against — and
+the product has no comparison SERIES to draw. It computes a delta, which is why
+the card carries a chip instead, but nothing plots a second line. A legend
+naming two series when one is drawn is a lie about the data, so it was left
+unbuilt rather than faked. Everything else on both cards follows the Figma:
+surface, hairline, the 28px figure, the freshness dot, the neutral chip.
 
-**The builder's canvas.** Out of scope for this pass by instruction, same as
-last time. `--canvas-bg` keeps its frozen value, `#1B191A` — the OLD page
-ground, from before either retheme — rather than moving to this pass's `#0F1011`.
-Two days ago that value happened to equal the page ground,
-which is the coincidence that closed a seam a previous pass had opened;
-this pass reopens it, on purpose, because moving `--canvas-bg` would be a
-canvas decision and none has been made. It is the same seam a previous
+Still open with it: whether a tile carries its own controls, and how a mark
+fills a tall tile.
+
+**The builder's canvas and its nodes.** Out of scope by instruction for the
+third pass running, and narrowed this time to exactly that: Elias's ruling on
+8 September was "recolour and change layout, complete retheme — only thing not
+to redesign is the flow canvas and nodes". So the builder's *chrome* was
+re-themed in full and the canvas surface was not. `--canvas-bg` keeps its
+frozen `#1B191A` — the page ground from before any of these retheme passes —
+rather than following the page to `#121214`. Moving it would be a canvas
+decision, and none has been made. It is the same seam a previous
 pass closed by coincidence, not a new one — the builder's *chrome* (its
 toolbar, config panel and modals) still follows the primitives, so it
 inherits every token change in this pass without the canvas itself having

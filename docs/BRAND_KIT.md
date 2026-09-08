@@ -6,10 +6,11 @@ living render of everything here is `/design`. If this document, the tokens,
 and `/design` ever disagree, the tokens win and the other two are bugs.
 
 Benchmarked against Linear, Stripe, Notion, Vercel, Miro and Zapier, and drawn
-from the 4 September 2026 Figma: **three dark surfaces meeting at one
-hairline**, one neutral ramp, one blue doing a stroke's job and a fill's,
-a 15px UI base (`--text-sm`), and a state for everything — hover, focus,
-empty, loading, error.
+from the **8 September 2026 Figma** (file `NlTjQFMQPUDLstdmzseeJl`, node
+49:5268): **one dark surface and one card above it**, one neutral ramp, one
+lime that fills under near-black ink and draws on dark, a **14px** UI base
+(`--text-sm`), and a state for everything — hover, focus, empty, loading,
+error.
 
 **The thesis: quiet chrome, loud numbers.** This is a reconciliation product —
 six tools disagree and the app's job is to answer in one figure you can defend.
@@ -21,25 +22,31 @@ exhausting by 4pm.
 
 ## 1. Principles
 
-1. **Three darks, one hairline.** The page is `#0F1011`; the top bar, the
-   rail and every card share `#111111`; the content panel under the top bar —
-   where the board and its tiles actually sit — is `#181818`. That is three
-   surfaces where the two-day-old console ran one, and they sit within a hair
-   of each other on purpose: `#111111` on `#0F1011` measures **1.01:1**,
-   `#181818` on `#0F1011` measures **1.07:1** — both TIGHTER than the 1.14:1
-   step the previous scheme ran between its one ground and its cards. `#343434`
-   is still the one hairline value that separates them anyway, because a
-   surface change nobody can see without its edge is not a flatter surface, it
-   is an invisible one — the same argument as two days ago, now covering three
-   surfaces instead of one.
+1. **One dark, one card, one hairline.** The page, the top bar, the rail and
+   the content area are all `#121214`. The only surface that steps away is the
+   card, at `#191919` — and that step measures **1.06:1**, which is to say it
+   is not visible on its own.
+
+   This is the SECOND reversal of this principle in four days: one surface,
+   then three, and one again. Each followed the Figma in front of it, and each
+   was deliberate. What changed is the hairline's job, and it narrowed rather
+   than shrank — there is no page/chrome or chrome/panel edge left to draw,
+   because a rule between two identical surfaces draws nothing. `#343434` now
+   carries the single card edge alone, and a card without its border is not a
+   flatter card, it is an invisible one.
 2. **Roles, not ramps.** Components say `bg-card`, `border-border`,
    `text-muted-foreground` — never `bg-neutral-800` or `border-neutral-600`.
    Roles are what make a surface change a one-file edit.
 3. **Depth is a mirror, not a recess.** On dark, a control (`--control`
-   `#202020`) is a step UP from the card it sits on (`#111111`) and its hover
-   (`--accent` `#3A3A3A`) is a further step up; on light both steps go DOWN
-   (`#F4F4F4`, then `#ECECEC`). Getting a surface's own direction backwards is
-   depth pointing the wrong way, not a slightly-wrong colour.
+   `#202020`, 1.08:1) is a step UP from the card it sits on (`#191919`) and its
+   hover (`--accent` `#3A3A3A`, 1.55:1) is a further step up; on light both
+   steps go DOWN (`#F4F4F4`, then `#ECECEC`). Getting a surface's own direction
+   backwards is depth pointing the wrong way, not a slightly-wrong colour.
+
+   `--muted` shares `--control`'s step in BOTH themes. It used to take the
+   panel's value on dark; that value is the CARD now, and a fill equal to the
+   card it sits on is a card painted onto itself — the collapse that broke six
+   hovers into invisibility the last time these two roles met.
 4. **Every interactive element has all five states**: rest, hover, focus-visible,
    active, disabled. No exceptions — including icon buttons, tabs, and nav. And
    **colour never carries state alone.**
@@ -54,82 +61,107 @@ exhausting by 4pm.
 
 ## 2. Color
 
-### The brand ramp — one blue, two jobs
+### The brand ramp — one lime, and the ink that had to invert
 
-Two days ago the kit ran cyan in three shapes: a ring for identity, a glyph
-for location, a fill for action. The Figma this pass builds from draws the
-active row as a **neutral** `--control` fill with no coloured glyph at all —
-but `RailChip` overrules that on purpose (its own comment cites WCAG 1.4.1:
-a colour-blind reader looking at six otherwise-identical icons has no other
-way to tell which one is the current page), so the active glyph keeps
-`text-marker` UNDER the row's new `--control` fill rather than losing its
-colour to it. Location is now two signals, not the Figma's one, and colour
-is still left doing two JOBS rather than three: drawing a **stroke** (which
-now covers the active nav glyph as well as links and the focus ring) and
-painting a **fill**.
+The kit ran **"yellow FILLS, violet DRAWS"** for one reason: `#EECF00` measures
+1.55:1 as a stroke on white and 11.24:1 as a fill under near-black — an *absent*
+line and a superb box, so one colour could never do both jobs. Blue retired that
+split by clearing its bar both ways.
+
+**Lime springs the same trap halfway**, and that decides the whole ramp:
+
+| | measured |
+|---|---|
+| `#B6FF56` under `#2C2C2C` ink | **11.59:1** |
+| `#B6FF56` as a stroke on `#121214` | **15.53:1** |
+| `#B6FF56` under WHITE ink | **1.20:1** |
+| `#B6FF56` as a stroke on WHITE | **1.20:1** |
+
+So the ink **inverted** — `--primary-foreground` is `#2C2C2C` in BOTH themes,
+because white on lime cannot be read at any size — and the split **moved**: on
+dark one value does the fill, the stroke and the chart series, while light
+alone needs a solved-down stroke.
 
 | Step | Hex | Role | Measured |
 |---|---|---|---|
-| 50 | `#E6F2FF` | wash on light | — |
-| 100 | `#CCE5FF` | | — |
-| 200 | `#99CBFF` | | — |
-| 300 | `#66B2FF` | | 8.51:1 on `#0F1011` |
-| 400 | `#3D9BFF` | **THE DARK STROKE** (`--marker` in `.dark`): links, focus ring, selected edge — NOT the active tab's rule, see `--tab-rule` below | 6.65:1 on `#0F1011`, 6.59:1 on `#111111`, 6.20:1 on `#181818` |
-| 500 | `#007BFF` | **THE BRAND**: hover of the fill, the workspace initial tint (`rgb(0 123 255 / .75)`), decorative dots, chart series default | 4.79:1 as a stroke on `#0F1011` |
-| 600 | `#0070E8` | **THE FILL** (`--primary`, both themes) under white ink | 4.68:1 white-on-fill — the Figma's own `#007BFF` measures 3.98:1 under white, short of the 4.5:1 a 15px label owes, so the fill sits one step deeper than the brand it is named after |
-| 700 | `#0069D9` | pressed | 5.22:1 under white |
-| 800 | `#0062CC` | **THE LIGHT STROKE** (`--marker` in `:root`): links, ring, active rule on white | 5.80:1 on white |
-| 900 | `#0056B3` | reserved — light hover of a stroke | 7.04:1 on white |
+| 50 | `#F4FFE4` | wash on light | — |
+| 100 | `#E9FFC9` | | — |
+| 200 | `#DBFFA6` | | — |
+| 300 | `#C9FF7D` | hover of the fill — LIGHTER, because on near-black raised means lighter | 12.02:1 under `#2C2C2C` |
+| 400 | `#B6FF56` | **THE BRAND**: the fill (`--primary`), the dark stroke (`--marker` in `.dark`), and the default chart series | 15.53:1 on `#121214`; 11.59:1 under its own ink |
+| 500 | `#A2E844` | pressed | 9.42:1 under `#2C2C2C` |
+| 600 | `#8ACC2E` | reserved | — |
+| 700 | `#6FA61C` | reserved | — |
+| 800 | `#4F7A00` | **THE LIGHT STROKE** (`--marker` in `:root`): links, ring, active rule on white | 5.10:1 on white, where the brand itself is 1.20:1 |
+| 900 | `#3D5E00` | reserved — light hover of a stroke | 7.50:1 on white |
 
-`--primary-foreground` is `#FFFFFF` in both themes now — it was near-black
-under cyan, because `#00C0E8` needed a dark ink to clear its bar and `#0070E8`
-needs a light one. `--brand-soft` is `rgb(0 123 255 / 0.10)`; `--brand-soft-line`
-is `rgb(0 123 255 / 0.25)` on dark and `0.30` on light — a 10% wash needs more
-ring on the lighter ground to keep an edge. **Hover still walks UP the ramp on
-dark** (600 fill → 500 on hover) **and DOWN on light** (600 → 700), and because
-a component may not spell `dark:`, that direction is a ROLE rather than a
-literal: `--primary-hover` is brand-500 in `.dark` and brand-700 in `:root`,
-bridged as `bg-primary-hover`. White under the fill measures **3.98:1** at
-dark's hover step and **5.22:1** at light's — dark's hover trades a hair of
-contrast for the "raised means lighter" feel, a known, documented trade
-rather than an oversight. The pressed step is its own role too:
-`--primary-active` is brand-700 in BOTH themes, bridged as `bg-primary-active`
-— `#0069D9` under white measures 5.22:1 there as well, since pressed never
-lightens on either surface.
+`--brand-soft` is `rgb(182 255 86 / 0.10)`; `--brand-soft-line` is
+`rgb(182 255 86 / 0.25)` on dark and `0.30` on light — a 10% wash needs more
+ring on the lighter ground to keep an edge.
 
-Two more roles the Figma implies, added 5 Sep: `--tab-rule` is **not** the
-blue stroke above — it is the active tab's 1px bottom rule, and it is grey
-in both themes: `--muted-foreground` in `.dark`, `--heading` in `:root`,
-bridged as `border-tab-rule`. The tab's TEXT carries the emphasis (15px/600
-in `--heading` versus 15px/500 muted for an inactive tab); the rule anchors
-the row, it does not repeat the colour.
+**Hover now walks UP in BOTH themes**, and losing that asymmetry is a
+consequence of the ink rather than a simplification. Blue hovered up on dark
+and DOWN on light because the fill carried WHITE ink: brightening it on a light
+ground moved it toward the white behind it and the label's contrast fell at the
+moment of the press. The lime fill carries near-black, so brightening RAISES the
+label's contrast — 12.02:1 at `brand-300` against 11.59:1 at `brand-400`. Both
+themes hover to 300 and press to 500, and because a component may not spell
+`dark:`, those are roles: `--primary-hover` and `--primary-active`, bridged as
+`bg-primary-hover` / `bg-primary-active`.
+
+`--tab-rule` is **not** the stroke above — it is the active tab's 1px bottom
+rule, grey in both themes: `--muted-foreground` in `.dark`, `--heading` in
+`:root`, bridged as `border-tab-rule`. The tab's TEXT carries the emphasis; the
+rule anchors the row, it does not repeat the colour.
 
 | Role | Dark | Light | Bridged as |
 |---|---|---|---|
 | `--tab-rule` | `--muted-foreground` | `--heading` | `border-tab-rule` |
-| `--primary-hover` | brand-500 `#007BFF` | brand-700 `#0069D9` | `bg-primary-hover` |
-| `--primary-active` | brand-700 `#0069D9` | brand-700 `#0069D9` | `bg-primary-active` |
+| `--primary-hover` | brand-300 `#C9FF7D` | brand-300 `#C9FF7D` | `bg-primary-hover` |
+| `--primary-active` | brand-500 `#A2E844` | brand-500 `#A2E844` | `bg-primary-active` |
 
-### The neutral ramp (dark), re-cut for three surfaces
+### Contrast substitutions — where the Figma was not followed
+
+Two of the Figma's own greys fail their bar on the ground it draws them on.
+Both are substituted, and both are recorded here rather than quietly fixed,
+because a value that came from the comp and a value that was solved are
+different kinds of fact.
+
+| Figma | Measured | Ships as | Why |
+|---|---|---|---|
+| `#7E7E7E` — every card title and axis label | **4.33:1** on the `#191919` card those titles sit on | `#828282` (`--muted-foreground`) | Under the 4.5:1 a 14px label owes. Four values brighter, indistinguishable beside it, and legal on both the page (4.87:1) and the card (4.58:1). |
+| `#4A4A4A` — the inactive tabs | **2.11:1** on `#121214` | `--muted-foreground` | Below even the 3:1 a non-text *graphic* owes, on a control you are meant to click. An inactive tab nobody can read is a functional bug, not a quiet aesthetic. |
+
+`#4A4A4A` is still used exactly as drawn where it sits on WHITE — the "Today"
+and "Refresh All" ink — where it measures 8.86:1.
+
+**The white buttons are NOT a substitution, and are worth naming here so they
+are not mistaken for one.** Nodes 49:5429 and 49:5439 draw those two controls as
+white pills, adjacent and unambiguous. On a `#121214` console a white fill is the
+loudest object on screen after the lime, which argues against this kit's own
+"quiet chrome" thesis. They ship as drawn.
+
+### The neutral ramp (dark), re-cut for one ground and one card
 
 | Token | Hex | Job |
 |---|---|---|
-| `neutral-950` | `#0F1011` | `--background` — **the page ground** |
-| `neutral-925` (new) | `#111111` | `--chrome` — top bar, rail, **and** `--card` |
-| `neutral-900` | `#181818` | `--panel` — the content area under the top bar |
+| `neutral-950` | `#121214` | `--background` — **the page ground**, and `--panel` with it |
+| `neutral-925` | `#121214` | `--chrome` — top bar and rail. The SAME hex here; a real step in `:root` |
+| `neutral-900` | `#191919` | `--card` — the one surface that steps away, at **1.06:1** |
 | `neutral-850` (new) | `#202020` | `--control` — fields, the search box, the active nav row |
 | `neutral-800` | `#333333` | `--secondary` — grey buttons |
 | `neutral-700` | `#3A3A3A` | avatar / icon circles (`--avatar`); `--accent` hover step |
 | `neutral-600` | `#343434` | `--border` — every hairline |
-| `neutral-500` | `#4A4A4A` | `--rule` — the heavier control edge (switch track, checkbox, table divider); the Figma's own "Main Menu" grey measures **2.13:1** here and is not text-safe |
-| `neutral-450` (new) | `#6E6E6E` | `--faint` — the caps section label only ("Main Menu"), **3.70:1** on `#111111`; never body copy |
-| `neutral-400` | `#858585` | `--muted-foreground` — the Figma's own `#7E7E7E` measures **4.37:1** on the panel; `#858585` clears **4.81:1** there and **5.12:1** on a card |
+| `neutral-500` | `#4A4A4A` | `--rule` — the heavier control edge (switch track, checkbox, table divider); the Figma's own "Main Menu" and inactive-tab grey measures **2.11:1** here and is not text-safe |
+| `neutral-450` | `#6E6E6E` | `--faint` — the caps section label only ("Main Menu"), **3.67:1** on `#121214`; never body copy |
+| `neutral-400` | `#828282` | `--muted-foreground` — the Figma's own `#7E7E7E` measures **4.33:1** on a card; `#828282` clears **4.87:1** on the page and **4.58:1** on a card |
 | `neutral-200` | `#FFFFFF` | `--foreground`, `--heading`, `--card-foreground` — the Figma sets body *and* titles in white |
 
 Step numbers stay labels for the ladder, not a promise of visual distance —
-**925 on 950 measures 1.01:1** and **900 on 950 measures 1.07:1**, both
-tighter than the single 1.14:1 step the cyan console ran between its one
-surface and its cards. **500 is still the last step a LINE may be drawn in
+**925 and 950 hold the same hex**, and **900 on 950 measures 1.06:1**, which is
+tighter than any step this kit has run. 925 is kept as a token because `:root`
+still has a real chrome/page step (white on `#F7F8F9`), and a role declared in
+one theme must be declared in both. **500 is still the last step a LINE may be drawn in
 and 450 a caps-label-only step; 400 is the first that TEXT may be set in.**
 The gap that used to run 500→400 now runs 500→450→400, and 450 is
 deliberately narrow: a section label reads at it, a sentence must not.
@@ -146,10 +178,10 @@ rule exists to punish, so they stay — orphaned by the roles, not retired.
 
 **Depth, and the sentence this kit no longer says.** "A control recesses from
 a card" was true of one theme and stated as a rule about both. What actually
-holds is that the two directions MIRROR: on dark, a field on the `#111111`
-chrome is a step UP (`--control` `#202020`) and its hover a further step up
-(`--accent` `#3A3A3A`); on light a field on white is a step DOWN (`#F4F4F4`)
-and its hover a further step down (`#ECECEC`). Neither is "recessed", and the
+holds is that the two directions MIRROR: on dark, a field on the `#191919`
+card is a step UP (`--control` `#202020`, 1.08:1) and its hover a further step
+up (`--accent` `#3A3A3A`, 1.55:1); on light a field on white is a step DOWN
+(`#F4F4F4`) and its hover a further step down (`#ECECEC`). Neither is "recessed", and the
 Figma contradicts the old wording outright on the dark side.
 
 Shadows: `--shadow-card` is `0 1px 2px rgb(0 0 0 / .20), 0 0 3px rgb(0 0 0 /
@@ -184,9 +216,9 @@ because dark has three surfaces again; light never stopped having two.
 | `--accent` (hover) | `#ECECEC` — one further step down; see the depth note above | — |
 | `--rule` (heavier control edge) | `#CFCFCF` — one clear step darker than `--border`, the relationship `#4A4A4A` has to `#343434` in dark | — |
 | `--popover` / `--popover-foreground` | `= --card` / `= --card-foreground`, in BOTH themes — a menu is a card that floats, and pointing rather than repeating is what stops the two drifting | — |
-| `--primary` / `--marker` | `#0070E8` / `#0062CC` | see the brand ramp above |
+| `--primary` / `--marker` | `#B6FF56` / `#4F7A00` | see the brand ramp above — one value on dark, a solved-down stroke on light |
 | `--success` etc. | unchanged (`#00734B` trio) | 5.91:1 on white |
-| `--freshness-dot` | `#34C759` on `rgb(0 212 146 / .15)` | 8.51:1 on `#111111`; on white the dot keeps its halo — flat `#34C759` alone measures **2.22:1** on white, so the halo is load-bearing there, not decorative |
+| `--freshness-dot` | `#34C759` on `rgb(0 212 146 / .15)` | 8.36:1 on `#121214` — the one Figma variable actually bound in the file (`Accents/Green`), and untouched by this re-theme. On white the dot keeps its halo: flat `#34C759` alone measures **2.22:1** there, so the halo is load-bearing, not decorative |
 
 ### Retired token families
 
@@ -206,7 +238,7 @@ token`). The last three rows are a different case, flagged as such:
 | `--rail`, `--sidebar`, `--sidebar-accent` | `background`, `neutral-700` | — |
 | `--accent-yellow` | `primary` | two yellows four counts apart under two names |
 | `.focus-ring-light` | the global ring | the product's ring was invisible on the one dark surface |
-| cyan `brand-500`/`brand-600` (`#00CDF5`/`#00C0E8`) | `brand-500`/`brand-600` at `#007BFF`/`#0070E8` | **not a dead class** — the 4 September 2026 Figma named a different blue two days after this ramp last moved. Recorded here anyway because a class surviving under a new value is the "plausible and wrong" case this table exists to catch in the DOCS, not the code |
+| blue `brand-400`/`brand-600` (`#3D9BFF`/`#0070E8`) | `brand-400` at `#B6FF56`, with 600 reserved | **not a dead class** — the 8 September 2026 Figma named a lime four days after this ramp last moved, and collapsed the fill and stroke onto ONE step. `bg-brand-600` still compiles and now paints a mid-olive nothing reads. A class surviving under a new value is the "plausible and wrong" case this table exists to catch in the DOCS, not the code |
 | `rounded-full` on `buttonVariants`'s base class | `rounded-control` | **not a dead class either** — the shape rule flipped to a pill and back for the second time (§4); `rounded-full` still compiles on purpose (avatars, the bell badge, the freshness dot, the active-count numeral), so this row is a paper trail for the next flip rather than a dead-class warning |
 
 `neutral-300`, `neutral-100` and `neutral-50` are deliberately NOT in that
@@ -250,7 +282,7 @@ system keywords behind it are only reached where the variable is undefined.
 hero and the metric numeral. The distinction this interface draws is between the
 chrome and the NUMBER, and a tile's headline dropped from 36px to **28px** in
 this pass — the Figma draws it smaller than the console did — but the
-separation still does not need a second family: 28px Inter 600 against a 15px
+separation still does not need a second family: 28px Inter 600 against a 14px
 interface still reads as the loudest thing on the tile. `.font-display`
 survives as a tracking utility (-0.022em) and `.stat-numeral` is now `28px /
 40px`, `font-family: var(--font-inter, "Inter"), var(--font-sans)` — Inter
@@ -343,8 +375,10 @@ simply what every button already is.
 cut to two days ago, and not because that reasoning was wrong: it argued
 that a notch drawn into a colour identical to what sits behind it draws
 nothing, which was true of a single-surface shell. The panel this Figma
-draws is `#181818`, meeting a top bar and a rail that are genuinely
-`#111111` — a real, if narrow, colour change — so the frame token has
+drew was `#181818`, meeting a top bar and a rail that were genuinely
+`#111111` — a real, if narrow, colour change. The 8 September Figma removes
+that surface: page, bar, rail and panel are all `#121214`, so the cut reveals
+nothing again and `--radius-frame` is back to **0**. The token has
 somewhere to point again. It rounds the panel's **top-RIGHT** corner, under
 the bar at the end of the row away from the rail; the rail-side corner stays
 square, and nothing about the top bar's own corners changes. That reverses
@@ -600,7 +634,7 @@ and on nothing else in the header.
   moves the jank later instead of removing it.
 - **Hover:** neutral hovers are `hover:bg-accent` — depth's mirror rule (§1,
   §2): on dark a field is a step UP from the surface (`--control` `#202020`
-  on `#111111`) and its hover a further step up (`--accent` `#3A3A3A`); on
+  on `#191919`) and its hover a further step up (`--accent` `#3A3A3A`); on
   light a field is a step DOWN (`--control` `#F4F4F4` on white) and its hover
   a further step down (`--accent` `#ECECEC`). Never `hover:bg-muted`, which
   was briefly the same value as `--card`, so six controls had an invisible
@@ -638,10 +672,10 @@ toolbar · **24** rail. `strokeWidth` 2 (2.25 only at ≤14px). Text glyphs
 ## 9. Data visualization
 
 **Marks are the BRAND now, not the marker.** The Figma's own chart draws
-its series in the same blue as its buttons: `--color-brand-500` (`#007BFF`)
+its series in the same lime as its buttons: `--color-brand-400` (`#B6FF56`)
 is the default series colour, an area fill under a line is
 `rgb(0 123 255 / .12)` — which `Sparkbars` spells `bg-brand-500/12`, up from
-the 5% it had inherited, keeping its 25% border — and a bar is `#007BFF`
+the 5% it had inherited, keeping its 25% border — and a bar is `#B6FF56`
 flat. Target-met
 stays `success`; bottleneck stays `danger`; tracks stay `bg-muted`.
 Headline numbers per §3 — 28px now, not 36, and inked with `--heading`
@@ -727,7 +761,7 @@ role values for a surface to be pinned against.
 **Heat is magnitude, never judgement.** The calendar tints each day by its
 share of the month's largest day, in the brand — `color-mix(in srgb,
 var(--color-brand-600) 12–56%, var(--card))`, a blue ramp in both themes: white
-on the deepest dark cell (`#0070E8` at 56% over `#111111`) is 9.35:1, black on
+on the deepest dark cell (`#B6FF56` at 56% over `#121214`) is 9.35:1, black on
 the deepest light cell is 9.10:1. It is a tint under a numeral, the shape
 `--accent` already takes behind a selected row — a SURFACE, not a verdict.
 Green-good/red-bad is the same mistake a coloured delta would be, which is why
@@ -769,7 +803,7 @@ rule carries the full substitution table in its own comment (and §2 above).
 
 **This pass adds two more rows to §2's table rather than a new mechanism.**
 The cyan ramp's own values (`#00CDF5`/`#00C0E8`) are retired now that the
-ramp holds `#007BFF`/`#0070E8` instead — a class name that keeps compiling
+ramp holds `#B6FF56` instead — a class name that keeps compiling
 under a new value is not the same failure a dead class is, but it earns a
 row for the same reason: a value that changed under a name that did not is
 exactly the kind of fact a comment forgets and a table does not.

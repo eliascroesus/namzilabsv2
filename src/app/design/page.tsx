@@ -68,7 +68,7 @@ export const metadata = { title: "Namzilabs — UI kit" };
  * THE BRAND RAMP IS ONE BLUE, ACROSS THREE JOBS.
  *
  * `600` fills (`--primary`, both themes, under white ink at 4.68:1). `500` is
- * the brand itself — the Figma's own #007BFF — one step too light to carry
+ * the brand itself — the Figma's own #B6FF56 — bright enough to carry
  * white text at 4.5:1 (3.98:1), so it never fills, but exactly right as the
  * hover of the fill, a decorative dot, a chart's default series and the
  * workspace-initial tint. `400` and `800` draw: the dark stroke and the light
@@ -140,15 +140,15 @@ const DIRECTION: Array<{ rule: string; why: string }> = [
   },
   {
     rule: "Three darks, and a hairline",
-    why: "The page is #0F1011; the top bar, the rail and every card are #111111; the panel under the top bar is #181818 — three surfaces where the two-day-old console ran one. They sit within a hair of each other on purpose (#111111 on #0F1011 measures 1.01:1, tighter than the 1.14:1 step the last surface ran), so the 1px #343434 rule between them is doing more work than ever, not less: a surface change nobody can see without its edge is not a flatter surface, it is an invisible one.",
+    why: "ONE surface. The page, the top bar, the rail and the content area are all #121214, and the only thing that steps away is the card, at #191919 — 1.06:1, which is to say invisible on its own. This is the second reversal of the same argument in four days: one surface, then three, and one again. What it does to the hairline is the interesting half. There is no page/chrome or chrome/panel edge left to draw, because a rule between two identical surfaces draws nothing — so #343434 is not doing LESS work, it is doing all of the work there is, on the single card edge that remains. A surface change nobody can see without its edge is not a flatter surface, it is an invisible one.",
   },
   {
     rule: "Content floats on the ground",
-    why: "Nothing sits flat on the page but a heading or a caption. Everything with content in it is an island with an EDGE, and the edge is the whole of it: a card is #111111 on a #0F1011 page — 1.01:1, tighter than ever — so the border is not trim on a surface you can already see, it is the only thing making the surface visible at all.",
+    why: "Nothing sits flat on the page but a heading or a caption. Everything with content in it is an island with an EDGE, and the edge is the whole of it: a card is #191919 on a #121214 page — 1.06:1 — so the border is not trim on a surface you can already see, it is the only thing making the surface visible at all.",
   },
   {
     rule: "One blue, two jobs",
-    why: "#007BFF replaces the cyan everywhere. It does two jobs, not three: a STROKE (--marker: links, the focus ring, a selected edge — NOT the active tab's rule, which is the grey --tab-rule role instead) at 6.65:1 down to 6.20:1 across the three dark surfaces, and a FILL (--primary, one step deeper at #0070E8) at 4.68:1 under white ink. The 'glyph is location' job the cyan carried folded into this one instead — the rail's active row takes a neutral --control fill UNDER the glyph, and RailChip keeps text-marker on the glyph itself, so location is now two signals rather than the Figma's one colourless fill. Success is still NOT the brand: it keeps the green the brand vacated, because a DONE badge and a New-flow button being one colour puts the loudest state and the loudest act in one vocabulary. Warn and danger are the other two state hues, and status is still quiet when fine.",
+    why: "#B6FF56 replaces the blue everywhere, and it inverts the ink. Blue was a fill under WHITE; white on lime is 1.20:1, so --primary-foreground is near-black (#2C2C2C) at 11.59:1 in BOTH themes. On dark it needs no second step at all: brand-400 is the STROKE (--marker: links, the focus ring, a selected edge — NOT the active tab's rule, which is the grey --tab-rule role instead) at 15.53:1 on the page, and the FILL, and the default chart series. Light is where the split survives, because lime cannot draw on white: --marker there is a solved-down #4F7A00 at 5.10:1. The 'glyph is location' job the cyan carried folded into this one instead — the rail's active row takes a neutral --control fill UNDER the glyph, and RailChip keeps text-marker on the glyph itself, so location is now two signals rather than the Figma's one colourless fill. Success is still NOT the brand: it keeps the green the brand vacated, because a DONE badge and a New-flow button being one colour puts the loudest state and the loudest act in one vocabulary. Warn and danger are the other two state hues, and status is still quiet when fine.",
   },
   {
     rule: "Ten contains, eight presses",
@@ -196,8 +196,8 @@ const RADII: Array<{ cls: string; label: string; body: string }> = [
   /* THE FRAME IS BACK, ON THE OTHER CORNER. It was 32px while the frame
      painted a gradient behind a transparent rail, then 16px, then 0 when the
      rail, the bar and the page became one surface and a notch had nothing
-     left to reveal. There are three surfaces again — the panel is #181818
-     under a bar and beside a rail that are #111111 — so 8px, half the old 16
+     left to reveal. There is one surface again — page, bar, rail and panel
+     all #121214 — so the token is back to 0, and the note below it
      because the step it reveals is a fraction of what the light page was.
      Applied to the panel's TOP-RIGHT corner: every earlier era cut the
      top-left, nearest the rail, and the 4 Sep 2026 Figma does not. The rail
@@ -382,7 +382,7 @@ export default function DesignPage() {
 
         <Section
           title="Colour"
-          note="ONE BLUE, TWO JOBS, and both of them measured. #0070E8 FILLS, carrying white ink at 4.68:1 — one step deeper than the Figma's own #007BFF, which measures 3.98:1 under white and is under the 4.5 a 15px label owes. #3D9BFF DRAWS on dark (6.65:1 on the page, 6.20:1 on the panel) and #0062CC draws on light (5.80:1 on white), because a 1px rule owes more room than a button's own ink does. The 'yellow fills, violet draws' split is retired and so is the gate rule that policed it: two steps of one ramp need no rule to keep them apart. Beside them sits a three-colour accent set (orange, pink, periwinkle) for surfaces that need to be identifiable rather than to mean something; success, warn and danger keep the job of meaning, and the tile's freshness dot has its own #34C759 so retuning a status can never move it."
+          note="ONE LIME, ONE VALUE ON DARK, and every number measured. #B6FF56 FILLS under NEAR-BLACK ink (#2C2C2C) at 11.59:1 — the inversion is the headline, because blue filled under WHITE and white on lime is 1.20:1, an unreadable label rather than a dim one. The same #B6FF56 DRAWS on dark at 15.53:1, so unlike blue it needs no second step to do both jobs. On white it has the yellow's old problem exactly — 1.20:1, an absent line — so light alone keeps a solved-down stroke at #4F7A00 (5.10:1). The split did not retire, it MOVED: not fill-versus-stroke inside a theme, but one value on dark and one for light's stroke. Beside them sits a three-colour accent set (orange, pink, periwinkle) for surfaces that need to be identifiable rather than to mean something; success, warn and danger keep the job of meaning, and the tile's freshness dot has its own #34C759 so retuning a status can never move it."
         >
           <p className="mb-2 text-xs font-medium text-muted-foreground">Brand — 500 draws, 600 fills, brand-*</p>
           <div className="flex overflow-hidden rounded-card border border-border">
@@ -411,7 +411,7 @@ export default function DesignPage() {
             ))}
           </div>
           <p className="mb-2 mt-5 text-xs font-medium text-muted-foreground">
-            Ink — three values, one per job, neutral-* · 450 is faint — the caps section label only, 3.70:1 on #111111,
+            Ink — three values, one per job, neutral-* · 450 is faint — the caps section label only, 3.67:1 on #121214,
             and never a sentence
           </p>
           <div className="flex overflow-hidden rounded-card border border-border">
@@ -749,7 +749,7 @@ export default function DesignPage() {
 
         <Section
           title="Rail"
-          note="A 56px icon column on --chrome (#111111), one step off the #0F1011 page beside it and separated by one hairline. These tiles are a swatch — the real markup lives in src/components/sidebar.tsx and nowhere else, and it has moved on from what is drawn here: the rail opens to 260px on hover with a workspace switcher at its head, a Main Menu caption and a Get Free Access row at its foot. The active row takes a neutral --control fill UNDER its glyph, and the glyph keeps text-marker on top of it — two signals, not the Figma's one — so the brand's 'location' job did not retire with the cyan after all; it just no longer carries the state alone."
+          note="A 260px column on --chrome (#121214), the SAME value as the page beside it, separated by one hairline and nothing else. These tiles are a swatch — the real markup lives in src/components/sidebar.tsx and nowhere else, and it has moved on from what is drawn here: the column no longer opens or closes at all, and its foot carries an Invite Members card over the lime New button. The active row takes a neutral --control fill UNDER its glyph, and the glyph keeps text-marker on top of it — two signals, not the Figma's one — so the brand's 'location' job did not retire with the cyan after all; it just no longer carries the state alone."
         >
           <div className="flex items-stretch gap-4">
             {/* `bg-chrome`, which is what the real rail is painted. It was
@@ -787,8 +787,8 @@ export default function DesignPage() {
             </div>
             <div className="flex flex-1 flex-col justify-center gap-1 text-xs text-muted-foreground">
               <p>
-                The rail is <code className="font-mono text-foreground">--chrome</code>{" "}(#111111), the same step as the
-                top bar above it and every card on the page — one count off the #0F1011 ground and two off the #181818
+                The rail is <code className="font-mono text-foreground">--chrome</code>{" "}(#121214), the same value as the
+                top bar above it and as the page itself — the card is the one surface that steps away, to #191919
                 panel, so its right edge is a real 1px hairline rather than a luminance step you could see unaided.
               </p>
               <p>
@@ -804,7 +804,7 @@ export default function DesignPage() {
 
         <Section
           title="Frame"
-          note="THE NOTCH IS BACK AND --radius-frame IS 8px. It went to 0 when the rail, the bar and the page became one colour: a radius reveals whatever is BEHIND the element it is cut into, and cutting a corner out of a colour to reveal the same colour draws nothing. There are three surfaces again — the panel is #181818 under a bar and beside a rail that are #111111 — so there is something to reveal. It is the panel's TOP-RIGHT corner, under the bar at the end of the row away from the rail; every earlier era of this shell cut the top-left instead, and the 4 September 2026 Figma does not. This is a DARK-THEME DEVICE, not a universal one: in light, --panel is --background (#F7F8F9) — the page's own colour — so the identical cut draws nothing there, exactly as it did not two days ago."
+          note="THE NOTCH IS GONE AGAIN AND --radius-frame IS 0, by its own argument. A radius reveals whatever is BEHIND the element it is cut into. It went to 0 when the rail, the bar and the page were one colour; it came back at 8px on 4 September because a third surface appeared for it to cut into; and the 8 September Figma removes that surface — panel, chrome and page are all #121214 — so the cut reveals #121214 against #121214 and draws nothing at all. This is the same sentence that reinstated it, read in the other direction. The token stays defined so rounded-frame remains a legal spelling for whatever the shell decides next."
         >
           <div className="flex h-40 overflow-hidden rounded-card bg-chrome">
             {/* The rail's width, holding the chrome's own colour — the panel
@@ -824,7 +824,7 @@ export default function DesignPage() {
 
         <Section
           title="Marks"
-          note="What a dashboard tile is made of. The series is the BRAND — --color-brand-500 (#007BFF), the same blue as the buttons, with a 12% wash under it — because after the ramp split, --marker is the stroke step for links and rings and no longer the colour the product measures in. A breakdown walks that blue plus the accent three. TargetBar drew met in --success and in-progress in --marker, which were the same green while success WAS the brand — so it rendered both states identically and stopped reporting the only thing it exists to report. That collision is long gone, but the fix outlived it on its own merits: the unmet meter is greyscale and colour ARRIVES when the goal lands, which is the honest reading anyway — a bar at 40% is not good, it is 40%. Every value goes through formatMetricValue, so the tooltip and the headline say the same quantity the same way. A delta is never green or red: up is good for Booked Leads and bad for Speed to Lead, and nothing on a tile knows which — so it is coloured by WHETHER it moved, and the arrow alone carries direction."
+          note="What a dashboard tile is made of. The series is the BRAND — --color-brand-400 (#B6FF56), the same lime as the buttons, with a wash under it — and on dark that is also the stroke step, because the lime clears its bar both ways where the blue did not. A breakdown walks that blue plus the accent three. TargetBar drew met in --success and in-progress in --marker, which were the same green while success WAS the brand — so it rendered both states identically and stopped reporting the only thing it exists to report. That collision is long gone, but the fix outlived it on its own merits: the unmet meter is greyscale and colour ARRIVES when the goal lands, which is the honest reading anyway — a bar at 40% is not good, it is 40%. Every value goes through formatMetricValue, so the tooltip and the headline say the same quantity the same way. A delta is never green or red: up is good for Booked Leads and bad for Speed to Lead, and nothing on a tile knows which — so it is coloured by WHETHER it moved, and the arrow alone carries direction."
         >
           <div className="grid gap-4 rounded-card bg-canvas-bg p-4 sm:grid-cols-2">
             <div className="rounded-surface border border-border bg-card p-5 shadow-card">
