@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from "vitest";
 import { randomBytes } from "node:crypto";
 import { createTestDb } from "./helpers/testdb";
-import { connections, rawEvents } from "@/db/schema";
+import { connections, events, rawEvents } from "@/db/schema";
 import type { DB } from "@/db/types";
 
 /**
@@ -28,6 +28,7 @@ vi.mock("@/inngest/client", () => ({ inngest: { send: async () => {} } }));
 
 const { POST, GET } = await import("@/app/api/webhooks/[connectionId]/route");
 const { createConnection, enableWebhookSigning, getSigningSecret, previewLatest } = await import("@/lib/connections");
+const { processRawEvent } = await import("@/ingestion/pipeline");
 
 beforeAll(() => {
   process.env.ENCRYPTION_KEY = KEY;
@@ -170,5 +171,75 @@ describe("seeing what arrived", () => {
     // The catch-hook maps ANY object, so an unparseable body still becomes a
     // record — carrying `_raw`, which is exactly what someone needs to see.
     expect(rows[0].properties).toMatchObject({ _raw: "<order><id>7</id></order>" });
+  });
+});
+
+describe("end to end: a POST from an app we have never heard of becomes a counted record", () => {
+  /**
+   * Every other test here proves one link of the chain. This one walks the
+   * whole thing, because that is the promise on the tin — point any app at this
+   * URL — and each link was individually fine while the chain was broken: the
+   * secret was minted at connection time, the delivery was refused at the route,
+   * and the mapper that would have handled it was never reached.
+   */
+  const eq = async () => (await import("drizzle-orm")).eq;
+
+  it("form-encoded, unsigned, no integration, no configuration — and it lands in events", async () => {
+    const id = await newHook();
+    const res = await post(
+      id,
+      "id=ord_99&event_type=purchase&email=someone%40acme.io&amount=149.5&occurred_at=2026-05-06T07:08:09Z",
+      { "content-type": "application/x-www-form-urlencoded" },
+    );
+    expect(res.status).toBe(202);
+
+    const e = await eq();
+    const [raw] = await db.select({ id: rawEvents.id }).from(rawEvents).where(e(rawEvents.connectionId, id));
+    const result = await processRawEvent(db, raw.id);
+    expect(result.inserted).toBe(1);
+
+    const [row] = await db.select().from(events).where(e(events.connectionId, id));
+    expect(row.eventType).toBe("purchase");
+    expect(row.subject).toBe("someone@acme.io");
+    expect(Number(row.value)).toBe(149.5);
+    expect(row.occurredAt.toISOString()).toBe("2026-05-06T07:08:09.000Z");
+  });
+
+  it("a batch of three lands as three records, not one", async () => {
+    const id = await newHook();
+    await post(
+      id,
+      JSON.stringify({
+        type: "orders.synced",
+        events: [
+          { id: "a", email: "a@x.io", amount: 1, occurred_at: "2026-05-01T00:00:00Z" },
+          { id: "b", email: "b@x.io", amount: 2, occurred_at: "2026-05-02T00:00:00Z" },
+          { id: "c", email: "c@x.io", amount: 3, occurred_at: "2026-05-03T00:00:00Z" },
+        ],
+      }),
+      { "content-type": "application/json" },
+    );
+
+    const e = await eq();
+    const [raw] = await db.select({ id: rawEvents.id }).from(rawEvents).where(e(rawEvents.connectionId, id));
+    expect((await processRawEvent(db, raw.id)).inserted).toBe(3);
+
+    const rows = await db.select().from(events).where(e(events.connectionId, id));
+    expect(rows.map((r) => r.subject).sort()).toEqual(["a@x.io", "b@x.io", "c@x.io"]);
+    expect(rows.every((r) => r.eventType === "orders.synced")).toBe(true);
+  });
+
+  it("a redelivery of the same batch adds nothing", async () => {
+    const id = await newHook();
+    const body = JSON.stringify({ events: [{ id: "a" }, { id: "b" }] });
+    await post(id, body, { "content-type": "application/json" });
+    await post(id, body, { "content-type": "application/json" });
+
+    const e = await eq();
+    const raws = await db.select({ id: rawEvents.id }).from(rawEvents).where(e(rawEvents.connectionId, id));
+    for (const r of raws) await processRawEvent(db, r.id);
+
+    const rows = await db.select().from(events).where(e(events.connectionId, id));
+    expect(rows).toHaveLength(2);
   });
 });
