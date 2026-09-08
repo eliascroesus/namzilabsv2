@@ -12,6 +12,19 @@ import { aircallConnector } from "./aircall";
 import { pipedriveConnector } from "./pipedrive";
 import { typeformConnector } from "./typeform";
 import { tallyConnector } from "./tally";
+import { smartleadConnector } from "./smartlead";
+import { helpscoutConnector } from "./helpscout";
+import { attioConnector } from "./attio";
+import { lemlistConnector } from "./lemlist";
+import { paddleConnector } from "./paddle";
+import { justcallConnector } from "./justcall";
+import { oncehubConnector } from "./oncehub";
+import { savvycalConnector } from "./savvycal";
+import { thinkificConnector } from "./thinkific";
+import { thrivecartConnector } from "./thrivecart";
+import { retellConnector } from "./retell";
+import { customerioConnector } from "./customerio";
+import { airtableConnector } from "./airtable";
 
 const registry = new Map<string, Connector>();
 
@@ -38,6 +51,19 @@ for (const connector of [
   pipedriveConnector,
   typeformConnector,
   tallyConnector,
+  smartleadConnector,
+  helpscoutConnector,
+  attioConnector,
+  lemlistConnector,
+  paddleConnector,
+  justcallConnector,
+  oncehubConnector,
+  savvycalConnector,
+  thinkificConnector,
+  thrivecartConnector,
+  retellConnector,
+  customerioConnector,
+  airtableConnector,
 ]) {
   registerConnector(connector);
 }

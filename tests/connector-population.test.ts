@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { CONNECTOR_CATALOG } from "@/connectors/catalog";
 import { getConnector } from "@/connectors/registry";
+import { readFileSync } from "node:fs";
 import { oauthProvider } from "@/lib/oauth/providers";
 
 /** The seven that predate the kit; everything after them must carry provenance. */
@@ -39,6 +40,22 @@ describe("every catalog entry and every registered connector agree", () => {
       }
     }
   });
+  it("the connect form stores the authType the connector declares", () => {
+    // A source whose only credential is a webhook signing secret must be stored
+    // as `secret`, not `apiKey`. This used to be keyed on the single name
+    // "webhook", so every secret-only connector added later was mislabelled.
+    const action = readFileSync("src/app/integrations/actions.ts", "utf8");
+    expect(action).toContain('authType: getConnector(source)?.authType ?? "apiKey"');
+    expect(action).not.toContain('authType: source === "webhook"');
+    for (const e of CONNECTOR_CATALOG) {
+      if (e.connect !== "apiKey") continue;
+      const c = getConnector(e.source)!;
+      const onlySecret = e.credentialFields.length > 0 && e.credentialFields.every((f) => f.key === "webhookSecret");
+      expect(c.authType, `${e.source}: only a webhook secret, so authType must be "secret"`).toBe(onlySecret ? "secret" : c.authType);
+      if (onlySecret) expect(c.authType, e.source).toBe("secret");
+    }
+  });
+
   it("every entry carries a brand, and every post-kit entry carries dated provenance", () => {
     for (const e of CONNECTOR_CATALOG) {
       expect(e.brand, `${e.source}: brand`).toBeDefined();

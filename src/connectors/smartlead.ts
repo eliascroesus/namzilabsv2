@@ -1,0 +1,283 @@
+import type { Connector, CanonicalEvent, VerifyArgs, NormalizeContext, PollArgs, PollResult, ListOptionsArgs, SourceOption } from "./types";
+import { asObject, parseDate, str } from "./field-utils";
+import { eventId, hmacHeaderVerify, isoOrNull, providerClient, requireCredential, windowedWalk, ymd, type Params } from "./kit";
+
+/**
+ * Smartlead. One lead-statistics ROW per lead and sequence step, carrying the
+ * moment it was sent, opened, clicked and replied to — so one row fans out
+ * into up to four dated events, the way Typeform's response fans into two.
+ * The API key travels in the QUERY STRING, so every error message and URL
+ * this module can produce is scrubbed of it before it leaves.
+ *
+ * Docs read 8 Sep 2026:
+ * - api.smartlead.ai/authentication — base `https://server.smartlead.ai/api/v1`;
+ *   the key is the `api_key` query parameter on every request.
+ * - api.smartlead.ai/reference/lead-statistics — GET /campaigns/{campaign_id}/
+ *   leads-statistics with `limit` ("max 100"), `offset`, and `event_time_gt`
+ *   ("Replied/Sent at date in YYYY-MM-DD format") which filters "by when the
+ *   last event for the lead was received". THE WATERMARK IS THEREFORE THE ROW'S
+ *   NEWEST EVENT TIME — the same axis the request bounds. Envelope `{ ok, data }`.
+ * - api.smartlead.ai/api-reference/campaigns/get-all — GET /campaigns/ "returns a
+ *   direct array of campaigns, not wrapped in a success object": { id, name, status, … }.
+ * - api.smartlead.ai/guides/webhook-integration — `X-Smartlead-Signature` =
+ *   `'sha256=' + hmac.new(signing_secret, payload_body, hashlib.sha256).hexdigest()`;
+ *   no timestamp in the scheme (idempotency is `X-Request-Id`). Payload examples
+ *   for EMAIL_SENT / EMAIL_OPEN / EMAIL_LINK_CLICK / EMAIL_REPLY carry
+ *   time_sent / time_opened / time_clicked / time_replied, `campaign_id`,
+ *   `to_email` and `sequence_number` — and NO stats id, which is why identity
+ *   falls back to the lead + sequence step below.
+ *   THE PLAN SAID THIS HEADER WAS UNCONFIRMED and accepted three candidates;
+ *   the page names one, so one is accepted.
+ * - api.smartlead.ai/api-reference/webhooks/events — the event vocabulary:
+ *   EMAIL_SENT, FIRST_EMAIL_SENT, EMAIL_OPEN, EMAIL_LINK_CLICK, EMAIL_REPLY,
+ *   EMAIL_BOUNCE, LEAD_UNSUBSCRIBED, LEAD_CATEGORY_UPDATED (category +
+ *   lead_data.category.sentiment_type + history[].time + lastReply.time),
+ *   CAMPAIGN_STATUS_CHANGED, UNTRACKED_REPLIES, MANUAL_STEP_REACHED,
+ *   EMAIL_ACCOUNT_DISCONNECTED, LINKEDIN_DISCONNECTED.
+ * - api.smartlead.ai/core/webhooks — names five of those differently
+ *   (EMAIL_OPENED / EMAIL_CLICKED / EMAIL_REPLIED / EMAIL_BOUNCED /
+ *   EMAIL_UNSUBSCRIBED) and gives them one ISO `timestamp`. Two vendor pages,
+ *   two spellings of one fact, so both spellings map and `timestamp` is the
+ *   last dated fallback.
+ * - api.smartlead.ai/guides/rate-limits — "Standard | 60 [per minute]",
+ *   Pro 120, and "Rate limits apply to your API key across all endpoints
+ *   combined" — hence ONE bucket in the catalog ("*"), not one per endpoint.
+ *
+ * WHAT IS NOT PUBLISHED: the leads-statistics ROW SHAPE. The reference page
+ * shows `"data": []` and no sample row, so each fact reads two candidate keys —
+ * the field name reported for this endpoint (sent_time, open_time, click_time,
+ * reply_time) and the vendor's own webhook name for the same fact (time_sent,
+ * time_opened, time_clicked, time_replied). A row that answers to neither is
+ * NOT dated with `now`: it produces no events at all, and `scripts/verify-
+ * smartlead.ts` prints the real field names against a live account.
+ *
+ * A bounce, an unsubscribe and a category change arrive by WEBHOOK only: no
+ * documented statistics field dates them, and an undated fact is not an event.
+ */
+const API = "https://server.smartlead.ai/api/v1";
+const DEFAULTS = { pagesPerPoll: 3, maxPagesPerPoll: 20, firstSyncDays: 30, overlapMs: 5 * 60_000 };
+/** "max 100" (reference/lead-statistics). */
+const PAGE = 100;
+const DAY_MS = 86_400_000;
+
+/**
+ * One statistics row's dated facts, in the order they happen. Two candidate
+ * keys each: the name reported for this endpoint, then the vendor's own
+ * webhook name for the same fact — the row shape itself is unpublished.
+ */
+const ROW_FACTS: ReadonlyArray<{ ours: string; fields: readonly string[] }> = [
+  { ours: "email_sent", fields: ["sent_time", "time_sent"] },
+  { ours: "email_opened", fields: ["open_time", "time_opened"] },
+  { ours: "email_clicked", fields: ["click_time", "time_clicked"] },
+  { ours: "reply", fields: ["reply_time", "time_replied"] },
+];
+
+/**
+ * Smartlead's webhook event types → our vocabulary, with the field that dates
+ * each. Both documented spellings of the five renamed events are present.
+ * CAMPAIGN_STATUS_CHANGED, MANUAL_STEP_REACHED and the two disconnection
+ * events are account plumbing, not countable outreach, so they map to nothing;
+ * UNTRACKED_REPLIES is deliberately not `reply` — the docs define it as "a
+ * reply that doesn't match a known lead in the campaign", and folding it into
+ * the reply count would inflate the campaign's reply rate with mail from
+ * outside the campaign. A bounce and an unsubscribe have NO documented
+ * timestamp of their own: the bounce falls back to the send it answers, the
+ * unsubscribe to `timestamp` and then to the delivery moment.
+ */
+export const SMARTLEAD_EVENTS: Record<string, { ours: string; times: readonly string[] }> = {
+  EMAIL_SENT: { ours: "email_sent", times: ["time_sent"] },
+  FIRST_EMAIL_SENT: { ours: "email_sent", times: ["time_sent"] },
+  EMAIL_OPEN: { ours: "email_opened", times: ["time_opened"] },
+  EMAIL_OPENED: { ours: "email_opened", times: ["time_opened"] },
+  EMAIL_LINK_CLICK: { ours: "email_clicked", times: ["time_clicked"] },
+  EMAIL_CLICKED: { ours: "email_clicked", times: ["time_clicked"] },
+  EMAIL_REPLY: { ours: "reply", times: ["time_replied"] },
+  EMAIL_REPLIED: { ours: "reply", times: ["time_replied"] },
+  EMAIL_BOUNCE: { ours: "bounced", times: ["time_sent"] },
+  EMAIL_BOUNCED: { ours: "bounced", times: ["time_sent"] },
+  LEAD_UNSUBSCRIBED: { ours: "unsubscribed", times: [] },
+  EMAIL_UNSUBSCRIBED: { ours: "unsubscribed", times: [] },
+};
+
+const idOf = (v: unknown): string | null => (typeof v === "number" && Number.isFinite(v) ? String(v) : str(v));
+const leadEmail = (o: Record<string, unknown>): string | null => str(o["lead_email"]) ?? str(o["to_email"]);
+
+/** The first of `fields` that holds a date, as a Date; null when none does. */
+function firstDate(o: Record<string, unknown>, fields: readonly string[]): Date | null {
+  for (const f of fields) {
+    const at = parseDate(str(o[f]), f);
+    if (at) return at;
+  }
+  return null;
+}
+
+/**
+ * What this row or delivery is ABOUT: Smartlead's own statistics id where there
+ * is one, else the lead and the sequence step it describes — the webhook
+ * payloads carry no stats id at all, and one lead's step-2 open must not share
+ * a key with its step-3 open.
+ */
+function factKey(o: Record<string, unknown>): string | null {
+  const stats = idOf(o["stats_id"]) ?? idOf(o["email_stats_id"]);
+  if (stats) return stats;
+  const email = leadEmail(o);
+  const seq = idOf(o["sequence_number"]);
+  if (email) return seq ? `${email}:${seq}` : email;
+  return idOf(o["lead_id"]) ?? idOf(o["message_id"]);
+}
+
+/**
+ * One statistics row → its dated facts. The id is namespaced by campaign AND
+ * by the fact, so the same row's send and reply are two events and a re-read
+ * of the row produces the same two.
+ */
+function rowEvents(row: Record<string, unknown>, campaignId: string, connectionId: string): CanonicalEvent[] {
+  const key = factKey(row);
+  if (!key) return [];
+  const email = leadEmail(row);
+  const props = { ...row, campaign_id: campaignId };
+  const out: CanonicalEvent[] = [];
+  for (const { ours, fields } of ROW_FACTS) {
+    const at = firstDate(row, fields);
+    if (!at) continue;
+    out.push({ eventId: eventId("smartlead", connectionId, campaignId, key, ours), eventType: ours, subject: email, occurredAt: at, properties: props });
+  }
+  return out;
+}
+
+/** The row's newest event time — the field `event_time_gt` bounds, and therefore the watermark. */
+function rowChangedAt(row: Record<string, unknown>): string | null {
+  let newest: string | null = null;
+  for (const { fields } of ROW_FACTS) {
+    for (const f of fields) {
+      const iso = isoOrNull(row[f]);
+      if (iso && (newest === null || iso > newest)) newest = iso;
+    }
+  }
+  return newest;
+}
+
+/** `{ ok, data: [...] }`, and a bare array for the campaign list. */
+function rowsOf(payload: unknown): Array<Record<string, unknown>> {
+  if (Array.isArray(payload)) return payload.map(asObject);
+  const data = asObject(payload)["data"];
+  return Array.isArray(data) ? data.map(asObject) : [];
+}
+
+/**
+ * A client whose key rides the query string. Every failure is scrubbed of the
+ * key before it is thrown: `HttpError` puts the full URL in its message and on
+ * `.url`, and this is the one provider here whose URL IS a credential.
+ */
+function client(credentials?: Record<string, unknown> | null) {
+  const key = requireCredential(credentials, "apiKey", "Smartlead");
+  const base = providerClient({ baseUrl: API, headers: {}, provider: "Smartlead" });
+  const scrub = (e: unknown): unknown => {
+    if (e instanceof Error) {
+      e.message = e.message.split(key).join("…");
+      const withUrl = e as { url?: string };
+      if (typeof withUrl.url === "string") withUrl.url = withUrl.url.split(key).join("…");
+    }
+    return e;
+  };
+  return {
+    async get<T>(path: string, params: Params = {}): Promise<T> {
+      try {
+        return await base.get<T>(path, { ...params, api_key: key });
+      } catch (e) {
+        throw scrub(e);
+      }
+    },
+    rateLimit: () => base.rateLimit(),
+  };
+}
+
+export const smartleadConnector: Connector = {
+  source: "smartlead",
+  authType: "apiKey",
+  verifySignature({ rawBody, headers, secret }: VerifyArgs): boolean {
+    if (!secret) return false;
+    return hmacHeaderVerify({ rawBody, headers, secret }, { header: "x-smartlead-signature", encoding: "hex", prefix: "sha256=" });
+  },
+  normalize(rawPayload: unknown, ctx: NormalizeContext): CanonicalEvent[] {
+    const b = asObject(rawPayload);
+    const type = str(b["event_type"]);
+    const campaignId = idOf(b["campaign_id"]) ?? "campaign";
+    const email = leadEmail(b);
+    if (type === "LEAD_CATEGORY_UPDATED") {
+      const cat = asObject(asObject(b["lead_data"])["category"]);
+      const category = str(b["category"]) ?? str(cat["name"]);
+      // Smartlead classifies the category itself — `sentiment_type` is the
+      // provider's own answer, so it wins over reading the name.
+      const sentiment = str(cat["sentiment_type"]);
+      const positive = sentiment ? sentiment.toLowerCase() === "positive" : /interest|meeting|positive/i.test(category ?? "");
+      // The categorisation itself is undated. The reply that provoked it is
+      // dated, and is the moment the interest was actually expressed.
+      const history = Array.isArray(b["history"]) ? (b["history"] as unknown[]).map(asObject) : [];
+      const newest = history.map((h) => isoOrNull(h["time"])).filter((x): x is string => x !== null).sort().pop() ?? null;
+      const at =
+        firstDate(asObject(b["lastReply"]), ["time"]) ??
+        (newest ? new Date(newest) : null) ??
+        firstDate(b, ["timestamp"]) ??
+        ctx.fallbackOccurredAt ??
+        new Date();
+      const slug = (category ?? "unknown").toLowerCase().replace(/\s+/g, "_");
+      return [
+        {
+          eventId: eventId("smartlead", ctx.connectionId, campaignId, factKey(b) ?? "lead", "category", slug),
+          eventType: positive ? "lead_interested" : "lead_category_updated",
+          subject: email,
+          occurredAt: at,
+          properties: b,
+        },
+      ];
+    }
+    const spec = type ? SMARTLEAD_EVENTS[type] : undefined;
+    const key = factKey(b);
+    if (!spec || !key) return [];
+    const at = firstDate(b, [...spec.times, "timestamp"]) ?? ctx.fallbackOccurredAt ?? new Date();
+    return [{ eventId: eventId("smartlead", ctx.connectionId, campaignId, key, spec.ours), eventType: spec.ours, subject: email, occurredAt: at, properties: b }];
+  },
+  async listOptions(key: string, args: ListOptionsArgs): Promise<SourceOption[]> {
+    if (key !== "campaignId") return [];
+    const res = await client(args.credentials).get<unknown>("/campaigns");
+    return rowsOf(res)
+      .map((c) => ({ value: idOf(c["id"]) ?? "", label: str(c["name"]) ?? idOf(c["id"]) ?? "Untitled campaign" }))
+      .filter((o) => o.value);
+  },
+  async poll(args: PollArgs): Promise<PollResult> {
+    const campaignId = str(args.config?.["campaignId"]);
+    if (!campaignId) return { records: [], nextCursor: null };
+    const api = client(args.credentials);
+    const res = await windowedWalk<Record<string, unknown>>({
+      cursor: args.cursor,
+      budget: args.budget,
+      windowFloor: args.windowFloor,
+      defaults: DEFAULTS,
+      fetchPage: async ({ since, cont }) => {
+        const offset = cont ? Number(cont) || 0 : 0;
+        const page = await api.get<unknown>(`/campaigns/${encodeURIComponent(campaignId)}/leads-statistics`, {
+          limit: PAGE,
+          offset,
+          // A DATE, and exclusive ("event_time_gt"). Asking from the day BEFORE
+          // the floor is the only way an event later on the floor's own day
+          // cannot be skipped; the extra day is re-read and dedupes on eventId.
+          event_time_gt: ymd(new Date(since.getTime() - DAY_MS)),
+        });
+        const rows = rowsOf(page);
+        return { rows, next: rows.length === PAGE ? String(offset + rows.length) : null, rateLimit: api.rateLimit() };
+      },
+      changedAt: rowChangedAt,
+      map: (r) => rowEvents(r, campaignId, args.connectionId)[0] ?? null,
+    });
+    // The walk carries one event per row (it dedupes and marks by row); the
+    // row's other dated facts are fanned out here, from the same properties.
+    const fanned: CanonicalEvent[] = [];
+    for (const r of res.records) fanned.push(...rowEvents(r.properties ?? {}, campaignId, args.connectionId));
+    return { ...res, records: fanned };
+  },
+  async testFetchLatest(n: number, args: PollArgs): Promise<CanonicalEvent[]> {
+    const { records } = await this.poll!({ ...args, cursor: null, budget: { maxCalls: 1 } });
+    return records.slice(0, n);
+  },
+};

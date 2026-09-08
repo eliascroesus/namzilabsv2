@@ -13,6 +13,7 @@ import {
   getConnection,
 } from "@/lib/connections";
 import { catalogEntry } from "@/connectors/catalog";
+import { getConnector } from "@/connectors/registry";
 import { inngest } from "@/inngest/client";
 import { promoteToBaseCadence } from "@/lib/sync/cadence";
 import { activeStreams } from "@/lib/sync/streams";
@@ -62,7 +63,12 @@ export async function connectApiKeyAction(formData: FormData): Promise<void> {
       orgId,
       source,
       name,
-      authType: source === "webhook" ? "secret" : "apiKey",
+      // The CONNECTOR is the authority on what it holds: a source whose only
+      // credential is a webhook signing secret (the catch-hook, ThriveCart,
+      // Customer.io) stores `secret`, everything else `apiKey`. Keyed on one
+      // source name, this said `apiKey` for every secret-only connector added
+      // after the catch-hook.
+      authType: getConnector(source)?.authType ?? "apiKey",
       credentials,
     });
   } catch (e) {

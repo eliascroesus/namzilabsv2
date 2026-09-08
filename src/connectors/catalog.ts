@@ -894,6 +894,529 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
       "In Tally, open the form → Integrations → Webhooks, add the URL below with a signing secret, and paste the same " +
       "secret as the webhook signing secret on this connection. A delivery triggers an immediate refresh of that form's step.",
   },
+  {
+    source: "smartlead",
+    name: "Smartlead",
+    description: "Cold email sent, opened, clicked and replied — per campaign.",
+    brand: { color: "#5B5FEF", short: "Sl" },
+    connect: "apiKey",
+    instant: true,
+    poll: true,
+    sync: "incremental",
+    syncNote:
+      "Sends, opens, clicks and replies are read from each lead's statistics row. A bounce, an unsubscribe and a " +
+      "lead-category change carry no date in that row, so they reach this connection through the webhook only.",
+    historyNote: "First sync reaches back 30 days.",
+    autoWebhook: false,
+    docs: { url: "https://api.smartlead.ai/reference/lead-statistics", readOn: "2026-09-08", webhooks: "https://api.smartlead.ai/guides/webhook-integration" },
+    verified: { live: null },
+    /**
+     * ONE BUCKET, because that is how Smartlead charges it.
+     * api.smartlead.ai/guides/rate-limits (read 2026-09-08): Standard 60 per
+     * minute per API key (Pro 120), and "Rate limits apply to your API key
+     * across all endpoints combined. A mix of campaign, lead, and analytics
+     * requests all count toward the same limit." So it is declared on "*" —
+     * the shared account-wide bucket, as Instantly's is — and the connector
+     * declares NO operations/operationFor, so the poll and the campaign-list
+     * lookup claim from the same 60/min the provider meters. Splitting it per
+     * endpoint would enforce each half alone and permit a multiple of the real
+     * limit in aggregate. 60 is the Standard floor; the observed layer widens.
+     */
+    rateLimits: { "*": { requestsPerMinute: 60 } },
+    credentialFields: [
+      { key: "apiKey", label: "API key (Settings → API)", placeholder: "…" },
+      { key: "webhookSecret", label: "Webhook secret (the one you set on the webhook in Smartlead)", placeholder: "…" },
+    ],
+    flowFields: [
+      {
+        key: "campaignId",
+        label: "Campaign",
+        required: true,
+        dynamic: true,
+        placeholder: "Choose a campaign…",
+        hint: "Each step reads one campaign. Add another Get data step for a second campaign.",
+      },
+    ],
+    // Only keys no other connector labels: email_sent and reply already carry
+    // Close's and Instantly's own declarations, and a second, different label
+    // for one key is what tests/event-type-labels.test.ts fails on. The rest
+    // (email_opened, bounced, unsubscribed, lead_category_updated) humanize
+    // correctly on their own, so they are left to the humanizer.
+    eventTypeLabels: { email_clicked: "Link clicked", lead_interested: "Lead marked interested" },
+    commonFields: ["campaign_id", "lead_email", "sequence_number", "email_subject", "lead_category"],
+    webhookSetup:
+      "In Smartlead → Settings → Webhooks, add the URL below with a signing secret, and paste the same secret as the " +
+      "webhook secret on this connection. Smartlead syncs by polling, so a delivery triggers an immediate refresh of " +
+      "that campaign's step — bounces, unsubscribes and lead-category changes arrive this way and no other.",
+  },
+  {
+    source: "helpscout",
+    name: "Help Scout",
+    description: "Conversations opened and closed, customer and agent replies — first response time straight from the threads.",
+    brand: { color: "#1292EE", short: "Hs" },
+    connect: "apiKey",
+    instant: true,
+    poll: true,
+    sync: "incremental",
+    autoWebhook: true,
+    docs: { url: "https://developer.helpscout.com/mailbox-api/", readOn: "2026-09-08", webhooks: "https://developer.helpscout.com/webhooks/" },
+    verified: { live: null },
+    // developer.helpscout.com/mailbox-api/overview/rate-limiting (read 2026-09-08):
+    // "Your current rate limit depends on your plan", and "Write requests (POST,
+    // PUT, DELETE, PATCH) count as 2 requests toward the rate limit." The numbers
+    // are in the article that page links, docs.helpscout.com/article/1140-mailbox-api
+    // (read 2026-09-08): Standard "Up to 200 calls per minute", Plus 400, Pro 800.
+    // The lowest paid plan is declared, and it covers the per-conversation threads
+    // reads too — Help Scout charges ONE account-wide bucket across every endpoint,
+    // which is why the connector emits a single operation key.
+    rateLimits: { "conversations.list": { requestsPerMinute: 200 } },
+    credentialFields: [
+      { key: "appId", label: "App ID (Your Profile → My Apps → Create My App)", placeholder: "Your app's ID" },
+      { key: "appSecret", label: "App secret (shown when the app is created)", placeholder: "Your app's secret" },
+    ],
+    eventTypeLabels: {
+      conversation_created: "Conversation opened",
+      customer_replied: "Customer replied",
+      agent_replied: "Agent replied",
+      conversation_closed: "Conversation closed",
+      conversation_assigned: "Conversation assigned",
+    },
+    commonFields: ["status", "subject", "primaryCustomer.email", "assignee.email", "mailboxId", "conversation_id", "createdBy.email"],
+  },
+  {
+    source: "attio",
+    name: "Attio",
+    description: "Deals and people created, with each deal's value and the stage it sits in.",
+    brand: { color: "#266DF0", short: "Ao" },
+    connect: "apiKey",
+    instant: true,
+    poll: true,
+    sync: "incremental",
+    syncNote:
+      "The poll reads records created since the last sweep, with the stage each one currently sits in; a stage change on a record created before the window is not re-read. Attio's webhook carries ids only — no timestamps, no field values — so it is a doorbell that triggers an immediate sync rather than a delivery of its own.",
+    autoWebhook: true,
+    docs: {
+      url: "https://docs.attio.com/rest-api/endpoint-reference/records/list-records",
+      readOn: "2026-09-08",
+      webhooks: "https://docs.attio.com/rest-api/guides/webhooks",
+    },
+    verified: { live: null },
+    // docs.attio.com/rest-api/guides/rate-limiting (read 2026-09-08): "Read requests: 100
+    // requests per second" (6,000/min) — which is what a plain GET /v2/objects gets. The
+    // records query is ALSO scored: its complexity is summed "using a sliding window
+    // algorithm with a 10 second window", so that bucket is held an order of magnitude
+    // under the raw read ceiling and the two are declared separately rather than sharing
+    // the tighter one.
+    rateLimits: { "records.query": { requestsPerMinute: 600 }, "objects.list": { requestsPerMinute: 6000 } },
+    credentialFields: [{ key: "apiKey", label: "Access token (Workspace settings → Developers → Access tokens)", placeholder: "…" }],
+    flowFields: [
+      {
+        key: "object",
+        label: "Record type",
+        required: true,
+        dynamic: true,
+        placeholder: "Choose a record type…",
+        hint: "Each step reads one Attio object — Deals, People, Companies or a custom one.",
+      },
+    ],
+    commonFields: [
+      "stage",
+      "created_at",
+      "values.name.0.value",
+      "values.name.0.full_name",
+      "values.email_addresses.0.email_address",
+      "values.value.0.currency_value",
+      "web_url",
+    ],
+  },
+  {
+    source: "lemlist",
+    name: "lemlist",
+    description: "Outreach emails sent, opened, link-clicked, replied, bounced or failed, marked interested, unsubscribed.",
+    brand: { color: "#316BFF", short: "Le" },
+    connect: "apiKey",
+    instant: true,
+    poll: true,
+    sync: "incremental",
+    autoWebhook: true,
+    docs: {
+      url: "https://developer.lemlist.com/api-reference/endpoints/activities/get-many-activities",
+      readOn: "2026-09-08",
+      webhooks: "https://developer.lemlist.com/api-reference/endpoints/webhooks/add-webhook",
+    },
+    verified: { live: null },
+    // developer.lemlist.com/api-reference/getting-started/rate-limits (read 2026-09-08):
+    // "20 requests per 2 seconds" per API key, across all routes — 600/min. The
+    // X-RateLimit-Reset header is a human-readable DATE, so the observed layer
+    // reads remaining and leaves reset null.
+    rateLimits: { "activities.list": { requestsPerMinute: 600 } },
+    credentialFields: [{ key: "apiKey", label: "API key (Settings → Integrations → API)", placeholder: "…" }],
+    // email_sent and reply are Instantly's declarations; one declarer per key keeps
+    // the org-wide picker unambiguous, and the humanizer already renders the rest.
+    eventTypeLabels: { email_opened: "Email opened", email_clicked: "Email link clicked", bounced: "Email bounced", lead_interested: "Lead marked interested" },
+    commonFields: ["type", "campaignName", "campaignId", "leadEmail", "sequenceStep", "stepId", "isFirst"],
+  },
+  {
+    source: "paddle",
+    name: "Paddle",
+    description: "Transactions paid and completed (total, with earnings and fee alongside), refunds and adjustments, subscriptions started, changed and cancelled.",
+    brand: { color: "#FDDD35", short: "Pa" },
+    connect: "apiKey",
+    instant: true,
+    poll: true,
+    sync: "incremental",
+    syncNote: "Completed and paid transactions are reconciled by polling; refunds, credits and subscription changes arrive by webhook only.",
+    historyNote: "Paddle keeps 90 days of events, so a refund or subscription change missed for longer than that cannot be recovered — transactions themselves have no such limit.",
+    autoWebhook: true,
+    docs: { url: "https://developer.paddle.com/api-reference/transactions/list-transactions", readOn: "2026-09-08", webhooks: "https://developer.paddle.com/webhooks/signature-verification" },
+    verified: { live: null },
+    // https://developer.paddle.com/api-reference/about/rate-limiting (read 2026-09-08):
+    // "An IP address can make up to 240 requests per minute." (The 1,000/min figure on
+    // that page is the pricing-preview endpoints only, which this connector never calls.)
+    rateLimits: { "transactions.list": { requestsPerMinute: 240 } },
+    credentialFields: [
+      { key: "apiKey", label: "API key (Paddle → Developer tools → Authentication)", placeholder: "pdl_live_apikey_…" },
+      { key: "sandbox", label: "Sandbox account? (type yes)", placeholder: "no" },
+    ],
+    // Only the two keys no other connector labels: payment_succeeded,
+    // payment_refunded, subscription_created/_updated/_canceled are Stripe's and
+    // must keep Stripe's wording (tests/event-type-labels.test.ts).
+    eventTypeLabels: { subscription_activated: "Subscription activated", adjustment_created: "Adjustment" },
+    commonFields: ["status", "customer_id", "currency_code", "details.totals.total", "earnings_major", "fee_major", "billed_at"],
+  },
+  {
+    source: "justcall",
+    name: "JustCall",
+    description: "Calls logged, connected, completed (talk time in seconds) and missed, with direction and disposition.",
+    brand: { color: "#004CE6", short: "Jc" },
+    connect: "apiKey",
+    // POLL ONLY, and not as a stopgap: JustCall signs
+    // `secret|urlencoded(webhook_url)|type|timestamp`, and the subscription URL is
+    // the one thing a receiver is never independently told — the only copy in hand
+    // is the one inside the body being verified. There is no honest yes, so no
+    // delivery is accepted and no webhookSecret field is offered.
+    instant: false,
+    poll: true,
+    sync: "incremental",
+    syncNote:
+      "Synced by polling — JustCall's webhook signature covers the subscription URL, which a receiver cannot check, so " +
+      "deliveries are not accepted. Call times come from call_date and call_time, which JustCall documents as UTC; the " +
+      "list filter reads the account's own time zone instead, so every sweep re-reads a wide margin around its mark.",
+    historyNote: "JustCall's API reaches back about 3 months, so the first import stops there.",
+    autoWebhook: false,
+    docs: { url: "https://developer.justcall.io/reference/call_list_v21", readOn: "2026-09-08", webhooks: "https://developer.justcall.io/docs/dynamic-webhook-signatures" },
+    verified: { live: null },
+    // developer.justcall.io/docs/rate-limits (read 2026-09-08): per plan — Team
+    // "1800 requests" hourly with a "30 requests" per-minute burst, Pro and Pro Plus
+    // 3600/60, Business and SalesPro 5400/90. The LOWEST tier is declared, because the
+    // plan is the customer's and not ours. Responses carry X-Rate-Limit-* and the
+    // -Burst- triple; justcall.ts reads them itself (the shared parser only knows the
+    // ratelimit-* / x-ratelimit-* spellings, and JustCall's reset is an absolute epoch).
+    rateLimits: { "calls.list": { requestsPerMinute: 30 } },
+    credentialFields: [
+      { key: "apiKey", label: "API key (justcall.io → Settings → Developers)", placeholder: "…" },
+      { key: "apiSecret", label: "API secret", placeholder: "…" },
+    ],
+    // No eventTypeLabels on purpose: call_logged / call_connected / call_completed are
+    // Close's declarations and call_missed is Aircall's, and one declarer per key is what
+    // keeps the org-wide picker unambiguous (tests/event-type-labels.test.ts pins
+    // call_logged at exactly one declarer). The humanizer already renders all four.
+    commonFields: ["direction", "call_type", "disposition", "agent_email", "contact_number", "talk_seconds", "ring_seconds"],
+  },
+  {
+    source: "oncehub",
+    name: "OnceHub",
+    description: "Meetings booked, cancelled, rescheduled, held and no-shows — with the charge where payment is collected.",
+    brand: { color: "#009BDE", short: "Oh" },
+    connect: "apiKey",
+    instant: true,
+    poll: true,
+    sync: "incremental",
+    // A subscription created through POST /v2/webhooks is always v2, and only
+    // v2 deliveries are signed — so auto-registering is what makes failing
+    // closed safe. A hand-made v1 endpoint has no secret to paste.
+    autoWebhook: true,
+    docs: { url: "https://help.oncehub.com/developers/api/", readOn: "2026-09-08", webhooks: "https://help.oncehub.com/developers/webhooks/webhook-signatures/" },
+    verified: { live: null },
+    // https://help.oncehub.com/developers/overview/rate-limits/ (read 2026-09-08):
+    // "5 requests per second" per account (300/min) AND "200 requests per 5
+    // minutes" per IP address (40/min). The tighter of the two is what a walk
+    // out of our own egress actually meets first.
+    rateLimits: { "bookings.list": { requestsPerMinute: 40 } },
+    credentialFields: [{ key: "apiKey", label: "API key (Settings → API & Webhooks)" }],
+    hiddenFields: ["object"],
+    commonFields: ["status", "creation_time", "starting_time", "last_updated_time", "form_submission.email", "owner.email", "tracking_id", "subject"],
+  },
+  {
+    source: "savvycal",
+    name: "SavvyCal",
+    description: "Meetings booked, cancelled and rescheduled, with paid-checkout revenue.",
+    brand: { color: "#00551F", short: "Sv" },
+    connect: "apiKey",
+    instant: true,
+    poll: true,
+    sync: "incremental",
+    // developers.savvycal.com/api/list-events (read 2026-09-08) has no created-at
+    // filter: the only date bound is `from`/`until` on the meeting's START date.
+    syncNote:
+      "SavvyCal can only filter its event list by meeting start date, so an import holds meetings that START inside the window, not meetings booked inside it.",
+    autoWebhook: false,
+    docs: { url: "https://developers.savvycal.com/api/list-events", readOn: "2026-09-08", webhooks: "https://developers.savvycal.com/webhooks" },
+    verified: { live: null },
+    // developers.savvycal.com (read 2026-09-08) publishes no rate limit and
+    // documents no 429 response; 60/min until scripts/verify-savvycal.ts measures one.
+    rateLimits: { "events.list": { requestsPerMinute: 60 } },
+    credentialFields: [
+      { key: "apiKey", label: "Personal access token (Settings → Developers)", placeholder: "pt_secret_…" },
+      { key: "webhookSecret", label: "Webhook signing secret (from the webhook you add in SavvyCal)", placeholder: "The secret shown beside the webhook" },
+    ],
+    commonFields: [
+      "state",
+      "created_at",
+      "start_at",
+      "end_at",
+      "canceled_at",
+      "rescheduled_at",
+      "scheduler.email",
+      "attendees.0.email",
+      "payment.state",
+      "cancel_reason",
+      "link.name",
+    ],
+    webhookSetup:
+      "In SavvyCal → Settings → Integrations → Webhooks, add the URL below, then copy that webhook's signing secret " +
+      "and paste it as the webhook signing secret on this connection.",
+  },
+  {
+    source: "thinkific",
+    name: "Thinkific",
+    description: "Orders, payments and refunds (Thinkific Payments), subscriptions cancelled, enrolments started and completed, signups and leads.",
+    brand: { color: "#271526", short: "Th" },
+    connect: "apiKey",
+    instant: true,
+    poll: true,
+    sync: "incremental",
+    syncNote:
+      "Orders are reconciled by polling; transactions, enrolments, signups and leads arrive only by webhook. The transaction and " +
+      "subscription topics fire only for sites on Thinkific Payments — a site taking payment through Stripe or PayPal sees none of them.",
+    historyNote:
+      "Orders reach back through the site's whole history (the first import covers 90 days, deeper on request), but transactions, enrolments, signups and leads have no list endpoint, so their history starts the day this connection was made.",
+    autoWebhook: true,
+    // Registration is plan- and permission-gated (the API needs Grow / Pro + Growth
+    // or above), and a refusal must leave the connection polling, not erroring.
+    webhookOptional: true,
+    docs: {
+      url: "https://developers.thinkific.com/api/api-documentation",
+      readOn: "2026-09-08",
+      webhooks: "https://support.thinkific.dev/hc/en-us/articles/4422685850775-Using-Webhooks",
+    },
+    verified: { live: null },
+    // support.thinkific.dev/hc/en-us/articles/4422684774935 "REST API Rate Limits"
+    // (read 2026-09-08): "REST API requests are limited to 120 requests per minute.
+    // If you exceed this maximum amount you'll receive a 429 error", plus a maximum
+    // of 10 concurrent requests. Both are per site.
+    rateLimits: { "orders.list": { requestsPerMinute: 120 } },
+    credentialFields: [
+      { key: "apiKey", label: "API key (Settings → Code & Analytics → API)", placeholder: "…" },
+      { key: "subdomain", label: "Site subdomain (the part before .thinkific.com)", placeholder: "acme" },
+    ],
+    // No webhookSecret field: Thinkific signs with the site API key itself, and only
+    // documents webhooks CREATED THROUGH THE API as verifiable — so registerWebhook
+    // makes them and hands the same key back as the signing secret. Asking for the
+    // key a second time would only be a second chance to paste it wrong.
+    //
+    // payment_succeeded, payment_refunded, subscription_canceled and lead_created are
+    // deliberately unlabelled here: Stripe, Close and Pipedrive already name those
+    // stored keys, and one key wearing two different labels is what
+    // tests/event-type-labels.test.ts exists to stop.
+    eventTypeLabels: { order_created: "Order placed", enrollment_created: "Enrolment started", enrollment_completed: "Course completed", user_signup: "Signed up" },
+    commonFields: ["product_name", "amount_dollars", "status", "user_email", "user.email", "coupon_code", "order.amount_dollars", "course.name", "percentage_completed"],
+  },
+  {
+    source: "thrivecart",
+    name: "ThriveCart",
+    description: "Orders, rebills and failed rebills, refunds, cancellations, pauses, abandoned carts, affiliate commissions.",
+    brand: { color: "#F5A623", short: "Tc" },
+    connect: "apiKey",
+    instant: true,
+    poll: false,
+    sync: "webhook-only",
+    historyNote: "ThriveCart publishes no order-list endpoint, so history begins the day you connect.",
+    autoWebhook: false,
+    docs: {
+      url: "https://support.thrivecart.com/help/using-webhook-notifications/",
+      readOn: "2026-09-08",
+      webhooks: "https://developers.thrivecart.com/documentation/event_subscription/intro/",
+    },
+    verified: { live: null },
+    // https://developers.thrivecart.com/documentation/intro/index/ (read 2026-09-08):
+    // "your use of the API will be rate limited to 60 requests per minute, per account
+    // that you are connected to", and they "do not increase rate limits preemptively".
+    // Declared for completeness — this connector is webhook-only and calls no endpoint,
+    // so it never spends the budget.
+    rateLimits: { "*": { requestsPerMinute: 60 } },
+    credentialFields: [
+      { key: "webhookSecret", label: "Order validation secret (Settings → API & Webhooks → ThriveCart order validation)", placeholder: "JLZE3Y54FEQ1" },
+    ],
+    // Only keys no other connector labels: payment_refunded and subscription_canceled
+    // are already named by Stripe, and two sources must not disagree about one key.
+    eventTypeLabels: {
+      order_created: "Order placed",
+      rebill: "Rebill collected",
+      rebill_failed: "Rebill failed",
+      subscription_paused: "Subscription paused",
+      subscription_resumed: "Subscription resumed",
+      cart_abandoned: "Cart abandoned",
+      commission_earned: "Commission earned",
+    },
+    commonFields: ["event", "mode", "base_product_name", "order.total", "currency", "customer.email", "order.charges"],
+    webhookSetup:
+      "In ThriveCart → Settings → API & Webhooks, add a webhook pointing at the URL below (or subscribe an app to the " +
+      "order and affiliate events), then paste the same account's ThriveCart order validation secret as the secret on " +
+      "this connection — it travels inside the body and is the whole of the authentication. Test-mode orders are dropped, " +
+      "and there is no list API, so history starts at connect.",
+  },
+  {
+    source: "retell",
+    name: "Retell AI",
+    description: "AI voice calls: started, completed with the duration in seconds, dials that never connected, analysed outcomes and transfers to a human.",
+    // The vendor's own mark: #00122E is the only fill in the icon and wordmark
+    // SVGs on https://www.retellai.com/logos (read 2026-09-08).
+    brand: { color: "#00122E", short: "Re" },
+    connect: "apiKey",
+    instant: true,
+    poll: true,
+    sync: "incremental",
+    historyNote: "Retell keeps calls indefinitely unless an agent sets a data-retention period, which then deletes its calls permanently.",
+    autoWebhook: false,
+    docs: { url: "https://docs.retellai.com/api-references/list-calls", readOn: "2026-09-08", webhooks: "https://docs.retellai.com/features/webhook" },
+    verified: { live: null },
+    // https://docs.retellai.com/deploy/concurrency (read 2026-09-08) publishes CALL
+    // limits only — concurrent calls per workspace (20 on pay-as-you-go) and calls
+    // per second — and no requests-per-minute figure for the REST API anywhere in
+    // the docs; 60/min is a conservative stand-in until scripts/verify-retell.ts
+    // measures the response headers against a real account.
+    rateLimits: { "calls.list": { requestsPerMinute: 60 } },
+    credentialFields: [
+      { key: "apiKey", label: "API key", placeholder: "key_…" },
+      { key: "webhookSecret", label: "Webhook signing key — Retell signs with your API key, so paste it again", placeholder: "key_…" },
+    ],
+    eventTypeLabels: { call_analyzed: "Call analysed", call_transferred: "Call transferred" },
+    commonFields: ["direction", "call_status", "disconnection_reason", "call_successful", "user_sentiment", "custom_analysis_data", "agent_id", "duration_ms"],
+    webhookSetup:
+      "In Retell, open the dashboard's Webhooks tab and set the URL below account-wide (an agent's own webhook_url overrides it), " +
+      "then paste your API key again as the webhook signing key — Retell signs every delivery with the API key itself. Polling covers " +
+      "the last 30 days either way.",
+  },
+  {
+    source: "customerio",
+    name: "Customer.io",
+    description: "Messages delivered, opened, clicked, converted and replied to; subscribers gained and lost.",
+    // Evergreen, the dark half of the 2024 identity, read off Customer.io's own
+    // stylesheet: `--evergreen-500: 187 69% 14%` (customer.io, 8 Sep 2026).
+    brand: { color: "#0B373C", short: "Ci" },
+    connect: "apiKey",
+    instant: true,
+    poll: false,
+    sync: "webhook-only",
+    syncNote:
+      "Opens are pixel-based and inflated by Apple Mail Privacy Protection and scanning proxies — delivered, clicked and " +
+      "converted are the defensible counts.",
+    historyNote:
+      "Customer.io's activity list has no time filter, so nothing can be backfilled — history starts when you connect.",
+    autoWebhook: false,
+    docs: {
+      url: "https://docs.customer.io/integrations/data-out/connections/webhooks/",
+      readOn: "2026-09-08",
+      webhooks: "https://docs.customer.io/integrations/data-out/connections/webhooks/",
+    },
+    verified: { live: null },
+    /**
+     * ONE ACCOUNT-WIDE BUCKET, and today nothing spends from it. Customer.io's
+     * App API reference (docs.customer.io/integrations/api/app, read 8 Sep 2026)
+     * publishes one figure for the endpoints that matter here — "Most endpoints
+     * on this page are limited to 10 requests per second" — so 600/min on "*"
+     * is the shape the provider actually charges, not a per-endpoint guess.
+     * Declared rather than omitted so the number carries a date: this connector
+     * makes no outbound requests at all (no poll — see customerio.ts on why the
+     * activity list cannot be walked), so it is the ceiling any future read
+     * would inherit, already cited.
+     */
+    rateLimits: { "*": { requestsPerMinute: 600 } },
+    credentialFields: [
+      { key: "webhookSecret", label: "Reporting webhook signing key (Integrations → Reporting webhooks)", placeholder: "…" },
+    ],
+    eventTypeLabels: {
+      email_delivered: "Email delivered",
+      email_opened: "Email opened",
+      email_clicked: "Email clicked",
+      email_converted: "Email converted",
+      sms_replied: "SMS reply received",
+      subscribed: "Subscribed",
+      unsubscribed: "Unsubscribed",
+      bounced: "Bounced",
+    },
+    commonFields: ["channel", "metric", "data.campaign_id", "data.subject", "data.identifiers.email", "data.delivery_id"],
+    webhookSetup:
+      "In Customer.io → Integrations → Reporting webhooks, add an endpoint with the URL below, tick the metrics you count " +
+      "(leave Drafted and Attempted off — they are internal stages and are dropped anyway), and paste that endpoint's signing " +
+      "key as the secret on this connection. By default Customer.io reports only the FIRST open or click per message; raise " +
+      "Send Frequency on the endpoint if you need every one. There is no list API to backfill from, so history starts here.",
+  },
+  {
+    source: "airtable",
+    name: "Airtable",
+    description: "Rows of one table, re-read every sweep — leads, jobs, deliverables, whatever the base models.",
+    brand: { color: "#FCB400", short: "At" },
+    connect: "apiKey",
+    instant: false,
+    poll: true,
+    // Whole-resource mirror: every sweep re-reads the table, so an edit or a
+    // deletion anywhere in it is reflected, not just appended rows. There is no
+    // choice about this — list-records has NO time filter, so there is no field
+    // the provider filters on and therefore no honest watermark to walk.
+    sync: "mirror",
+    syncNote:
+      "Each sweep re-reads the whole table, up to 5,000 records; a larger table mirrors only its first 5,000 rows, in Airtable's own order.",
+    autoWebhook: false,
+    docs: {
+      url: "https://airtable.com/developers/web/api/list-records",
+      readOn: "2026-09-08",
+      webhooks: "https://airtable.com/developers/web/api/webhooks-overview",
+    },
+    verified: { live: null },
+    // airtable.com/developers/web/api/rate-limits (read 2026-09-08): "5 requests
+    // per second per base" — 300/min, and the binding figure because one stream
+    // is one base. The same page's other limit, "50 requests per second for all
+    // traffic using personal access tokens from a given user or service
+    // account", is ~10x looser and only bites across many bases at once. A 429
+    // there costs 30 seconds ("you will need to wait 30 seconds before
+    // subsequent requests will succeed"), which is why the connector paces its
+    // own page walk under this number rather than discovering it.
+    rateLimits: { "records.list": { requestsPerMinute: 300 } },
+    credentialFields: [
+      {
+        key: "apiKey",
+        label: "Personal access token (airtable.com/create/tokens — scopes data.records:read and schema.bases:read)",
+        placeholder: "pat…",
+      },
+    ],
+    // Which base + table is chosen inside each flow's Get data step.
+    flowFields: [
+      { key: "baseId", label: "Base", required: true, dynamic: true, placeholder: "Choose a base…" },
+      {
+        key: "tableId",
+        label: "Table",
+        required: true,
+        dynamic: true,
+        dependsOn: ["baseId"],
+        placeholder: "Choose a table…",
+        hint: "Each step reads one table.",
+      },
+    ],
+    hiddenFields: ["_airtable.id", "_airtable.baseId", "_airtable.tableId"],
+    commonFields: ["_airtable.createdTime"],
+  },
 ];
 
 export function catalogEntry(source: string): ConnectorCatalogEntry | undefined {

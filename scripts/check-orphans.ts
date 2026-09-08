@@ -31,9 +31,7 @@ const ALLOWLIST: Record<string, string> = {
   // land in docs/superpowers/plans/2026-09-07-connectors-batch-1.md, and each
   // task there DELETES the entry for the helper it consumes. Added 8 Sep 2026.
   standardWebhooksVerify: "connector kit — first consumer: Retell (connectors batch 1)",
-  sharedTokenVerify: "connector kit — first consumer: Lemlist (connectors batch 1)",
   naturalOrHash: "connector kit — first consumer: Typeform (connectors batch 1)",
-  ymd: "connector kit — first consumer: Typeform (connectors batch 1)",
   // A.2, by design: identifiers are extracted and stored now so that identity
   // resolution can be built later WITHOUT a schema change or a backfill. The
   // spec explicitly deferred the reader ("no persons table now").
