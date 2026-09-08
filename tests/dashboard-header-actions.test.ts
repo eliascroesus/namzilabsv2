@@ -3,20 +3,27 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 /**
- * THE BLUE RETHEME (4 Sep 2026) — blue is reserved for "+ Add" and "New
- * flow"; every other header action, Refresh all included, takes the kit's
- * ordinary grey `secondary` button. A source pin because `SubmitButton`'s
- * props are plain strings — a render test here would only re-check this
- * same file's JSX against itself through React, at more cost for no more
- * certainty.
+ * THE LIME RETHEME (8 Sep 2026) — the brand fill is reserved for "+ Add" and
+ * the rail's "New"; the other two header actions are WHITE.
+ *
+ * That is a strange thing for a kit whose thesis is "quiet chrome" to ship,
+ * and it is drawn twice — "Today" and "Refresh All", adjacent, both white
+ * with #4A4A4A ink (nodes 49:5429 and 49:5439). Followed rather than corrected
+ * toward the grey `secondary` these used to take. What the rule PRESERVES is
+ * the important half: the brand still marks the two controls that ADD
+ * something, and nothing else in the header may take it.
+ *
+ * A source pin because `SubmitButton`'s props are plain strings — a render
+ * test here would only re-check this same file's JSX against itself through
+ * React, at more cost for no more certainty.
  */
-describe("dashboard header actions, 4 Sep 2026 blue retheme", () => {
-  it("draws Refresh all as secondary, not the brand fill", () => {
+describe("dashboard header actions, 8 Sep 2026 lime retheme", () => {
+  it("draws Refresh all as white, and never as the brand fill", () => {
     const src = readFileSync(join(process.cwd(), "src/app/dashboard/page.tsx"), "utf8");
     const anchor = src.indexOf("action={refreshAllFlowsAction}");
     expect(anchor, "the Refresh all form was found").toBeGreaterThan(-1);
-    const block = src.slice(anchor, anchor + 500);
-    expect(block, 'Refresh all reads variant="secondary"').toContain('variant="secondary"');
+    const block = src.slice(anchor, anchor + 900);
+    expect(block, 'Refresh all reads variant="white"').toContain('variant="white"');
     expect(block, 'Refresh all no longer reads variant="accent"').not.toContain('variant="accent"');
     /**
      * RE-POINTED 6 SEP 2026, AND THE OLD PIN IS WHY THIS SHIPPED WRONG.

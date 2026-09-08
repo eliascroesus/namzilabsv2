@@ -228,7 +228,7 @@ export default async function OverviewLab({
             title={<ViewTitle viewId="v-demo" name="Overview" canEdit />}
             actions={
               <>
-                <Button>
+                <Button variant="accent">
                   <Plus />
                   Add
                 </Button>
@@ -241,7 +241,12 @@ export default async function OverviewLab({
                   href="/design/overview"
                   now={HOUR_AGO}
                 />
-                <Button variant="secondary">
+                {/* WHITE, WHICH IS THE LOUDEST THING IN THIS ROW AFTER THE
+                    LIME — and it is drawn that way (node 49:5439). It reads
+                    against "quiet chrome", and it is followed rather than
+                    corrected: the Figma is explicit, twice, on two adjacent
+                    controls. See DESIGN.md, which owns the tension. */}
+                <Button variant="white">
                   <RefreshCw />
                   Refresh all
                 </Button>

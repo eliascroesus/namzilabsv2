@@ -46,11 +46,18 @@ describe("the dashboard's page header, 4 Sep 2026 blue retheme", () => {
     expect(page, "and so are its imports").not.toMatch(/PERIOD_PILL/);
   });
 
-  it("dresses that dropdown as a secondary control at the kit's one height, with a 16px calendar glyph", () => {
+  it("dresses that dropdown as a WHITE control at the kit's one height, with a 16px calendar glyph", () => {
+    /**
+     * `white`, not `secondary`, since 8 Sep 2026. Node 49:5429 draws the
+     * period trigger as a white pill with #4A4A4A ink, sitting between the
+     * lime "+ Add" and a white "Refresh All". It is the loudest row in the
+     * product after the brand itself, and it is drawn that way deliberately —
+     * see `dashboard-header-actions.test.ts` for the argument.
+     */
     const controls = read("src/app/dashboard/board-controls.tsx");
     const menu = controls.slice(controls.indexOf("export function RangeMenu"));
     expect(menu, "RangeMenu was found").not.toBe("");
-    expect(menu).toContain('variant="secondary"');
+    expect(menu).toContain('variant="white"');
     // RE-POINTED 6 SEP 2026: `xs` (24px/12px) is deleted from the size table.
     // It made this trigger shorter and quieter than the top bar's buttons.
     // The default rung is 32px at 14px and brings `[&_svg]:size-4` with it,

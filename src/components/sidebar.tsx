@@ -16,102 +16,50 @@ import { viewStrip, type BoardView } from "@/lib/board/types";
 import { GROUP_COLOR_KEYS, groupBadge, groupInk } from "@/components/flow/node-accent";
 
 /**
- * THE ICON RAIL — 48px at rest, 240px under the pointer.
+ * THE NAVIGATION COLUMN — 260px, always.
  *
- * WHAT IT WAS: 70px of `ink-950` running the full height, with the top bar
- * carrying the same charcoal across the rest. The two were ONE BAND wrapping a
- * lighter page, and the whole design followed from that: no hairline inside the
- * band (a 40-point luminance step finds its own edge), a notch cut out of the
- * band's inner corner, a chip under every glyph so the icons had a surface to
- * sit on, and a `focus-ring-light` because the product's one focus ring was
- * invisible on near-black.
+ * WHAT IT WAS, THROUGH THREE SHAPES. A 70px band of near-black running the
+ * full height beside a lighter page. Then 56px of `--chrome` separated from
+ * the page by one hairline, opening to 260px under the pointer and holding
+ * that width on a pin cookie. Now: 260px, permanently, drawn by node 49:5269.
  *
- * WHAT IT IS: 48px of `--background` — the SAME COLOUR as the top bar and the
- * page — separated from both by a 1px `--border` hairline and nothing else.
- * Every one of the five decisions above inverts with that. There is no band, so
- * there is no notch and no second material to avoid drawing a rule between;
- * there is one hairline down the right edge doing the entire job. The glyphs sit
- * directly on the ground at 12.9:1 with no chip, because a chip is a surface
- * step and there is nothing here to step away from. The focus ring is the
- * product's own — blue (`#3D9BFF`) at 6.65:1 on this exact colour, which is
- * the ring the light page provably could not carry.
+ * EVERY MECHANISM THE MIDDLE SHAPE NEEDED IS GONE, and they were all one
+ * mechanism. `REVEAL` faded the labels in on `group-hover/rail`,
+ * `group-focus-within/rail` and `group-data-[pinned=true]/rail`. The panel was
+ * `absolute` inside a narrower `<aside>` so its extra width came out of the
+ * page rather than out of the layout — widening in FLOW on a pointer-move
+ * would re-lay-out every tile on the dashboard as the cursor passed, and
+ * resize the builder's canvas under a drag. A toggle sat on the hairline, and
+ * a cookie carried the choice so the server could render the right width in
+ * the first paint instead of snapping a frame later.
  *
- * The rail's top block is still exactly the top bar's height, and that is still
- * the point: it is what makes the corner where the rail's rule meets the bar's
- * rule ONE seam rather than two that nearly meet. `tests/page-width.test.ts`
- * pins the two together.
+ * All of it existed to make a column that can be SHUT usable. Nothing here can
+ * be shut, so the labels are simply present, the `<aside>` is simply 260px,
+ * and there is no state, no cookie and no toggle. See `Sidebar` at the foot of
+ * this file for what the retirement leaves behind, and `page-width.test.ts`,
+ * which now asserts the ABSENCE of each piece — the mechanism was subtle
+ * enough that it would otherwise be reintroduced by a well-meaning "restore
+ * the collapse".
  *
- * AND IT OPENS. Point at it and the column widens IN PLACE to 240px and the
- * names fade in beside the chips: the wordmark, the two caps headings and
- * every destination. The reference is VoltOps, and the reason to copy
- * it is that it settles the argument the notes below used to lose — an icon
- * rail is unreadable until you have learned it, and the six names are the one
- * thing 70px genuinely could not hold. It holds them now, for as long as you
- * are looking at it.
+ * WHAT THE COLUMN HOLDS, top to bottom: a workspace switcher (a tinted 28px
+ * square, the name, a chevron), a search field on `--control`, a "Main Menu"
+ * caption at the faint step, the nav rows with the active one filled, a nested
+ * view list under Dashboard, and a foot carrying an Invite Members CARD over
+ * the lime "New". The last two arrived on 8 Sep 2026 from the top bar, which
+ * gave up both acts and took the gift in exchange.
  *
- * IT OVERLAYS, IT DOES NOT PUSH. The `<aside>` keeps a flat 48px footprint in
- * the layout and the panel inside it is `absolute`, so the 192px it gains are
- * taken from the page rather than given by it. The alternative — widening in
- * flow — reflows the entire board on a pointer-move, which on the dashboard
- * means every tile re-laying out and on the builder means the canvas resizing
- * under a drag. That is not a slower version of this, it is unusable.
+ * EVERY ROW IS A 36px SLOT HOLDING A 32px ICON BOX, and the split still
+ * matters. The BOX is the picture, a bare 18px glyph on the column's own
+ * ground — no plate, because there is no surface here to lift it off. The SLOT
+ * is the hit area, the full width of the column, so the name is as clickable
+ * as the glyph. Colour is spent in exactly one place: the row you are standing
+ * on takes `--control` under the WHOLE ROW, and its label goes white and
+ * semibold. There is no second raise — a hover that reached `--accent` made a
+ * hovered row look more selected than the selected one, which
+ * `controls-and-rail.test.ts` pins against.
  *
- * IT IS CSS, NOT STATE. `group-hover` and `group-focus-within` on one width
- * transition. A `useState` here would re-render this tree (and every child of
- * it) on entering and leaving the column, and it would do nothing at all until
- * hydration — a rail that ignores the pointer for the first second of a cold
- * load is worse than one that never moved.
- *
- * THERE IS NOTHING LEFT TO INVERT. This block used to argue that the band must
- * keep `bg-background` in BOTH themes while only the page inside it switched — the
- * thing Miro, Notion and Linear all do, on the grounds that a rail which flips
- * with the theme is a rail with no identity. The argument was right and it has
- * no subject: there is one theme, and the rail is `--background`, which is
- * exactly what the page is. What gives it identity now is not being a different
- * colour, it is the hairline and the fact that it is the only column on screen.
- *
- * EVERY ROW IS A 32px SLOT HOLDING A 24px CHIP, and the split matters. The CHIP
- * is the picture — a bare 16px glyph at 12.9:1, with no plate under it, because
- * on this ground there is no surface to lift it off. The SLOT is the hit area:
- * 32px tall, and as WIDE as the column is at the moment you press it, so an open
- * rail lets you click the name as well as the picture. Colour is spent in
- * exactly one place — the row you are standing on carries `--control` under
- * the WHOLE ROW and a blue glyph (`text-marker`) on top of it, with no fill
- * of its own under the chip, and the other four are plain.
- *
- * WHAT THE 48px COULD NOT HOLD, AND WHERE EACH THING WENT. Every one of these
- * came BACK with the hover panel; what follows is what the collapsed column
- * still does not say, and where the answer is instead:
- *
- * · THE LABELS. Present in the DOM at all times and revealed by the panel —
- *   which is also what NAMES each control now. There is no `aria-label` on a
- *   row any more: the accessible name is the visible label, one string, so the
- *   two can no longer drift apart (they did, in the 264px column, twice). A
- *   clipped, transparent label is still in the accessibility tree; only
- *   `display:none` and `visibility:hidden` take a name away.
- * · THE SECTION HEADINGS ("Workspace" / "Build"). Back, and their line is
- *   RESERVED IN BOTH STATES — see the note on the group block for why a
- *   heading that grows on hover is a mis-click waiting to happen.
- * · THE WORKSPACE SWITCHER. It is in the TOP BAR now, behind the workspace
- *   avatar and its name — see the note there. It was the one control in the
- *   old column that needed a name to be usable at all ("which workspace am I
- *   in" cannot be answered by an icon), so it moved rather than shrank.
- * · THE PLAN CARD ("Your plan / Seats, usage and billing"). DROPPED. It was a
- *   264px-wide link to `/dashboard/settings` carrying no number — the rail
- *   still goes to Settings, one row down, so nothing became unreachable and
- *   the only loss is a signpost pointing at a door that is still in view.
- * · THE ⌘K KEYCAP. GONE AGAIN, 6 SEP 2026, at the owner's word — it came
- *   back with the panel and went out with the export, which draws a search
- *   field carrying a magnifier and a word and nothing else. The binding is
- *   untouched: `aria-keyshortcuts` on the button is the announced fact, and
- *   the chip was `aria-hidden`, so it was never part of the control's name.
- * · THE TOOLTIPS. GONE, all seven, and that is a decision rather than an
- *   omission. They existed to name a glyph for a pointer user; the panel now
- *   names it, at the same moment, from the same string. Worse, they were
- *   `side="right"` — anchored to a row that is now 216px wide, a tooltip opens
- *   ON TOP of the very label it duplicates. A control cannot be its own
- *   annotation.
- * · THE THEME TOGGLE. GONE, with the second theme it switched between.
+ * IT IS NOT RENDERED BELOW `md`. 260px of permanent column on a 390px screen
+ * is two thirds of the viewport; `MobileDrawer` renders this same tree there.
  */
 
 /**
@@ -1081,7 +1029,12 @@ export function RailContent({
               GET FREE ACCESS IS NOT HERE ANY MORE. Its gift moved to the top
               bar (node 51:5756), where it sits beside the account as an offer
               rather than under two acts as a third one. */}
-          <Button asChild size="sm" className="h-9 w-full">
+          {/* `accent` NAMED, not inherited. The default variant is `default`
+              (a bordered `--card` fill), and this button is the one act in the
+              column — the Figma fills it with the brand. Relying on a default
+              here is how the identical control ends up drawn two ways in two
+              files, which is what happened to "+ Add" in the board header. */}
+          <Button asChild variant="accent" size="sm" className="h-9 w-full">
             <Link href="/dashboard/flows">
               <Plus />
               <span className="text-button font-semibold">New</span>

@@ -217,7 +217,7 @@ export function RangeMenu({
             `truncate max-w-40` because a dated label is longer than a preset's
             and this trigger shares a header slot with "+ Add" and "Refresh
             all". */}
-        <Button variant="secondary" aria-label={`Period — ${label}`}>
+        <Button variant="white" aria-label={`Period — ${label}`}>
           <CalendarDays aria-hidden />
           <span className="truncate max-w-40">{label}</span>
           <ChevronDown aria-hidden />

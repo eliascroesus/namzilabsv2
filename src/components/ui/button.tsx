@@ -138,7 +138,11 @@ const buttonVariants = cva(
          * all. On the console the border is invisible against the fill and
          * costs nothing.
          */
-        white: "border border-border bg-white text-neutral-950 shadow-xs hover:bg-neutral-50 active:bg-neutral-100",
+        // `neutral-500` (#4A4A4A at 8.86:1 on white), which is what node
+        // 49:5429 sets "Today" and "Refresh All" in — not `neutral-950`. The
+        // ramp's dark end is the PAGE now (#121214), so spelling the ink there
+        // put near-black-on-white on a control the Figma draws in a mid grey.
+        white: "border border-border bg-white text-neutral-500 shadow-xs hover:bg-neutral-50 active:bg-neutral-100",
         /** THE REFERENCE'S OWN BADGE-AS-BUTTON: a 10% brand wash inside a 20%
          *  brand ring, carrying brand ink. On a light page this shape was
          *  impossible in the brand — a yellow wash under yellow ink needs
