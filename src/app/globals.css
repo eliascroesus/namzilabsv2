@@ -196,8 +196,8 @@
      technical strings stop wearing the browser's fallback serif-mono mix. */
   --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
 
-  /* --- Brand: blue, and why one ramp does both jobs -----------------------
-   * ONE COLOUR, THREE JOBS, ACROSS TWO RETHEMES.
+  /* --- Brand: lime, and the ink that had to invert ------------------------
+   * ONE COLOUR, THREE JOBS, ACROSS THREE RETHEMES.
    *
    * The kit ran "YELLOW FILLS, VIOLET DRAWS" for exactly one reason, and it is
    * worth keeping on the record because the reason is gone rather than
@@ -206,38 +206,45 @@
    * could only ever safely do one of the two jobs and `check-ui.ts` needed a
    * rule (`yellow-as-stroke`) to keep them from swapping places.
    *
-   * The 2 September cyan re-theme retired that rule once the brand moved onto
-   * a hue that cleared its bar both ways. The 4 September Figma replaces the
-   * cyan itself with #007BFF — a full re-cut, not a hex swap, because the
-   * ground it is measured against moves too (three surfaces from the next
-   * task on: #0F1011, #111111, #181818, in place of one #1B191A).
+   * The 8 September Figma lands on #B6FF56, and the yellow problem comes back
+   * HALF true. On white the lime is 1.20:1 — an absent line, exactly as the
+   * yellow was. On the near-black console it is 15.53:1, the brightest stroke
+   * this product has ever drawn. So the split the yellow needed is reinstated
+   * ACROSS THEMES rather than across jobs: one value draws and fills on dark,
+   * and light mode alone needs a second, solved-down step (`800`) to draw with.
    *
-   * `--primary` fills, `--marker` draws, and they are two steps of one ramp
-   * rather than two colours holding each other's job open.
+   * THE INK INVERTED, AND THAT IS THE HEADLINE. Blue was a fill under WHITE
+   * (#0070E8 at 4.68:1). Lime cannot be: white-on-lime is the same 1.20:1, unreadable.
+   * It is a fill under NEAR-BLACK — #2C2C2C at 11.59:1 — which is why
+   * `--primary-foreground` is a dark value in BOTH themes now. The rule did
+   * not change (a primary button is one object and its ink does not vary by
+   * theme); which end of the ramp supplies that ink did.
    *
-   * HOVER WALKS UP, NOT DOWN, on dark. On a light ground the brand darkened
-   * under the pointer, because brightening a colour moves it toward the white
-   * behind it and the label's contrast falls at the moment of the press. On
-   * near-black the argument inverts with the surface: raised means lighter, so
-   * hover is `500` and the press is `700`.
+   * ONE STEP DOES BOTH JOBS ON DARK, where blue needed two. Blue was tight
+   * enough under white that the fill had to sit a rung below the named brand
+   * to clear 4.5:1. Lime has 11.59:1 under its ink and 15.53:1 as a stroke —
+   * room enough that `400` is the fill, the stroke and the default chart
+   * series, and `500`/`600`/`700` are left as press and reserve.
+   *
+   * HOVER WALKS UP, NOT DOWN, on dark — unchanged in argument, inverted in
+   * value. On near-black, raised means lighter, so the fill hovers to the
+   * LIGHTER `300` and presses to `500`. (Blue hovered to `500` and pressed to
+   * `700` because its ramp ran the other way round the fill.)
    */
-  /* THE 4 SEPTEMBER FIGMA SUPPLIES EVERY STEP. #007BFF is named as THE BRAND,
-     but it is not the FILL: measured white-on-fill it is 3.98:1, under the 4.5
-     a 15px label owes. `--primary` reads one step deeper, `600` (#0070E8,
-     4.68:1 white-on-fill) — indistinguishable beside the named value, and it
-     clears the bar the Figma's own choice does not. #007BFF keeps its place at
-     `500`: the hover of the fill, the workspace-initial tint, decorative dots
-     and the chart's default series. */
-  --color-brand-50: #e6f2ff;
-  --color-brand-100: #cce5ff;
-  --color-brand-200: #99cbff;
-  --color-brand-300: #66b2ff; /* 8.51:1 on #0F1011 */
-  --color-brand-400: #3d9bff; /* THE DARK STROKE (`--marker` in `.dark`) — 6.65:1 on #0F1011, 6.59:1 on #111111, 6.20:1 on #181818 */
-  --color-brand-500: #007bff; /* THE BRAND — hover of the fill, the workspace-initial tint, decorative dots, the chart's default series. 4.79:1 as a stroke on #0F1011 */
-  --color-brand-600: #0070e8; /* THE FILL (`--primary`, both themes) under WHITE ink — 4.68:1 */
-  --color-brand-700: #0069d9; /* pressed — 5.22:1 under white */
-  --color-brand-800: #0062cc; /* THE LIGHT STROKE (`--marker` in `:root`) — 5.80:1 on white */
-  --color-brand-900: #0056b3; /* reserved — the light theme's hover-of-a-stroke, 7.04:1 on white */
+  /* THE 8 SEPTEMBER FIGMA SUPPLIES #B6FF56 AND NOTHING ELSE. Every other step
+     here is solved from it: the pale end by lightening toward white for washes
+     that do not exist yet, the deep end by darkening until it clears 4.5:1 on
+     white, which is the one bar the Figma's own value cannot meet. */
+  --color-brand-50: #f4ffe4;
+  --color-brand-100: #e9ffc9;
+  --color-brand-200: #dbffa6;
+  --color-brand-300: #c9ff7d; /* hover of the fill — LIGHTER, because on near-black raised means lighter */
+  --color-brand-400: #b6ff56; /* THE BRAND — the fill, the dark stroke (`--marker` in `.dark`), and the default chart series. 15.53:1 on #121214, 11.59:1 under #2C2C2C ink */
+  --color-brand-500: #a2e844; /* pressed */
+  --color-brand-600: #8acc2e; /* reserved */
+  --color-brand-700: #6fa61c; /* reserved */
+  --color-brand-800: #4f7a00; /* THE LIGHT STROKE (`--marker` in `:root`) — 5.10:1 on white, where #B6FF56 is 1.20:1 */
+  --color-brand-900: #3d5e00; /* reserved — the light theme's hover-of-a-stroke, 7.50:1 on white */
 
   /* --- The decorative set -------------------------------------------------
    * The kit page draws its chips and pins in a fixed set beside the neutrals.
@@ -662,22 +669,22 @@
   --control: #f4f4f4;
 
   /* ---- Brand ------------------------------------------------------------- */
-  --primary: var(--color-brand-600); /* the fill does not change with the theme */
-  --primary-foreground: #ffffff;
-  --marker: var(--color-brand-800); /* THE LIGHT STROKE — 5.80:1 on white */
+  --primary: var(--color-brand-400); /* the fill does not change with the theme */
+  --primary-foreground: #2c2c2c; /* NEAR-BLACK, and dark in both themes: white on lime is 1.20:1 */
+  --marker: var(--color-brand-800); /* THE LIGHT STROKE — 5.10:1 on white, where the brand itself is 1.20:1 */
   /* THE FILL'S HOVER — walks DOWN on light: brand-700, the same step as the
      press below it. The spec sets hover and press to that one shared step on
      light rather than giving hover a lighter rung of its own — 5.22:1
      white-on-fill, clear of the 4.5:1 a button's ink owes. */
-  --primary-hover: var(--color-brand-700);
+  --primary-hover: var(--color-brand-300);
   /* THE PRESSED STEP — brand-700 in BOTH themes, the one step of the ramp
      that does not flip direction with the surface. */
-  --primary-active: var(--color-brand-700);
-  --brand-soft: rgb(0 123 255 / 0.1);
+  --primary-active: var(--color-brand-500);
+  --brand-soft: rgb(182 255 86 / 0.1);
   /* 30%, not the dark theme's 25%: the same alpha over white is a smaller edge
      than it is over the near-black surfaces, and a wash with no ring is not a
      badge. */
-  --brand-soft-line: rgb(0 123 255 / 0.3);
+  --brand-soft-line: rgb(182 255 86 / 0.3);
 
   /* ---- Neutral roles ----------------------------------------------------- */
   /* Both white with a `--input` outline — the Figma's grey buttons are white
@@ -796,12 +803,13 @@
   --control: var(--color-neutral-850); /* #202020 — a step UP from #111111 */
 
   /* ---- Brand ------------------------------------------------------------- */
-  /* THE FILL. #0070E8 under WHITE ink at 4.68:1 — white rather than
+  /* THE FILL. #B6FF56 under NEAR-BLACK ink at 11.59:1 — #2C2C2C rather than
      `--foreground`, because a primary button is one object and the ink on it
-     does not change with the theme. It is white in `:root` too now, where the
-     old cyan needed near-black ink in both. */
-  --primary: var(--color-brand-600);
-  --primary-foreground: #ffffff;
+     does not change with the theme. The RULE is the blue kit's; what inverted
+     is which end of the ramp supplies the ink, because white on this fill is
+     1.20:1 and cannot be read at any size. */
+  --primary: var(--color-brand-400);
+  --primary-foreground: #2c2c2c;
 
   /* THE STROKE. Every line, ring and coloured glyph: the focus ring, links,
      the active tab's rule, a selected edge. 6.65:1 on the ground, 6.59:1 on
@@ -811,15 +819,15 @@
   --marker: var(--color-brand-400);
   /* THE FILL'S HOVER — walks UP on dark: brand-500, the same value the ramp
      names THE BRAND. Raised means lighter on a near-black ground. */
-  --primary-hover: var(--color-brand-500);
+  --primary-hover: var(--color-brand-300);
   /* THE PRESSED STEP — brand-700 in BOTH themes, the one step of the ramp
      that does not flip direction with the surface. */
-  --primary-active: var(--color-brand-700);
+  --primary-active: var(--color-brand-500);
   /* The brand as a WASH — the "Free" and "Developer" pills, a selected row, a
      soft banner. Alpha rather than a mixed step so it sits correctly on any of
      the dark surfaces without a second token. */
-  --brand-soft: rgb(0 123 255 / 0.1);
-  --brand-soft-line: rgb(0 123 255 / 0.25);
+  --brand-soft: rgb(182 255 86 / 0.1);
+  --brand-soft-line: rgb(182 255 86 / 0.25);
 
   /* ---- Neutral roles ----------------------------------------------------- */
   --secondary: var(--color-neutral-800); /* #333333 — grey buttons */
