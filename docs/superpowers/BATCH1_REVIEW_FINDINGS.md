@@ -27,8 +27,30 @@ own documentation first rather than taken on the reviewer's word:
   are deleted, with a test that fails if either returns before the two paths are
   made to agree on identity. The `lead_interested` label went with it.
 
-The **43 remaining findings below are still unverified**, and the two Smartlead
-entries further down are superseded by the fix above.
+A second verification pass then ran, one agent per connector, each told to
+default to REFUTED and to confirm nothing it could not back with a concrete
+payload, a concrete wrong number, and a line of the vendor's own documentation.
+**Thirteen of its fourteen agents died on the same session limit that killed the
+first pass**, so it settled one connector before stopping:
+
+- **Airtable's truncated mirror.** CONFIRMED, and fixed in `872ff88`. A mirror
+  read promises "this IS the resource" and `retireAbsent` tombstones every
+  stored row the read omitted. Airtable is the first mirror that can come back
+  truncated — its walk stops at a page cap and sets `incomplete` — and the
+  runner's mirror branch never read that flag, so a base past the cap had every
+  row outside an *arbitrarily ordered* prefix soft-deleted on every sweep, with
+  the drift alarm silenced because it compared the prefix against the
+  post-retire count. Airtable's docs supplied the decisive line: with neither
+  `sort` nor `view`, record order "is arbitrary".
+
+So **38 of the original 45 remain unverified**. They are hypotheses written by
+reviewers who were never checked, not defects of record — the two that have been
+examined closely both turned out to be real, which is a reason to finish the
+pass rather than a reason to trust the rest. Re-run it after the limit resets:
+`Workflow({scriptPath: '<scratchpad>/verify-findings.js', resumeFromRunId: 'wf_bd66272a-a9f'})`
+replays Airtable from cache and re-runs the thirteen that died.
+
+The two Smartlead entries further down are superseded by the fix above.
 
 
 ## CRITICAL
