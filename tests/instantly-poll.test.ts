@@ -284,9 +284,20 @@ describe("Instantly: a dead continuation restarts the window without advancing i
     timestamp_created: iso,
   });
 
+  /**
+   * ANCHORED TO THE RUN, per this file's header. These three fixtures used to
+   * read "2026-06-01" / "2026-06-10" / "2026-06-20" against a `days: 90`
+   * window, so the moment the clock passed 8 Sep 2026 the 10 June record fell
+   * below `now - 90 days` and "walks past an empty page" began failing — on a
+   * DATE, for a reason with nothing to do with continuations. Offsets from a
+   * base captured once keep the three records inside the window forever.
+   */
+  const BASE = Date.now();
+  const ago = (days: number) => new Date(BASE - days * 86_400_000).toISOString();
+
   it("keeps the high-water mark where it was, and reports the sweep unfinished", async () => {
-    const hw = "2026-06-01T00:00:00.000Z";
-    const newest = "2026-06-20T00:00:00.000Z";
+    const hw = ago(60);
+    const newest = ago(20);
     let call = 0;
     vi.stubGlobal(
       "fetch",
@@ -314,8 +325,8 @@ describe("Instantly: a dead continuation restarts the window without advancing i
   });
 
   it("still promotes the mark when the walk actually drained", async () => {
-    const hw = "2026-06-01T00:00:00.000Z";
-    const newest = "2026-06-20T00:00:00.000Z";
+    const hw = ago(60);
+    const newest = ago(20);
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => jsonResponse({ items: [email("e1", newest)], next_starting_after: null })),
@@ -338,9 +349,9 @@ describe("Instantly: a dead continuation restarts the window without advancing i
    * promote the mark over an unread remainder.
    */
   it("walks past an empty page instead of calling it the end", async () => {
-    const hw = "2026-06-01T00:00:00.000Z";
-    const older = "2026-06-10T00:00:00.000Z";
-    const newest = "2026-06-20T00:00:00.000Z";
+    const hw = ago(60);
+    const older = ago(40);
+    const newest = ago(20);
     let call = 0;
     vi.stubGlobal(
       "fetch",
