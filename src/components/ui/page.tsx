@@ -314,22 +314,23 @@ export function PageHeader({ title, lede, actions, tabs, back, className }: Page
      * `pb-4` stays: it is what stops a title touching the thing beneath it, and
      * dropping both would have been a different change.
      */
-    // 16px BELOW THE ROW'S VISUAL BOTTOM, WHICH IS NOT THE SAME AS 16px OF
-    // PADDING — and the difference is the tab strip's focus ring.
+    // 16px, FLAT, AND IT NO LONGER HAS TO KNOW ABOUT THE TABS.
     //
     // Node 58:5951 puts the header row at y=0 of the content container and the
     // tile grid at y=48, the row itself 32 tall: a 16px gap, the same gutter
     // the grid below it uses. It was `pb-6` (24), so the board sat 8px low on
     // every route.
     //
-    // With TABS the row is 40, not 32: `ViewStrip` carries `py-1` so its focus
-    // ring is not clipped by its own `overflow-x-auto` scroller (an `overflow-x`
-    // other than visible forces `overflow-y` to match, so the ring cannot
-    // simply spill). Those 4px above and below are ring room rather than
-    // spacing, so the padding gives back the 8 they cost and the measured gap
-    // lands on 16 either way. Verified in the browser at 1920: the grid starts
-    // at y=137, which is the Figma's own number.
-    <header className={cn(tabs ? "pb-2" : "pb-4", className)}>
+    // It was then `tabs ? "pb-2" : "pb-4"` for one commit, compensating for the
+    // 8px the tab strip's focus-ring padding added to the row. That worked and
+    // was the wrong place: a header should not carry an offset for a child's
+    // ring. `ViewStrip` cancels its own padding with `-my-1` now, so the row is
+    // 32 whether or not it has tabs and this is one number again.
+    //
+    // Measured at 1920: the Add button's bottom edge sits at 121 and the board
+    // starts at 137. `pnpm geometry` pins the board; the 12px this replaced was
+    // reported by Elias before any check could see it.
+    <header className={cn("pb-4", className)}>
       {back && (
         /**
          * AN 8px CONTROL, NOT A LINE OF TEXT. This was the one navigation

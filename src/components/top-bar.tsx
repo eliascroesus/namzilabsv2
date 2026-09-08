@@ -146,7 +146,7 @@ export function TopBar({
             already italic, so the class would be a second spelling of the tag. */}
         <p className="hidden shrink-0 text-sm italic text-chrome-foreground peer-[:not(:empty)]:hidden lg:block">
           <em>Try </em>
-          <em className="font-semibold text-chrome-brand">Namzilabs</em>
+          <em className="font-black text-chrome-brand">Namzilabs</em>
           <em> for free</em>
         </p>
       </div>

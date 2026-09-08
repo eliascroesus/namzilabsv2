@@ -62,6 +62,27 @@ const FIGMA = {
   ],
 };
 
+/**
+ * THE RAIL'S OWN RHYTHM, node 58:5825, measured from the rail's top-left.
+ *
+ * Every one of these is a CONTENT box — the padded frame the Figma names, not
+ * the full-width row we wrap it in. `x` is therefore 16 (the rail's own gutter)
+ * on all of them, and a row whose outer div spans the full 260 is still correct
+ * as long as its content starts there.
+ *
+ * The vertical numbers are the ones that matter and the ones that were wrong:
+ * the whole column sat 34px high because the nav's top padding was 4 where the
+ * Figma's gap is 24, and every row below the search inherited it.
+ */
+const RAIL = {
+  "switcher": { x: 16, y: 14, h: 40 },
+  "search": { x: 16, y: 78, h: 36 },
+  "Main Menu": { x: 16, y: 138, h: 12 },
+  "Dashboard": { x: 16, y: 158, h: 36 },
+  "sub-nav 1st": { x: 48, y: 202, h: 32 },
+  "Activity": { x: 16, y: 306, h: 36 },
+};
+
 const browser = await chromium.launch();
 const page = await browser.newPage({
   viewport: { width: 1920, height: 1200 },
@@ -89,10 +110,69 @@ const got = await page.evaluate(() => {
    */
   const first = document.querySelector("[data-tile-card]");
   const grid = first?.parentElement?.parentElement ?? null;
+  /**
+   * RAIL BOXES, RELATIVE TO THE RAIL, AND MEASURED ON THE INNERMOST THING.
+   *
+   * A row's outer div is full-width with its own gutter padding, so measuring
+   * it reports x=0 and compares a wrapper against a padded frame. What the
+   * Figma names is the CONTENT, so each of these reaches for the element that
+   * actually carries ink or a border.
+   */
+  const aside = document.querySelector("aside");
+  const rail = {};
+  if (aside) {
+    const o = aside.getBoundingClientRect();
+    const rel = (el) => {
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return {
+        x: +(r.x - o.x).toFixed(2),
+        y: +(r.y - o.y).toFixed(2),
+        w: +r.width.toFixed(2),
+        h: +r.height.toFixed(2),
+      };
+    };
+    const text = (tag, t) => [...aside.querySelectorAll(tag)].find((e) => (e.textContent || "").trim() === t);
+    const head = aside.querySelector("div.mt-3\\.5");
+    rail["switcher"] = rel(head?.firstElementChild ?? head);
+    rail["search"] = rel(aside.querySelector("input")?.parentElement);
+    /**
+     * THE CONTENT BOX, NOT THE BORDER BOX AND NOT A RANGE.
+     *
+     * The caption's `<p>` carries the 24px that separates it from the search as
+     * its own `padding-top`, so its border box starts at 122 and comparing that
+     * against a Figma frame naming the glyphs is off by the padding.
+     *
+     * A `Range` over the text node is the obvious alternative and is WRONG here
+     * in a way worth recording: it returns the GLYPH box, which for a
+     * `line-height` tighter than the font's natural leading is taller than the
+     * line and starts above it — it reported 136/15 for a line laid out at
+     * 138/12. The content box is what CSS actually placed.
+     */
+    const mm = text("p", "Main Menu");
+    if (mm) {
+      const r = mm.getBoundingClientRect();
+      const cs = getComputedStyle(mm);
+      rail["Main Menu"] = {
+        x: +(r.x - o.x + parseFloat(cs.paddingLeft)).toFixed(2),
+        y: +(r.y - o.y + parseFloat(cs.paddingTop)).toFixed(2),
+        w: +(r.width - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)).toFixed(2),
+        h: +parseFloat(cs.lineHeight).toFixed(2),
+      };
+    }
+    rail["Dashboard"] = rel(text("span", "Dashboard")?.closest("a"));
+    // The nested view rows: the first one's LABEL, which is what sits at x=48.
+    const sub = aside.querySelector("a > span[aria-hidden].border-r");
+    rail["sub-nav 1st"] = rel(sub?.parentElement);
+    rail["sub-nav rule"] = rel(sub);
+    rail["Activity"] = rel(text("span", "Activity")?.closest("a"));
+  }
+
   return {
     sidebar: box(document.querySelector("aside")),
     topbar: box(document.querySelector("header")),
     cells: grid ? [...grid.children].map(box) : [],
+    rail,
   };
 });
 
@@ -120,6 +200,19 @@ FIGMA.chartCards.forEach((want, i) => check(`chart ${i + 1}`, got.cells[i], want
 
 console.log("\nstat tiles (height is grid-quantised — see the note in this file)");
 FIGMA.statTiles.forEach((want, i) => check(`stat ${i + 1}`, got.cells[i + 3], want));
+
+console.log("\nrail (content boxes, relative to the rail's own top-left)");
+for (const [k, want] of Object.entries(RAIL)) {
+  const a = got.rail[k];
+  if (!a) {
+    console.log(`  ✗ ${k.padEnd(14)} NOT FOUND`);
+    failed++;
+    continue;
+  }
+  // `x` on a row is where its CONTENT starts, which is what the Figma names.
+  const actual = k === "sub-nav 1st" ? { ...a, x: got.rail["sub-nav rule"] ? a.x + 32 : a.x } : a;
+  check(k, actual, want);
+}
 
 await browser.close();
 console.log(failed ? `\n✗ ${failed} box(es) off by more than ${TOL}px` : "\n✓ every measured box matches the Figma");

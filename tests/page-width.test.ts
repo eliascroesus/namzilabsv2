@@ -209,24 +209,30 @@ describe("the page container and the skeleton that stands in for it", () => {
     const bar = band(topBar, /<header className="[^"]*?\bh-(\S+) shrink-0/, "the top bar's height");
     expect(band(skeleton, /className="h-(\S+) shrink-0 border-b/, "the skeleton's top bar band")).toEqual(bar);
     /**
-     * THE RAIL'S TOP BLOCK IS NO LONGER IN THIS COMPARISON, and dropping it is
-     * the point rather than a relaxation.
+     * THE RAIL'S TOP BLOCK LEFT THIS COMPARISON ENTIRELY, in two steps, and the
+     * second one is the lesson.
      *
-     * It was asserted equal to the bar because the two sat side by side at the
+     * It was asserted EQUAL to the bar, because the two sat side by side at the
      * top of the screen: the corner where the rail's right edge met the bar's
-     * bottom edge only read as ONE seam while the block carrying the switcher
+     * bottom edge only read as one seam while the block carrying the switcher
      * and the bar beside it were the same height.
      *
-     * The frame is a row now (8 Sep). The rail runs the full height and the bar
-     * begins to its right, so those two edges meet in a T, not an L — there is
-     * no corner for a mismatch to show up in. The Figma agrees and does not
-     * align them: node 58:5828 puts the switcher block at y=14 and node
-     * 58:5829 makes the row 40px, against a 65px bar.
+     * The frame became a row on 8 Sep — the rail runs full height and the bar
+     * begins to its right — so those edges meet in a T, not an L, and there is
+     * no corner for a mismatch to show in. The Figma agrees and does not align
+     * them: node 58:5828 puts the switcher block at y=14 against a 65px bar.
+     * So the assertion was inverted to `.not.toEqual`, which was a mistake of a
+     * familiar kind: it kept a brittle SOURCE regex (`className="flex h-…`)
+     * alive to make a claim worth almost nothing, and the regex then broke on a
+     * class-order change and threw "could not find the rail's top block" — a
+     * parse failure wearing the costume of a layout failure.
      *
-     * What still matters is the pair below, which is the drift this file
-     * actually exists to catch.
+     * The rail's real rhythm is checked where it can actually be seen:
+     * `pnpm geometry` measures the switcher, the search, the caption, the nav
+     * rows and the nested view rows against nodes 58:5825/49:5269 in a browser.
+     * What stays HERE is the pair this file exists for — the bar and the ghost
+     * that stands in front of it.
      */
-    expect(band(sidebar, /className="flex h-(\S+) shrink-0 items-center/, "the rail's top block")).not.toEqual(bar);
   });
 
   /**

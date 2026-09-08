@@ -516,26 +516,37 @@ export function RailContent({
                  make it a child of the Dashboard chip above without pushing it
                  out to the parent's label, which is where it started. */
               className={cn(
-                "flex h-8 min-h-11 items-center rounded-control pl-4 pr-2 text-sm transition-colors duration-(--duration-fast) md:min-h-0",
-                /* `bg-control` (#202020) FOR BOTH, which is the rule the whole
-                   rail follows now: the row you are on and the row under the
-                   pointer wear the SAME fill. `--accent` (#3A3A3A) was a second,
-                   stronger raise reserved for hover, and having two of them
-                   meant a hovered row looked more selected than the selected
-                   one. See `SLOT`. */
-                on
-                  ? "bg-chrome-control font-medium text-chrome-foreground"
-                  : "text-chrome-muted hover:bg-chrome-control hover:text-chrome-foreground",
+                "flex h-8 min-h-11 items-center pr-2 text-sm transition-colors duration-(--duration-fast) md:min-h-0",
+                /* NO FILL ON THE ACTIVE ROW, which is where this differs from
+                   the rows above it. Node 49:5307 draws the current view as
+                   white text beside a WHITE RULE and nothing else — the rule is
+                   the second signal, so a fill would be a third. The parent nav
+                   rows keep theirs: they have no rule. */
+                on ? "font-medium text-chrome-foreground" : "text-chrome-muted hover:text-chrome-foreground",
               )}
             >
-              {/* A DASH, DRAWN RATHER THAN TYPED. It marks these rows as
-                  children of the one above without repeating an icon column
-                  they do not have — and it is a rule, not an en-dash, because
-                  the kit bans text glyphs used as marks and because `bg-current`
-                  makes it inherit the row's own ink, so it lights with the name
-                  on hover and on the active row instead of staying a fixed grey
-                  beside text that moved. */}
-              <span aria-hidden className="mr-2 h-px w-2 shrink-0 bg-current opacity-60" />
+              {/* THE RULE, AND IT USED TO BE A DASH.
+                  This was an 8px horizontal line per row — a mark saying "child
+                  of the row above". Node 51:5779 draws something else: ONE
+                  continuous vertical rule down a 16px gutter, its segment beside
+                  the current view WHITE and the rest `--chrome-muted`. It reads
+                  as a bracket around the group rather than as three unrelated
+                  ticks.
+                  It is a `border-r` on a full-height 16px span INSIDE each row,
+                  not a separate column beside the list: two lists that have to
+                  stay in lockstep drift the moment one of them grows a touch
+                  target (`min-h-11` below `md`), and then the rule stops meeting
+                  itself between rows. One list cannot drift from itself.
+                  `self-stretch` is what makes the segments meet: at `h-full` the
+                  span measures against a flex parent that has not sized yet and
+                  collapses to nothing. */}
+              <span
+                aria-hidden
+                className={cn(
+                  "mr-4 w-4 shrink-0 self-stretch border-r",
+                  on ? "border-chrome-foreground" : "border-chrome-muted",
+                )}
+              />
               <span className="truncate">{v.name}</span>
             </Link>
           );
@@ -613,7 +624,7 @@ export function RailContent({
             L and nothing needs to line up across it.
             Node 58:5828 measures the block at y=14 and node 58:5829 the
             switcher row at 40px, which is what this spells. */}
-        <div className="flex h-10 shrink-0 items-center px-4 pt-3.5">
+        <div className="mt-3.5 flex h-10 shrink-0 items-center px-4">
           {workspace &&
             (account ? (
               <DropdownMenu>
@@ -730,13 +741,14 @@ export function RailContent({
           */}
         <nav
           aria-label="Primary"
-          /* `pt-1`, NOT `pt-3`. The head block above is exactly 60px (it has to
-             be — it is what makes the rail's rule and the top bar's rule one
-             seam, pinned by tests/page-width.test.ts), so this padding is the
-             only thing deciding where the search field lands. At 12px it put
-             the field at 132; the export draws it at 124, and every row below
-             inherited the same 8px of slack. */
-          className={cn("quiet-scroll flex min-h-0 flex-1 flex-col gap-2 overflow-x-hidden overflow-y-auto pt-1 pb-4", GUTTER)}
+          /* `pt-6` — 24px, and every row in the column depends on it.
+             The head block above is `mt-3.5 h-10`, so it runs 14 -> 54; node
+             58:5838 puts the search at 78. This padding is the whole of that
+             gap, and it was `pt-1`: the field landed at 44 and the ENTIRE
+             column below inherited the same 34px of slack — measured, against a
+             Figma that puts Dashboard at 158 and Activity at 306. `pnpm
+             geometry`'s rail pass is what caught it. */
+          className={cn("quiet-scroll flex min-h-0 flex-1 flex-col gap-2 overflow-x-hidden overflow-y-auto pt-6 pb-4", GUTTER)}
         >
               {/* THE SEARCH CONTROL OPENS THE COLUMN, which is where all
                   three references (Miro, Figma, Make) put it: the fastest way
@@ -899,7 +911,13 @@ export function RailContent({
                 </div>
               ) : (
                 <>
-              <p className="px-1 pb-1 pt-2 text-xs font-normal text-chrome-faint">Main Menu</p>
+              {/* NO `px-1`. Every other row in this column starts its content at the
+                  rail's own 16px gutter; the caption carried a further 4px and
+                  sat at 20, which is the sort of single-element drift nobody
+                  sees and everybody feels. `pt-4` is the 24px node 58:5847
+                  puts between the search and this line, minus the nav's own
+                  8px gap. */}
+              <p className="pt-4 text-xs font-normal leading-3 text-chrome-faint">Main Menu</p>
               {items
                 .map(({ label, href, icon: Icon }) => {
                   const active = pathname === href || (href !== "/dashboard" && pathname.startsWith(href));

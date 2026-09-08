@@ -363,7 +363,20 @@ export function ViewStrip({
        target by comparing `clientX` against each tab's rect, and a wrapped
        row has several tabs at the same x. Above `md` there is room for the
        row and wrapping stays the right answer. */
-    <div ref={strip} className="-mx-1 flex flex-nowrap items-center gap-6 px-1 py-1 md:flex-wrap">
+    <div
+      ref={strip}
+      /* `-my-1` PAIRED WITH `py-1`, WHICH IS WHAT STOPS RING ROOM BECOMING
+         LAYOUT. The padding is here so a focused tab's ring is not clipped by
+         this strip's own `overflow-x-auto` (an `overflow-x` other than visible
+         forces `overflow-y` to match, so the ring cannot spill). But padding
+         also made the strip 40 tall, which made the whole header row 40, which
+         centred the 32px buttons 4px low and left 12px between them and the
+         board where node 58:5951 draws 16.
+         The negative margin cancels it in the LAYOUT while the padding still
+         reserves the space INSIDE the scroller: border box 40, margin box 32.
+         The same `-mx-1 px-1` trick this row already used horizontally. */
+      className="-mx-1 -my-1 flex flex-nowrap items-center gap-6 px-1 py-1 md:flex-wrap"
+    >
       {order.map((v) => (
         <div
           key={v.key}
