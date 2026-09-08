@@ -30,6 +30,17 @@ export const selectWorkspaceTool = {
       // Same sentence withToolContext already uses for every other tool once
       // a workspace is resolved (context.ts).
       if (r.reason === "disabled") return fail("AI assistants are turned off for this workspace by its owner.");
+      if (r.reason === "pinned") {
+        // Named, not just refused: "you cannot switch" leaves someone retrying,
+        // while naming the workspace this connection is pinned to points at the
+        // only thing that actually changes it.
+        const all = await listUserWorkspaces(auth.extra.userId);
+        const to = all.find((w) => w.orgId === r.pinnedTo)?.name ?? r.pinnedTo;
+        return fail(
+          `This connection is pinned to ${to} by the authorization it was set up with, so it can only read that workspace. ` +
+            `To read a different one, reconnect Namzilabs and choose that workspace during sign-in.`,
+        );
+      }
       return fail("You are not a member of that workspace.");
     }
     const ws = await listUserWorkspaces(auth.extra.userId);

@@ -8,7 +8,8 @@ export type Workspace = { orgId: string; name: string };
 export type ResolvedWorkspace = { orgId: string; userId: string; role?: string; grantSource: "selected" | "claim" };
 export type Resolution =
   | { ok: true; ws: ResolvedWorkspace }
-  | { ok: false; reason: "workspace_required" | "revoked" | "not_member" | "disabled"; workspaces?: Workspace[] };
+  | { ok: false; reason: "workspace_required" | "revoked" | "not_member" | "disabled"; workspaces?: Workspace[] }
+  | { ok: false; reason: "pinned"; pinnedTo: string };
 
 /**
  * Whether a workspace's owner has the AI-assistants switch on. Lives here
@@ -153,6 +154,34 @@ export async function resolveWorkspace(db: DB, auth: McpAuth): Promise<Resolutio
 }
 
 export async function selectWorkspace(db: DB, auth: McpAuth, orgId: string): Promise<Resolution> {
+  /**
+   * A TOKEN-PINNED CLIENT CANNOT SELECT, and saying so is the whole of this
+   * check.
+   *
+   * `resolveWorkspace` answers the claim FIRST and returns before it ever
+   * reads a binding — and on the way it re-binds to the claim's org. So for a
+   * client whose token carries `org_id`, everything below was a write that the
+   * very next tool call silently undid: the grant was made, the binding was
+   * moved, `ok` was returned naming the requested workspace, and then every
+   * read came back from the pinned one. An assistant would answer questions
+   * about the workspace the person thought they had left, with numbers that
+   * are real and an attribution that is wrong — which is worse than an error,
+   * because nothing looks broken.
+   *
+   * The claim wins, and must: it is a verified WorkOS claim saying which
+   * organization this token was ISSUED FOR, so a tool argument overriding it
+   * would let a call read outside the scope its authorization granted. What
+   * changes here is only that the refusal is now visible, and names the
+   * workspace the connection is pinned to so the fix ("reconnect it to the
+   * other workspace") is obvious.
+   *
+   * Checked before membership on purpose: it is a fact about the CONNECTION,
+   * not about the person, and a member of both workspaces would otherwise sail
+   * past every other guard into the silent no-op.
+   */
+  const pinned = auth.extra.orgIdClaim;
+  if (pinned && pinned !== orgId) return { ok: false, reason: "pinned", pinnedTo: pinned };
+
   const m = await membership(auth.extra.userId, orgId);
   if (!m) return { ok: false, reason: "not_member" };
   // Checked BEFORE the grant write, not after (round 2 review): a refused

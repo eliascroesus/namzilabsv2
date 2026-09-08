@@ -41,7 +41,15 @@ describe("resolveWorkspace", () => {
     member(["org_a", "org_b"]);
     const r = await resolveWorkspace(db, auth());
     expect(r.ok).toBe(false);
-    if (!r.ok) { expect(r.reason).toBe("workspace_required"); expect(r.workspaces).toEqual([{ orgId: "org_a", name: "Org org_a" }, { orgId: "org_b", name: "Org org_b" }]); }
+    if (!r.ok) {
+      expect(r.reason).toBe("workspace_required");
+      // Narrowed on the reason because a refusal is no longer one shape: a
+      // token-pinned connection refuses with the workspace it is pinned TO
+      // rather than a list to choose from.
+      if (r.reason === "workspace_required") {
+        expect(r.workspaces).toEqual([{ orgId: "org_a", name: "Org org_a" }, { orgId: "org_b", name: "Org org_b" }]);
+      }
+    }
   });
   it("uses the one un-revoked grant and writes a binding", async () => {
     member(["org_a", "org_b"]);
@@ -148,5 +156,68 @@ describe("selectWorkspace", () => {
   it("refuses an org the user does not belong to", async () => {
     member(["org_a"]);
     expect(await selectWorkspace(db, auth(), "org_z")).toEqual({ ok: false, reason: "not_member" });
+  });
+});
+
+describe("a token-pinned connection cannot select, and says so", () => {
+  /**
+   * FOUND LIVE, 8 Sep 2026. `select_workspace` was called for the second
+   * workspace, answered `{ok: true}` naming it, and every read afterwards came
+   * back from the first one.
+   *
+   * `resolveWorkspace` answers the `org_id` claim FIRST and returns before it
+   * reads any binding — and re-binds to the claim's org on the way. So for a
+   * client whose token carries a claim, `selectWorkspace` wrote a grant, moved
+   * the binding, reported success, and the very next tool call silently undid
+   * all of it. An assistant would then answer about the workspace the person
+   * believed they had left, with numbers that are real and an attribution that
+   * is wrong — which is worse than an error, because nothing looks broken.
+   *
+   * The claim must keep winning: it is a verified WorkOS claim naming the
+   * organization the token was ISSUED FOR, and a tool argument overriding it
+   * would read outside the scope the authorization granted. What these tests
+   * pin is that the refusal is visible and names the pinned workspace.
+   */
+  it("refuses a switch away from the pinned workspace instead of pretending", async () => {
+    member(["org_a", "org_b"]);
+    const r = await selectWorkspace(db, auth({ orgIdClaim: "org_a" }), "org_b");
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.reason).toBe("pinned");
+      if (r.reason === "pinned") expect(r.pinnedTo).toBe("org_a");
+    }
+  });
+
+  it("writes NOTHING on a refused switch — no grant, no rebinding", async () => {
+    // The silent no-op was not merely useless: it moved the binding and minted
+    // a grant for a workspace this connection can never read.
+    member(["org_a", "org_b"]);
+    await selectWorkspace(db, auth({ orgIdClaim: "org_a" }), "org_b");
+    expect(await db.select().from(mcpGrants)).toEqual([]);
+    expect(await db.select().from(mcpBindings)).toEqual([]);
+  });
+
+  it("still allows selecting the workspace it is already pinned to", async () => {
+    // A no-op that is honestly a no-op. Refusing this would break the ordinary
+    // flow where a client selects the workspace it was authorized for.
+    member(["org_a"]);
+    const r = await selectWorkspace(db, auth({ orgIdClaim: "org_a" }), "org_a");
+    expect(r).toMatchObject({ ok: true, ws: { orgId: "org_a" } });
+  });
+
+  it("leaves an unpinned connection free to switch, which is the normal case", async () => {
+    member(["org_a", "org_b"]);
+    const r = await selectWorkspace(db, auth(), "org_b");
+    expect(r).toMatchObject({ ok: true, ws: { orgId: "org_b" } });
+    const [binding] = await db.select().from(mcpBindings);
+    expect(binding.orgId).toBe("org_b");
+  });
+
+  it("refuses BEFORE the membership check, because pinning is about the connection", async () => {
+    // A member of both would otherwise sail past every other guard into the
+    // silent no-op — which is exactly the case this was found in.
+    member(["org_a", "org_b"]);
+    const r = await selectWorkspace(db, auth({ orgIdClaim: "org_a" }), "org_b");
+    if (!r.ok) expect(r.reason).toBe("pinned");
   });
 });
