@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { createHmac } from "node:crypto";
 import { savvycalConnector } from "@/connectors/savvycal";
-import { catalogEntry } from "@/connectors/catalog";
+import { catalogEntry, isStreamScoped } from "@/connectors/catalog";
 import { getConnector } from "@/connectors/registry";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -64,9 +64,19 @@ describe("savvycal: registration", () => {
     expect(e.docs?.readOn).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(e.verified).toEqual({ live: null });
     expect(e.brand).toBeDefined();
-    expect(e.instant && !e.autoWebhook).toBe(true);
-    expect(e.credentialFields.map((f) => f.key)).toEqual(["apiKey", "webhookSecret"]);
+    expect(e.instant).toBe(true);
+    // Connection-scoped: nothing is chosen inside a flow, so the subscription can
+    // be created the moment the token arrives.
+    expect(isStreamScoped("savvycal")).toBe(false);
+    // The personal access token is the ONLY thing a person types. The signing
+    // secret is whatever POST /v1/webhooks hands back, so it is never a field.
+    expect(e.credentialFields[0].key).toBe("apiKey");
     expect(Object.keys(e.rateLimits ?? {})).toEqual(["events.list"]);
+  });
+
+  it("can create and tear down its own subscription", () => {
+    expect(typeof savvycalConnector.registerWebhook).toBe("function");
+    expect(typeof savvycalConnector.unregisterWebhook).toBe("function");
   });
 });
 
@@ -241,5 +251,76 @@ describe("savvycal: poll", () => {
     expect(JSON.parse(res.nextCursor!)).toMatchObject({ cont: "cur_1", hw: "2026-09-05T00:00:00.000Z" });
     // Coverage is a FIRST-sync question; behind a settled mark there is none.
     expect(savvycalConnector.importProgress!(res.nextCursor, NOW)).toBeNull();
+  });
+});
+
+describe("savvycal: webhook registration", () => {
+  const HOOK_URL = "https://app.namzilabs.com/api/webhooks/savvycal/conn_1";
+  /** A create/delete that answers with `status`, so a 404 teardown can be told from a 500. */
+  const stubStatus = (status: number) =>
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: status < 400,
+        status,
+        statusText: String(status),
+        headers: { get: () => null },
+        json: async () => ({}),
+        text: async () => "{}",
+      })) as unknown as typeof fetch,
+    );
+
+  it("posts just the url, and keeps the secret SavvyCal minted for the subscription", async () => {
+    const calls = stubFetch([
+      {
+        id: "wh_01J5KC8V1MKRFGT8V2WD9Y8H6X",
+        state: "active",
+        url: HOOK_URL,
+        secret: "whsec_from_savvycal",
+        version: "2020-11-18",
+        created_at: "2026-09-08T10:30:00Z",
+      },
+    ]);
+    const res = await savvycalConnector.registerWebhook!({
+      connectionId: CONN,
+      webhookUrl: HOOK_URL,
+      credentials: { apiKey: "pt_secret_x" },
+    });
+
+    expect(res).toEqual({ signingSecret: "whsec_from_savvycal", externalId: "wh_01J5KC8V1MKRFGT8V2WD9Y8H6X" });
+    expect(calls[0].url).toBe("https://api.savvycal.com/v1/webhooks");
+    expect(calls[0].init.method).toBe("POST");
+    expect((calls[0].init.headers as Record<string, string>).authorization).toBe("Bearer pt_secret_x");
+    // `url` is the WHOLE documented body — there is no events array to get wrong.
+    expect(JSON.parse(String(calls[0].init.body))).toEqual({ url: HOOK_URL });
+  });
+
+  it("the secret it registers is the one that verifies a delivery", async () => {
+    stubFetch([{ id: "wh_1", secret: SECRET, state: "active", url: HOOK_URL, version: "2020-11-18", created_at: "2026-09-08T10:30:00Z" }]);
+    const { signingSecret } = await savvycalConnector.registerWebhook!({
+      connectionId: CONN,
+      webhookUrl: HOOK_URL,
+      credentials: { apiKey: "pt_secret_x" },
+    });
+    const body = JSON.stringify(hook("event.created", ev()));
+    expect(savvycalConnector.verifySignature({ rawBody: body, headers: { "x-savvycal-signature": sign(body) }, secret: signingSecret! })).toBe(true);
+  });
+
+  it("tears the subscription down by id", async () => {
+    const calls = stubFetch([{}]);
+    await savvycalConnector.unregisterWebhook!({ connectionId: CONN, credentials: { apiKey: "pt_secret_x" }, externalId: "wh_1" });
+    expect(calls[0].url).toBe("https://api.savvycal.com/v1/webhooks/wh_1");
+    expect(calls[0].init.method).toBe("DELETE");
+  });
+
+  it("a webhook that is already gone is a successful teardown, but any other refusal is reported", async () => {
+    stubStatus(404);
+    await expect(
+      savvycalConnector.unregisterWebhook!({ connectionId: CONN, credentials: { apiKey: "pt_secret_x" }, externalId: "wh_gone" }),
+    ).resolves.toBeUndefined();
+    stubStatus(500);
+    await expect(
+      savvycalConnector.unregisterWebhook!({ connectionId: CONN, credentials: { apiKey: "pt_secret_x" }, externalId: "wh_1" }),
+    ).rejects.toThrow();
   });
 });

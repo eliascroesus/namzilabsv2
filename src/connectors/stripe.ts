@@ -1,5 +1,16 @@
-import type { Connector, CanonicalEvent, VerifyArgs, NormalizeContext, PollArgs, PollResult } from "./types";
+import type {
+  Connector,
+  CanonicalEvent,
+  VerifyArgs,
+  NormalizeContext,
+  PollArgs,
+  PollResult,
+  RegisterWebhookArgs,
+  RegisterWebhookResult,
+  UnregisterWebhookArgs,
+} from "./types";
 import { asObject, str } from "./field-utils";
+import { fetchJson, HttpError } from "@/lib/http-client";
 import { bearerClient, epochToDate, eventId, parseWalkCursor, requireCredential, timestampedHmacVerify, walkImportProgress, windowedWalk } from "./kit";
 
 /**
@@ -19,8 +30,39 @@ import { bearerClient, epochToDate, eventId, parseWalkCursor, requireCredential,
  *   `payment_intent.succeeded` describe one payment: one event type per fact.
  * - https://docs.stripe.com/currencies — zero-decimal list; ISK and UGX are
  *   represented as two-decimal for backward compatibility, so they are NOT here.
+ * - https://docs.stripe.com/api/webhook_endpoints/create — POST
+ *   /v1/webhook_endpoints, `url` and `enabled_events` both required:
+ *   "Returns the webhook endpoint object with the `secret` field populated",
+ *   and the sample response carries `"secret": "whsec_…"` beside `"id": "we_…"`.
+ *   So the key that already reads /v1/events can mint the endpoint AND its
+ *   signing secret in one call — NOBODY PASTES A whsec_ ANY MORE.
+ * - https://docs.stripe.com/api/webhook_endpoints/delete — `curl -X DELETE
+ *   https://api.stripe.com/v1/webhook_endpoints/{id}`; "Otherwise, this call
+ *   raises an error, such as if the webhook endpoint has already been deleted"
+ *   — precisely the 404 `unregisterWebhook` swallows as success.
+ * - https://docs.stripe.com/api/authentication — "The Stripe API authenticates
+ *   requests using HTTP Basic Auth… If you need to authenticate using bearer
+ *   auth… use `-H "Authorization: Bearer …"`", so the poll's Bearer header is
+ *   good for the write too. The v1 API takes FORM-ENCODED bodies (every sample
+ *   is `-d` / `--data-urlencode`) and the kit's client posts JSON — hence
+ *   `postForm` below rather than `client.post`.
+ * - https://docs.stripe.com/stripe-apps/reference/permissions — "Webhook
+ *   Endpoints, Event Destinations | webhook_read, webhook_write … This is a
+ *   sensitive permission because it allows subscribing to events across your
+ *   entire account." A restricted key scoped to Events: read alone therefore
+ *   CANNOT create the endpoint — which is why the catalog marks this webhook
+ *   optional: the 30-day poll is the primary path and stands on its own.
+ *
+ * NOT used: POST /v2/core/event_destinations. It needs a pinned `Stripe-Version`
+ * header, an explicit `event_payload: "snapshot"` + `snapshot_api_version` to
+ * emit the v1 Event objects this connector normalizes, and its response returns
+ * `"signing_secret": null` unless `include: ["webhook_endpoint.signing_secret"]`
+ * is asked for (docs.stripe.com/api/v2/core/event_destinations/create, read
+ * 8 Sep 2026). Three extra moving parts for the same subscription — v1 wins.
  */
 const API = "https://api.stripe.com/v1";
+/** Shown beside the endpoint we create, in the customer's own Stripe dashboard. */
+const WEBHOOK_DESCRIPTION = "Namzilabs";
 const DEFAULTS = { pagesPerPoll: 3, maxPagesPerPoll: 20, firstSyncDays: 30, overlapMs: 5 * 60_000 };
 const ZERO_DECIMAL = new Set(["bif", "clp", "djf", "gnf", "jpy", "kmf", "krw", "mga", "pyg", "rwf", "vnd", "vuv", "xaf", "xof", "xpf"]);
 
@@ -34,6 +76,21 @@ export const STRIPE_EVENT_TYPES: Record<string, string> = {
   "customer.subscription.updated": "subscription_updated",
   "customer.subscription.deleted": "subscription_canceled",
 };
+
+/**
+ * Stripe v1 speaks `application/x-www-form-urlencoded` and nothing else, while
+ * the kit's `providerClient` posts JSON — so the one write this connector makes
+ * goes through `fetchJson` directly. A failure keeps Stripe's OWN error body
+ * (HttpError quotes it), which for a restricted key names the missing
+ * permission far better than anything we could paraphrase.
+ */
+async function postForm<T>(path: string, apiKey: string, form: URLSearchParams): Promise<T> {
+  return fetchJson<T>(`${API}${path}`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/x-www-form-urlencoded" },
+    body: form.toString(),
+  });
+}
 
 function money(amount: unknown, currency: unknown): { value: number | null; currency: string | null } {
   const cur = str(currency)?.toLowerCase() ?? null;
@@ -160,5 +217,31 @@ export const stripeConnector: Connector = {
   async testFetchLatest(n: number, args: PollArgs): Promise<CanonicalEvent[]> {
     const { records } = await this.poll!({ ...args, cursor: null, budget: { maxCalls: 1 } });
     return records.slice(0, n);
+  },
+  async registerWebhook(args: RegisterWebhookArgs): Promise<RegisterWebhookResult> {
+    const form = new URLSearchParams({ url: args.webhookUrl, description: WEBHOOK_DESCRIPTION });
+    // THE SAME seven types the poll asks /v1/events for, read from the one map,
+    // so the two paths cannot drift into subscribing to different facts.
+    for (const t of Object.keys(STRIPE_EVENT_TYPES)) form.append("enabled_events[]", t);
+    // `api_version` is deliberately left unset. Pinning it would render
+    // deliveries at a version of OUR choosing while /v1/events keeps answering
+    // the poll at the ACCOUNT's default — two shapes for one `toCanonical`, and
+    // a silent divergence the day Stripe changes a field. Unset means both
+    // paths speak the account's version, whatever it is.
+    const res = await postForm<{ id?: unknown; secret?: unknown }>(
+      "/webhook_endpoints",
+      requireCredential(args.credentials, "apiKey", "Stripe"),
+      form,
+    );
+    return { signingSecret: str(res.secret) ?? undefined, externalId: str(res.id) ?? undefined };
+  },
+  async unregisterWebhook(args: UnregisterWebhookArgs): Promise<void> {
+    const api = bearerClient(API, requireCredential(args.credentials, "apiKey", "Stripe"), "Stripe");
+    try {
+      await api.del(`/webhook_endpoints/${encodeURIComponent(args.externalId)}`);
+    } catch (e) {
+      if (e instanceof HttpError && e.status === 404) return; // already gone is success
+      throw e;
+    }
   },
 };

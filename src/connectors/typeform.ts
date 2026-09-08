@@ -20,6 +20,34 @@ import { bearerClient, eventId, hmacHeaderVerify, isoOrNull, requireCredential, 
  *   form_response: { form_id, token, landed_at, submitted_at, answers[], hidden } };
  *   "The answers array is populated only with answered questions."
  * - developers/get-started — "two requests per second, per Typeform account".
+ * - developers/webhooks/reference/create-or-update-webhook — PUT
+ *   /forms/{form_id}/webhooks/{tag} { url, enabled, event_types, secret,
+ *   verify_ssl }; `secret` is "If specified, will be used to sign the webhook
+ *   payload with HMAC SHA256" and is echoed back on the response object
+ *   (created_at, enabled, event_types, form_id, id, secret, tag, updated_at,
+ *   url, verify_ssl). WE choose that string — Typeform never mints one.
+ * - developers/webhooks/reference/delete-webhook — DELETE
+ *   /forms/{form_id}/webhooks/{tag}; "204 No content" on success,
+ *   "404 Not found — Webhook or form not found".
+ *
+ * NO CONNECT-TIME AUTO-REGISTRATION, and the reason is the path itself: every
+ * webhook endpoint Typeform publishes lives under /forms/{form_id}, and the
+ * form is a flowField chosen inside a step, not at connect
+ * (`isStreamScoped("typeform")` is true). At connect time there is no form to
+ * register against, so `autoWebhook` stays false and no `registerWebhook`
+ * exists here. Registering at STREAM creation would be entirely feasible and is
+ * the place to build it if it is ever wanted: a connection holds ONE signing
+ * secret, `secret` is ours to supply rather than the provider's to mint, so a
+ * PUT per form carrying that same secret makes every form's deliveries verify
+ * against the one stored value, and DELETE with the same tag tears it down
+ * (404 = already gone = success).
+ *
+ * What the webhook buys is a DOORBELL, not data. The inbound route answers
+ * `isStreamScoped` before it stores anything — it promotes cadence and asks for
+ * a sweep — so a delivery only decides WHEN the poll runs, and `normalize`
+ * below has no production caller today. The poll is the sole ingest path, which
+ * is why the secret is optional: with none set, deliveries 401 and the only
+ * thing lost is freshness.
  */
 const API = "https://api.typeform.com";
 const SENTINEL = "0001-01-01T00:00:00Z";

@@ -41,6 +41,23 @@ import { epochToDate, eventId, sharedTokenVerify } from "./kit";
  *   you are connected to". Cited on the catalog entry; this connector makes no
  *   provider calls at all, so it never spends it.
  *
+ * AUTO-REGISTRATION IS IMPOSSIBLE, and this is where that was settled (docs
+ * read 8 Sep 2026). ThriveCart does publish a create endpoint —
+ * https://developers.thrivecart.com/documentation/event_subscription/intro/:
+ * "you will POST a JSON blob to the subscribe endpoint:
+ * https://thrivecart.com/api/external/subscribe", carrying `event` and
+ * `target_url` — but it documents NO response body and no secret anywhere in
+ * one, and it is app-scoped: "You will only be able to create a target_url
+ * that begins with one of the URLs registered to your app", which needs a
+ * public app and an OAuth grant (…/documentation/intro/authentication-via-oauth/,
+ * "you'll need to create an app, and get your credentials") that this
+ * connector does not hold — its ONLY credential is the secret itself. The
+ * value that authenticates a delivery is the ACCOUNT's own "Secret word",
+ * set and read in the ThriveCart UI (Account → Settings → API & Webhooks →
+ * ThriveCart order validation); no documented endpoint returns it, none
+ * accepts one we mint, and there is no unsubscribe endpoint either. So the
+ * field stays, and the copy's whole job is to say exactly where it lives.
+ *
  * UNCONFIRMED, and therefore failed closed rather than guessed: no page
  * documents an example payload for the affiliate events, so the commission
  * AMOUNT has no field name we can name — `commission_earned` carries the whole

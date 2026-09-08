@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { createHmac } from "node:crypto";
 import { customerioConnector } from "@/connectors/customerio";
-import { catalogEntry } from "@/connectors/catalog";
+import { catalogEntry, isStreamScoped } from "@/connectors/catalog";
 import { getConnector } from "@/connectors/registry";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -67,6 +67,63 @@ describe("customerio: registration", () => {
     // One account-wide bucket, and nothing claims against it: no poll exists.
     expect(Object.keys(e.rateLimits ?? {})).toEqual(["*"]);
     expect(customerioConnector.operations).toBeUndefined();
+  });
+});
+
+describe("customerio: the signing key is pasted, not registered", () => {
+  /**
+   * The App API CAN create the endpoint — `POST /v1/reporting_webhooks`, with a
+   * `DELETE /v1/reporting_webhooks/{webhook_id}` to match — so the reason this
+   * connector still asks for a paste has to be stated, or someone will
+   * "fix" it into a worse dialog. The reason is that the reporting-webhook
+   * object it returns (create, get AND list) is
+   * `{name, id, type, endpoint, disabled, full_resolution, with_content, events}`
+   * and carries no signing key, and none can be supplied on the way in
+   * (docs.customer.io/integrations/api/app/tag/reporting-webhooks/, 8 Sep 2026).
+   * The key is UI-only: "you can find the signing key on the same page you enter
+   * your webhook endpoint: Integrations > Reporting webhooks".
+   */
+  it("declares no registration hooks, because creating an endpoint would not yield the key that verifies it", () => {
+    const e = catalogEntry("customerio")!;
+    expect(e.autoWebhook).toBe(false);
+    expect(customerioConnector.registerWebhook).toBeUndefined();
+    expect(customerioConnector.unregisterWebhook).toBeUndefined();
+    expect(customerioConnector.verifyWebhookSubscription).toBeUndefined();
+    // Not the stream-scoped excuse: the resource IS known at connect time (the
+    // whole workspace), so "we don't know what to subscribe to yet" is not why.
+    expect(isStreamScoped("customerio")).toBe(false);
+    expect(e.flowFields).toBeUndefined();
+  });
+
+  it("asks for the signing key and nothing else — an App API key would ADD a paste, not remove one", () => {
+    const e = catalogEntry("customerio")!;
+    const keys = e.credentialFields.map((f) => f.key);
+    expect(keys).toEqual(["webhookSecret"]);
+    // Creating the endpoint for the customer needs an "Auth Required" App API
+    // Key with write scope; the signing key would STILL have to be pasted
+    // afterwards. Two secrets instead of one, the extra one far more powerful,
+    // and the source stops being secret-only (see the authType rule in
+    // connector-population.test.ts).
+    expect(keys).not.toContain("apiKey");
+    expect(customerioConnector.authType).toBe("secret");
+  });
+
+  it("points at the exact page in Customer.io where the key is shown", () => {
+    const e = catalogEntry("customerio")!;
+    const [field] = e.credentialFields;
+    // Both the label on the box and the setup copy have to name the same place:
+    // the field is the only thing standing between a connection and no data at
+    // all, and there is no API that could fetch the value instead.
+    expect(field.label).toMatch(/signing key/i);
+    expect(field.label).toContain("Integrations → Reporting webhooks");
+    expect(e.webhookSetup).toContain("Integrations → Reporting webhooks");
+    expect(e.webhookSetup).toMatch(/signing key/i);
+    // Never sold as optional: webhook-only + fail-closed means an empty box is
+    // an integration that silently receives nothing.
+    expect(e.webhookSetup).not.toMatch(/\(optional\)/i);
+    expect(field.label).not.toMatch(/optional/i);
+    expect(e.sync).toBe("webhook-only");
+    expect(customerioConnector.verifySignature({ rawBody: "{}", headers: {}, secret: "" })).toBe(false);
   });
 });
 

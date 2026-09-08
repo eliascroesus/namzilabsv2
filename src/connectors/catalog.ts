@@ -618,17 +618,32 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
      * right beats two that split a limit whose scoping is unstated.
      */
     rateLimits: { "api.request": { requestsPerMinute: 600 } },
+    /**
+     * FALSE BY CHOICE, NOT BY LIMITATION. `POST /api/v1/webhooks` returns
+     * `webhook_secret` on the create response and `DELETE /webhooks/{id}`
+     * exists, so this connector COULD register its own endpoint — but doing so
+     * costs the API key the `developer:manage_webhook` permission, which a
+     * read-only key deliberately does not carry. The paste stays optional and
+     * the poll covers both collections regardless.
+     */
     autoWebhook: false,
     credentialFields: [
       { key: "apiKey", label: "API key", placeholder: "Whop → Developer → API keys" },
       { key: "companyId", label: "Company ID", placeholder: "biz_..." },
-      { key: "webhookSecret", label: "Webhook signing secret (optional)", placeholder: "ws_… or whsec_…" },
+      { key: "webhookSecret", label: "Webhook signing secret (optional — Whop → Developer → Webhooks, Secret column)", placeholder: "ws_… or whsec_…" },
     ],
+    /**
+     * The old copy said Namzilabs would "mint one instead — copy it from the
+     * field below into Whop". Whop generates the secret itself and has no
+     * field to paste one into, so that route stored a secret no delivery could
+     * ever match and every webhook was refused. Say what is actually possible.
+     */
     webhookSetup:
-      "In Whop, add a webhook pointing at the URL below. Already have a signing secret from Whop? Paste it into " +
-      "the Webhook signing secret field when you connect. Leave that blank and Namzilabs mints one instead — " +
-      "copy it from the field below into Whop. Payments and memberships also arrive by polling, so webhooks are " +
-      "optional — they only make updates instant.",
+      "Optional — payments and memberships arrive by polling either way, so a webhook only makes updates instant. " +
+      "To turn it on: in Whop, open Developer → Create webhook, point it at the URL below, then copy the signing " +
+      "secret from the Secret column of that table into the Webhook signing secret field here. Whop mints that " +
+      "secret itself and has nowhere to paste one in, so if you leave the field blank its deliveries cannot be " +
+      "verified and are refused — reconnect with the secret to switch them on.",
   },
   {
     source: "gsheets",
@@ -740,8 +755,22 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
     poll: true,
     sync: "incremental",
     historyNote: "Stripe keeps 30 days of events, so the first import reaches back 30 days.",
-    autoWebhook: false,
-    docs: { url: "https://docs.stripe.com/api/events/list", readOn: "2026-09-08", webhooks: "https://docs.stripe.com/webhooks" },
+    // The key that already reads /v1/events can also MAKE the endpoint: POST
+    // /v1/webhook_endpoints "Returns the webhook endpoint object with the
+    // `secret` field populated" (docs.stripe.com/api/webhook_endpoints/create,
+    // read 2026-09-08). So there is no whsec_ field any more — asking for one
+    // was asking the customer to go and fetch a value we can mint ourselves.
+    autoWebhook: true,
+    // …but that write is a SEPARATE permission: a restricted key needs "Webhook
+    // Endpoints, Event Destinations" = Write (`webhook_write`), which Stripe
+    // itself calls "a sensitive permission because it allows subscribing to
+    // events across your entire account"
+    // (docs.stripe.com/stripe-apps/reference/permissions, read 2026-09-08).
+    // A key scoped to Events: read alone is a legitimate, security-conscious
+    // choice and must still connect: /v1/events covers Stripe's whole 30-day
+    // retention, so a refused endpoint costs latency, never data.
+    webhookOptional: true,
+    docs: { url: "https://docs.stripe.com/api/events/list", readOn: "2026-09-08", webhooks: "https://docs.stripe.com/api/webhook_endpoints/create" },
     verified: { live: null },
     // https://docs.stripe.com/rate-limits (read 2026-09-08): "Individual API endpoints
     // (unless otherwise noted): 25 requests per second" = 1,500/min; the account-wide
@@ -749,10 +778,7 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
     // transaction over a rolling 30 days (minimum 10,000/month) — a ten-minute sweep is
     // ~4,300 reads/month per connection, inside the floor.
     rateLimits: { "events.list": { requestsPerMinute: 1_500 } },
-    credentialFields: [
-      { key: "apiKey", label: "Restricted or secret key", placeholder: "rk_live_…" },
-      { key: "webhookSecret", label: "Webhook signing secret (from the endpoint you add in Stripe)", placeholder: "whsec_…" },
-    ],
+    credentialFields: [{ key: "apiKey", label: "Restricted or secret key", placeholder: "rk_live_…" }],
     eventTypeLabels: {
       payment_succeeded: "Payment succeeded",
       checkout_completed: "Checkout completed",
@@ -764,9 +790,8 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
     },
     commonFields: ["type", "data.object.amount", "data.object.currency", "data.object.customer", "data.object.status", "livemode"],
     webhookSetup:
-      "In Stripe → Developers → Webhooks, add an endpoint with the URL below, select the events charge.succeeded, " +
-      "checkout.session.completed, invoice.paid, refund.created and customer.subscription.*, and paste the endpoint's " +
-      "signing secret (whsec_…) as the webhook signing secret on this connection. Polling covers the last 30 days either way.",
+      "Nothing to set up in Stripe: connecting creates this endpoint for you and keeps its signing secret. Creating it needs a " +
+      "key with Webhook Endpoints → Write — a read-only key connects fine, and polling still covers the last 30 days.",
   },
   {
     source: "calcom",
@@ -851,7 +876,28 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
     instant: true,
     poll: true,
     sync: "incremental",
-    syncNote: "Completed responses are read; a partial (unfinished) response reaches this connection only through its webhook.",
+    /**
+     * What this used to say — "a partial (unfinished) response reaches this
+     * connection only through its webhook" — was never true of this codebase.
+     * Typeform is stream-scoped, so its inbound route rings the doorbell and
+     * returns BEFORE anything is stored (the isStreamScoped branch in
+     * src/app/api/webhooks/[connectionId]/route.ts). No delivery has ever been
+     * ingested, so no partial has ever arrived by webhook. The poll reads
+     * completed responses, and that is the whole of what lands.
+     */
+    syncNote:
+      "Completed responses are read. A partial (unfinished) response is not imported at all — a delivery from Typeform " +
+      "only triggers an immediate re-read of that form's step.",
+    /**
+     * Impossible here, and not for want of an API. Typeform's create endpoint is
+     * PUT /forms/{form_id}/webhooks/{tag} and it takes the `secret` WE choose,
+     * echoing it back on the response (typeform.com/developers/webhooks/reference/
+     * create-or-update-webhook, read 2026-09-08) — everything Stripe's
+     * auto-registration needs, except a resource. Every webhook path is under
+     * /forms/{form_id}, and the form is a flowField picked inside a step, so at
+     * connect time there is nothing to PUT against. Registering at STREAM
+     * creation is the version that would work; the reasoning is in typeform.ts.
+     */
     autoWebhook: false,
     docs: { url: "https://www.typeform.com/developers/responses/reference/retrieve-responses/", readOn: "2026-09-08", webhooks: "https://www.typeform.com/developers/webhooks/secure-your-webhooks/" },
     verified: { live: null },
@@ -860,14 +906,18 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
     rateLimits: { "responses.list": { requestsPerMinute: 120 } },
     credentialFields: [
       { key: "apiKey", label: "Personal access token (Account → Personal tokens)", placeholder: "tfp_…" },
-      { key: "webhookSecret", label: "Webhook secret (the one you set on the form's webhook)", placeholder: "…" },
+      { key: "webhookSecret", label: "Webhook secret (optional)", placeholder: "only if you already set one in Typeform" },
     ],
     flowFields: [{ key: "formId", label: "Form", required: true, dynamic: true, placeholder: "Choose a form…", hint: "Each step reads one form." }],
     eventTypeLabels: { form_submitted: "Form submitted", form_started: "Form started" },
     commonFields: ["form_id", "answers_by_field", "hidden", "metadata.referer", "landed_at", "submitted_at"],
     webhookSetup:
-      "In Typeform, open the form → Connect → Webhooks, add the URL below and set a secret; paste the same secret " +
-      "as the webhook secret on this connection. A delivery triggers an immediate refresh of that form's step.",
+      "Optional — responses arrive by polling either way, and a webhook only makes them instant. Typeform sets webhooks per " +
+      "form, so this one cannot be created for you at connect time. To add it: open the form in Typeform, click Connect in " +
+      "the top menu, open the Webhooks tab, click Add a webhook, paste the URL below, enter a value under Secret (the eye " +
+      "icon reveals what you typed) and click Finish. Simplest is to leave the Webhook secret field blank when you connect " +
+      "and copy this connection's Signing secret into Typeform; if you already set your own secret there, paste that same " +
+      "string as the Webhook secret instead. A delivery triggers an immediate refresh of that form's step.",
   },
   {
     source: "tally",
@@ -878,6 +928,23 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
     instant: true,
     poll: true,
     sync: "incremental",
+    /**
+     * NOT auto-registerable, and the reason is Tally's shape rather than an
+     * unfinished connector. POST /webhooks (developers.tally.so, read
+     * 2026-09-08) has `"required": ["formId", "url", "eventTypes"]`, and there
+     * is no account- or workspace-wide subscription to fall back on: every
+     * Tally webhook belongs to ONE form. `formId` is a flowField — chosen on a
+     * flow's Get data step — so at connect time, the only moment
+     * `registerWebhook` is ever called, the one required argument does not
+     * exist yet. Blanketing every form the key can see would plant
+     * subscriptions on forms no step reads and still miss every form made
+     * afterwards, so the secret stays a field the customer can fill.
+     *
+     * It is an HONEST optional, not a reluctant one: the poll reads the same
+     * submissions with `filter: "all"`, so completed AND partial arrive with no
+     * webhook at all. Left blank, `createConnection` mints a secret (this entry
+     * is `instant`) for the customer to paste into Tally's own field.
+     */
     autoWebhook: false,
     docs: { url: "https://developers.tally.so/api-reference/endpoint/forms/submissions/list", readOn: "2026-09-08", webhooks: "https://tally.so/help/webhooks" },
     verified: { live: null },
@@ -885,14 +952,17 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
     rateLimits: { "submissions.list": { requestsPerMinute: 100 } },
     credentialFields: [
       { key: "apiKey", label: "API key (Settings → API keys)", placeholder: "tly-…" },
-      { key: "webhookSecret", label: "Webhook signing secret (the one you set on the form's webhook)", placeholder: "…" },
+      { key: "webhookSecret", label: "Webhook signing secret (optional)", placeholder: "Blank mints one for you" },
     ],
     flowFields: [{ key: "formId", label: "Form", required: true, dynamic: true, placeholder: "Choose a form…", hint: "Each step reads one form." }],
     eventTypeLabels: { form_submitted: "Form submitted", form_partial: "Form partially filled" },
     commonFields: ["formId", "isCompleted", "fields_by_label", "respondentId", "submittedAt"],
     webhookSetup:
-      "In Tally, open the form → Integrations → Webhooks, add the URL below with a signing secret, and paste the same " +
-      "secret as the webhook signing secret on this connection. A delivery triggers an immediate refresh of that form's step.",
+      "Optional — submissions arrive by polling either way, and a webhook only makes them instant. To add one: publish " +
+      "the form, open its Integrations tab, click Connect on Webhooks, and point it at the URL below. Already have a " +
+      "signing secret from Tally? Paste it into the Webhook signing secret field when you connect. Leave that blank and " +
+      "Namzilabs mints one instead — copy it from the field below into Tally's signing secret. Tally scopes a webhook to " +
+      "one form, so add one per form your steps read.",
   },
   {
     source: "smartlead",
@@ -905,8 +975,38 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
     sync: "incremental",
     syncNote:
       "Sends, opens, clicks and replies are read from each lead's statistics row. A bounce, an unsubscribe and a " +
-      "lead-category change carry no date in that row, so they reach this connection through the webhook only.",
+      "lead-category change carry no date in that row, and this source's webhook is a doorbell that asks for a " +
+      "refresh rather than a second way in, so those three are not counted on this connection.",
     historyNote: "First sync reaches back 30 days.",
+    /**
+     * NOT FOR WANT OF AN ENDPOINT, which is the part worth writing down:
+     * "Smartlead has a webhook API" is true and still does not help.
+     *
+     * api.smartlead.ai/api-reference/webhooks/create (read 2026-09-08): POST
+     * /api/v1/webhook/create takes webhook_url, association_type ("Valid
+     * values: user, client, campaign"), email_campaign_id, name,
+     * event_type_map, category_id_map, client_id, event_type, category_id,
+     * webhook_type and force_create — eleven parameters, NOT ONE of them a
+     * secret we could supply — and answers `{ ok, id, webhook_url }`, which
+     * mints none either. .../webhooks/get returns id, email_campaign_id, name,
+     * webhook_url, event_type_map, category_id_map, created_at, updated_at, so
+     * there is nothing to read back afterwards; .../webhooks/update takes name,
+     * webhook_url, event_types and categories, so there is nothing to set
+     * afterwards. Registering at connect would therefore create a LIVE
+     * subscription this connection could never authenticate, and
+     * `verifySignature` — which fails closed — would 401 every delivery we
+     * ourselves caused, forever and silently. Strictly worse than asking, so
+     * the field stays and the ask is honest about being optional.
+     *
+     * SCOPE IS NOT THE BLOCKER, in case Smartlead ever publishes a secret. A
+     * user-level hook is "applied to all unmapped campaigns. This means that
+     * campaigns not mapped with any webhook will be linked to this webhook"
+     * (helpcenter.smartlead.ai/en/articles/185-assigning-webhooks-to-campaigns-clients-or-users,
+     * read 2026-09-08), so ONE `association_type: "user"` registration at
+     * connect would cover campaigns created later — the per-campaign flowField
+     * and `isStreamScoped("smartlead")` notwithstanding. On that day this
+     * becomes an ordinary `registerWebhook`.
+     */
     autoWebhook: false,
     docs: { url: "https://api.smartlead.ai/reference/lead-statistics", readOn: "2026-09-08", webhooks: "https://api.smartlead.ai/guides/webhook-integration" },
     verified: { live: null },
@@ -925,7 +1025,7 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
     rateLimits: { "*": { requestsPerMinute: 60 } },
     credentialFields: [
       { key: "apiKey", label: "API key (Settings → API)", placeholder: "…" },
-      { key: "webhookSecret", label: "Webhook secret (the one you set on the webhook in Smartlead)", placeholder: "…" },
+      { key: "webhookSecret", label: "Webhook signing secret (optional — it only makes the refresh instant)", placeholder: "…" },
     ],
     flowFields: [
       {
@@ -945,9 +1045,13 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
     eventTypeLabels: { email_clicked: "Link clicked", lead_interested: "Lead marked interested" },
     commonFields: ["campaign_id", "lead_email", "sequence_number", "email_subject", "lead_category"],
     webhookSetup:
-      "In Smartlead → Settings → Webhooks, add the URL below with a signing secret, and paste the same secret as the " +
-      "webhook secret on this connection. Smartlead syncs by polling, so a delivery triggers an immediate refresh of " +
-      "that campaign's step — bounces, unsubscribes and lead-category changes arrive this way and no other.",
+      "Optional. Smartlead syncs by polling each campaign; a delivery only makes the next refresh immediate. To set " +
+      "one up: in Smartlead go to Settings → Webhooks → Add Webhook, name it, pick the campaign (or leave it at user " +
+      "level, which covers every campaign not mapped to a webhook of its own, including ones you create later), tick " +
+      "the events, and paste the URL below. If that form offers a signing secret, paste the same value into the " +
+      "webhook signing secret field on this connection. Smartlead's webhook API neither returns a secret nor accepts " +
+      "one, so if the form has no such field, leave ours blank: deliveries are then refused and the campaign simply " +
+      "refreshes on its normal schedule, losing no records.",
   },
   {
     source: "helpscout",
@@ -1160,16 +1264,26 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
     // filter: the only date bound is `from`/`until` on the meeting's START date.
     syncNote:
       "SavvyCal can only filter its event list by meeting start date, so an import holds meetings that START inside the window, not meetings booked inside it.",
-    autoWebhook: false,
+    // developers.savvycal.com/api/create-webhook (read 2026-09-08): POST /v1/webhooks
+    // takes `{ url }` and NOTHING else, and answers the Webhook object whose `secret`
+    // ("Webhook secret") is one of its six REQUIRED fields. So the personal access
+    // token the customer already pasted buys both the subscription and the signing
+    // secret in one call, and there is nothing left for anyone to copy by hand.
+    //
+    // No `webhookOptional`: savvycal.com/pricing sells "API & Webhooks" as ONE feature
+    // line, so there is no plan that grants the event list and refuses the
+    // subscription. A refusal here is a real fault and belongs in `lastError`, where
+    // the sweep retries it, rather than being shrugged off as a tier we expected.
+    autoWebhook: true,
     docs: { url: "https://developers.savvycal.com/api/list-events", readOn: "2026-09-08", webhooks: "https://developers.savvycal.com/webhooks" },
     verified: { live: null },
     // developers.savvycal.com (read 2026-09-08) publishes no rate limit and
     // documents no 429 response; 60/min until scripts/verify-savvycal.ts measures one.
     rateLimits: { "events.list": { requestsPerMinute: 60 } },
-    credentialFields: [
-      { key: "apiKey", label: "Personal access token (Settings → Developers)", placeholder: "pt_secret_…" },
-      { key: "webhookSecret", label: "Webhook signing secret (from the webhook you add in SavvyCal)", placeholder: "The secret shown beside the webhook" },
-    ],
+    // The token is the whole ask. There is no `webhookSecret` field because there is
+    // nothing to paste: the secret arrives in the create response and is stored
+    // encrypted from there.
+    credentialFields: [{ key: "apiKey", label: "Personal access token (Settings → Developers)", placeholder: "pt_secret_…" }],
     commonFields: [
       "state",
       "created_at",
@@ -1183,9 +1297,8 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
       "cancel_reason",
       "link.name",
     ],
-    webhookSetup:
-      "In SavvyCal → Settings → Integrations → Webhooks, add the URL below, then copy that webhook's signing secret " +
-      "and paste it as the webhook signing secret on this connection.",
+    // No `webhookSetup`: connecting creates the subscription, so there are no manual
+    // steps in SavvyCal's UI left to describe.
   },
   {
     source: "thinkific",
@@ -1242,6 +1355,20 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
     poll: false,
     sync: "webhook-only",
     historyNote: "ThriveCart publishes no order-list endpoint, so history begins the day you connect.",
+    // NOT auto-registerable, and this is the whole working (docs read 2026-09-08).
+    // ThriveCart does publish a create endpoint —
+    // https://developers.thrivecart.com/documentation/event_subscription/intro/: "you
+    // will POST a JSON blob to the subscribe endpoint:
+    // https://thrivecart.com/api/external/subscribe", carrying `event` and `target_url`
+    // — but it documents NO response body and no secret anywhere in one, and it gates
+    // the URL on an app's own settings ("You will only be able to create a target_url
+    // that begins with one of the URLs registered to your app"), which needs a public
+    // app and an OAuth grant this connector holds no credential for: its ONLY
+    // credential IS the secret. What authenticates a delivery is the ACCOUNT's "Secret
+    // word", which exists only in the ThriveCart UI — no documented endpoint returns
+    // it, none accepts one we mint, and there is no unsubscribe endpoint either. So the
+    // field stays, marked required, and the copy names the exact screen instead of
+    // pretending the paste can be skipped.
     autoWebhook: false,
     docs: {
       url: "https://support.thrivecart.com/help/using-webhook-notifications/",
@@ -1255,8 +1382,16 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
     // Declared for completeness — this connector is webhook-only and calls no endpoint,
     // so it never spends the budget.
     rateLimits: { "*": { requestsPerMinute: 60 } },
+    // REQUIRED, and said so: there is no poll behind this source and the secret in the
+    // body is the whole of the authentication, so a connection saved without it is a
+    // connection that receives nothing. (Whop's webhook secret says "(optional)" and
+    // means it — polling covers that one.)
     credentialFields: [
-      { key: "webhookSecret", label: "Order validation secret (Settings → API & Webhooks → ThriveCart order validation)", placeholder: "JLZE3Y54FEQ1" },
+      {
+        key: "webhookSecret",
+        label: "Order validation secret (required) — Account → Settings → API & Webhooks → ThriveCart order validation",
+        placeholder: "JLZE3Y54FEQ1",
+      },
     ],
     // Only keys no other connector labels: payment_refunded and subscription_canceled
     // are already named by Stripe, and two sources must not disagree about one key.
@@ -1271,10 +1406,12 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
     },
     commonFields: ["event", "mode", "base_product_name", "order.total", "currency", "customer.email", "order.charges"],
     webhookSetup:
-      "In ThriveCart → Settings → API & Webhooks, add a webhook pointing at the URL below (or subscribe an app to the " +
-      "order and affiliate events), then paste the same account's ThriveCart order validation secret as the secret on " +
-      "this connection — it travels inside the body and is the whole of the authentication. Test-mode orders are dropped, " +
-      "and there is no list API, so history starts at connect.",
+      "ThriveCart has no API that hands out this secret, so it is the one value you copy across by hand. In ThriveCart " +
+      "open Account → Settings → API & Webhooks: in the Webhooks area add a webhook with any descriptive name and the " +
+      "URL below (or point an app's event subscription at it), then copy the Secret word shown in the ThriveCart order " +
+      "validation area on that same page and paste it above. It travels inside the body of every delivery and is the " +
+      "whole of the authentication, so deliveries are rejected while it is missing or wrong. Test-mode orders are " +
+      "dropped, and there is no list API, so history starts at connect.",
   },
   {
     source: "retell",
@@ -1288,6 +1425,33 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
     poll: true,
     sync: "incremental",
     historyNote: "Retell keeps calls indefinitely unless an agent sets a data-retention period, which then deletes its calls permanently.",
+    /**
+     * Re-checked against the live docs on 2026-09-08, because every other
+     * instant source we ship registers its own subscription and this one
+     * cannot:
+     * - RETELL HAS NO WEBHOOK RESOURCE. docs.retellai.com/llms.txt — the
+     *   published index of every page — lists four webhook pages, all under
+     *   `features/`, and not one webhook endpoint under `api-references/`.
+     *   features/register-webhook is a DASHBOARD walkthrough: account-level
+     *   webhooks are "Set up through the system settings' webhooks tab",
+     *   agent-level ones "through the dashboard's agent detail page".
+     * - The one API that can write a webhook URL is `PATCH
+     *   /update-agent/{agent_id}`, whose `webhook_url` "If set, will binds
+     *   webhook events for this agent to the specified url, and will ignore the
+     *   account level webhook for this agent". One single-valued field, per
+     *   agent, on "an existing agent's latest draft version" (a separate
+     *   publish-agent moves a draft to live traffic). Writing it would REDIRECT
+     *   the customer's own deliveries rather than add a subscription beside
+     *   them, so we do not write it.
+     * - No signing secret exists to return or to supply: "Only the API key that
+     *   has a webhook badge next to it can be used to verify the webhook"
+     *   (features/secure-webhook), Retell having "automatically designate[d]
+     *   one of your API keys for webhook authentication"
+     *   (accounts/api-keys-overview). That key is one the connect dialog
+     *   already collected, which is why the connector's
+     *   `webhookSecretFromCredentials` names it and the second field below is
+     *   an OVERRIDE rather than a chore.
+     */
     autoWebhook: false,
     docs: { url: "https://docs.retellai.com/api-references/list-calls", readOn: "2026-09-08", webhooks: "https://docs.retellai.com/features/webhook" },
     verified: { live: null },
@@ -1299,13 +1463,19 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
     rateLimits: { "calls.list": { requestsPerMinute: 60 } },
     credentialFields: [
       { key: "apiKey", label: "API key", placeholder: "key_…" },
-      { key: "webhookSecret", label: "Webhook signing key — Retell signs with your API key, so paste it again", placeholder: "key_…" },
+      // Optional because it is only ever a correction. A workspace "can have
+      // multiple API keys" and Retell badges ONE of them for webhooks, so this
+      // is for the account whose badged key is not the key above; left empty,
+      // the connection verifies with the key above.
+      { key: "webhookSecret", label: "Webhook signing key (optional — only if it isn't the API key above)", placeholder: "The key badged “webhook” in Retell → API keys" },
     ],
     eventTypeLabels: { call_analyzed: "Call analysed", call_transferred: "Call transferred" },
     commonFields: ["direction", "call_status", "disconnection_reason", "call_successful", "user_sentiment", "custom_analysis_data", "agent_id", "duration_ms"],
     webhookSetup:
-      "In Retell, open the dashboard's Webhooks tab and set the URL below account-wide (an agent's own webhook_url overrides it), " +
-      "then paste your API key again as the webhook signing key — Retell signs every delivery with the API key itself. Polling covers " +
+      "In Retell, open the dashboard's system settings → Webhooks tab, set the URL below, and press Test to check it — or set an " +
+      "agent's own webhook_url on its detail page, which takes that agent's events away from the account-wide one. There is no secret " +
+      "to copy back: Retell signs every delivery with one of your API keys, and Namzilabs verifies with the key you already pasted. " +
+      "Only if the key badged “webhook” under Retell's API keys is a different one, paste that key as the signing key. Polling covers " +
       "the last 30 days either way.",
   },
   {
@@ -1324,6 +1494,18 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
       "converted are the defensible counts.",
     historyNote:
       "Customer.io's activity list has no time filter, so nothing can be backfilled — history starts when you connect.",
+    /**
+     * FALSE ON PURPOSE, and NOT for the usual reason — there IS a create API.
+     * `POST /v1/reporting_webhooks` takes `{name, endpoint, events, disabled,
+     * full_resolution, with_content}` and has a matching `DELETE
+     * /v1/reporting_webhooks/{webhook_id}`
+     * (docs.customer.io/integrations/api/app/tag/reporting-webhooks/, read
+     * 8 Sep 2026). What it returns is the problem: `{name, id, type, endpoint,
+     * disabled, full_resolution, with_content, events}` — the same eight fields
+     * on create, get and list, none of them a secret, and none accepted on the
+     * way in. So registering would leave this paste exactly where it is and ADD
+     * an "Auth Required" App API Key to it. The full ruling is in customerio.ts.
+     */
     autoWebhook: false,
     docs: {
       url: "https://docs.customer.io/integrations/data-out/connections/webhooks/",
@@ -1343,8 +1525,20 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
      * would inherit, already cited.
      */
     rateLimits: { "*": { requestsPerMinute: 600 } },
+    /**
+     * ONE FIELD, AND IT IS REQUIRED. There is no poll behind it, so an empty box
+     * is not a slower integration — it is an integration whose deliveries this
+     * app refuses, because `verifySignature` fails closed. The label names the
+     * PAGE rather than the product because that is the whole of the difficulty:
+     * the key is shown beside the endpoint in Customer.io's UI and no API
+     * returns it, so nothing but the customer's own eyes can fetch this value.
+     */
     credentialFields: [
-      { key: "webhookSecret", label: "Reporting webhook signing key (Integrations → Reporting webhooks)", placeholder: "…" },
+      {
+        key: "webhookSecret",
+        label: "Reporting webhook signing key (Integrations → Reporting webhooks, shown beside the endpoint)",
+        placeholder: "…",
+      },
     ],
     eventTypeLabels: {
       email_delivered: "Email delivered",
@@ -1358,10 +1552,12 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
     },
     commonFields: ["channel", "metric", "data.campaign_id", "data.subject", "data.identifiers.email", "data.delivery_id"],
     webhookSetup:
-      "In Customer.io → Integrations → Reporting webhooks, add an endpoint with the URL below, tick the metrics you count " +
-      "(leave Drafted and Attempted off — they are internal stages and are dropped anyway), and paste that endpoint's signing " +
-      "key as the secret on this connection. By default Customer.io reports only the FIRST open or click per message; raise " +
-      "Send Frequency on the endpoint if you need every one. There is no list API to backfill from, so history starts here.",
+      "In Customer.io → Integrations → Reporting webhooks, choose Add Reporting Webhook, paste the URL below as the Webhook " +
+      "Endpoint URL, tick the metrics you count (leave Drafted and Attempted off — they are internal stages and are dropped " +
+      "anyway), and Save and Enable Webhook. That same page then shows a signing key beside the endpoint: paste it as the " +
+      "secret on this connection. Customer.io's API can create the endpoint but never hands back that key, so this is the one " +
+      "step nothing can do for you. By default Customer.io reports only the FIRST open or click per message; raise Send " +
+      "Frequency on the endpoint if you need every one. There is no list API to backfill from, so history starts here.",
   },
   {
     source: "airtable",

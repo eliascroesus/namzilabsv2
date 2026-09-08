@@ -1,10 +1,25 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { createHmac } from "node:crypto";
+import { createHmac, randomBytes } from "node:crypto";
 import { retellConnector } from "@/connectors/retell";
-import { catalogEntry } from "@/connectors/catalog";
+import { catalogEntry, isStreamScoped } from "@/connectors/catalog";
 import { getConnector } from "@/connectors/registry";
+import { decryptCredentials } from "@/lib/credentials";
+import { createTestDb } from "./helpers/testdb";
+import type { DB } from "@/db/types";
 
 afterEach(() => vi.unstubAllGlobals());
+
+// `createConnection` writes straight to the database and, for a poll-capable
+// source like Retell, dispatches a first sync through Inngest. Same three
+// mocks as whop.test.ts / org-caps.test.ts; `db` is assigned inside the connect
+// describe's own beforeEach so the pure connector tests never start PGlite.
+let db: DB;
+let closeDb: () => Promise<void>;
+vi.mock("server-only", () => ({}));
+vi.mock("@/db/client", () => ({ getDb: () => db, getReadDb: () => db }));
+vi.mock("@/inngest/client", () => ({ inngest: { send: async () => {} } }));
+
+const { createConnection, getSigningSecret } = await import("@/lib/connections");
 const CONN = "conn_1";
 
 /** A fetch stub that answers a queue of JSON bodies in order and records every request. */
@@ -67,6 +82,42 @@ describe("retell: registration", () => {
     expect(e.instant && !e.autoWebhook).toBe(true);
     expect(e.credentialFields?.map((f) => f.key)).toContain("webhookSecret");
     expect(Object.keys(e.rateLimits ?? {})).toEqual([retellConnector.operationFor!({})]);
+  });
+
+  /**
+   * Retell publishes NO webhook endpoint at all — docs.retellai.com/llms.txt
+   * indexes four webhook pages, every one of them under `features/`, and none
+   * under `api-references/`. The single API that can write a webhook URL is
+   * `PATCH /update-agent/{agent_id}`, whose `webhook_url` "will ignore the
+   * account level webhook for this agent": one field, per agent, in that
+   * agent's "latest draft version". Writing it would REDIRECT the customer's
+   * own deliveries rather than add a subscription beside them, which is why
+   * this connector deliberately implements neither half of the pair.
+   */
+  it("registers nothing, because Retell has nothing to register against", () => {
+    expect(retellConnector.registerWebhook).toBeUndefined();
+    expect(retellConnector.unregisterWebhook).toBeUndefined();
+    // And not because the webhook is per-resource: Retell's connection has no
+    // flow-level stream fields, so a connect-time registration WOULD have had
+    // everything it needed. The impossibility is the provider's.
+    expect(isStreamScoped("retell")).toBe(false);
+  });
+
+  /**
+   * The field STAYS, but only as an override: accounts/api-keys-overview says
+   * a workspace "can have multiple API keys" and Retell picks ONE of them for
+   * webhook authentication, so the badged key is not always the key the
+   * customer reads calls with. What changes is that leaving it empty is now a
+   * working connection rather than a silent 401 (see the connect tests below),
+   * which is what lets the catalog label it optional.
+   */
+  it("keeps the signing-key box as an override, not a requirement", () => {
+    const e = catalogEntry("retell")!;
+    expect(e.credentialFields!.some((f) => f.key === "webhookSecret")).toBe(true);
+    expect(typeof retellConnector.webhookSecretFromCredentials).toBe("function");
+    expect(retellConnector.webhookSecretFromCredentials!({ apiKey: KEY })).toBe(KEY);
+    // Nothing to name when the credential is absent: the minted secret stands.
+    expect(retellConnector.webhookSecretFromCredentials!({})).toBeNull();
   });
 });
 
@@ -245,5 +296,77 @@ describe("retell: poll", () => {
     expect(JSON.parse(res.nextCursor!).cont).toBe("pk_2");
     expect(retellConnector.holdsContinuation!(res.nextCursor)).toBe(true);
     expect(retellConnector.holdsContinuation!("2026-09-07T09:00:00.000Z")).toBe(false);
+  });
+});
+
+/**
+ * THE SECOND BOX IS AN OVERRIDE NOW, NOT A CHORE.
+ *
+ * Retell mints no webhook secret: "Only the API key that has a webhook badge
+ * next to it can be used to verify the webhook" (features/secure-webhook), and
+ * accounts/api-keys-overview says Retell "automatically designate[s] one of
+ * your API keys for webhook authentication". So the key that verifies is a key
+ * the connect dialog already collected. Leaving the field blank used to store a
+ * minted `whsec_…` — a secret with NOWHERE in Retell to paste it back into, so
+ * every real delivery 401'd, silently, forever.
+ */
+describe("retell: the API key is the signing secret", () => {
+  beforeEach(async () => {
+    ({ db, close: closeDb } = await createTestDb());
+    process.env.ENCRYPTION_KEY = randomBytes(32).toString("base64");
+  });
+  afterEach(async () => {
+    await closeDb();
+  });
+
+  const ORG = "org_retell";
+
+  it("connecting with the API key alone stores a secret that verifies a real delivery", async () => {
+    const conn = await createConnection({
+      orgId: ORG,
+      source: "retell",
+      name: "Retell",
+      authType: "apiKey",
+      credentials: { apiKey: KEY },
+    });
+
+    // Sabotage: mint a random secret when the box is empty (what this did
+    // before) and the stored value is one Retell has never heard of.
+    expect(getSigningSecret(conn)).toBe(KEY);
+
+    const body = JSON.stringify({ event: "call_ended", call: call() });
+    const ts = Date.now();
+    expect(
+      retellConnector.verifySignature({
+        rawBody: body,
+        headers: { "x-retell-signature": sign(body, ts) },
+        secret: getSigningSecret(conn),
+      }),
+    ).toBe(true);
+  });
+
+  it("a pasted key still wins — the workspace whose webhook badge sits on a different key", async () => {
+    const BADGED = "key_retell_webhook";
+    const conn = await createConnection({
+      orgId: ORG,
+      source: "retell",
+      name: "Retell",
+      authType: "apiKey",
+      credentials: { apiKey: KEY, webhookSecret: BADGED },
+    });
+
+    expect(getSigningSecret(conn)).toBe(BADGED);
+    // C21 — verification material never rides along inside the credentials blob.
+    const stored = decryptCredentials(conn);
+    expect(stored).not.toHaveProperty("webhookSecret");
+    expect(stored.apiKey).toBe(KEY);
+  });
+
+  it("a source that names no signing credential is still minted a secret", async () => {
+    // The hook is opt-in per connector: ThriveCart's own secret is a value only
+    // ThriveCart can give, so nothing here may quietly press an API key into
+    // service as one.
+    const conn = await createConnection({ orgId: ORG, source: "thrivecart", name: "TC", authType: "secret", credentials: {} });
+    expect(getSigningSecret(conn)).toMatch(/^whsec_/);
   });
 });

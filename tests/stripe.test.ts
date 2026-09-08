@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { createHmac } from "node:crypto";
 import { stripeConnector, STRIPE_EVENT_TYPES } from "@/connectors/stripe";
-import { catalogEntry } from "@/connectors/catalog";
+import { catalogEntry, isStreamScoped } from "@/connectors/catalog";
 import { getConnector } from "@/connectors/registry";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -123,5 +123,100 @@ describe("stripe: poll", () => {
     expect(stripeConnector.retention!.watermarkOf("2026-09-01T00:00:00.000Z")).toBe("2026-09-01T00:00:00.000Z");
     expect(stripeConnector.retention!.watermarkOf(JSON.stringify({ hw: "2026-09-02T00:00:00.000Z", cont: "evt_x", maxSeen: null }))).toBe("2026-09-02T00:00:00.000Z");
     expect(stripeConnector.importProgress).toBeDefined();
+  });
+});
+
+/** A fetch stub that answers one non-2xx status, and records every request. */
+function stubStatus(status: number, body: unknown = { error: { message: "No such webhook endpoint" } }) {
+  const calls: Array<{ url: string; init: RequestInit }> = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      calls.push({ url: String(url), init: init ?? {} });
+      return {
+        ok: false,
+        status,
+        statusText: "Err",
+        headers: { get: () => null },
+        json: async () => body,
+        text: async () => JSON.stringify(body),
+      } as unknown as Response;
+    }),
+  );
+  return calls;
+}
+
+const HOOK_URL = "https://app.namzilabs.com/api/webhooks/conn_1";
+const creds = { apiKey: "rk_live_x" };
+
+describe("stripe: webhook registration", () => {
+  it("creates the endpoint form-encoded with our seven events, and returns Stripe's own secret and id", async () => {
+    const calls = stubFetch([
+      { id: "we_1", object: "webhook_endpoint", secret: "whsec_wRNftLajMZNeslQOP6vEPm4iVx5NlZ6z", status: "enabled", url: HOOK_URL },
+    ]);
+    const res = await stripeConnector.registerWebhook!({ connectionId: CONN, webhookUrl: HOOK_URL, credentials: creds });
+    // The whole point: the secret comes back FROM the create call, so the
+    // connect dialog never has to ask anyone for a whsec_.
+    expect(res).toEqual({ signingSecret: "whsec_wRNftLajMZNeslQOP6vEPm4iVx5NlZ6z", externalId: "we_1" });
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toBe("https://api.stripe.com/v1/webhook_endpoints");
+    expect(calls[0].init.method).toBe("POST");
+    const headers = calls[0].init.headers as Record<string, string>;
+    expect(headers.authorization).toBe("Bearer rk_live_x");
+    // v1 takes form-encoded bodies only; JSON is silently the wrong request.
+    expect(headers["content-type"]).toBe("application/x-www-form-urlencoded");
+
+    const body = new URLSearchParams(String(calls[0].init.body));
+    expect(body.get("url")).toBe(HOOK_URL);
+    expect(body.get("description")).toBe("Namzilabs");
+    expect(body.getAll("enabled_events[]")).toEqual(Object.keys(STRIPE_EVENT_TYPES));
+    // Unset on purpose: an endpoint with no pinned version renders events at the
+    // account default — the same shape /v1/events hands the poll.
+    expect(body.get("api_version")).toBeNull();
+    expect(body.get("connect")).toBeNull();
+  });
+
+  it("a secret the create call did not return is left undefined, not invented", async () => {
+    stubFetch([{ id: "we_2", object: "webhook_endpoint" }]);
+    const res = await stripeConnector.registerWebhook!({ connectionId: CONN, webhookUrl: HOOK_URL, credentials: creds });
+    // A minted secret could never verify Stripe's HMAC; with none stored the
+    // route fails closed, and the id still lets teardown find the endpoint.
+    expect(res).toEqual({ signingSecret: undefined, externalId: "we_2" });
+  });
+
+  it("registration refuses to run without a key", async () => {
+    await expect(stripeConnector.registerWebhook!({ connectionId: CONN, webhookUrl: HOOK_URL, credentials: {} })).rejects.toThrow(/apiKey/);
+  });
+
+  it("deletion DELETEs the endpoint id, swallows a 404, and rethrows anything else", async () => {
+    const ok = stubFetch([{ id: "we_1", object: "webhook_endpoint", deleted: true }]);
+    await expect(stripeConnector.unregisterWebhook!({ connectionId: CONN, credentials: creds, externalId: "we_1" })).resolves.toBeUndefined();
+    expect(ok[0].url).toBe("https://api.stripe.com/v1/webhook_endpoints/we_1");
+    expect(ok[0].init.method).toBe("DELETE");
+
+    vi.unstubAllGlobals();
+    const gone = stubStatus(404);
+    // "already deleted" IS the goal — teardown must not fail on it.
+    await expect(stripeConnector.unregisterWebhook!({ connectionId: CONN, credentials: creds, externalId: "we_gone" })).resolves.toBeUndefined();
+    expect(gone).toHaveLength(1);
+
+    vi.unstubAllGlobals();
+    stubStatus(500, { error: { message: "boom" } });
+    await expect(stripeConnector.unregisterWebhook!({ connectionId: CONN, credentials: creds, externalId: "we_1" })).rejects.toThrow(/500/);
+  });
+
+  it("the connector can do both halves, and the resource is the account so connect time is early enough", () => {
+    const c = getConnector("stripe")!;
+    expect(typeof c.registerWebhook).toBe("function");
+    expect(typeof c.unregisterWebhook).toBe("function");
+    // Auto-registration AT CONNECT is only possible because the resource is the
+    // ACCOUNT: nothing about a Stripe stream is chosen inside a flow, so there
+    // is no per-form / per-campaign resource we would still be waiting on.
+    expect(isStreamScoped("stripe")).toBe(false);
+    // The signature still fails closed with no secret — a connection whose
+    // registration was refused verifies nothing rather than trusting anything.
+    expect(catalogEntry("stripe")!.instant).toBe(true);
+    expect(c.verifySignature({ rawBody: "{}", headers: {}, secret: null })).toBe(false);
   });
 });

@@ -581,6 +581,26 @@ export interface Connector {
   /** Optional: auto-create the provider's webhook subscription at connect time. */
   registerWebhook?(args: RegisterWebhookArgs): Promise<RegisterWebhookResult>;
   /**
+   * Optional: the provider signs its deliveries with a credential the connect
+   * form ALREADY collects, so there is nothing for the customer to paste a
+   * second time.
+   *
+   * Retell is the case this exists for. It has no webhook resource to create
+   * and mints no secret of its own: it signs with one of the workspace's API
+   * keys ("Only the API key that has a webhook badge next to it can be used to
+   * verify the webhook" — docs.retellai.com/features/secure-webhook, read
+   * 8 Sep 2026). Without this hook the connect form has to ask for the same key
+   * twice, and a customer who leaves the second box empty gets a MINTED secret
+   * that no real delivery can ever match — every webhook 401s, silently,
+   * forever, because there is nowhere in Retell to paste a minted secret back.
+   *
+   * Consulted by `createConnection` only when nothing was pasted into
+   * `webhookSecret`, so an explicit paste always wins: a workspace whose badged
+   * key is not the key we hold can still name the right one. Returning null
+   * means "no such credential here" and the minted secret stands.
+   */
+  webhookSecretFromCredentials?(credentials: Record<string, unknown>): string | null;
+  /**
    * Optional: verify the provider-side subscription still points at our URL and
    * re-create it when missing (webhook-health backstop, run by the sweep).
    */

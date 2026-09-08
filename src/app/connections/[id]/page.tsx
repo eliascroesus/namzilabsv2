@@ -228,7 +228,15 @@ export default async function ConnectionPage({
             <Card variant="surface" padding="compact">
               {entry.webhookSetup && <p className="mb-3 text-sm text-muted-foreground">{entry.webhookSetup}</p>}
               <CopyField label="URL" value={webhookUrl} isUrl />
-              {signingSecret && <CopyField label="Signing secret" value={signingSecret} />}
+              {/* The secret is shown to be COPIED INTO the provider. A provider
+                  that signs with a credential the customer already holds
+                  (Retell signs with one of their own API keys) has no box to
+                  paste it into, so showing it invites a pointless copy of a
+                  live API key. The connector saying so is the same fact the
+                  connect dialog uses to stop asking for that key twice. */}
+              {signingSecret && !getConnector(conn.source)?.webhookSecretFromCredentials && (
+                <CopyField label="Signing secret" value={signingSecret} />
+              )}
               {/* Only the catch-hook has this question. Every other source reads a
                   documented timestamp field of its own, so there is nothing to
                   choose and nothing to be wrong about. */}

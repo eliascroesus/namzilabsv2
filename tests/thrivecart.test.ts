@@ -1,6 +1,7 @@
+import { readFileSync } from "node:fs";
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { thrivecartConnector, THRIVECART_EVENTS } from "@/connectors/thrivecart";
-import { catalogEntry } from "@/connectors/catalog";
+import { catalogEntry, isStreamScoped } from "@/connectors/catalog";
 import { getConnector } from "@/connectors/registry";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -74,6 +75,54 @@ describe("thrivecart: registration", () => {
     expect(e.webhookSetup).toContain("order validation");
     // https://developers.thrivecart.com/documentation/intro/index/ — 60/min per account.
     expect(e.rateLimits).toEqual({ "*": { requestsPerMinute: 60 } });
+  });
+});
+
+/**
+ * WHY THE CUSTOMER STILL PASTES SOMETHING — pinned so nobody re-litigates it
+ * from memory, and so the one line of copy that has a JOB keeps doing it.
+ *
+ * ThriveCart's Event Subscription API does create subscriptions ("POST a JSON
+ * blob to the subscribe endpoint: https://thrivecart.com/api/external/subscribe",
+ * developers.thrivecart.com/documentation/event_subscription/intro/, read 8 Sep
+ * 2026), but it documents no response body and no secret in one, and it gates
+ * `target_url` on an app's registered URLs — an OAuth grant this connector has
+ * no credential for. The value that authenticates a delivery is the account's
+ * own "Secret word", which exists only inside ThriveCart's UI. So the field
+ * stays, required, and the copy's job is to name the exact place it lives.
+ *
+ * The copy is asserted by its ANCHORS (the menu path, the field's name) rather
+ * than verbatim: the sentence around them gets edited, the path must not drift.
+ */
+describe("thrivecart: no auto-registration, and copy that says so", () => {
+  it("registers nothing, and never claims it did", () => {
+    const e = catalogEntry("thrivecart")!;
+    expect(e.autoWebhook).toBe(false);
+    expect(thrivecartConnector.registerWebhook).toBeUndefined();
+    expect(thrivecartConnector.unregisterWebhook).toBeUndefined();
+    // Connection-scoped, so the blocker is the SECRET and not an unknown
+    // resource: there is no per-form, per-product stream to register against,
+    // and registering later at stream creation would meet the same wall.
+    expect(isStreamScoped("thrivecart")).toBe(false);
+    expect(e.webhookSetup ?? "").not.toMatch(/automatic|we create|created for you/i);
+  });
+
+  it("the dialog names the exact place in ThriveCart the value lives", () => {
+    const e = catalogEntry("thrivecart")!;
+    const [field, ...rest] = e.credentialFields;
+    expect(rest).toEqual([]);
+    expect(field.key).toBe("webhookSecret");
+    // The label carries the path on its own: the connect dialog renders a
+    // label and a masked box, and nothing else.
+    for (const anchor of [/API & Webhooks/, /order validation/i]) expect(field.label, field.label).toMatch(anchor);
+    const setup = e.webhookSetup ?? "";
+    for (const anchor of [/Settings/, /API & Webhooks/, /order validation/i, /webhook/i]) expect(setup, setup).toMatch(anchor);
+  });
+
+  it("the module cites the create endpoint that cannot help, and fails closed in one line", () => {
+    const src = readFileSync("src/connectors/thrivecart.ts", "utf8");
+    expect(src).toContain("https://thrivecart.com/api/external/subscribe");
+    expect(src.match(/if \(!secret\) return false;/g)).toHaveLength(1);
   });
 });
 

@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { createHmac } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { tallyConnector } from "@/connectors/tally";
-import { catalogEntry } from "@/connectors/catalog";
+import { catalogEntry, isStreamScoped } from "@/connectors/catalog";
 import { getConnector } from "@/connectors/registry";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -56,6 +57,61 @@ describe("tally: registration", () => {
     expect(e.docs?.readOn).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(e.verified).toEqual({ live: null });
     expect(e.flowFields?.map((f) => f.key)).toEqual(["formId"]);
+  });
+});
+
+/**
+ * WHY TALLY ASKS FOR A SIGNING SECRET AND THE AUTO-WEBHOOK CONNECTORS DO NOT.
+ *
+ * Not an oversight to be tidied away later: POST /webhooks has
+ * `"required": ["formId", "url", "eventTypes"]`, and Tally publishes no
+ * account- or workspace-wide subscription. `formId` lives on a flow's Get
+ * data step, so at connect time — the ONLY moment `registerWebhook` is ever
+ * called (`createConnection`) — the one required argument does not exist.
+ * These assertions pin the two halves of that argument together, so a future
+ * "why is autoWebhook false here?" has its answer in the failing sabotage
+ * rather than in someone's memory.
+ */
+describe("tally: no connect-time auto-registration, and the reason", () => {
+  it("is stream-scoped on formId — the create call's required argument is chosen per step, not per connection", () => {
+    expect(isStreamScoped("tally")).toBe(true);
+    const [form] = catalogEntry("tally")!.flowFields!;
+    // A readFilter would make it a WHERE clause over stored rows and the
+    // source connection-scoped; formId narrows the REQUEST, so each form is
+    // its own stream — and its own Tally webhook, if there ever is one.
+    expect(form.key).toBe("formId");
+    expect(form.readFilter).toBeUndefined();
+    expect(form.required).toBe(true);
+  });
+
+  it("declares no auto-webhook and implements neither half of the hook", () => {
+    expect(catalogEntry("tally")!.autoWebhook).toBe(false);
+    expect(tallyConnector.registerWebhook).toBeUndefined();
+    expect(tallyConnector.unregisterWebhook).toBeUndefined();
+    // instant + !autoWebhook ⇒ the secret is pasted (or minted for pasting),
+    // so the field it lands in and the sentence pointing at Tally's UI both
+    // have to exist. Drop the field and C21 has nowhere to put the value.
+    const e = catalogEntry("tally")!;
+    expect(e.instant).toBe(true);
+    expect(e.credentialFields.map((f) => f.key)).toEqual(["apiKey", "webhookSecret"]);
+    expect(e.webhookSetup).toContain("Integrations");
+  });
+
+  it("the secret is OPTIONAL in behaviour: the poll alone yields completed AND partial, with no webhookSecret in credentials", async () => {
+    const calls = stubFetch([
+      { page: 1, hasMore: false, submissions: [submission(), submission({ id: "s2", isCompleted: false, submittedAt: "2026-09-01T11:00:00.000Z" })], questions: [] },
+    ]);
+    const res = await tallyConnector.poll!({ connectionId: CONN, cursor: null, credentials: { apiKey: "k" }, config: { formId: "F1" } });
+    expect(res.records.map((r) => r.eventType)).toEqual(["form_submitted", "form_partial"]);
+    // `filter: "all"` is what makes the webhook a doorbell rather than the
+    // only door — flip it to "completed" and partials would need one.
+    expect(new URL(calls[0].url).searchParams.get("filter")).toBe("all");
+  });
+
+  it("verifySignature fails closed on exactly one line", () => {
+    const src = readFileSync("src/connectors/tally.ts", "utf8");
+    expect(src.match(/if \(!secret\) return false;/g)).toHaveLength(1);
+    expect(tallyConnector.verifySignature({ rawBody: "{}", headers: {}, secret: null })).toBe(false);
   });
 });
 

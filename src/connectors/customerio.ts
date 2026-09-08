@@ -41,9 +41,49 @@ import { epochToDate, eventId, hmacHeaderVerify } from "./kit";
  *   webhook-only (the plan said the App API has no bulk activity list at all;
  *   the live docs say it has one with no time filter, which lands in the same
  *   place for a different reason).
+ * - https://docs.customer.io/integrations/api/app/tag/reporting-webhooks/ —
+ *   the endpoint CAN be created for the customer, and deleted again:
+ *   `POST /v1/reporting_webhooks` takes `{name, endpoint, events, disabled,
+ *   full_resolution, with_content}` and 200 "Returns your webhook configuration
+ *   and the ID of the webhook" — `{"name","id","type","endpoint","disabled",
+ *   "full_resolution","with_content","events"}`. THAT IS THE WHOLE OBJECT: no
+ *   signing key in the body, none accepted in the request, and
+ *   `GET /v1/reporting_webhooks` (.../listwebhooks/) and
+ *   `GET /v1/reporting_webhooks/{webhook_id}` (.../getwebhook/) return those
+ *   same eight fields, so it cannot be read back afterwards either.
+ *   `DELETE /v1/reporting_webhooks/{webhook_id}` → 200 "A successful request
+ *   has no response", 404 "The webhook ID does not exist".
  * - https://docs.customer.io/integrations/api/app/ — base
  *   `https://api.customer.io` (EU: `https://api-eu.customer.io`); "Most
  *   endpoints on this page are limited to 10 requests per second."
+ *
+ * WHY THE SIGNING KEY IS STILL PASTED BY HAND — `autoWebhook: false`, no
+ * `registerWebhook`, and that is a ruling rather than an omission.
+ *
+ * Not "there is no create API": there is one, with a delete to match (above).
+ * The reason is that creating the endpoint never tells us the key it will be
+ * signed with. The reporting-webhook object is eight fields on create, get and
+ * list alike, and none of them is a secret. The key exists only in the UI:
+ * "For reporting webhooks, you can find the signing key on the same page you
+ * enter your webhook endpoint: Integrations > Reporting webhooks"
+ * (docs.customer.io/integrations/data-out/connections/webhooks/, 8 Sep 2026).
+ *
+ * So auto-registering would not remove a paste — it would ADD a credential.
+ * This connector has no `apiKey` field at all; `POST /v1/reporting_webhooks` is
+ * "Auth Required" and wants an App API Key bearer token, so every customer
+ * would have to mint and paste a WRITE-scoped token they otherwise never need,
+ * and then still walk to Integrations → Reporting webhooks to copy the signing
+ * key. One paste becomes two, and the new one is far more powerful than the one
+ * it failed to replace. (It would also stop this being a secret-only source —
+ * the `authType: "secret"` convention connector-population.test.ts encodes for
+ * entries whose only credential field is `webhookSecret`.)
+ *
+ * And a half-registration is worse than none. `verifySignature` fails closed,
+ * so an endpoint we created but hold no key for would deliver into a 401
+ * forever: a live subscription in the customer's account, burning their retry
+ * budget for seven days per event, that this app can never accept. Creating it
+ * is only safe once the key is already pasted — by which point the customer has
+ * been to the page that creates it anyway.
  *
  * OPENS ARE PIXEL-BASED. Apple Mail Privacy Protection and every scanning proxy
  * fetch the tracking pixel without a human reading anything, so `email_opened`

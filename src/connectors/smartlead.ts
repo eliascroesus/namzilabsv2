@@ -39,6 +39,40 @@ import { eventId, hmacHeaderVerify, isoOrNull, providerClient, requireCredential
  *   EMAIL_UNSUBSCRIBED) and gives them one ISO `timestamp`. Two vendor pages,
  *   two spellings of one fact, so both spellings map and `timestamp` is the
  *   last dated fallback.
+ * - api.smartlead.ai/api-reference/webhooks/create — THE REGISTRATION API EXISTS
+ *   AND IS STILL NO USE HERE. POST /api/v1/webhook/create takes webhook_url,
+ *   association_type ("Scope of the webhook. Valid values: user, client,
+ *   campaign"), email_campaign_id, name, event_type_map, category_id_map,
+ *   client_id, event_type, category_id, webhook_type and force_create, and
+ *   answers 200 with `ok`, `id`, `webhook_url`. NO SECRET IN EITHER DIRECTION:
+ *   none of the eleven request parameters is one we could supply, and the
+ *   response mints none. .../webhooks/get — GET /api/v1/webhook/{webhook_id}
+ *   returns id, email_campaign_id, name, webhook_url, event_type_map,
+ *   category_id_map, created_at, updated_at, so there is nothing to read back
+ *   afterwards either; .../webhooks/update — PUT /api/v1/webhook/update/
+ *   {webhook_id} takes name, webhook_url, event_types and categories, so there
+ *   is nothing to set afterwards either. Registering from connect would
+ *   therefore create a LIVE subscription this connection could never
+ *   authenticate — `verifySignature` would 401 every delivery we ourselves
+ *   caused — which is why `autoWebhook` stays false. (The delete half is
+ *   published, .../webhooks/delete — DELETE /api/v1/webhook/delete with the id,
+ *   404 "Resource not found" when it is already gone. It is the secret that is
+ *   missing, not the endpoints.)
+ * - helpcenter.smartlead.ai/en/articles/185-assigning-webhooks-to-campaigns-clients-or-users
+ *   — a USER-level hook is "applied to all unmapped campaigns. This means that
+ *   campaigns not mapped with any webhook will be linked to this webhook", so
+ *   one user-level registration WOULD cover campaigns created after connect,
+ *   and the per-campaign scoping is not what blocks auto-registration. Only the
+ *   secret is. Worth remembering if Smartlead ever publishes one.
+ * - And note what a delivery buys this source at all: `campaignId` is a
+ *   flowField with no readFilter, so `isStreamScoped("smartlead")` is true and
+ *   the inbound route (src/app/api/webhooks/[connectionId]/route.ts) verifies,
+ *   rings the connection's doorbell and returns 202 WITHOUT storing the
+ *   payload. The poll is the sole ingest path; a signed delivery only decides
+ *   WHEN the campaign is re-read. That is why the secret is optional, and why
+ *   the events this module maps in `normalize` but the statistics row cannot
+ *   date — a bounce, an unsubscribe, a category change — are not counted on
+ *   this connection today: no reachable path writes them.
  * - api.smartlead.ai/guides/rate-limits — "Standard | 60 [per minute]",
  *   Pro 120, and "Rate limits apply to your API key across all endpoints
  *   combined" — hence ONE bucket in the catalog ("*"), not one per endpoint.
@@ -51,8 +85,13 @@ import { eventId, hmacHeaderVerify, isoOrNull, providerClient, requireCredential
  * NOT dated with `now`: it produces no events at all, and `scripts/verify-
  * smartlead.ts` prints the real field names against a live account.
  *
- * A bounce, an unsubscribe and a category change arrive by WEBHOOK only: no
- * documented statistics field dates them, and an undated fact is not an event.
+ * A bounce, an unsubscribe and a category change reach no counter at all: no
+ * documented statistics field dates them (and an undated fact is not an event),
+ * and the webhook that carries them is a doorbell for a stream-scoped source,
+ * so its payload is never stored. `normalize` maps them against the day the
+ * inbound path becomes reachable; nothing today can call it. The catalog's
+ * syncNote says this out loud rather than promising the webhook makes up the
+ * difference.
  */
 const API = "https://server.smartlead.ai/api/v1";
 const DEFAULTS = { pagesPerPoll: 3, maxPagesPerPoll: 20, firstSyncDays: 30, overlapMs: 5 * 60_000 };

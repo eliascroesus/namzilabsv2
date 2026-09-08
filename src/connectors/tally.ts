@@ -15,12 +15,43 @@ import { bearerClient, eventId, hmacHeaderVerify, isoOrNull, requireCredential, 
  *   hasMore, submissions[{ id, formId, isCompleted, submittedAt, responses[
  *   { questionId, answer }] }], questions[{ id, title, type }] }.
  * - …/endpoint/forms/list — GET /forms → { items[{ id, name }], hasMore }.
- * - …/endpoint/webhooks/post — POST /webhooks { formId, url, eventTypes:
- *   ["FORM_RESPONSE"], signingSecret }.
- * - tally.so/help/webhooks — `Tally-Signature` = base64 HMAC-SHA256 over
- *   JSON.stringify(payload) keyed on the signing secret; delivery
+ * - …/endpoint/webhooks/post — POST /webhooks, requestBody
+ *   `"required": ["formId", "url", "eventTypes"]` (openapi.json), with
+ *   `signingSecret` "Optional secret used to sign webhook payloads"
+ *   (nullable) — so a secret WE mint is accepted. 201 returns
+ *   { id, url, eventTypes, isEnabled, createdAt } and NOT the secret.
+ * - …/endpoint/webhooks/get — GET /webhooks does return each webhook's
+ *   `signingSecret` ("Secret used to sign webhook payloads", nullable).
+ * - …/endpoint/webhooks/delete — DELETE /webhooks/{webhookId} → 204, 404
+ *   "Webhook not found".
+ * - tally.so/help/webhooks — "Publish your form and go to the Integrations
+ *   tab. Click Connect to Webhooks."; `Tally-Signature` = base64 HMAC-SHA256
+ *   over JSON.stringify(payload) keyed on the signing secret; delivery
  *   { eventId, eventType, createdAt, data: { responseId, submissionId,
  *   respondentId, formId, formName, createdAt, fields[{ key, label, type, value }] } }.
+ *
+ * NO `registerWebhook`, AND THE REASON IS THE SHAPE OF THE PROVIDER, NOT AN
+ * OMISSION. Tally has no account- or workspace-wide subscription: every
+ * webhook belongs to ONE form, and `formId` is required on the create call.
+ * This connector is STREAM-SCOPED (`isStreamScoped("tally")` is true — its
+ * only flowField, `formId`, carries no readFilter), so the form is chosen
+ * inside a flow's Get data step, long after connecting. At connect time the
+ * one required argument does not exist yet, and `createConnection` is the
+ * only caller `registerWebhook` has. Registering across every form the key
+ * can see would be a different promise than the one the customer made — it
+ * would plant subscriptions on forms no step reads, and still miss every
+ * form created afterwards.
+ *
+ * So the signing secret stays a credential field, and it is honestly
+ * OPTIONAL: `poll` reads the same submissions with `filter: "all"`, so
+ * completed AND partial arrive without any webhook at all. The webhook is a
+ * doorbell that makes them instant. Blank means `createConnection` mints one
+ * (`entry.instant`) for the customer to paste into Tally's own field.
+ *
+ * If a stream-creation hook ever lands, everything it needs is already
+ * documented above: `formId` is known by then, POST accepts our minted
+ * `signingSecret` (and GET reads one back), `externalSubscriber` can carry
+ * the stream id, and DELETE tears it down.
  */
 const API = "https://api.tally.so";
 const DEFAULTS = { pagesPerPoll: 3, maxPagesPerPoll: 20, firstSyncDays: 90, overlapMs: 5 * 60_000 };

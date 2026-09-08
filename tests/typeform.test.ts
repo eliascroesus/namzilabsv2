@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { createHmac } from "node:crypto";
 import { typeformConnector } from "@/connectors/typeform";
-import { catalogEntry } from "@/connectors/catalog";
+import { catalogEntry, isStreamScoped } from "@/connectors/catalog";
 import { getConnector } from "@/connectors/registry";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -51,6 +51,38 @@ describe("typeform: registration", () => {
     expect(e.docs?.readOn).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(e.verified).toEqual({ live: null });
     expect(e.flowFields?.map((f) => f.key)).toEqual(["formId"]);
+  });
+});
+
+describe("typeform: webhook posture", () => {
+  /**
+   * The connect dialog cannot create this webhook, and the reason is structural
+   * rather than a missing feature. Every endpoint Typeform publishes for webhook
+   * management is under the form — PUT and DELETE
+   * /forms/{form_id}/webhooks/{tag} (developers/webhooks/reference/*, read
+   * 8 Sep 2026) — while the form is a flowField chosen inside a step. At connect
+   * time there is no form_id in hand, so there is nothing to register against.
+   *
+   * This test is the guard on that story: if `formId` ever stops being
+   * stream-scoping (a readFilter, say), the connection becomes the resource and
+   * connect-time registration becomes buildable — and this fails, which is the
+   * prompt to build it.
+   */
+  it("is stream-scoped on the form, so there is no connect-time registration to do", () => {
+    expect(isStreamScoped("typeform")).toBe(true);
+    expect(catalogEntry("typeform")!.autoWebhook).toBe(false);
+    expect(typeformConnector.registerWebhook).toBeUndefined();
+    expect(typeformConnector.unregisterWebhook).toBeUndefined();
+  });
+  it("keeps the pasted secret, and the poll is what makes it optional", () => {
+    const e = catalogEntry("typeform")!;
+    expect(e.credentialFields.map((f) => f.key)).toContain("webhookSecret");
+    // Deliveries are a doorbell for a stream-scoped source, so a connection with
+    // no secret loses freshness and no records: the poll is the sole ingest path.
+    expect(e.poll).toBe(true);
+    // The copy must name the place in Typeform's own UI where the value lives.
+    expect(e.webhookSetup).toMatch(/Connect/);
+    expect(e.webhookSetup).toMatch(/Webhooks/);
   });
 });
 

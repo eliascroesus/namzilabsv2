@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { createHmac } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { smartleadConnector, SMARTLEAD_EVENTS } from "@/connectors/smartlead";
-import { catalogEntry } from "@/connectors/catalog";
+import { catalogEntry, isStreamScoped } from "@/connectors/catalog";
 import { getConnector } from "@/connectors/registry";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -73,6 +74,62 @@ describe("smartlead: registration", () => {
     // instant + not auto-registered ⇒ the customer pastes the secret.
     expect(e.credentialFields.map((f) => f.key)).toEqual(["apiKey", "webhookSecret"]);
     expect(e.webhookSetup).toContain("webhook");
+  });
+
+  /**
+   * WHY THERE IS NO `registerWebhook`, AND IT IS NOT FOR WANT OF AN ENDPOINT.
+   *
+   * api.smartlead.ai/api-reference/webhooks/create (read 8 Sep 2026) publishes
+   * POST /api/v1/webhook/create with eleven request parameters — webhook_url,
+   * association_type ("Valid values: user, client, campaign"), email_campaign_id,
+   * name, event_type_map, category_id_map, client_id, event_type, category_id,
+   * webhook_type, force_create — and NOT ONE of them is a secret we could
+   * supply; its 200 is `ok`, `id`, `webhook_url`, which mints none either.
+   * `.../webhooks/get` (id, email_campaign_id, name, webhook_url,
+   * event_type_map, category_id_map, created_at, updated_at) has none to read
+   * back afterwards, and `.../webhooks/update` (name, webhook_url, event_types,
+   * categories) none to set afterwards.
+   *
+   * So auto-registering would create a LIVE subscription this connection could
+   * never authenticate: `verifySignature` fails closed, and every delivery we
+   * ourselves caused would 401 forever, silently. That is strictly worse than
+   * asking — which is the whole reason the field stays.
+   */
+  it("does not auto-register: Smartlead's create API neither returns a signing secret nor accepts ours", () => {
+    expect(catalogEntry("smartlead")!.autoWebhook).toBe(false);
+    expect(smartleadConnector.registerWebhook).toBeUndefined();
+    expect(smartleadConnector.unregisterWebhook).toBeUndefined();
+  });
+
+  it("is stream-scoped on the campaign, so a delivery is a doorbell and the copy must point at Smartlead's own UI", () => {
+    expect(isStreamScoped("smartlead")).toBe(true);
+    const e = catalogEntry("smartlead")!;
+    // The route verifies, sweeps and returns 202 without storing the payload
+    // (src/app/api/webhooks/[connectionId]/route.ts), so the poll is the only
+    // way a record ever lands and a missing secret costs freshness, not data.
+    expect(e.poll).toBe(true);
+    // Somewhere for a pasted value to land: C21 lifts `webhookSecret` out of
+    // `credentials` into the connection's signing secret, and with no field
+    // there is nowhere for it to come from.
+    expect(e.credentialFields.map((f) => f.key)).toContain("webhookSecret");
+    // Named place in the provider's UI, and no promise of an automatic
+    // registration this connector cannot perform.
+    expect(e.webhookSetup).toMatch(/Settings\s*→\s*Webhooks/);
+    expect(e.webhookSetup ?? "").not.toMatch(/automatic|we create|created for you/i);
+  });
+
+  it("the secret is OPTIONAL in behaviour: the poll alone yields every fact this connection counts", async () => {
+    stubFetch([{ ok: true, data: [row()] }]);
+    const res = await smartleadConnector.poll!({ connectionId: CONN, cursor: null, credentials: { apiKey: "K" }, config: { campaignId: "7" } });
+    // No webhookSecret anywhere in the credentials, and the three dated facts
+    // still land. A click would too — this row simply has none.
+    expect(res.records.map((r) => r.eventType)).toEqual(["email_sent", "email_opened", "reply"]);
+  });
+
+  it("verifySignature fails closed on exactly one line", () => {
+    const src = readFileSync("src/connectors/smartlead.ts", "utf8");
+    expect(src.match(/if \(!secret\) return false;/g)).toHaveLength(1);
+    expect(smartleadConnector.verifySignature({ rawBody: "{}", headers: {}, secret: null })).toBe(false);
   });
 });
 

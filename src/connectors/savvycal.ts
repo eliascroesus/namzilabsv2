@@ -1,5 +1,16 @@
-import type { Connector, CanonicalEvent, VerifyArgs, NormalizeContext, PollArgs, PollResult } from "./types";
+import type {
+  Connector,
+  CanonicalEvent,
+  VerifyArgs,
+  NormalizeContext,
+  PollArgs,
+  PollResult,
+  RegisterWebhookArgs,
+  RegisterWebhookResult,
+  UnregisterWebhookArgs,
+} from "./types";
 import { asObject, parseDate, str } from "./field-utils";
+import { HttpError } from "@/lib/http-client";
 import { bearerClient, eventId, hmacHeaderVerify, isoOrNull, requireCredential, walkImportProgress, windowedWalk, ymd } from "./kit";
 
 /**
@@ -45,6 +56,22 @@ import { bearerClient, eventId, hmacHeaderVerify, isoOrNull, requireCredential, 
  *   is `{ type, id: "payload_…", occurred_at, payload: <Event>, version }`, and
  *   `event.created` fires again "when approval is granted", alongside
  *   `event.approved` — one event id, so the two dedupe.
+ * - https://developers.savvycal.com/api/create-webhook — POST /v1/webhooks.
+ *   The whole request body is `{ url }` (`CreateWebhookRequest`, `required:
+ *   ["url"]`, and it declares no other property): SavvyCal has no per-topic
+ *   subscription, so ONE webhook hears every event and `normalize` does the
+ *   selecting. The 201 answers the Webhook object itself — flat, not
+ *   enveloped — and its `secret` ("Webhook secret") is one of the six REQUIRED
+ *   fields, so the signing secret comes back from the create call. Nobody has
+ *   to paste it, which is why there is no `webhookSecret` credential field.
+ * - https://developers.savvycal.com/api/delete-webhook — DELETE
+ *   /v1/webhooks/{webhook_id}, whose documented responses are 200, 401 and
+ *   404 "Not Found". A 404 IS a successful teardown: the subscription this
+ *   connection owned is already gone.
+ * - savvycal.com/pricing lists "API & Webhooks" as ONE feature line, so a token
+ *   that can read /v1/events can create a webhook too. No `webhookOptional`:
+ *   there is no plan that grants the poll and refuses the subscription, so a
+ *   refusal here is a real fault worth reporting rather than a tier to shrug at.
  */
 const API = "https://api.savvycal.com/v1";
 const DEFAULTS = { pagesPerPoll: 3, maxPagesPerPoll: 20, firstSyncDays: 90, overlapMs: 5 * 60_000 };
@@ -201,5 +228,20 @@ export const savvycalConnector: Connector = {
   async testFetchLatest(n: number, args: PollArgs): Promise<CanonicalEvent[]> {
     const { records } = await this.poll!({ ...args, cursor: null, budget: { maxCalls: 1 } });
     return records.slice(0, n);
+  },
+  async registerWebhook(args: RegisterWebhookArgs): Promise<RegisterWebhookResult> {
+    // `url` is the entire documented body — no events array, no version, no
+    // label — and the created Webhook comes back with the secret SavvyCal
+    // minted for it. We do not invent one: the provider signs with its own.
+    const res = await api(args.credentials).post<{ id?: string; secret?: string }>("/webhooks", { url: args.webhookUrl });
+    return { signingSecret: str(res.secret) ?? undefined, externalId: str(res.id) ?? undefined };
+  },
+  async unregisterWebhook(args: UnregisterWebhookArgs): Promise<void> {
+    try {
+      await api(args.credentials).del(`/webhooks/${encodeURIComponent(args.externalId)}`);
+    } catch (e) {
+      if (e instanceof HttpError && e.status === 404) return; // already gone is success
+      throw e;
+    }
   },
 };

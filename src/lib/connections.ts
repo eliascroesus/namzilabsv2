@@ -146,7 +146,16 @@ export async function createConnection(input: CreateConnectionInput): Promise<Co
     // A pasted secret came from the provider itself, so it can verify real
     // deliveries right away; a minted one only ever could once the user
     // copies it back into the provider's own webhook config.
-    signingSecret = stripWebhookSecret ? pastedWebhookSecret : randomSecret();
+    //
+    // Between those two sits a provider that signs with a credential we were
+    // just handed — Retell signs with the account's own API key and offers no
+    // secret field anywhere to paste a minted one back INTO. Minting there is
+    // not a neutral default: it guarantees every real delivery 401s. So a
+    // connector may name the credential that signs, and that is used whenever
+    // the customer pasted nothing. An explicit paste still wins, because it is
+    // the only way to name a key different from the one we hold.
+    const fromCredentials = connector?.webhookSecretFromCredentials?.(rawCredentials) || null;
+    signingSecret = stripWebhookSecret ? pastedWebhookSecret : (fromCredentials ?? randomSecret());
   }
 
   const patch: Partial<Connection> = {};
