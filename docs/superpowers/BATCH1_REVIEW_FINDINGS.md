@@ -52,6 +52,21 @@ replays Airtable from cache and re-runs the thirteen that died.
 
 The two Smartlead entries further down are superseded by the fix above.
 
+## Batch 2, and why only four of eight shipped
+
+The connector build ran alongside the verification pass and lost the same way:
+eight agents, one returned. Four connectors are on the branch — **Mailchimp,
+WooCommerce, Shopify, Klaviyo** — of which the last two were finished by hand
+after their agents died, with every load-bearing fact re-checked against the
+vendor's documentation rather than taken from the module's own comments.
+
+Four modules are written, compile, and are **UNVERIFIED** — no tests, no
+sabotage check, no independent reading of their docs. They are parked OUTSIDE
+the repo at `<session scratchpad>/unfinished-connectors/`: **HubSpot, Zoom,
+GoHighLevel, ActiveCampaign**. Do not ship them as they stand. Re-running the
+build workflow is cleaner than resuming from them, since the briefs are what
+carried the value and the code was never checked by anything.
+
 
 ## CRITICAL
 
