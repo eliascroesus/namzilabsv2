@@ -30,6 +30,10 @@ import { mailchimpConnector } from "./mailchimp";
 
 import { woocommerceConnector } from "./woocommerce";
 
+import { shopifyConnector } from "./shopify";
+
+import { klaviyoConnector } from "./klaviyo";
+
 const registry = new Map<string, Connector>();
 
 export function registerConnector(connector: Connector): void {
@@ -70,6 +74,8 @@ for (const connector of [
   airtableConnector,
   mailchimpConnector,
   woocommerceConnector,
+  shopifyConnector,
+  klaviyoConnector,
 ]) {
   registerConnector(connector);
 }

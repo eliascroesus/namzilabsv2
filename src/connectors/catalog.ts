@@ -1775,6 +1775,129 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
       "Nothing to do — the webhook is created on the store for you when you connect, and removed when you disconnect. " +
       "The API keys need Read/Write permission for that; a read-only key still syncs by polling.",
   },
+  {
+    source: "shopify",
+    name: "Shopify",
+    description: "Orders placed, paid, cancelled and refunded on a Shopify store, with their totals in the shop's own currency.",
+    // shopify.com's brand green.
+    brand: { color: "#5E8E3E", short: "Sh" },
+    connect: "apiKey",
+    instant: true,
+    poll: true,
+    sync: "incremental",
+    syncNote:
+      "Orders are re-read whenever they change and each fact is dated by when it HAPPENED — placed, paid, cancelled, " +
+      "refunded — so an order edited today keeps its original order date and a payment that settled a day later counts " +
+      "on the day it settled. A refund is valued at the money that actually moved back, not at the order total.",
+    historyNote:
+      "First sync reaches back 60 days. Shopify does not return orders older than that without its approval-gated " +
+      "read_all_orders scope, so a deeper import needs that scope on the app.",
+    /**
+     * TRUE — we create all six subscriptions with the access token. What we
+     * CANNOT do is mint the secret, and that is Shopify's design rather than an
+     * omission on our side: the create response carries no secret at all, because
+     * Shopify signs every delivery with the APP'S CLIENT SECRET ("generated using
+     * your app's client secret and the raw request body",
+     * shopify.dev/docs/apps/build/webhooks/subscribe/https, read 2026-09-08).
+     * There is nowhere in Shopify to paste a secret of ours, so the pasted
+     * `apiSecretKey` is handed back as the signing secret. This is the one case
+     * where a second credential is genuinely unavoidable — unlike Stripe, whose
+     * endpoint create call returns the secret and where asking was our mistake.
+     */
+    autoWebhook: true,
+    docs: {
+      url: "https://shopify.dev/docs/api/admin-rest/latest/resources/order",
+      readOn: "2026-09-08",
+      webhooks: "https://shopify.dev/docs/apps/build/webhooks/subscribe/https",
+    },
+    verified: { live: null },
+    /**
+     * REST Admin API: 2 requests/second sustained for a standard store on the
+     * leaky bucket, which is 120/minute. Declared at the sustained rate rather
+     * than the 40-call burst capacity, because the bucket refills at the
+     * sustained rate and a budget built on the burst would overrun every store
+     * that is not idle.
+     */
+    rateLimits: { "*": { requestsPerMinute: 120 } },
+    credentialFields: [
+      { key: "shopDomain", label: "Store domain", placeholder: "acme.myshopify.com" },
+      { key: "accessToken", label: "Admin API access token (Settings → Apps → Develop apps)", placeholder: "shpat_…" },
+      { key: "apiSecretKey", label: "API secret key — the same app's, used to verify deliveries", placeholder: "shpss_…" },
+    ],
+    commonFields: ["financial_status", "fulfillment_status", "currency", "total_price", "customer.id", "line_items"],
+    /**
+     * No eventTypeLabels: order_created is named by ThriveCart, payment_succeeded
+     * and payment_refunded by Stripe, and order_cancelled/checkout_created/
+     * customer_created all humanize correctly on their own.
+     */
+    webhookSetup:
+      "The subscriptions are created on your store when you connect, and removed when you disconnect. Create the app " +
+      "under Settings → Apps and sales channels → Develop apps, give it read access to orders and customers, then paste " +
+      "its Admin API access token and its API secret key above — Shopify signs every delivery with that secret, which is " +
+      "why both are needed.",
+  },
+  {
+    source: "klaviyo",
+    name: "Klaviyo",
+    description: "Any Klaviyo metric as dated events — orders placed, emails opened, carts started — with their value.",
+    // klaviyo.com's brand black-green.
+    brand: { color: "#232426", short: "Kl" },
+    connect: "apiKey",
+    instant: true,
+    poll: true,
+    sync: "incremental",
+    syncNote:
+      "Each step reads ONE metric — Klaviyo's own name for a kind of event, so the list is whatever your account tracks. " +
+      "Events are dated by the moment Klaviyo recorded them, and valued from the event's own $value where it carries " +
+      "one. An event with no $value has no value here rather than a zero: Klaviyo drops properties set to 0, so a zero " +
+      "and an absent one are indistinguishable and inventing either would put a made-up number in a revenue total.",
+    historyNote: "First sync reaches back 90 days. Klaviyo publishes no limit on how far back events can be read, so a deeper import can go further.",
+    /**
+     * TRUE, and cleanly: `POST /api/webhooks` takes a `secret_key` that WE
+     * supply, so the customer pastes their API key and nothing else — no secret
+     * to copy back out of Klaviyo's UI. Topics are read from the account rather
+     * than hard-coded, because they are "dynamic and based on the metrics
+     * available in your account" and subscribing to one an account lacks is a
+     * create that fails.
+     */
+    autoWebhook: true,
+    docs: {
+      url: "https://developers.klaviyo.com/en/reference/get_events",
+      readOn: "2026-09-08",
+      webhooks: "https://developers.klaviyo.com/en/docs/working_with_system_webhooks",
+    },
+    verified: { live: null },
+    /**
+     * The STEADY figure, which is the one a per-minute budget can express.
+     * Klaviyo publishes both a burst ("1-second window") and a steady
+     * ("1-minute window") limit per endpoint; Get Events is burst 350/s, steady
+     * 3500/m. Declaring the burst would let a budget authorise 350 calls inside
+     * one minute and blow the steady ceiling twenty times over.
+     */
+    rateLimits: { "*": { requestsPerMinute: 3500 } },
+    credentialFields: [{ key: "apiKey", label: "Private API key (Settings → API keys)", placeholder: "pk_…" }],
+    flowFields: [
+      {
+        key: "metric",
+        label: "Metric",
+        required: true,
+        dynamic: true,
+        placeholder: "Choose a metric…",
+        hint: "Each step reads one metric. Add another Get data step for a second one.",
+      },
+    ],
+    commonFields: ["metric", "email", "profile_id", "event_properties", "datetime"],
+    /**
+     * No eventTypeLabels, and none is possible: the type IS the account's own
+     * metric name slugged, so the vocabulary is unbounded and different per
+     * customer. `eventTypeLabel`'s humanizer already renders "placed_order" as
+     * "Placed order", which is the right answer for a name we did not choose.
+     */
+    webhookSetup:
+      "Nothing to do — the subscription is created in your Klaviyo account when you connect, and removed when you " +
+      "disconnect. A delivery only makes the next refresh immediate; the events themselves are read by polling the " +
+      "metric each step is scoped to.",
+  },
 ];
 
 export function catalogEntry(source: string): ConnectorCatalogEntry | undefined {
