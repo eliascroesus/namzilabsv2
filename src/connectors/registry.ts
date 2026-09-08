@@ -26,6 +26,10 @@ import { retellConnector } from "./retell";
 import { customerioConnector } from "./customerio";
 import { airtableConnector } from "./airtable";
 
+import { mailchimpConnector } from "./mailchimp";
+
+import { woocommerceConnector } from "./woocommerce";
+
 const registry = new Map<string, Connector>();
 
 export function registerConnector(connector: Connector): void {
@@ -64,6 +68,8 @@ for (const connector of [
   retellConnector,
   customerioConnector,
   airtableConnector,
+  mailchimpConnector,
+  woocommerceConnector,
 ]) {
   registerConnector(connector);
 }

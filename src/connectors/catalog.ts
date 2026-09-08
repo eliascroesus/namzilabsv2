@@ -1629,6 +1629,152 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
     hiddenFields: ["_airtable.id", "_airtable.baseId", "_airtable.tableId"],
     commonFields: ["_airtable.createdTime"],
   },
+  {
+    source: "mailchimp",
+    name: "Mailchimp",
+    description: "Contacts joining an audience, dated by when they confirmed their opt-in, with the status they hold now.",
+    // mailchimp.com/design (Cavendish Yellow), the vendor's own brand colour.
+    brand: { color: "#FFE01B", short: "Mc" },
+    connect: "apiKey",
+    // INSTANT IS A DOORBELL, NOT A DELIVERY. Mailchimp signs (see webhookSetup),
+    // but the audience is a flowField, so the inbound route answers
+    // isStreamScoped, promotes cadence and returns without storing. The poll is
+    // the ingest path; a delivery only decides WHEN it runs.
+    instant: true,
+    poll: true,
+    sync: "incremental",
+    syncNote:
+      "Contacts are read by polling, filtered on when their record last changed and dated by when they confirmed their " +
+      "opt-in — so a long-standing contact edited today keeps its original join date. Unsubscribes are NOT counted as " +
+      "events: Mailchimp returns an unsubscribe reason but no unsubscribe timestamp, so there is no honest date for one. " +
+      "A contact's current status rides on every record instead, for a step that wants only the still-subscribed.",
+    historyNote:
+      "The first import reaches back a year, and Mailchimp filters contacts by when their record last changed — so someone " +
+      "who joined earlier and has not been edited since is not read.",
+    /**
+     * Impossible at connect time, and not for want of an API. Mailchimp's
+     * create endpoint is POST /lists/{list_id}/webhooks and its response
+     * carries `signing_secret` ("Returned exactly once at creation",
+     * mailchimp.com/developer/marketing/api/list-webhooks/add-webhook/, read
+     * 2026-09-08) — everything auto-registration needs, except a resource.
+     * Every webhook path is under /lists/{list_id} and the audience is a
+     * flowField picked inside a step. Registering at STREAM creation is the
+     * version that would work, with a wrinkle Typeform does not have: a
+     * connection holds ONE signing secret and Mailchimp mints a DIFFERENT one
+     * per webhook, so N audiences would need N secrets and only the first
+     * could ever verify. Until that exists, the secret is pasted.
+     */
+    autoWebhook: false,
+    docs: {
+      url: "https://mailchimp.com/developer/marketing/api/list-members/list-members-info/",
+      readOn: "2026-09-08",
+      webhooks: "https://mailchimp.com/developer/marketing/guides/sync-audience-data-webhooks/",
+    },
+    verified: { live: null },
+    /**
+     * NO rateLimits, and that is the accurate declaration rather than a gap.
+     *
+     * mailchimp.com/developer/marketing/docs/fundamentals/ (read 2026-09-08)
+     * publishes "a limit of 10 simultaneous connections. You'll receive a 429
+     * error if you reach the limit" and adds "Currently there are no options to
+     * raise the limit on a per-customer basis." That is a CONCURRENCY ceiling;
+     * Mailchimp documents no requests-per-minute figure anywhere. `rateLimits`
+     * can only express a rate, so any number here would be invented and the
+     * next reader would trust it. Left off, the conservative default budget
+     * governs, and the concurrency limit is satisfied by construction: the
+     * connector's walk is sequential, so one poll is one open connection. (The
+     * connector correspondingly declares no `operations`, which keeps the
+     * budget-operations drift tests satisfied in both directions.)
+     */
+    credentialFields: [
+      {
+        key: "apiKey",
+        label: "API key (Account → Extras → API keys)",
+        placeholder: "0123456789abcdef0123456789abcde-us14",
+      },
+      {
+        key: "webhookSecret",
+        label: "Webhook signing secret (optional)",
+        placeholder: "only if you created a webhook in Mailchimp",
+      },
+    ],
+    // The data centre is NOT a field: it is the key's own suffix after the final
+    // dash ("if your API key is …-us6, then the data center subdomain is us6" —
+    // fundamentals, read 2026-09-08), so asking for it could only add a way to
+    // get it wrong. mailchimpBaseUrl() derives it and refuses a key without one.
+    flowFields: [
+      {
+        key: "listId",
+        label: "Audience",
+        required: true,
+        dynamic: true,
+        placeholder: "Choose an audience…",
+        hint: "Each step reads one Mailchimp audience. Most accounts have exactly one.",
+      },
+    ],
+    webhookSetup:
+      "Optional — contacts arrive by polling either way, and a webhook only makes them instant. Mailchimp sets webhooks " +
+      "per audience, so this one cannot be created for you at connect time. To add it: in Mailchimp open Audience → " +
+      "Manage Audience → Settings → Webhooks → Create New Webhook, paste the URL below, tick Subscribes and " +
+      "Unsubscribes, and click Save. Mailchimp then shows a signing secret ONCE — copy it before dismissing that dialog " +
+      "and paste it into the Webhook signing secret field here. If you lose it you have to delete the webhook and make a " +
+      "new one. Leave the field blank and deliveries are refused rather than trusted, which costs freshness and nothing else.",
+    commonFields: ["status", "email_address", "full_name", "timestamp_opt", "last_changed", "source", "member_rating", "list_id"],
+  },
+  {
+    source: "woocommerce",
+    name: "WooCommerce",
+    description: "Orders placed and paid on a WordPress store, with their totals and the buyer's email.",
+    // woocommerce.com's own purple.
+    brand: { color: "#7F54B3", short: "Wc" },
+    connect: "apiKey",
+    instant: true,
+    poll: true,
+    sync: "incremental",
+    syncNote:
+      "Orders are read newest-change-first and dated by when they were PLACED, so an old order edited today keeps its " +
+      "original date. A paid order also produces a payment on the day it was paid, which is a different day from the " +
+      "order on any store that takes bank transfers or invoices. Started checkouts and drafts are not orders and are " +
+      "not counted.",
+    historyNote: "First sync reaches back 90 days. WooCommerce keeps everything, so a deeper import can go as far as the store does.",
+    /**
+     * TRUE, and this is the shape every connector should have: the store's own
+     * REST API creates the subscription and WE choose the secret, so there is
+     * exactly one thing for the merchant to paste — their API keys — and nothing
+     * to copy back. WooCommerce's `secret` field defaults to "a MD5 hash from the
+     * current user's ID|username if not provided"
+     * (class-wc-rest-webhooks-v2-controller.php), which is guessable, so the
+     * connector always supplies one rather than accepting that default.
+     */
+    autoWebhook: true,
+    docs: {
+      url: "https://woocommerce.github.io/woocommerce-rest-api-docs/#orders",
+      readOn: "2026-09-08",
+      webhooks: "https://woocommerce.github.io/woocommerce-rest-api-docs/#webhooks",
+    },
+    verified: { live: null },
+    /**
+     * NO rateLimits, deliberately. WooCommerce publishes none for `wc/v3` — the
+     * only limiting it ships is opt-in and applies to the Store API (cart and
+     * checkout), not this one. The ceiling here is the merchant's own PHP
+     * workers, and inventing a number would be a claim about a server nobody has
+     * seen. The default budget governs instead.
+     */
+    credentialFields: [
+      { key: "storeUrl", label: "Store URL", placeholder: "https://shop.example.com" },
+      { key: "consumerKey", label: "Consumer key (WooCommerce → Settings → Advanced → REST API)", placeholder: "ck_…" },
+      { key: "consumerSecret", label: "Consumer secret", placeholder: "cs_…" },
+    ],
+    commonFields: ["status", "currency", "total", "payment_method_title", "billing.email", "billing.country"],
+    /**
+     * No eventTypeLabels: `order_created` is already named by ThriveCart and
+     * `payment_succeeded` by Stripe, and two sources disagreeing about one key is
+     * what tests/event-type-labels.test.ts exists to catch.
+     */
+    webhookSetup:
+      "Nothing to do — the webhook is created on the store for you when you connect, and removed when you disconnect. " +
+      "The API keys need Read/Write permission for that; a read-only key still syncs by polling.",
+  },
 ];
 
 export function catalogEntry(source: string): ConnectorCatalogEntry | undefined {
