@@ -262,29 +262,48 @@
   --color-accent-peri: #a8a8f0;
 
   /* --- The neutral ramp ----------------------------------------------------
-   * THREE SURFACES NOW, NOT ONE — and the ramp is re-cut to build all three.
+   * ONE SURFACE AGAIN, AND A SINGLE CARD STEP ABOVE IT.
    *
-   * The 2 September re-theme argued for a single ground with hairlines doing
-   * every separation, and it was right for the surface the product had then.
-   * The 4 September Figma draws three: a page (#0F1011), a chrome band that
-   * carries the top bar and the rail (#111111), and a content panel under it
-   * (#181818). That is not a value tweak on the old thesis, it is its reversal
-   * — reintroducing exactly the surface split the one-surface ramp retired —
-   * and it is deliberate.
+   * This is the second reversal of the same argument in four days, and both
+   * were right for the Figma in front of them. The 2 September re-theme argued
+   * for a single ground with hairlines doing every separation. The 4 September
+   * Figma drew three surfaces and that thesis was reversed. The 8 September
+   * Figma (node 49:5268) draws ONE: page, top bar, rail and content area are
+   * all #121214, and the only surface that steps away is the card, at #191919.
    *
-   * TWO NEW STEPS LAND BETWEEN EXISTING ONES rather than displacing them,
-   * because both new surfaces sit between values the ramp already had: `925`
-   * is the chrome, one count lighter than the page; `850` is the control fill,
-   * one count lighter than the panel. A `900` still marks that same panel
-   * step; only the HEX under it moved.
+   * SO THE HAIRLINE'S JOB NARROWS, AND GETS HARDER WHERE IT REMAINS. There is
+   * no longer a page/chrome edge or a chrome/panel edge for it to draw, because
+   * those surfaces are the same colour — a rule drawn where two identical
+   * surfaces meet does nothing, which is the one-surface argument in its
+   * original form. What is left is the card edge, and that edge measures
+   * 1.06:1. A card without its border is not a flatter card, it is an
+   * invisible one, so #343434 carries the whole separation on its own.
+   *
+   * 925 NOW HOLDS THE SAME HEX AS 950, on purpose rather than by oversight.
+   * The ROLE (`--chrome`) survives because the light theme still has a real
+   * chrome/page step — white on #F7F8F9 — and a role that exists in one theme
+   * must exist in both. Collapsing the token would make the dark theme's
+   * vocabulary a subset of the light one, which design-swatches.test.ts fails
+   * on, and would turn `bg-chrome` into a spelling with nowhere to resolve the
+   * day the two surfaces separate again.
+   *
+   * 900 IS RE-ROLED, NOT MOVED. It was the panel; it is now the card. `--panel`
+   * points at `--background` in BOTH themes as a result — the same mirror the
+   * light theme has always had, arrived at from the other side.
    *
    * THE SURFACE HALF (950 → 500) and THE INK HALF (450 → 50) are still
    * separated on purpose. `500` is the last step a LINE may be drawn in
    * (`--rule`); `450` is a caps-label-only step (`--faint`, "Main Menu" and
    * nothing that reads as a sentence); `400` is the first step body TEXT may be
    * set in (`--muted-foreground`). The Figma's own "Main Menu" grey — #4A4A4A —
-   * is not text-safe at 2.13:1 on the chrome, which is exactly the gap this
+   * is not text-safe at 2.11:1 on this ground, which is exactly the gap this
    * rule exists to catch; the caption gets a lighter, tested step instead.
+   *
+   * 400 IS A SUBSTITUTION, AND IT IS RECORDED. The Figma sets every card title
+   * and axis label in #7E7E7E. On the page that is 4.61:1 and fine; on the CARD
+   * those titles actually sit on it is 4.33:1, under the bar a 14px label owes.
+   * #828282 is 4.87:1 and 4.58:1 — four values brighter, indistinguishable
+   * beside the original, and legal on both grounds.
    *
    * 300, 100 AND 50 STAY DEFINED, RE-CUT RATHER THAN RETIRED. No ROLE reads
    * them once `--muted-foreground` moves to `400`, but four files still spell
@@ -293,28 +312,26 @@
    * `active:bg-neutral-100`) and the off-limits `flow/node-meta.ts` — and
    * deleting a colour token out from under a live class is the exact "renders
    * with no colour at all" failure `check-ui.ts`'s retired-token rule exists
-   * to punish. They are re-cut for the new near-neutral cast instead of being
-   * carried over from the warm ramp, so nothing in the product mixes a warm
-   * grey into a neutral one.
+   * to punish.
    *
    * DEPTH, STATED HONESTLY. This file used to say "a control recesses from a
-   * card". That is not what either theme does now and the sentence is gone:
-   * here, on the #111111 chrome and cards, a field is a step UP (850) and its
-   * hover a further step up (700); in `:root`, on white, a field is a step
-   * DOWN (#F4F4F4) and its hover a further step down (#ECECEC). The two
-   * directions MIRROR each other, which is the invariant that actually holds —
-   * "raised" and "recessed" do not survive the mirror and are not used.
+   * card". That is not what either theme does and the sentence is gone: here,
+   * on the #191919 card, a field is a step UP (850) and its hover a further
+   * step up (700); in `:root`, on white, a field is a step DOWN (#F4F4F4) and
+   * its hover a further step down (#ECECEC). The two directions MIRROR each
+   * other, which is the invariant that actually holds — "raised" and
+   * "recessed" do not survive the mirror and are not used.
    */
-  --color-neutral-950: #0f1011; /* THE PAGE — the ground beneath everything */
-  --color-neutral-925: #111111; /* THE CHROME — top bar, rail, AND the card fill */
-  --color-neutral-900: #181818; /* THE PANEL — the content area under the top bar */
+  --color-neutral-950: #121214; /* THE PAGE — and the chrome, and the panel. One surface. */
+  --color-neutral-925: #121214; /* THE CHROME — top bar and rail. Same hex as the page here; a real step in `:root`. */
+  --color-neutral-900: #191919; /* THE CARD — the only surface that steps away, at 1.06:1 */
   --color-neutral-850: #202020; /* THE CONTROL — fields, the search box, the active nav row */
   --color-neutral-800: #333333; /* grey buttons (`--secondary`) */
   --color-neutral-700: #3a3a3a; /* avatar and icon circles (`--avatar`); `--accent`'s hover step */
   --color-neutral-600: #343434; /* THE HAIRLINE — every separation in the product */
   --color-neutral-500: #4a4a4a; /* the heavier rule: switch track, table divider, ring track */
   --color-neutral-450: #6e6e6e; /* THE FAINT LABEL — "Main Menu" and nothing else; 3.70:1 on the chrome, never body copy */
-  --color-neutral-400: #858585; /* the dimmest INK — 4.81:1 on the panel, 5.12:1 on a card */
+  --color-neutral-400: #828282; /* the dimmest INK — 4.87:1 on the page, 4.58:1 on a card. Substituted from the Figma's #7E7E7E, which is 4.33:1 on a card. */
   --color-neutral-300: #b5b5b5; /* no role reads it since `--muted-foreground` moved to `400`; scroll-area's thumb, switch's off track and node-meta's untested dot still spell it */
   --color-neutral-200: #ffffff; /* body, headings and card titles — the Figma sets both in white */
   --color-neutral-100: #e5e5e5; /* button.tsx's `white` variant presses here (`active:`) */
@@ -776,11 +793,16 @@
   --foreground: var(--color-neutral-200); /* #FFFFFF — the Figma sets body AND titles in white */
   --heading: var(--color-neutral-200); /* #FFFFFF — the same value as `--foreground` now; see the light block's note for where they diverge */
 
-  /* THE CHROME — the top bar and the rail, one step lighter than the page.
-     `--card` shares it: the Figma's cards sit on the same near-black as the
-     bars around them, not on a third value of their own. */
-  --chrome: var(--color-neutral-925); /* #111111 */
-  --card: var(--chrome);
+  /* THE CHROME — the top bar and the rail. The SAME hex as the page in this
+     theme: the 8 September Figma draws no step between them, and a rule drawn
+     where two identical surfaces meet does nothing. The role survives because
+     `:root` still has a real chrome/page step (white on #F7F8F9), and a role
+     declared in one theme must be declared in both. */
+  --chrome: var(--color-neutral-925); /* #121214 */
+  /* THE CARD NO LONGER SHARES THE CHROME. It is the one surface that steps
+     away — #191919, at 1.06:1 on the page — which is the entire reason the
+     hairline is still load-bearing. */
+  --card: var(--color-neutral-900); /* #191919 */
   --card-foreground: var(--color-neutral-200);
   /* A MENU IS A CARD THAT FLOATS. Pointed at `--card` rather than at
      `--chrome` directly, in both themes, so the two can never drift apart by
@@ -788,9 +810,11 @@
   --popover: var(--card);
   --popover-foreground: var(--card-foreground);
 
-  /* THE PANEL — the content area under the top bar, one step lighter again
-     than the chrome. Three surfaces, three steps: page, chrome, panel. */
-  --panel: var(--color-neutral-900); /* #181818 */
+  /* THE PANEL — the content area under the top bar. The page's own colour, the
+     same mirror `:root` has always had: one surface, arrived at from the other
+     side. Kept as a role because every `bg-panel` call site spells it and the
+     two themes must share a vocabulary. */
+  --panel: var(--background); /* #121214 */
 
   /* THE CONTROL SURFACE, AND THE DEPTH RULE STATED HONESTLY.
      A field on this theme's chrome and cards (#111111) is a step UP: #202020,
@@ -800,7 +824,7 @@
      MIRROR each other. What it no longer says is "a control recesses from a
      card", which was a sentence about one theme pretending to be a rule about
      both, and which the Figma contradicts on the dark side outright. */
-  --control: var(--color-neutral-850); /* #202020 — a step UP from #111111 */
+  --control: var(--color-neutral-850); /* #202020 — a step UP from the #191919 card */
 
   /* ---- Brand ------------------------------------------------------------- */
   /* THE FILL. #B6FF56 under NEAR-BLACK ink at 11.59:1 — #2C2C2C rather than
@@ -864,8 +888,8 @@
    * button landing on the same step is a coincidence of the ramp, not a
    * relationship between the two roles.
    */
-  --muted: var(--color-neutral-900); /* #181818 */
-  --muted-foreground: var(--color-neutral-400); /* #858585 — 4.81:1 on the panel, 5.12:1 on a card */
+  --muted: var(--color-neutral-850); /* #202020 — NOT `--color-neutral-900`, which is now the card: a fill equal to the card it sits on is a card painted onto itself, and it broke six hovers into invisibility the last time these two roles collapsed. `:root` mirrors this, giving --muted and --control the same step. */
+  --muted-foreground: var(--color-neutral-400); /* #828282 — 4.87:1 on the page, 4.58:1 on a card */
 
   --accent: var(--color-neutral-700); /* #3A3A3A — a visible step up from --secondary (#333333); same value as --avatar, a different role */
   --accent-foreground: var(--color-neutral-200);

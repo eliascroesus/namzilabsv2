@@ -92,3 +92,66 @@ describe("--marker draws on both themes", () => {
     expect(contrast("#b6ff56", "#ffffff")).toBeLessThan(3);
   });
 });
+
+describe("one surface, one card", () => {
+  it("page, chrome and panel are all #121214", () => {
+    expect(token("color-neutral-950")).toBe("#121214");
+    expect(token("color-neutral-925")).toBe("#121214");
+    expect(darkToken("background")).toBe("var(--color-neutral-950)");
+    expect(darkToken("chrome")).toBe("var(--color-neutral-925)");
+    expect(darkToken("panel")).toBe("var(--background)");
+  });
+
+  it("the card is the only step away, and it is tiny", () => {
+    expect(token("color-neutral-900")).toBe("#191919");
+    const step = contrast("#191919", "#121214");
+    expect(step).toBeGreaterThan(1);
+    expect(step).toBeLessThan(1.15); // which is why the hairline is load-bearing
+  });
+
+  it("keeps --panel as a role even though it no longer differs", () => {
+    // Deleting it would break the shared-vocabulary rule design-swatches.test.ts
+    // enforces, and every bg-panel call site with it.
+    expect(darkToken("panel")).not.toBeNull();
+    expect(lightToken("panel")).not.toBeNull();
+  });
+
+  it("never lets --muted collapse onto --card", () => {
+    // A card painted onto itself. FlowNodeCard hovers to `bg-muted` while
+    // sitting ON a card; when these two roles held the same value it broke six
+    // hovers into invisibility. The light theme already mirrors this by giving
+    // --muted and --control the same step, one down from its white card.
+    expect(darkToken("muted")).not.toBe(darkToken("card"));
+    expect(lightToken("muted")).not.toBe(lightToken("card"));
+  });
+
+  it("the hairline and the control are unchanged", () => {
+    expect(token("color-neutral-600")).toBe("#343434");
+    expect(token("color-neutral-850")).toBe("#202020");
+  });
+});
+
+describe("the recorded contrast substitutions", () => {
+  it("--muted-foreground clears 4.5:1 on BOTH the page and the card", () => {
+    expect(token("color-neutral-400")).toBe("#828282");
+    expect(contrast("#828282", "#121214")).toBeGreaterThanOrEqual(4.5);
+    expect(contrast("#828282", "#191919")).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("records why the Figma's own #7E7E7E was not used", () => {
+    // 4.33:1 on the card its titles actually sit on — under the bar a 14px
+    // label owes. Substituted, not shipped; see the spec's substitution log.
+    expect(contrast("#7e7e7e", "#191919")).toBeLessThan(4.5);
+  });
+
+  it("--faint stays a caps-label step and is never body copy", () => {
+    expect(token("color-neutral-450")).toBe("#6e6e6e");
+    expect(contrast("#6e6e6e", "#121214")).toBeGreaterThanOrEqual(3);
+  });
+
+  it("records why the Figma's #4A4A4A cannot be an inactive tab", () => {
+    // 2.11:1 on the page — below even the 3:1 a non-text GRAPHIC owes, and a
+    // tab is an interactive control. Tabs use --muted-foreground instead.
+    expect(contrast("#4a4a4a", "#121214")).toBeLessThan(3);
+  });
+});
