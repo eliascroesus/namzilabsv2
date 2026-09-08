@@ -58,6 +58,41 @@ describe("the board palette is solved for the dark card", () => {
     expect(GROUP_ACCENT.blue).not.toBe("#2B95FF");
   });
 
+  /**
+   * THE SOLVE INVERTS WITH THE GROUND, IN BOTH DIRECTIONS — and this test
+   * exists because the second direction was missed on the first pass.
+   *
+   * These twelve were re-cut to clear 3:1 on the #191919 card, and shipping
+   * them raw made every one of them 2.0–2.8:1 on WHITE: the exact failure they
+   * had just been fixed for, mirrored. `accentOf` mixes them toward
+   * `--group-ink-end` by `--series-mix` — 100% on dark, 70% on light — and this
+   * reproduces that arithmetic rather than trusting it.
+   */
+  it("clears 3:1 on WHITE too, once the light theme's mix is applied", () => {
+    const LIGHT_INK = "#0c111d"; // --group-ink-end in :root
+    const MIX = 0.7; // --series-mix in :root
+    const blend = (hex: string) => {
+      const h = hex.replace("#", "");
+      const ink = LIGHT_INK.replace("#", "");
+      const ch = [0, 2, 4].map((i) => {
+        const a = parseInt(h.slice(i, i + 2), 16);
+        const b = parseInt(ink.slice(i, i + 2), 16);
+        return Math.round(a * MIX + b * (1 - MIX));
+      });
+      return `#${ch.map((c) => c.toString(16).padStart(2, "0")).join("")}`;
+    };
+    for (const key of GROUP_COLOR_KEYS) {
+      expect(contrast(blend(GROUP_ACCENT[key]), "#ffffff"), `${key} on white`).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it("would NOT clear it raw — which is why the mix exists", () => {
+    // Every hue fails on white without it. If this ever passes, the palette has
+    // drifted back toward a white solve and the dark card is now the problem.
+    const raw = GROUP_COLOR_KEYS.map((k) => contrast(GROUP_ACCENT[k], "#ffffff"));
+    expect(Math.max(...raw)).toBeLessThan(4);
+  });
+
   it("still spans the wheel rather than clustering", () => {
     // Eleven hues plus a neutral, spaced round the circle. If a re-solve ever
     // collapses two of them onto the same value the picker stops reading as a

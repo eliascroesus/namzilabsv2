@@ -815,6 +815,13 @@
   --canvas-edge: #98a2b3;
 
   --group-ink-end: #0c111d;
+
+  /* HOW MUCH OF A SERIES HUE SURVIVES ON THIS GROUND — see `accentOf()`.
+     70% here: the twelve board hues are solved to clear 3:1 on the #191919
+     CARD, and on white the same values measure 2.0–2.8:1, which is under the
+     bar a data mark owes. Mixed 70% into `--group-ink-end` they clear 3.69:1
+     at the worst hue and stay recognisably themselves. */
+  --series-mix: 70%;
 }
 
 .dark {
@@ -1032,6 +1039,11 @@
   /* The far end a group's name is mixed toward — see `groupInk` in
      node-accent.ts. Near-white, because the badge is the dark thing. */
   --group-ink-end: #f9fafb;
+
+  /* 100% — the hue AS SOLVED. These values were cut for this exact ground, so
+     mixing anything into them here would undo the solve. The role exists so
+     the LIGHT theme can darken them without a component ever spelling `dark:`. */
+  --series-mix: 100%;
 }
 
 /**

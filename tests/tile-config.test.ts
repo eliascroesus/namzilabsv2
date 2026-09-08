@@ -182,13 +182,17 @@ describe("the colour key is a key, not anything that answers to `in`", () => {
     // Belt and braces: a row written before the schema was tightened must not
     // render a function into a style attribute.
     //
-    // `brand-400`, not `brand-500`, since 8 Sep 2026. The blue ramp had to
-    // split the fill (600) from the chart series (500) because blue sat too
-    // tight under white for one value to do both jobs; the lime does both at
-    // 400, so the tile with no colour of its own draws in the brand itself.
-    expect(accentOf("constructor")).toBe("var(--color-brand-400)");
-    expect(accentOf("nope")).toBe("var(--color-brand-400)");
-    expect(accentOf(undefined)).toBe("var(--color-brand-400)");
-    expect(accentOf("teal")).not.toBe("var(--color-brand-400)");
+    // `--marker`, not a hex, since 8 Sep 2026 — and the hex it briefly was is
+    // why. `var(--color-brand-400)` is #B6FF56: 15.53:1 on the console and
+    // 1.20:1 on white, so every unconfigured tile drew an invisible line the
+    // moment the theme flipped. A role resolves per theme; a hex cannot.
+    expect(accentOf("constructor")).toBe("var(--marker)");
+    expect(accentOf("nope")).toBe("var(--marker)");
+    expect(accentOf(undefined)).toBe("var(--marker)");
+    expect(accentOf("teal")).not.toBe("var(--marker)");
+    // A known key resolves through the same theme-aware mix rather than to a
+    // raw hue, for the identical reason.
+    expect(accentOf("teal")).toContain("var(--series-mix");
+    expect(accentOf("teal")).toContain("var(--group-ink-end)");
   });
 });

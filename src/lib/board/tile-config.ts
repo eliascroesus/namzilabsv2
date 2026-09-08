@@ -118,13 +118,11 @@ export function parseTileConfig(raw: unknown): TileConfig {
  * to the kit's own mark colour instead of rendering `undefined` into a style
  * attribute. The same argument `node-accent.ts` makes for group colours.
  *
- * THE DEFAULT IS `--color-brand-400`, WHICH IS ALSO `--primary`, and the
- * collapse is the point. The 4 Sep blue ramp had to split these: `600` was the
- * fill controls took under white ink and `500` was the chart-series step,
- * because blue sat too tight under white for one value to do both. The lime
- * has 11.59:1 under its ink and 15.53:1 as a mark on the page, so `400` is the
- * fill, the stroke and the series at once — a tile with no `GROUP_ACCENT`
- * colour of its own draws in the brand itself, exactly as the Figma does.
+ * EVERYTHING IT RETURNS IS THEME-AWARE, AND THAT IS THE 8 SEP LESSON. Both
+ * branches below returned a fixed hex for one commit, and both were wrong on
+ * light for the same reason: this function runs on the SERVER, which cannot
+ * know which theme the browser will paint. A value solved for the console is
+ * not a value at all on white. See each branch for its own numbers.
  */
 export function accentOf(color?: string): string {
   /**
@@ -133,7 +131,34 @@ export function accentOf(color?: string): string {
    * which React stringifies into the style attribute. An own-property check
    * closes the write path and degrades anything already stored to the default.
    */
-  return color && Object.hasOwn(GROUP_ACCENT, color) ? GROUP_ACCENT[color] : "var(--color-brand-400)";
+  const hue = color && Object.hasOwn(GROUP_ACCENT, color) ? GROUP_ACCENT[color] : null;
+  /**
+   * THE DEFAULT IS `--marker`, NOT A HEX, BECAUSE A HEX CANNOT CHANGE THEME.
+   *
+   * It was `var(--color-brand-400)` for one commit and that was a real bug on
+   * light: #B6FF56 is 15.53:1 on the console and **1.20:1 on white**, so every
+   * unconfigured tile drew a line nobody could see the moment the theme
+   * flipped. `--marker` is the same lime on dark and the solved-down #4F7A00
+   * (5.10:1) on light — the stroke role, which is exactly what a series is.
+   */
+  if (!hue) return "var(--marker)";
+  /**
+   * AND A STORED HUE IS MIXED TOWARD THE THEME'S OWN FAR END.
+   *
+   * The twelve `GROUP_ACCENT` values are solved to clear 3:1 on the #191919
+   * card. On white the identical values measure 2.0–2.8:1 — the solve inverted
+   * with the ground, exactly as it did when they moved the other way. Rather
+   * than keep two palettes in step by hand, the ARITHMETIC is deferred to the
+   * browser, where the theme has already resolved: `--series-mix` is 100% on
+   * dark (the hue as solved, untouched) and 70% on light, which lands the worst
+   * hue at 3.69:1 on white while keeping all twelve recognisable.
+   *
+   * The same `color-mix` trick `groupWash`/`groupBadge`/`groupInk` in
+   * `node-accent.ts` already use, and for the identical reason: the surface
+   * being mixed into is a different colour in each theme, and a server render
+   * cannot know which one the browser will paint.
+   */
+  return `color-mix(in srgb, ${hue} var(--series-mix, 100%), var(--group-ink-end))`;
 }
 
 /**
