@@ -742,8 +742,21 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
     poll: false,
     autoWebhook: false,
     credentialFields: [],
+    /**
+     * THE COPY IS THE PRODUCT HERE, because this connection has no settings.
+     *
+     * The old line — "optionally sign the body … using the secret shown" —
+     * described a secret that was minted for every one of these connections and
+     * shown whether or not anyone wanted it, which made the word "optionally"
+     * false: an unsigned POST was refused. It now says what the endpoint does,
+     * in the order someone meets it, and every clause is a behaviour with a test
+     * behind it rather than an intention.
+     */
     webhookSetup:
-      "Point any app's outbound webhook at the URL below. Optionally sign the body with HMAC-SHA256 using the secret shown.",
+      "Point any app's outbound webhook at the URL below. Nothing else to set up: JSON, form-encoded bodies and " +
+      "values in the query string all work, a wrapper like {\"data\": {…}} is read through, and a batch such as " +
+      "{\"events\": [ … ]} is counted as one record per item. Anyone holding this URL can post to it, so treat it " +
+      "like a password — and once your app is delivering, use Require signature to lock it to a shared secret.",
   },
   {
     source: "stripe",
@@ -1042,7 +1055,10 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
     // for one key is what tests/event-type-labels.test.ts fails on. The rest
     // (email_opened, bounced, unsubscribed, lead_category_updated) humanize
     // correctly on their own, so they are left to the humanizer.
-    eventTypeLabels: { email_clicked: "Link clicked", lead_interested: "Lead marked interested" },
+    // No `lead_interested` label: nothing on this connection can produce that
+    // event (see smartlead.ts, where `normalize` used to be), and a label is a
+    // promise that the key will one day appear in a picker.
+    eventTypeLabels: { email_clicked: "Link clicked" },
     commonFields: ["campaign_id", "lead_email", "sequence_number", "email_subject", "lead_category"],
     webhookSetup:
       "Optional. Smartlead syncs by polling each campaign; a delivery only makes the next refresh immediate. To set " +

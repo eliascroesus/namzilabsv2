@@ -1,4 +1,4 @@
-import type { Connector, CanonicalEvent, VerifyArgs, NormalizeContext, PollArgs, PollResult, ListOptionsArgs, SourceOption } from "./types";
+import type { Connector, CanonicalEvent, VerifyArgs, PollArgs, PollResult, ListOptionsArgs, SourceOption } from "./types";
 import { asObject, parseDate, str } from "./field-utils";
 import { eventId, hmacHeaderVerify, isoOrNull, providerClient, requireCredential, windowedWalk, ymd, type Params } from "./kit";
 
@@ -88,10 +88,9 @@ import { eventId, hmacHeaderVerify, isoOrNull, providerClient, requireCredential
  * A bounce, an unsubscribe and a category change reach no counter at all: no
  * documented statistics field dates them (and an undated fact is not an event),
  * and the webhook that carries them is a doorbell for a stream-scoped source,
- * so its payload is never stored. `normalize` maps them against the day the
- * inbound path becomes reachable; nothing today can call it. The catalog's
- * syncNote says this out loud rather than promising the webhook makes up the
- * difference.
+ * so its payload is never stored. There is deliberately no `normalize` to map
+ * them with — see the note where it used to sit. The catalog's syncNote says
+ * this out loud rather than promising the webhook makes up the difference.
  */
 const API = "https://server.smartlead.ai/api/v1";
 const DEFAULTS = { pagesPerPoll: 3, maxPagesPerPoll: 20, firstSyncDays: 30, overlapMs: 5 * 60_000 };
@@ -111,32 +110,18 @@ const ROW_FACTS: ReadonlyArray<{ ours: string; fields: readonly string[] }> = [
   { ours: "reply", fields: ["reply_time", "time_replied"] },
 ];
 
-/**
- * Smartlead's webhook event types → our vocabulary, with the field that dates
- * each. Both documented spellings of the five renamed events are present.
- * CAMPAIGN_STATUS_CHANGED, MANUAL_STEP_REACHED and the two disconnection
- * events are account plumbing, not countable outreach, so they map to nothing;
- * UNTRACKED_REPLIES is deliberately not `reply` — the docs define it as "a
- * reply that doesn't match a known lead in the campaign", and folding it into
- * the reply count would inflate the campaign's reply rate with mail from
- * outside the campaign. A bounce and an unsubscribe have NO documented
- * timestamp of their own: the bounce falls back to the send it answers, the
- * unsubscribe to `timestamp` and then to the delivery moment.
+/*
+ * THE WEBHOOK EVENT MAP LIVED HERE, and went with `normalize`.
+ *
+ * It translated Smartlead's delivery names (EMAIL_SENT, EMAIL_OPEN,
+ * EMAIL_BOUNCE, LEAD_UNSUBSCRIBED and the five renamed spellings of each) into
+ * our vocabulary. Nothing reads a delivery on this source — the route rings the
+ * doorbell and drops the body — so the map described a translation that never
+ * happened, and kept `bounced` and `unsubscribed` looking supported in the
+ * source while no code path could ever write one.
+ *
+ * The poll's own vocabulary is `ROW_FACTS` above, which is the real one.
  */
-export const SMARTLEAD_EVENTS: Record<string, { ours: string; times: readonly string[] }> = {
-  EMAIL_SENT: { ours: "email_sent", times: ["time_sent"] },
-  FIRST_EMAIL_SENT: { ours: "email_sent", times: ["time_sent"] },
-  EMAIL_OPEN: { ours: "email_opened", times: ["time_opened"] },
-  EMAIL_OPENED: { ours: "email_opened", times: ["time_opened"] },
-  EMAIL_LINK_CLICK: { ours: "email_clicked", times: ["time_clicked"] },
-  EMAIL_CLICKED: { ours: "email_clicked", times: ["time_clicked"] },
-  EMAIL_REPLY: { ours: "reply", times: ["time_replied"] },
-  EMAIL_REPLIED: { ours: "reply", times: ["time_replied"] },
-  EMAIL_BOUNCE: { ours: "bounced", times: ["time_sent"] },
-  EMAIL_BOUNCED: { ours: "bounced", times: ["time_sent"] },
-  LEAD_UNSUBSCRIBED: { ours: "unsubscribed", times: [] },
-  EMAIL_UNSUBSCRIBED: { ours: "unsubscribed", times: [] },
-};
 
 const idOf = (v: unknown): string | null => (typeof v === "number" && Number.isFinite(v) ? String(v) : str(v));
 const leadEmail = (o: Record<string, unknown>): string | null => str(o["lead_email"]) ?? str(o["to_email"]);
@@ -238,45 +223,27 @@ export const smartleadConnector: Connector = {
     if (!secret) return false;
     return hmacHeaderVerify({ rawBody, headers, secret }, { header: "x-smartlead-signature", encoding: "hex", prefix: "sha256=" });
   },
-  normalize(rawPayload: unknown, ctx: NormalizeContext): CanonicalEvent[] {
-    const b = asObject(rawPayload);
-    const type = str(b["event_type"]);
-    const campaignId = idOf(b["campaign_id"]) ?? "campaign";
-    const email = leadEmail(b);
-    if (type === "LEAD_CATEGORY_UPDATED") {
-      const cat = asObject(asObject(b["lead_data"])["category"]);
-      const category = str(b["category"]) ?? str(cat["name"]);
-      // Smartlead classifies the category itself — `sentiment_type` is the
-      // provider's own answer, so it wins over reading the name.
-      const sentiment = str(cat["sentiment_type"]);
-      const positive = sentiment ? sentiment.toLowerCase() === "positive" : /interest|meeting|positive/i.test(category ?? "");
-      // The categorisation itself is undated. The reply that provoked it is
-      // dated, and is the moment the interest was actually expressed.
-      const history = Array.isArray(b["history"]) ? (b["history"] as unknown[]).map(asObject) : [];
-      const newest = history.map((h) => isoOrNull(h["time"])).filter((x): x is string => x !== null).sort().pop() ?? null;
-      const at =
-        firstDate(asObject(b["lastReply"]), ["time"]) ??
-        (newest ? new Date(newest) : null) ??
-        firstDate(b, ["timestamp"]) ??
-        ctx.fallbackOccurredAt ??
-        new Date();
-      const slug = (category ?? "unknown").toLowerCase().replace(/\s+/g, "_");
-      return [
-        {
-          eventId: eventId("smartlead", ctx.connectionId, campaignId, factKey(b) ?? "lead", "category", slug),
-          eventType: positive ? "lead_interested" : "lead_category_updated",
-          subject: email,
-          occurredAt: at,
-          properties: b,
-        },
-      ];
-    }
-    const spec = type ? SMARTLEAD_EVENTS[type] : undefined;
-    const key = factKey(b);
-    if (!spec || !key) return [];
-    const at = firstDate(b, [...spec.times, "timestamp"]) ?? ctx.fallbackOccurredAt ?? new Date();
-    return [{ eventId: eventId("smartlead", ctx.connectionId, campaignId, key, spec.ours), eventType: spec.ours, subject: email, occurredAt: at, properties: b }];
-  },
+  // NO `normalize`, and its absence is the honest statement of what this
+  // source can do — the same call attio.ts makes for the same reason.
+  //
+  // `campaignId` is a STREAM (the statistics endpoint is per-campaign, so
+  // there is no shared read to filter), which makes the webhook route treat
+  // every Smartlead delivery as a DOORBELL: it verifies, promotes cadence,
+  // asks for a sync and returns 202 without storing the body. Nothing then
+  // calls `normalize`. A mapper written against that dead path is not
+  // harmless: it keyed a send on `stats_id` when a row carried one and on
+  // `to_email:sequence_number` when a delivery did not, so the day somebody
+  // made the path reachable, every send, open, click and reply would have
+  // been written once by the delivery and once by the next poll of the same
+  // row, and the campaign's counts — and every rate built on them — would
+  // have read exactly double. Code that is wrong on the day it is revived is
+  // worse than code that is absent, because absence forces the identity
+  // question to be answered rather than inherited.
+  //
+  // So bounces, unsubscribes and lead-category changes are not counted on
+  // this connection, which is what the catalog's syncNote already says. To
+  // count them, they must come from the POLL — a statistics field that dates
+  // them — not from the doorbell.
   async listOptions(key: string, args: ListOptionsArgs): Promise<SourceOption[]> {
     if (key !== "campaignId") return [];
     const res = await client(args.credentials).get<unknown>("/campaigns");

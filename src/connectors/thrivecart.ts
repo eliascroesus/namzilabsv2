@@ -108,6 +108,13 @@ export const THRIVECART_EVENTS: Record<string, string> = {
 const MONEY_EVENTS = new Set(["order_created", "rebill", "rebill_failed", "payment_refunded"]);
 
 /**
+ * The events whose identity is the INVOICE rather than the order: one
+ * subscription, many charges, one order_id across all of them. See the id
+ * derivation in `normalize` for the documented example this rests on.
+ */
+const RECURRING_EVENTS = new Set(["rebill", "rebill_failed"]);
+
+/**
  * Zero-decimal currencies, as Stripe lists them. ThriveCart documents only
  * that "price fields are in hundreds" and says nothing about currencies that
  * have no minor unit; house style governs (`docs/ADDING_A_CONNECTOR.md`), and
@@ -253,12 +260,6 @@ export const thrivecartConnector: Connector = {
 
     const order = asObject(body["order"]);
     const customer = asObject(body["customer"]);
-    // The account webhook sends `order_id` at the top level and the Event
-    // Subscription API nests it; an abandoned cart has no order at all, so the
-    // delivery's own id is the last rung.
-    const id = text(order["id"]) ?? text(body["order_id"]) ?? text(body["invoice_id"]) ?? text(body["event_id"]);
-    if (!id) return [];
-
     // WHEN IT HAPPENED. `order_timestamp` is unix seconds; `order_date` is the
     // same instant as text. Nothing here is a future date — ThriveCart's
     // forward-looking fields (next rebill dates) stay in `properties`.
@@ -268,6 +269,35 @@ export const thrivecartConnector: Connector = {
       parseDate(text(body["order_date"]), "order_date") ??
       ctx.fallbackOccurredAt ??
       new Date();
+
+    // WHICH THING THIS DELIVERY IS, and a subscription is where the obvious
+    // answer is wrong.
+    //
+    // A rebill carries the SAME order_id as the sale that opened the
+    // subscription. ThriveCart's own examples show it plainly (docs read 8 Sep
+    // 2026, support.thrivecart.com/help/using-webhook-notifications/): the
+    // order.success example and the order.subscription_payment example that
+    // follows it both read `order_id=1514394`, while the invoice moves
+    // `invoice_id=000000004` → `000000004-2` and a `recurring_payment_idx=2`
+    // counts the payment outright. Keying a rebill on the order therefore gave
+    // every payment in a subscription's life ONE event id, so month two onward
+    // deduped against month one and the recurring revenue — the whole reason
+    // someone tracks a subscription product — silently never arrived.
+    //
+    // So a recurring charge is identified by its INVOICE, and everything else
+    // keeps the order-first chain byte-for-byte, because moving a settled id
+    // scheme re-ingests already-stored orders as duplicates. `_idx` rides along
+    // as a second signal for the Event Subscription API's JSON shape, whose
+    // rebill payloads are not documented with an example; the timestamp is the
+    // final guard so that two payments can never collapse merely because both
+    // ids were absent.
+    const invoice = text(body["invoice_id"]) ?? text(order["invoice_id"]);
+    const idx = text(body["recurring_payment_idx"]) ?? text(order["recurring_payment_idx"]);
+    const orderId = text(order["id"]) ?? text(body["order_id"]);
+    const id = RECURRING_EVENTS.has(ours)
+      ? (invoice ?? (orderId && idx ? `${orderId}:${idx}` : null) ?? (orderId ? `${orderId}:${occurredAt.getTime()}` : null))
+      : (orderId ?? invoice ?? text(body["event_id"]));
+    if (!id) return [];
 
     // `currency` is a TOP-LEVEL key on the delivery (the plan put it under
     // `order`); the nested one is kept as a fallback.

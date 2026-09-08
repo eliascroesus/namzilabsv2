@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { smartleadConnector, SMARTLEAD_EVENTS } from "@/connectors/smartlead";
+import { smartleadConnector } from "@/connectors/smartlead";
 import { catalogEntry, isStreamScoped } from "@/connectors/catalog";
 import { getConnector } from "@/connectors/registry";
 
@@ -148,78 +148,31 @@ describe("smartlead: signature", () => {
   });
 });
 
-describe("smartlead: normalize", () => {
-  it("dates each delivery by its own time field, keyed by campaign, lead+step and fact", () => {
-    const cases: Array<[string, string, string]> = [
-      ["EMAIL_SENT", "time_sent", "email_sent"],
-      ["FIRST_EMAIL_SENT", "time_sent", "email_sent"],
-      ["EMAIL_OPEN", "time_opened", "email_opened"],
-      ["EMAIL_LINK_CLICK", "time_clicked", "email_clicked"],
-      ["EMAIL_REPLY", "time_replied", "reply"],
-      ["EMAIL_BOUNCE", "time_sent", "bounced"],
-    ];
-    for (const [type, field, ours] of cases) {
-      const [ev] = smartleadConnector.normalize!(hook(type, { [field]: "2026-09-02T11:00:00.000Z" }), { connectionId: CONN });
-      expect(ev, type).toMatchObject({ eventType: ours, subject: "lead@example.com" });
-      expect(ev.eventId, type).toBe(`smartlead:conn_1:123:lead@example.com:1:${ours}`);
-      expect(ev.occurredAt.toISOString(), type).toBe("2026-09-02T11:00:00.000Z");
-    }
+describe("smartlead: there is deliberately no normalize", () => {
+  /**
+   * The webhook is a DOORBELL, because `campaignId` is a stream: the route
+   * verifies the delivery, asks for a sync and returns 202 without storing the
+   * body, so nothing ever calls `normalize`. A mapper written against that dead
+   * path keyed a send differently from the way the poll keys the same send, so
+   * reviving it would have double-counted every send, open, click and reply on
+   * a campaign with a webhook — and doubled every rate built on them.
+   *
+   * This test is the guard on that decision: adding `normalize` back without
+   * first making the two paths agree on identity fails here, where the reason
+   * is written down, instead of quietly doubling a customer's numbers.
+   */
+  it("has no mapper for a delivery, so the doorbell cannot become a second door by accident", () => {
+    expect(smartleadConnector.normalize).toBeUndefined();
   });
 
-  it("accepts core/webhooks' other spelling of the same event, dated by its `timestamp`", () => {
-    const [ev] = smartleadConnector.normalize!(hook("EMAIL_OPENED", { timestamp: "2026-09-02T11:00:00.000Z" }), { connectionId: CONN });
-    expect(ev.eventType).toBe("email_opened");
-    expect(ev.occurredAt.toISOString()).toBe("2026-09-02T11:00:00.000Z");
+  it("is still stream-scoped, which is what makes the doorbell a doorbell", () => {
+    expect(isStreamScoped("smartlead")).toBe(true);
   });
 
-  it("an unsubscribe has no documented timestamp, so it is dated by the delivery moment", () => {
-    const payload = { event_type: "LEAD_UNSUBSCRIBED", lead_email: "lead@example.com", lead_name: "John Doe", campaign_id: 123, unsubscribed_client_id_map: {} };
-    const [ev] = smartleadConnector.normalize!(payload, { connectionId: CONN, fallbackOccurredAt: new Date("2026-09-03T00:00:00Z") });
-    expect(ev).toMatchObject({ eventType: "unsubscribed", eventId: "smartlead:conn_1:123:lead@example.com:unsubscribed" });
-    expect(ev.occurredAt.toISOString()).toBe("2026-09-03T00:00:00.000Z");
-  });
-
-  it("a positive category is lead_interested, dated by the reply that provoked it", () => {
-    const payload = {
-      event_type: "LEAD_CATEGORY_UPDATED",
-      lead_id: 789,
-      lead_email: "lead@example.com",
-      campaign_id: 123,
-      category: "Interested",
-      lead_category_id: 5,
-      lead_data: { email: "lead@example.com", category: { name: "Interested", sentiment_type: "positive" } },
-      history: [
-        { type: "SENT", time: "2026-09-01T09:00:00.000Z" },
-        { type: "REPLY", time: "2026-09-02T11:00:00.000Z" },
-      ],
-      lastReply: { type: "REPLY", time: "2026-09-02T11:00:00.000Z" },
-    };
-    const [ev] = smartleadConnector.normalize!(payload, { connectionId: CONN, fallbackOccurredAt: new Date("2026-09-05T00:00:00Z") });
-    expect(ev).toMatchObject({ eventType: "lead_interested", subject: "lead@example.com" });
-    expect(ev.eventId).toBe("smartlead:conn_1:123:lead@example.com:category:interested");
-    expect(ev.occurredAt.toISOString()).toBe("2026-09-02T11:00:00.000Z");
-  });
-
-  it("a category Smartlead does not call positive is a plain category change, dated by the delivery", () => {
-    const payload = {
-      event_type: "LEAD_CATEGORY_UPDATED",
-      lead_id: 790,
-      lead_email: "lead@example.com",
-      campaign_id: 123,
-      category: "Out Of Office",
-      lead_data: { category: { name: "Out Of Office", sentiment_type: "neutral" } },
-    };
-    const [ev] = smartleadConnector.normalize!(payload, { connectionId: CONN, fallbackOccurredAt: new Date("2026-09-05T00:00:00Z") });
-    expect(ev).toMatchObject({ eventType: "lead_category_updated" });
-    expect(ev.eventId).toBe("smartlead:conn_1:123:lead@example.com:category:out_of_office");
-    expect(ev.occurredAt.toISOString()).toBe("2026-09-05T00:00:00.000Z");
-  });
-
-  it("account plumbing and out-of-campaign replies are not outreach events", () => {
-    for (const type of ["CAMPAIGN_STATUS_CHANGED", "UNTRACKED_REPLIES", "MANUAL_STEP_REACHED", "EMAIL_ACCOUNT_DISCONNECTED"]) {
-      expect(smartleadConnector.normalize!(hook(type), { connectionId: CONN }), type).toEqual([]);
-      expect(SMARTLEAD_EVENTS[type], type).toBeUndefined();
-    }
+  it("still authenticates the doorbell, and still fails closed without a secret", () => {
+    // Verification is not about storing the body — an unauthenticated ring
+    // would let anyone spend a customer's rate limit on demand.
+    expect(smartleadConnector.verifySignature({ rawBody: "{}", headers: {}, secret: null })).toBe(false);
   });
 });
 

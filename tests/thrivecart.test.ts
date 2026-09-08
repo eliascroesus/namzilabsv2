@@ -197,7 +197,14 @@ describe("thrivecart: normalize", () => {
     for (const [event, ours] of cases) {
       const [ev] = thrivecartConnector.normalize!(body({ event }), { connectionId: CONN });
       expect(ev.eventType, event).toBe(ours);
-      expect(ev.eventId, event).toBe(`thrivecart:conn_1:O-1:${event}`);
+      // The two RECURRING events are keyed on the charge rather than the order,
+      // because one subscription reuses one order_id for every payment it ever
+      // makes. Their ids have their own describe block below; asserting the
+      // order-keyed shape for them here is what hid the collapse in the first
+      // place.
+      if (!["rebill", "rebill_failed"].includes(ours)) {
+        expect(ev.eventId, event).toBe(`thrivecart:conn_1:O-1:${event}`);
+      }
     }
     // Every declared mapping is exercised above — a new one cannot arrive untested.
     expect(new Set(cases.map(([event]) => event))).toEqual(new Set(Object.keys(THRIVECART_EVENTS)));
@@ -292,5 +299,74 @@ describe("thrivecart: the form-encoded delivery the account webhook actually sen
 
   it("drops a form-encoded test order", () => {
     expect(thrivecartConnector.normalize!({ _raw: FORM.replace("mode=live&mode_int=2", "mode=test&mode_int=1") }, { connectionId: CONN })).toEqual([]);
+  });
+});
+
+describe("thrivecart: a subscription's payments are separate events", () => {
+  /**
+   * The shape ThriveCart's own docs print. On the account webhook the sale and
+   * the rebill that follows it BOTH carry order_id=1514394; only the invoice
+   * moves (000000004 → 000000004-2) and only recurring_payment_idx counts.
+   * Keying on the order therefore collapsed a subscription's entire life onto
+   * one event, and every payment after the first was dropped as a duplicate —
+   * a silent loss of exactly the revenue a subscription exists to produce.
+   */
+  const rebill = (over: Record<string, unknown> = {}) =>
+    body({
+      event: "order.subscription_payment",
+      order_id: "1514394",
+      invoice_id: "000000004-2",
+      recurring_payment_idx: 2,
+      order: { id: undefined, total: 9700 },
+      ...over,
+    });
+
+  it("keeps twelve months of one subscription as twelve events", () => {
+    const ids = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((n) => {
+      const [ev] = thrivecartConnector.normalize!(
+        rebill({ invoice_id: `000000004-${n}`, recurring_payment_idx: n, order_timestamp: 1_757_200_000 + n * 2_592_000 }),
+        { connectionId: CONN },
+      );
+      return ev.eventId;
+    });
+    expect(new Set(ids).size).toBe(12);
+  });
+
+  it("still dedups a REDELIVERY of the same payment", () => {
+    const one = thrivecartConnector.normalize!(rebill(), { connectionId: CONN })[0];
+    const again = thrivecartConnector.normalize!(rebill(), { connectionId: CONN })[0];
+    expect(one.eventId).toBe(again.eventId);
+  });
+
+  it("separates the rebill from the sale that opened the subscription", () => {
+    const [sale] = thrivecartConnector.normalize!(
+      body({ event: "order.success", order_id: "1514394", invoice_id: "000000004", order: { id: undefined, total: 9700 } }),
+      { connectionId: CONN },
+    );
+    const [second] = thrivecartConnector.normalize!(rebill(), { connectionId: CONN });
+    expect(sale.eventId).not.toBe(second.eventId);
+  });
+
+  it("falls back to the payment index, then the timestamp, when no invoice is sent", () => {
+    const byIdx = thrivecartConnector.normalize!(rebill({ invoice_id: undefined }), { connectionId: CONN })[0];
+    const byIdx3 = thrivecartConnector.normalize!(
+      rebill({ invoice_id: undefined, recurring_payment_idx: 3 }),
+      { connectionId: CONN },
+    )[0];
+    expect(byIdx.eventId).not.toBe(byIdx3.eventId);
+
+    const bare = (ts: number) =>
+      thrivecartConnector.normalize!(
+        rebill({ invoice_id: undefined, recurring_payment_idx: undefined, order_timestamp: ts }),
+        { connectionId: CONN },
+      )[0].eventId;
+    expect(bare(1_757_200_000)).not.toBe(bare(1_759_792_000));
+  });
+
+  it("leaves a one-off order's id exactly where it was", () => {
+    // Nothing about a non-recurring sale moves: the settled scheme keeps its
+    // keys, so already-stored orders are not re-ingested as duplicates.
+    const [ev] = thrivecartConnector.normalize!(body(), { connectionId: CONN });
+    expect(ev.eventId).toBe("thrivecart:conn_1:O-1:order.success");
   });
 });
