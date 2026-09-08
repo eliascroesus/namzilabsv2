@@ -182,8 +182,11 @@ describe("the top bar below md", () => {
      * would make it read as the only pressable thing among three.
      */
     const stripped = code(bar);
+    // `--chrome-*` since the bar became a permanently dark band: `bg-avatar`
+    // and `text-foreground` are content roles that invert with the theme, and
+    // this surface does not.
     expect(stripped, "the avatar keeps its disc").toContain(
-      "rounded-full border border-input bg-avatar text-xs font-semibold text-foreground",
+      "rounded-full bg-chrome-accent text-xs font-semibold text-chrome-foreground",
     );
     expect(stripped, "the bell is bare, like the moon and the gift beside it").not.toContain(
       "relative rounded-full border border-input bg-avatar",

@@ -3,18 +3,25 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 
 /**
- * THE FALLBACK, NOT THE FACE.
+ * THE FACE, NOT THE FALLBACK — and this comment said the opposite for two
+ * re-themes after it stopped being true.
  *
- * The interface is set in SF Pro, which is Apple-licensed and cannot be shipped
- * — `--font-sans` reaches the copy already installed on every Mac and iPhone
- * through `-apple-system`. Inter is what everyone else gets, and next/font
- * self-hosts it at build time: no runtime fetch, no layout shift, no
- * third-party request.
+ * It read "the interface is set in SF Pro… Inter is what everyone else gets".
+ * That was accurate when `-apple-system` led `--font-sans`. It has not been
+ * since 6 September: Inter leads the stack on every platform, and the system
+ * keywords behind it are reached only if the variable is undefined. Verified in
+ * the browser rather than inferred — `getComputedStyle(body).fontFamily`
+ * resolves to `Inter`, and `document.fonts.check('600 14px Inter')` is true.
  *
- * It is still loaded unconditionally, which is deliberate. Serving it only to
- * non-Apple clients would mean sniffing the user agent to pick a stylesheet,
- * and the file is ~40KB subsetted against a font stack that has to be correct
- * on the first paint.
+ * The distinction matters for anyone debugging how the app LOOKS: a reader who
+ * believed this comment would go hunting for an SF Pro rendering difference
+ * that cannot exist, which is worse than having no note at all.
+ *
+ * next/font self-hosts it at build time: no runtime fetch, no layout shift, no
+ * third-party request. It is loaded unconditionally, which is deliberate —
+ * serving it only to non-Apple clients would mean sniffing the user agent to
+ * pick a stylesheet, against a font stack that has to be correct on the first
+ * paint.
  *
  * INSTRUMENT SANS IS GONE. It ran page titles, the landing hero and the metric
  * numeral, on the argument that a product set entirely in one face is the house
@@ -69,7 +76,7 @@ export const viewport: Viewport = {
    * mismatched band above the app on mobile with nothing failing.
    */
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f7f8f9" },
+    { media: "(prefers-color-scheme: light)", color: "#f7f7f7" },
     { media: "(prefers-color-scheme: dark)", color: "#121214" },
   ],
   colorScheme: "light dark",

@@ -18,6 +18,26 @@ import { join, relative } from "node:path";
 const ROOT = process.cwd();
 const SRC = join(ROOT, "src");
 
+/**
+ * THE CHROME ROLES THAT ACTUALLY EXIST, READ FROM THE STYLESHEET.
+ *
+ * The `retired token` rule below used to ban `chrome-[a-z-]+` outright,
+ * because nine `--chrome-*` roles were deleted in an earlier era and their
+ * classes kept compiling to nothing. That was the right rule and the wrong
+ * mechanism: on 8 September the chrome came BACK as a real surface — the
+ * sidebar and top bar are #121214 in both Figma frames, so they need their own
+ * ink, hairline and control fill — and a blanket prefix ban made every one of
+ * those live roles a build failure.
+ *
+ * A name blacklist cannot tell a dead token from a reborn one. Liveness can:
+ * the rule's own stated crime is "the class compiles to NOTHING", so the test
+ * is whether the token is declared, not what it is called. Re-deleting the
+ * roles re-arms the rule automatically, with no list to remember to update.
+ */
+const LIVE_CHROME_ROLES = new Set(
+  [...readFileSync(join(ROOT, "src/app/globals.css"), "utf8").matchAll(/--chrome-([a-z-]+)\s*:/g)].map((m) => m[1]),
+);
+
 function walk(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir)) {
     const full = join(dir, entry);
@@ -300,10 +320,22 @@ const RULES: Rule[] = [
      *   --rail / --sidebar / --sidebar-accent         ->  background / neutral-700
      *   --accent-yellow                               ->  primary
      */
-    find: (line) =>
-      line.match(
+    find: (line) => {
+      const hit = line.match(
         /\b(?:bg|text|border|divide|ring|outline|fill|stroke|from|via|to|shadow)-(?:ink-\d+|chrome-[a-z-]+|ground(?:-ink)?(?:-muted)?|period-[a-z]+|marker-ink|marker-\d+|tab-underline|accent-yellow|rail|sidebar(?:-accent)?)\b/,
-      )?.[0] ?? null,
+      )?.[0];
+      if (!hit) return null;
+      /**
+       * A `chrome-*` class is only a violation if the ROLE IS NOT DECLARED.
+       * See `LIVE_CHROME_ROLES` above: the chrome is a real surface again, and
+       * banning the prefix would ban the roles the shell is built out of. A
+       * name that globals.css does not define still fails here, which is the
+       * whole point of the rule.
+       */
+      const chrome = hit.match(/-chrome-([a-z-]+)$/);
+      if (chrome && LIVE_CHROME_ROLES.has(chrome[1])) return null;
+      return hit;
+    },
   },
   {
     name: "dark: variant",

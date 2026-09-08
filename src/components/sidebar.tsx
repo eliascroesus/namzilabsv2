@@ -215,8 +215,8 @@ function RailChip({ tone, children }: { tone: "rest" | "active"; children: React
          * the one that survives (see `SLOT`'s own hover).
          */
         tone === "active"
-          ? "text-foreground [&_svg]:fill-current"
-          : "text-foreground",
+          ? "text-chrome-foreground [&_svg]:fill-current"
+          : "text-chrome-foreground",
       )}
     >
       {children}
@@ -247,7 +247,7 @@ function RailChip({ tone, children }: { tone: "rest" | "active"; children: React
  * benefit. Fixed at its natural width, it simply sits where it is put.
  */
 function RailLabel({ children, className }: { children: ReactNode; className?: string }) {
-  return <span className={cn("shrink-0 whitespace-nowrap text-sm font-medium text-foreground", className)}>{children}</span>;
+  return <span className={cn("shrink-0 whitespace-nowrap text-sm font-medium text-chrome-foreground", className)}>{children}</span>;
 }
 
 /**
@@ -317,7 +317,7 @@ function ThemeGlyph({ value }: { value: "light" | "dark" | "system" }) {
  * down again above the breakpoint, so the rail keeps its density and the
  * drawer keeps its targets from one string.
  */
-const SLOT = "group flex h-9 min-h-11 w-full shrink-0 items-center justify-start gap-2.5 rounded-control text-left transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:bg-control md:min-h-0";
+const SLOT = "group flex h-9 min-h-11 w-full shrink-0 items-center justify-start gap-2.5 rounded-control text-left transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:bg-chrome-control md:min-h-0";
 
 /**
  * THE GUTTER, WRITTEN DOWN.
@@ -524,8 +524,8 @@ export function RailContent({
                    meant a hovered row looked more selected than the selected
                    one. See `SLOT`. */
                 on
-                  ? "bg-control font-medium text-foreground"
-                  : "text-muted-foreground hover:bg-control hover:text-foreground",
+                  ? "bg-chrome-control font-medium text-chrome-foreground"
+                  : "text-chrome-muted hover:bg-chrome-control hover:text-chrome-foreground",
               )}
             >
               {/* A DASH, DRAWN RATHER THAN TYPED. It marks these rows as
@@ -553,7 +553,7 @@ export function RailContent({
                16px by their dash and its margin, so this is level with their
                NAMES. A fold that starts left of the names it folds reads as
                belonging to the section rather than to them. */
-            className="h-8 min-h-11 w-full justify-start rounded-control pl-8 pr-2 text-xs font-medium text-muted-foreground hover:bg-control hover:text-foreground active:bg-control md:min-h-0"
+            className="h-8 min-h-11 w-full justify-start rounded-control pl-8 pr-2 text-xs font-medium text-chrome-muted hover:bg-chrome-control hover:text-chrome-foreground active:bg-chrome-control md:min-h-0"
           >
             {allViews ? "Show less" : `Show all ${ordered.length}`}
           </Button>
@@ -604,7 +604,16 @@ export function RailContent({
             and 600 already reads as a badge at 13px. `.wordmark` stays the ONE
             exception above 600 (see globals.css), and it needs no gate change
             because its weight is declared in CSS. */}
-        <div className="flex h-[60px] shrink-0 items-center px-4">
+        {/* pt-3.5 px-4, AND A 40px ROW — the Figma's own head block, not the
+            bar's height any more. It was `h-[60px]` so the switcher's block and
+            the top bar beside it were the same height, which made the corner
+            where the rail's right edge met the bar's bottom edge read as ONE
+            seam. There is no such corner now: the rail is full height and the
+            bar starts to its right, so the two edges meet in a T rather than an
+            L and nothing needs to line up across it.
+            Node 58:5828 measures the block at y=14 and node 58:5829 the
+            switcher row at 40px, which is what this spells. */}
+        <div className="flex h-10 shrink-0 items-center px-4 pt-3.5">
           {workspace &&
             (account ? (
               <DropdownMenu>
@@ -658,8 +667,8 @@ export function RailContent({
                         chip and the name together on the left, the chevron
                         alone on the right. */}
                     <span className="flex min-w-0 flex-1 items-center justify-between gap-2">
-                      <span className="min-w-0 truncate text-sm font-semibold text-foreground">{workspace}</span>
-                      <ChevronDown aria-hidden className="shrink-0 text-muted-foreground" />
+                      <span className="min-w-0 truncate text-sm font-semibold text-chrome-foreground">{workspace}</span>
+                      <ChevronDown aria-hidden className="shrink-0 text-chrome-muted" />
                     </span>
                   </Button>
                 </DropdownMenuTrigger>
@@ -677,7 +686,7 @@ export function RailContent({
                     {initial}
                   </span>
                 </span>
-                <RailLabel className="font-semibold text-foreground">{workspace}</RailLabel>
+                <RailLabel className="font-semibold text-chrome-foreground">{workspace}</RailLabel>
               </span>
             ))}
         </div>
@@ -767,7 +776,7 @@ export function RailContent({
                      below it or the column has a kink in it. 18px, like every
                      other icon in the rail — a 16px magnifier would be the one
                      picture here that is quietly a size smaller. */
-                  className="pointer-events-none absolute left-[7px] top-1/2 size-[18px] -translate-y-1/2 text-muted-foreground"
+                  className="pointer-events-none absolute left-[7px] top-1/2 size-[18px] -translate-y-1/2 text-chrome-muted"
                 />
                 <Input
                   ref={searchRef}
@@ -790,7 +799,7 @@ export function RailContent({
                      `border`/`bg-control`/`rounded-control` come from `Input`;
                      what is overridden is the left padding, to clear the
                      magnifier standing in the icon column. */
-                  className={cn(SLOT, "border-border pl-9 pr-2")}
+                  className={cn(SLOT, "border-chrome-border bg-chrome-control pl-9 pr-2 text-chrome-foreground placeholder:text-chrome-muted")}
                 />
               </div>
               {/* THE CAPS LABEL IS BACK, ON THE FIGMA'S OWN TERMS THIS TIME.
@@ -842,7 +851,7 @@ export function RailContent({
                   className="flex flex-col gap-2 pb-1"
                 >
                   {results.length === 0 && (
-                    <p className="px-1 py-2 text-xs text-muted-foreground">No matches.</p>
+                    <p className="px-1 py-2 text-xs text-chrome-muted">No matches.</p>
                   )}
                   {results.map((entry) =>
                     entry.kind === "theme" ? (
@@ -852,7 +861,7 @@ export function RailContent({
                         size="iconSm"
                         role="option"
                         aria-selected={false}
-                        className={cn(SLOT, "hover:bg-control")}
+                        className={cn(SLOT, "hover:bg-chrome-control")}
                         onClick={() => {
                           setTheme(entry.theme);
                           setQuery("");
@@ -863,7 +872,7 @@ export function RailContent({
                             <ThemeGlyph value={entry.theme} />
                           </RailChip>
                         </span>
-                        <RailLabel className="text-muted-foreground group-hover:text-foreground">
+                        <RailLabel className="text-chrome-muted group-hover:text-chrome-foreground">
                           {entry.label}
                         </RailLabel>
                       </Button>
@@ -881,7 +890,7 @@ export function RailContent({
                             {entry.kind === "page" ? <PageGlyph label={entry.label} /> : <LayoutDashboard className="size-[18px]" />}
                           </RailChip>
                         </span>
-                        <RailLabel className="text-muted-foreground group-hover:text-foreground">
+                        <RailLabel className="text-chrome-muted group-hover:text-chrome-foreground">
                           {entry.label}
                         </RailLabel>
                       </Link>
@@ -890,7 +899,7 @@ export function RailContent({
                 </div>
               ) : (
                 <>
-              <p className="px-1 pb-1 pt-2 text-xs font-normal text-faint">Main Menu</p>
+              <p className="px-1 pb-1 pt-2 text-xs font-normal text-chrome-faint">Main Menu</p>
               {items
                 .map(({ label, href, icon: Icon }) => {
                   const active = pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
@@ -910,7 +919,7 @@ export function RailContent({
                       <Link
                         href={href}
                         aria-current={active ? "page" : undefined}
-                        className={cn(SLOT, active && "bg-control")}
+                        className={cn(SLOT, active && "bg-chrome-control")}
                       >
                         <span className={ICON_COL}>
                           <RailChip tone={active ? "active" : "rest"}>
@@ -918,7 +927,7 @@ export function RailContent({
                           </RailChip>
                         </span>
                         <RailLabel
-                          className={active ? "text-foreground" : "text-muted-foreground group-hover:text-foreground"}
+                          className={active ? "text-chrome-foreground" : "text-chrome-muted group-hover:text-chrome-foreground"}
                         >
                           {label}
                         </RailLabel>
@@ -999,9 +1008,9 @@ export function RailContent({
                controls-and-rail.test.ts pins. This card RESTS on `--control`,
                so it has nowhere to raise to that is not that mistake. Its
                border brightens instead: feedback that costs no fill. */
-            className="flex w-full items-center gap-3 rounded-card border border-border bg-control px-3 py-2 transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:border-rule"
+            className="flex w-full items-center gap-3 rounded-card border border-chrome-border bg-chrome-control px-3 py-2 transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:border-chrome-accent"
           >
-            <UserPlus className="size-4 shrink-0 text-foreground" />
+            <UserPlus className="size-4 shrink-0 text-chrome-foreground" />
             {/* NO GAP, and the rail's spacing rule is why. Every column in this
                 file stacks on 8 or 16 (pinned by page-width.test.ts), and the
                 Figma's 2px here is neither — it is the slack between two 16px
@@ -1012,8 +1021,8 @@ export function RailContent({
                   The Figma sets the title at 600 and the line under it at 400
                   on the same size, which is what keeps a two-line card from
                   reading as a heading with a caption — they are one object. */}
-              <span className="text-xs font-semibold leading-4 text-foreground">Invite Members</span>
-              <span className="text-xs leading-4 text-muted-foreground">Collaborate with your team.</span>
+              <span className="text-xs font-semibold leading-4 text-chrome-foreground">Invite Members</span>
+              <span className="text-xs leading-4 text-chrome-muted">Collaborate with your team.</span>
             </span>
           </Link>
 
@@ -1087,7 +1096,7 @@ export function Sidebar({
   account?: { initials: string; avatarUrl?: string | null; panel: ReactNode };
 }) {
   return (
-    <aside className="relative z-20 hidden h-full w-65 shrink-0 flex-col overflow-hidden border-r border-border bg-chrome md:flex">
+    <aside className="relative z-20 hidden h-full w-65 shrink-0 flex-col overflow-hidden border-r border-chrome-border bg-chrome md:flex">
       <RailContent hide={hide} views={views} workspace={workspace} account={account} />
     </aside>
   );

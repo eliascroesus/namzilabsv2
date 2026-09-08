@@ -33,8 +33,17 @@ import { cn } from "@/lib/utils";
  * greeting. It is back for the same reason it existed: two things want one
  * position and neither page should have to say which.
  *
- * 60px, `--chrome` fill, `--border` bottom rule. The bar and the page are one
- * colour now, so that rule is the only thing marking where the bar stops.
+ * 65px (node 58:5926), `--chrome` fill, `--chrome-border` bottom rule.
+ *
+ * IT SITS BESIDE THE RAIL, NOT ABOVE IT — the frame is a row, and this bar is
+ * a child of the content column, 1660 of the frame's 1920. See `app-frame.tsx`
+ * for why that reversed.
+ *
+ * EVERY INK HERE IS A `--chrome-*` ROLE, and that is the point of them. This
+ * band is #121214 in BOTH themes — 49:5268 and 58:5824 draw it identically —
+ * so `text-foreground` would be near-black on it the moment the light theme is
+ * on, and `border-border` would be #E1E1E1. A permanently dark surface cannot
+ * borrow the content's vocabulary, because it is not on the content's ground.
  */
 
 export function TopBar({
@@ -67,7 +76,7 @@ export function TopBar({
     // reads this bar's height by matching `<header className="…"`, and a
     // comment between the two breaks the check that keeps the loading
     // skeleton's band the same height as the real one.
-    <header className="flex h-[60px] shrink-0 items-center justify-between gap-4 border-b border-border bg-chrome px-6 py-2">
+    <header className="flex h-[65px] shrink-0 items-center justify-between gap-4 border-b border-chrome-border bg-chrome px-6 py-4">
       {/* ── WHO YOU ARE ──────────────────────────────────────────────────
           The menu button exists only below `md`, where there is no rail to the
           left of this bar — it is the phone's whole navigation, so it takes
@@ -80,7 +89,7 @@ export function TopBar({
             aria-label="Your profile"
             className={cn(
               buttonVariants({ variant: "ghost", size: "icon" }),
-              "rounded-full border border-input bg-avatar text-xs font-semibold text-foreground hover:bg-accent active:bg-accent",
+              "rounded-full bg-chrome-accent text-xs font-semibold text-chrome-foreground hover:brightness-110 active:brightness-95",
             )}
           >
             {account.avatarUrl ? (
@@ -91,7 +100,9 @@ export function TopBar({
             )}
           </Link>
         )}
-        {firstName && <span className="hidden shrink-0 text-sm font-semibold text-foreground sm:inline">{firstName}</span>}
+        {firstName && (
+          <span className="hidden shrink-0 text-sm font-semibold text-chrome-foreground sm:inline">{firstName}</span>
+        )}
 
         {/* THE OFFER, WITH A DOT ON IT. It was "Get Free Access" — a filled
             secondary button at the foot of the rail — and it is a bare glyph
@@ -105,7 +116,7 @@ export function TopBar({
           href="/dashboard/settings"
           aria-label="Get free access"
           title="Get free access"
-          className="relative flex size-5 shrink-0 items-center justify-center text-foreground transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:text-muted-foreground [&_svg]:size-5"
+          className="relative flex size-5 shrink-0 items-center justify-center text-chrome-foreground transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:text-chrome-muted [&_svg]:size-5"
         >
           <Gift />
           <span aria-hidden className="absolute -right-0.5 -top-0.5 size-1.5 rounded-full bg-primary" />
@@ -127,9 +138,9 @@ export function TopBar({
             and colour — which is how the Figma sets it (node 51:5788): the
             sentence leans, the NAME is what stands out inside it. `<em>` is
             already italic, so the class would be a second spelling of the tag. */}
-        <p className="hidden shrink-0 text-sm italic text-foreground peer-[:not(:empty)]:hidden lg:block">
+        <p className="hidden shrink-0 text-sm italic text-chrome-foreground peer-[:not(:empty)]:hidden lg:block">
           <em>Try </em>
-          <em className="font-semibold text-marker">Namzilabs</em>
+          <em className="font-semibold text-chrome-brand">Namzilabs</em>
           <em> for free</em>
         </p>
       </div>
@@ -140,7 +151,7 @@ export function TopBar({
             cannot honestly claim a freshness it has not measured, so this
             stays a slot rather than a string — the builder already fills it,
             and it is where the dashboard's own freshness belongs. */}
-        <div id="topbar-status" className="flex shrink-0 items-center text-sm text-muted-foreground empty:hidden" />
+        <div id="topbar-status" className="flex shrink-0 items-center text-sm text-chrome-muted empty:hidden" />
 
         <ShareLink />
         <ThemeToggle />
@@ -149,7 +160,7 @@ export function TopBar({
           variant="ghost"
           size="icon"
           aria-label={unread > 0 ? `Notifications — ${unread} unread` : "Notifications"}
-          className="relative rounded-full text-foreground hover:bg-accent active:bg-accent"
+          className="relative rounded-full text-chrome-foreground hover:bg-chrome-accent active:bg-chrome-accent"
         >
           <Bell />
           {unread > 0 && (
@@ -205,7 +216,7 @@ function ShareLink() {
          the bar with no box. `h-auto px-0` takes the rung's height and padding
          off while keeping the variant's states, its focus ring and its
          disabled handling, which is the half that actually matters. */
-      className="hidden h-auto shrink-0 px-0 text-sm font-semibold text-foreground hover:bg-transparent hover:text-muted-foreground active:bg-transparent md:inline-flex [&_svg]:size-3.5"
+      className="hidden h-auto shrink-0 px-0 text-sm font-semibold text-chrome-foreground hover:bg-transparent hover:text-chrome-muted active:bg-transparent md:inline-flex [&_svg]:size-3.5"
     >
       <Link2 aria-hidden />
       {/* `aria-live` so the change is announced rather than only seen. */}
@@ -242,7 +253,7 @@ function ThemeToggle() {
       variant="ghost"
       onClick={() => setTheme(dark ? "light" : "dark")}
       aria-label={dark ? "Switch to the light theme" : "Switch to the dark theme"}
-      className="h-auto shrink-0 px-0 text-foreground hover:bg-transparent hover:text-muted-foreground active:bg-transparent [&_svg]:size-4"
+      className="h-auto shrink-0 px-0 text-chrome-foreground hover:bg-transparent hover:text-chrome-muted active:bg-transparent [&_svg]:size-4"
     >
       {mounted && (dark ? <Sun aria-hidden /> : <Moon aria-hidden />)}
     </Button>

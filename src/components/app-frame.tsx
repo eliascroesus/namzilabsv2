@@ -152,47 +152,70 @@ export function AppFrame({
    * matched as a literal by `tests/page-width.test.ts`, on both sides of the
    * frame/skeleton mirror.
    */
-  const className = cn("relative min-w-0 flex-1 md:rounded-tr-frame bg-panel", surface);
+  // `min-h-0` joins the list now that the panel is a flex COLUMN child rather
+  // than a row one: a column child defaults to `min-height: auto`, refuses to
+  // shrink below its content, and the `overflow-y-auto` in `surface` then has
+  // nothing to scroll against — the page scrolls instead of the panel, and the
+  // top bar leaves the screen with it.
+  const className = cn("relative min-h-0 min-w-0 flex-1 md:rounded-tr-frame bg-panel", surface);
 
   return (
     // `h-dvh`, not `h-screen` — the dynamic viewport unit, so a phone's
     // address bar sliding away does not leave a strip of `bg-background`
-    // showing under the frame. The left/right insets below are the same
-    // safe-area accommodation, on the other two edges: a phone in landscape
-    // (or one with a notch) can inset the viewport from either side, and
-    // without these two the bar's own edge-to-edge content would render
-    // partly behind the device's own chrome.
+    // showing under the frame. The left/right insets are the same safe-area
+    // accommodation on the other two edges: a phone in landscape (or one with
+    // a notch) can inset the viewport from either side.
+    //
+    // A ROW, NOT A COLUMN — AND THAT IS THIS FILE'S SECOND REVERSAL.
+    //
+    // It was a column: a full-width bar across the top with [rail | panel]
+    // underneath. Both 8 September frames draw the other arrangement, and the
+    // metadata is unambiguous about it — in 58:5824 the sidebar is
+    // `x=0 y=0 260x1200` (the FULL height of the frame) and the top bar is
+    // `x=260 y=0 1660x65`, a child of the content column rather than a sibling
+    // above it.
+    //
+    // The difference is visible and was reported as "the navbars are
+    // overlapping wrong": with the bar on top, the account cluster sits ABOVE
+    // the workspace switcher instead of beside it, and the rail's own top edge
+    // starts 60px down the screen where the design has it at zero.
+    //
+    // The earlier column had a reason, recorded here because it is now dead:
+    // "a bar spanning both would put the workspace switcher above the
+    // navigation that switches it". That was written when the switcher lived
+    // in the BAR. It lives in the rail's head block now, so the bar spans only
+    // the content column and the objection has no subject.
     <div
-      className="flex h-dvh flex-col bg-background"
+      className="flex h-dvh bg-background"
       style={{
         paddingLeft: "env(safe-area-inset-left)",
         paddingRight: "env(safe-area-inset-right)",
       }}
     >
-      {/* THE BAR SPANS EVERYTHING, ABOVE THE RAIL RATHER THAN BESIDE IT.
-          It no longer receives `workspace` — the workspace switcher moved into
-          the rail's own head block, and it needs `workspace`/`account` for
-          that, not the bar — and it no longer takes a metric count either,
-          because the setup ring that was the only reader of it is gone (the
-          Figma has no ring; the dashboard's checklist reports the same
-          progress). What the bar draws on its own account is the wordmark,
-          the greeting and the right-hand cluster. */}
-      {/* THE DRAWER IS BUILT HERE BECAUSE THIS IS WHERE THE NAVIGATION DATA
-          IS. `AppFrame` already holds the workspace, the account, the view
-          list and `hide` for the rail beside it; the bar holds none of them
-          and should not start. Below `md` this is the only way into any of
-          it — the rail is not rendered at all. */}
-      <TopBar
-        account={account}
-        firstName={firstName}
-        menu={<MobileDrawer hide={hide} views={views} workspace={workspace} account={account} />}
-      />
-      {/* THE ROW BELOW THE BAR — the rail, then the panel. `min-h-0` is load
-          bearing: without it a flex row with a scrolling child never shrinks
-          past its content's natural height, and the panel's own
-          `overflow-y-auto` never gets anything to scroll AGAINST. */}
-      <div className="flex min-h-0 flex-1">
-        <Sidebar hide={hide} views={views} workspace={workspace} account={account} />
+      {/* THE RAIL, FULL HEIGHT, FIRST IN THE ROW. It owns the whole left edge
+          — there is nothing above it — which is why its head block carries the
+          workspace switcher at the same y as the bar's account cluster. */}
+      <Sidebar hide={hide} views={views} workspace={workspace} account={account} />
+
+      {/* THE CONTENT COLUMN — bar, then panel. `min-w-0` is load bearing on a
+          flex child that contains a horizontally scrolling tab strip: without
+          it the column refuses to shrink below its content and the whole page
+          gains a sideways scrollbar. */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* THE DRAWER IS BUILT HERE BECAUSE THIS IS WHERE THE NAVIGATION DATA
+            IS. `AppFrame` already holds the workspace, the account, the view
+            list and `hide`; the bar holds none of them and should not start.
+            Below `md` this is the only way into any of it — the rail is not
+            rendered at all. */}
+        <TopBar
+          account={account}
+          firstName={firstName}
+          menu={<MobileDrawer hide={hide} views={views} workspace={workspace} account={account} />}
+        />
+        {/* `min-h-0` is the vertical twin of the `min-w-0` above: without it a
+            flex column with a scrolling child never shrinks past its content's
+            natural height, and the panel's `overflow-y-auto` never gets
+            anything to scroll AGAINST. */}
         {ownsMain ? (
           <main id="main" className={className}>
             {children}

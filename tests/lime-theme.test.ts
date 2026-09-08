@@ -98,7 +98,11 @@ describe("one surface, one card", () => {
     expect(token("color-neutral-950")).toBe("#121214");
     expect(token("color-neutral-925")).toBe("#121214");
     expect(darkToken("background")).toBe("var(--color-neutral-950)");
-    expect(darkToken("chrome")).toBe("var(--color-neutral-925)");
+    // A LITERAL now, not a ramp reference, and declared identically in both
+    // themes: the chrome is the one surface that does NOT flip. See the
+    // `--chrome-*` block in globals.css.
+    expect(darkToken("chrome")).toBe("#121214");
+    expect(lightToken("chrome")).toBe("#121214");
     expect(darkToken("panel")).toBe("var(--background)");
   });
 

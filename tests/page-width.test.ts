@@ -136,7 +136,7 @@ describe("the page container and the skeleton that stands in for it", () => {
       // loose `w-(\d+)` scan finds a `w-2` in some unrelated row first — which
       // would compare two numbers that are not the measurement in question and
       // pass or fail for the wrong reason.
-      const rail = code.split("\n").find((l) => /border-r border-border/.test(l));
+      const rail = code.split("\n").find((l) => /border-r border-(?:chrome-)?border/.test(l));
       if (!rail) throw new Error("could not find the rail's own edge");
       const m = rail.match(/w-\[(\d+)px\]/) ?? rail.match(/\bw-(\d+)\b/);
       if (!m) throw new Error("could not find a sidebar width");
@@ -208,10 +208,25 @@ describe("the page container and the skeleton that stands in for it", () => {
     // builder portals into it.
     const bar = band(topBar, /<header className="[^"]*?\bh-(\S+) shrink-0/, "the top bar's height");
     expect(band(skeleton, /className="h-(\S+) shrink-0 border-b/, "the skeleton's top bar band")).toEqual(bar);
-    // The rail's top block: the first `flex h-… shrink-0 items-center` in the
-    // file. The `<aside>` above it cannot match — its own height is `h-full`
-    // and `w-[48px]` sits between that and its `shrink-0`.
-    expect(band(sidebar, /className="flex h-(\S+) shrink-0 items-center/, "the rail's top block")).toEqual(bar);
+    /**
+     * THE RAIL'S TOP BLOCK IS NO LONGER IN THIS COMPARISON, and dropping it is
+     * the point rather than a relaxation.
+     *
+     * It was asserted equal to the bar because the two sat side by side at the
+     * top of the screen: the corner where the rail's right edge met the bar's
+     * bottom edge only read as ONE seam while the block carrying the switcher
+     * and the bar beside it were the same height.
+     *
+     * The frame is a row now (8 Sep). The rail runs the full height and the bar
+     * begins to its right, so those two edges meet in a T, not an L — there is
+     * no corner for a mismatch to show up in. The Figma agrees and does not
+     * align them: node 58:5828 puts the switcher block at y=14 and node
+     * 58:5829 makes the row 40px, against a 65px bar.
+     *
+     * What still matters is the pair below, which is the drift this file
+     * actually exists to catch.
+     */
+    expect(band(sidebar, /className="flex h-(\S+) shrink-0 items-center/, "the rail's top block")).not.toEqual(bar);
   });
 
   /**
@@ -230,14 +245,14 @@ describe("the page container and the skeleton that stands in for it", () => {
   it("mirrors both of the chrome's hairlines, which now take real pixels", () => {
     const code = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
     // The rail's right edge, and the ghost standing in for it.
-    expect(code(sidebar)).toMatch(/border-r border-border/);
+    expect(code(sidebar)).toMatch(/border-r border-chrome-border/);
     // `hidden` precedes the width now — the ghost mirrors the rail's absence
     // below `md` as well as its 56px above it, or the skeleton reserves a
     // column the real chrome will not draw.
-    expect(code(skeleton)).toMatch(/hidden w-65[^"]*border-r border-border/);
+    expect(code(skeleton)).toMatch(/hidden w-65[^"]*border-r border-chrome-border/);
     // The bar's bottom edge, and its ghost.
-    expect(code(read("src/components/top-bar.tsx"))).toMatch(/<header className="[^"]*border-b border-border/);
-    expect(code(skeleton)).toMatch(/h-\[60px\][^"]*border-b border-border/);
+    expect(code(read("src/components/top-bar.tsx"))).toMatch(/<header className="[^"]*border-b border-chrome-border/);
+    expect(code(skeleton)).toMatch(/h-\[65px\][^"]*border-b border-chrome-border/);
   });
 });
 
@@ -479,11 +494,26 @@ describe("the frame's new shape — a full-width bar over [rail | panel]", () =>
   const frame = read("src/components/app-frame.tsx");
   const bar = read("src/components/top-bar.tsx");
 
-  it("renders the top bar before the rail, as a column rather than a row", () => {
+  it("renders the rail before the top bar, as a row rather than a column", () => {
+    /**
+     * REVERSED 8 SEP 2026, AND THE OLD ASSERTION WAS RIGHT UNTIL IT WASN'T.
+     *
+     * The frame was a column: a full-width bar with [rail | panel] beneath.
+     * Both 8 September frames draw the other arrangement, and the metadata is
+     * exact about it — in 58:5824 the sidebar is `x=0 y=0 260x1200`, the FULL
+     * height of the frame, and the bar is `x=260 y=0 1660x65`, a child of the
+     * content column rather than a sibling above it.
+     *
+     * The symptom of having it backwards was reported as "the navbars are
+     * overlapping wrong": the account cluster sat ABOVE the workspace switcher
+     * instead of beside it, and the rail began 60px down a screen where the
+     * design starts it at zero.
+     */
     const code = frame.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
-    expect(code).toMatch(/className="flex h-dvh flex-col bg-background"/);
-    expect(code.indexOf("<TopBar")).toBeGreaterThan(-1);
-    expect(code.indexOf("<Sidebar")).toBeGreaterThan(code.indexOf("<TopBar"));
+    expect(code, "a row, so `flex-col` must not come back").toMatch(/className="flex h-dvh bg-background"/);
+    expect(code).not.toMatch(/className="flex h-dvh flex-col bg-background"/);
+    expect(code.indexOf("<Sidebar")).toBeGreaterThan(-1);
+    expect(code.indexOf("<TopBar")).toBeGreaterThan(code.indexOf("<Sidebar"));
   });
 
   it("gives the panel its own surface and a top-RIGHT corner", () => {
@@ -657,8 +687,8 @@ describe("the rail's re-dress — a workspace switcher, Main Menu, a search fiel
      * a hue anyone has to be able to distinguish. The owner asked for white
      * directly. See `RailChip`.
      */
-    expect(sidebar).toContain('className={cn(SLOT, active && "bg-control")}');
-    expect(sidebar).toMatch(/tone === "active"\s*\n\s*\? "text-foreground \[&_svg\]:fill-current"/);
+    expect(sidebar).toContain('className={cn(SLOT, active && "bg-chrome-control")}');
+    expect(sidebar).toMatch(/tone === "active"\s*\n\s*\? "text-chrome-foreground \[&_svg\]:fill-current"/);
     expect(sidebar, "the active glyph must not go back to the brand").not.toMatch(/\? "text-marker"/);
     expect(sidebar, "the fill must not land back on the chip").not.toMatch(/"bg-control text-marker"/);
     expect(sidebar, "the hover step must not come back as the active fill").not.toMatch(/"bg-accent text-marker"/);
@@ -671,7 +701,7 @@ describe("the rail's re-dress — a workspace switcher, Main Menu, a search fiel
   });
 
   it("labels the nav list in the faint role, only", () => {
-    expect(sidebar).toMatch(/text-faint/);
+    expect(sidebar).toMatch(/text-chrome-faint/);
     expect(sidebar).toMatch(/Main Menu/);
   });
 
@@ -693,7 +723,7 @@ describe("the rail's re-dress — a workspace switcher, Main Menu, a search fiel
      */
     const code = sidebar.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
     expect(code, "the search row is an Input").toMatch(/<Input\b[\s\S]{0,600}aria-keyshortcuts="Meta\+K"/);
-    expect(code, "wearing the rail's row geometry").toMatch(/cn\(SLOT, "border-border pl-9/);
+    expect(code, "wearing the rail's row geometry").toMatch(/cn\(SLOT, "border-chrome-border bg-chrome-control pl-9/);
     expect(code, "and it is no longer a Button pretending").not.toMatch(
       /<Button[^>]*aria-keyshortcuts="Meta\+K"/,
     );
@@ -722,11 +752,24 @@ describe("the rail's re-dress — a workspace switcher, Main Menu, a search fiel
 });
 
 describe("the skeleton mirrors the frame's new order", () => {
-  it("holds the bar above the row, not beside it", () => {
+  it("holds the rail beside the bar, not under it", () => {
+    /**
+     * A MIRROR OF THE WRONG SHAPE IS WORSE THAN NO MIRROR. If this file keeps
+     * the column while the frame is a row, the rail's ghost starts 60px down,
+     * the real rail lands at zero, and the whole page jumps at hydration —
+     * exactly the failure this file exists to prevent, caused by the file meant
+     * to prevent it.
+     */
     const code = skeleton.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
-    expect(code).toMatch(/className="flex h-dvh flex-col bg-background"/);
+    expect(code).toMatch(/className="flex h-dvh bg-background"/);
+    expect(code).not.toMatch(/className="flex h-dvh flex-col bg-background"/);
     // The bar's ghost precedes the rail's ghost in the DOM now.
-    expect(code.indexOf("border-b border-border")).toBeLessThan(code.indexOf("border-r border-border"));
+    // THE ORDER REVERSED WITH THE FRAME. The rail's ghost comes FIRST now —
+    // it is a full-height column and the bar is inside the content column
+    // beside it, which is what both 8 September frames draw. See
+    // `app-frame.tsx`. Asserting the new order is what stops the old shape
+    // being restored in one file and not the other.
+    expect(code.indexOf("border-r border-chrome-border")).toBeLessThan(code.indexOf("border-b border-chrome-border"));
   });
 
   it("gives its content ghost the panel's own surface and corner", () => {
@@ -736,7 +779,7 @@ describe("the skeleton mirrors the frame's new order", () => {
 
   it("puts the two chrome ghosts on --chrome, matching the real bar and rail", () => {
     const code = skeleton.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
-    expect(code).toMatch(/h-\[60px\][^"]*bg-chrome/);
+    expect(code).toMatch(/h-\[65px\][^"]*bg-chrome/);
     expect(code).toMatch(/w-65[^"]*bg-chrome/);
   });
 });

@@ -4,14 +4,19 @@ import { Skeleton } from "@/components/ui/skeleton";
 /**
  * THE SHELL, HELD OPEN WHILE A PAGE STREAMS.
  *
- * Every authenticated route renders inside AppShell — a full-width bar,
- * then a row of the rail and the panel under it. The root `loading.tsx`
- * cannot know that, so a navigation into one of those routes used to blank
- * the whole viewport and then paint the chrome back.
+ * Every authenticated route renders inside AppShell — a full-height rail, then
+ * a column carrying the bar and the panel. The root `loading.tsx` cannot know
+ * that, so a navigation into one of those routes used to blank the whole
+ * viewport and then paint the chrome back.
  *
- * This holds the frame's new SHAPE — bar first, then the row — so only the
- * CONTENT shimmers. All three bands are deliberately empty rather than
- * skeletons of themselves: the real chrome is about to occupy them.
+ * IT IS A ROW NOW, NOT A COLUMN, and this file has to turn with the frame or
+ * it is worse than useless: a mirror of the WRONG shape means the rail's ghost
+ * starts 60px down, the real rail lands at zero, and the whole page jumps at
+ * hydration — the precise failure this file exists to prevent, caused by the
+ * file meant to prevent it. See `app-frame.tsx` for why the shape reversed.
+ *
+ * All three bands are deliberately empty rather than skeletons of themselves:
+ * the real chrome is about to occupy them.
  *
  * `tests/page-width.test.ts` pins this against `app-frame.tsx`, `top-bar.tsx`
  * and `sidebar.tsx` class-for-class — it is the only thing that keeps a
@@ -26,32 +31,28 @@ export function ShellSkeleton({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex h-dvh flex-col bg-background">
-      {/* THE BAR'S GHOST — 60px, `--chrome`, its bottom hairline. Empty: the
-          real bar is about to occupy it, and a shimmering placeholder under
-          a wordmark that never moves is noise. */}
-      <div className="h-[60px] shrink-0 border-b border-border bg-chrome" />
-      <div className="flex min-h-0 flex-1">
-        {/* THE RAIL'S GHOST — its own width, pinned against `sidebar.tsx` by
-            `tests/page-width.test.ts`. `--chrome`, matching the bar above it;
-            the border is the ONLY thing marking where it ends, because the
-            rail and the panel beside it are two different surfaces now. */}
-        {/* NOTHING IS RESERVED FOR THE RAIL BELOW `md`, because nothing is
-            drawn there — see `Sidebar`. A ghost the real chrome will not
-            replace is 57px of content jumping left when the route lands,
-            which is the one failure this file exists to prevent. */}
-        <div className="hidden w-65 shrink-0 border-r border-border bg-chrome md:block" />
-        <div className="flex min-w-0 flex-1 flex-col">
-          {/* THE PANEL'S GHOST — its own surface (`--panel`) and the same
-              top-RIGHT corner the real content column carries under the bar.
-              The rail side stays square in both, which is the export's own
-              geometry and the reverse of every earlier notch this shell had. */}
-          <div className="flex-1 overflow-y-auto md:rounded-tr-frame bg-panel">
-            {/* Not <main>: PageContainer renders the page's one main landmark. */}
-            <div className={`mx-auto w-full p-6 ${width === "narrow" ? "max-w-3xl" : "max-w-6xl"}`}>
-              <Skeleton className="h-8 w-48" />
-              {children}
-            </div>
+    <div className="flex h-dvh bg-background">
+      {/* THE RAIL'S GHOST — FIRST, AND FULL HEIGHT. Its width is pinned against
+          `sidebar.tsx` by `tests/page-width.test.ts`; `--chrome` matches the
+          real rail, and `--chrome-border` is the only thing marking where it
+          ends, because the rail and the panel beside it are two different
+          materials in both themes.
+          NOTHING IS RESERVED FOR IT BELOW `md`, because nothing is drawn there
+          — see `Sidebar`. A ghost the real chrome will not replace is 260px of
+          content jumping left when the route lands. */}
+      <div className="hidden w-65 shrink-0 border-r border-chrome-border bg-chrome md:block" />
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* THE BAR'S GHOST — 65px, `--chrome`, its bottom hairline. Empty: the
+            real bar is about to occupy it, and a shimmering placeholder under
+            an account name that never moves is noise. */}
+        <div className="h-[65px] shrink-0 border-b border-chrome-border bg-chrome" />
+        {/* THE PANEL'S GHOST — its own surface (`--panel`) and the same
+            top-RIGHT corner the real content column carries under the bar. */}
+        <div className="min-h-0 flex-1 overflow-y-auto md:rounded-tr-frame bg-panel">
+          {/* Not <main>: PageContainer renders the page's one main landmark. */}
+          <div className={`mx-auto w-full p-6 ${width === "narrow" ? "max-w-3xl" : "max-w-6xl"}`}>
+            <Skeleton className="h-8 w-48" />
+            {children}
           </div>
         </div>
       </div>

@@ -400,6 +400,7 @@
      stop. `2xs` keeps 11px for the caps badge, which is a different job. */
   --text-xs: 0.75rem; /* 12px — labels, captions, dense controls */
   --text-xs--line-height: 1rem;
+  --text-xs--letter-spacing: -0.0065em; /* the Figma's -0.078px at 12 */
   /**
    * 14px — A BUTTON'S LABEL, AND THE STEP THE KIT HAS BEEN CLAIMING IT HAD.
    *
@@ -429,6 +430,7 @@
      under a hundred call sites mid-re-theme. */
   --text-sm: 0.875rem; /* 14px — the app's default body */
   --text-sm--line-height: 1.125rem; /* 18px */
+  --text-sm--letter-spacing: -0.0171em; /* the Figma's -0.24px at 14 */
   --text-md: 1.0625rem; /* 17px — long-form reading prose, and the `lg` button */
   --text-md--line-height: 1.625rem;
   --text-lg: 1.125rem; /* 18px */
@@ -681,8 +683,8 @@
  */
 :root {
   /* ---- Surface ----------------------------------------------------------- */
-  --background: #f7f8f9; /* THE PAGE — off-white, so a white card reads as one */
-  --foreground: #000000; /* 21:1 on a card — the Figma sets page copy in pure black */
+  --background: #f7f7f7; /* THE PAGE — sampled from node 58:5824, so a white card reads as one */
+  --foreground: #121214; /* 18.71:1 on a card — node 58:6186 sets the numeral here, not at pure black */
   /* THE ONE INK THAT OUTRANKS THE BODY — a page title, the workspace name, and
      the active tab. In the dark theme it is now the SAME value as the body
      (both #FFFFFF). In light it stays a distinct step: #313131 against a pure
@@ -692,21 +694,48 @@
      what carries that. */
   --heading: #313131;
 
-  /* THE CHROME — the top bar and the rail. White, and `--card` shares it: the
-     light Figma draws both on the same white, distinguished from the page
-     only by the hairline — exactly as the dark theme's chrome and card share
-     a step. */
-  --chrome: #ffffff;
-  --card: var(--chrome);
-  --card-foreground: #000000;
+  /* ---- THE CHROME, WHICH DOES NOT CHANGE WITH THE THEME -----------------
+   * The sidebar and the top bar are #121214 in BOTH Figma frames — 49:5268
+   * (dark) and 58:5824 (light) draw them byte-identical, and only the content
+   * area and its cards go light. Sampled from both PNGs, not inferred.
+   *
+   * That is why these are seven roles rather than one. A permanently dark
+   * surface needs its own INK, its own hairline and its own control fill: on
+   * light, `--foreground` is near-black and `--border` is #E1E1E1, and either
+   * of them on this band would be invisible. The chrome cannot borrow the
+   * content's vocabulary because it is not on the content's ground.
+   *
+   * They are declared IDENTICALLY in both blocks rather than once at `:root`,
+   * so `design-swatches.test.ts`'s "every role in both themes" rule still has
+   * something to check, and so flipping one theme's chrome later is an edit in
+   * the place you would look for it.
+   */
+  --chrome: #121214;
+  --chrome-foreground: #ffffff; /* 18.71:1 */
+  --chrome-muted: #7e7e7e; /* 4.61:1 — the bar's "Updated just now", the rail's rest labels */
+  --chrome-faint: #6e6e6e; /* 3.67:1 — the "Main Menu" caps label ONLY, never a sentence */
+  --chrome-border: #343434; /* the rail's right edge and the bar's bottom */
+  --chrome-control: #202020; /* the search field, the active nav row, the invite card */
+  --chrome-accent: #3a3a3a; /* the avatar disc, and a chrome hover */
+  /* THE BRAND, ON THE CHROME. `--marker` cannot be used here: it is the lime
+     on dark and a solved-down #4F7A00 on LIGHT, and this band is dark in both
+     — so on light `text-marker` would paint dark olive on near-black. The
+     chrome always gets the bright value, because it always has the dark
+     ground that value was solved against. */
+  --chrome-brand: var(--color-brand-400); /* 15.53:1 on #121214 */
+
+  /* THE CARD — white, and it no longer borrows the chrome, because the chrome
+     is dark here now. Node 58:6173 draws it `bg-white` with an #E1E1E1 rim. */
+  --card: #ffffff;
+  --card-foreground: #121214;
   /* A MENU IS A CARD THAT FLOATS — see the note in `.dark`. Same pointer, so
      the two cannot drift apart by one being re-pointed and the other missed. */
   --popover: var(--card);
   --popover-foreground: var(--card-foreground);
 
-  /* THE PANEL — the content area under the top bar. Same value as the page in
-     this theme: the light Figma's panel and ground are both `#F7F8F9`, so the
-     top bar's white is the only surface that steps away from it. */
+  /* THE PANEL — the content area beside the rail and under the bar. The page's
+     own colour: #F7F7F7, sampled from node 58:5824. The card's white is what
+     steps away from it, and the chrome is a different material entirely. */
   --panel: var(--background);
 
   /* THE CONTROL SURFACE — a step DOWN from the white card it sits on, which is
@@ -830,12 +859,35 @@
   --foreground: var(--color-neutral-200); /* #FFFFFF — the Figma sets body AND titles in white */
   --heading: var(--color-neutral-200); /* #FFFFFF — the same value as `--foreground` now; see the light block's note for where they diverge */
 
-  /* THE CHROME — the top bar and the rail. The SAME hex as the page in this
-     theme: the 8 September Figma draws no step between them, and a rule drawn
-     where two identical surfaces meet does nothing. The role survives because
-     `:root` still has a real chrome/page step (white on #F7F8F9), and a role
-     declared in one theme must be declared in both. */
-  --chrome: var(--color-neutral-925); /* #121214 */
+  /* ---- THE CHROME, WHICH DOES NOT CHANGE WITH THE THEME -----------------
+   * The sidebar and the top bar are #121214 in BOTH Figma frames — 49:5268
+   * (dark) and 58:5824 (light) draw them byte-identical, and only the content
+   * area and its cards go light. Sampled from both PNGs, not inferred.
+   *
+   * That is why these are seven roles rather than one. A permanently dark
+   * surface needs its own INK, its own hairline and its own control fill: on
+   * light, `--foreground` is near-black and `--border` is #E1E1E1, and either
+   * of them on this band would be invisible. The chrome cannot borrow the
+   * content's vocabulary because it is not on the content's ground.
+   *
+   * Identical to the `:root` block above, on purpose — see the note there.
+   * On THIS theme they coincide with the content roles; on light they do not,
+   * and that is the whole reason they exist separately.
+   */
+  --chrome: #121214;
+  --chrome-foreground: #ffffff; /* 18.71:1 */
+  --chrome-muted: #7e7e7e; /* 4.61:1 — the bar's "Updated just now", the rail's rest labels */
+  --chrome-faint: #6e6e6e; /* 3.67:1 — the "Main Menu" caps label ONLY, never a sentence */
+  --chrome-border: #343434; /* the rail's right edge and the bar's bottom */
+  --chrome-control: #202020; /* the search field, the active nav row, the invite card */
+  --chrome-accent: #3a3a3a; /* the avatar disc, and a chrome hover */
+  /* THE BRAND, ON THE CHROME. `--marker` cannot be used here: it is the lime
+     on dark and a solved-down #4F7A00 on LIGHT, and this band is dark in both
+     — so on light `text-marker` would paint dark olive on near-black. The
+     chrome always gets the bright value, because it always has the dark
+     ground that value was solved against. */
+  --chrome-brand: var(--color-brand-400); /* 15.53:1 on #121214 */
+
   /* THE CARD NO LONGER SHARES THE CHROME. It is the one surface that steps
      away — #191919, at 1.06:1 on the page — which is the entire reason the
      hairline is still load-bearing. */
@@ -1073,6 +1125,13 @@
   --color-popover-foreground: var(--popover-foreground);
   --color-control: var(--control);
   --color-chrome: var(--chrome);
+  --color-chrome-foreground: var(--chrome-foreground);
+  --color-chrome-muted: var(--chrome-muted);
+  --color-chrome-faint: var(--chrome-faint);
+  --color-chrome-border: var(--chrome-border);
+  --color-chrome-control: var(--chrome-control);
+  --color-chrome-accent: var(--chrome-accent);
+  --color-chrome-brand: var(--chrome-brand);
   --color-panel: var(--panel);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
@@ -1223,19 +1282,39 @@ html {
     background: var(--background);
     color: var(--foreground);
     font-family: var(--font-sans);
+    /**
+     * THE BASE SIZE, WHICH THIS FILE HAS NEVER DECLARED — and that was a real
+     * bug rather than a tidy omission.
+     *
+     * `body` set the family, the colour and the smoothing and left the SIZE to
+     * the browser, which is 16px. Every element carrying an explicit `text-*`
+     * class was right; everything else inherited 16px into a design drawn at
+     * 14. Measured in the browser: the workspace name rendered 16px/24px where
+     * node 49:5283 draws 14px/22px.
+     *
+     * That is the "everything looks slightly too big and slightly wrong" that
+     * no single component is responsible for, because no single component is
+     * doing it — a missing declaration cannot be found by reading the file
+     * that should have contained it.
+     */
+    font-size: var(--text-sm); /* 14px */
+    line-height: var(--text-sm--line-height); /* 18px */
     /* Type rendering is part of the kit: without these, the same 13px label is
        visibly heavier on macOS than the design was drawn at. */
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
-    /* THE TRACKING IS OFF NOW, and that is a consequence of the typeface change
-       rather than a change of taste. The -0.008em here was cut for Inter, which
-       wants a touch of negative tracking at UI sizes — Linear runs -0.011em at
-       15px. SF Pro Text does not: it ships optical sizing that has already
-       tightened the small sizes, and pulling it in further is what makes a Mac
-       render the interface a half-step denser than the design. Inter still gets
-       its correction, from the fallback stack rather than from here. */
-    letter-spacing: normal;
+    /* THE TRACKING IS BACK ON, BECAUSE THE FACE IT WAS TURNED OFF FOR IS NOT
+       THE ONE RENDERING.
+       It was disabled on the reasoning that SF Pro ships optical sizing which
+       has already tightened the small sizes, so pulling them in further makes
+       a Mac render the interface a half-step denser than the design. True of
+       SF Pro — and the app draws in INTER, measured with getComputedStyle, not
+       assumed. Inter wants the correction, and the Figma is explicit about how
+       much: -0.24px at 14px, -0.078px at 12px, -1.08px at 28px. Those live on
+       the scale steps now, so every size carries its own; this is the base
+       step's, for text that inherits rather than naming a size. */
+    letter-spacing: var(--text-sm--letter-spacing);
   }
 }
 
@@ -1431,7 +1510,10 @@ select:-webkit-autofill {
 .stat-numeral {
   font-feature-settings: "tnum";
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.03em;
+  /* -1.08px at 28px, which is what nodes 49:5462 and 58:6186 measure. It was
+     -0.03em (-0.84px) — close enough to look right and wrong enough that a
+     four-character figure sat a quarter-pixel wide of the design. */
+  letter-spacing: -0.0386em;
   font-weight: 600;
   /**
    * NO `white-space` HERE, AND THE REASON IS A CASCADE ONE.
