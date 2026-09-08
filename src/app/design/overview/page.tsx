@@ -1,6 +1,6 @@
 import { AppFrame } from "@/components/app-frame";
 import { PageContainer, PageHeader } from "@/components/ui/page";
-import { BoardControls, RangeMenu, ViewStrip, ViewTitle } from "@/app/dashboard/board-controls";
+import { BoardControls, RangeMenu, ViewStrip } from "@/app/dashboard/board-controls";
 import { Button } from "@/components/ui/button";
 import { Plus, RefreshCw } from "lucide-react";
 import { FlowTile, type FlowResultRow } from "@/components/flow-tile";
@@ -224,8 +224,9 @@ export default async function OverviewLab({
               draws the same three controls at the same rungs rather than
               importing machinery that needs a board behind it. */}
           <PageHeader
+            /* NO `title`: the name is on its own tab with the options menu
+               beside it, which is the one place node 49:5399 draws it. */
             tabs={viewStrip}
-            title={<ViewTitle viewId="v-demo" name="Overview" canEdit />}
             actions={
               <>
                 <Button variant="accent">

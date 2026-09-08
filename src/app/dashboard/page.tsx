@@ -15,7 +15,7 @@ import { FreshnessPoller } from "@/components/freshness-poller";
 import { FunnelView } from "@/components/funnel-view";
 import { FlowTile, tileValueForRange, type FlowResultRow } from "@/components/flow-tile";
 import { OnboardingChecklist } from "@/components/onboarding-checklist";
-import { BoardControls, RangeMenu, TileArea, ViewStrip, ViewTitle } from "./board-controls";
+import { BoardControls, RangeMenu, TileArea, ViewStrip } from "./board-controls";
 import { BoardLayout } from "./board-layout";
 import { CustomBoard, type CanvasTile } from "./custom-board";
 import type { CustomTileSource } from "@/components/custom-tile";
@@ -1051,27 +1051,20 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             the same day `dashboard_views` grows a nullable `subtitle` and
             `renameViewAction` gains a sibling to write it. */}
         <PageHeader
-          /* THE THIRD ZONE, AND THE WHOLE REASON THE TITLE CENTRES.
-             The view strip used to be the first thing inside the BOARD, one
-             row below this header, which meant the top of the page read as a
-             title band and then a tab band. The Figma draws one row: tabs
-             left, the view's name centred, the actions right. `PageHeader`
-             grew a `tabs` slot for exactly this, and passing it is what
-             switches the component into its three-zone grid — no other route
-             passes it, and every other route is untouched. */
+          /* TABS AND ACTIONS, AND NO THIRD ZONE ANY MORE.
+             The 4 September Figma drew one row as tabs left, the view's name
+             CENTRED, the actions right — so `PageHeader` grew a `tabs` slot
+             and a three-zone grid to hold it. Node 49:5399 draws two zones:
+             the tab strip and the three buttons. The name appears exactly
+             once, on its own tab, with the "Options for Overview" menu beside
+             it (node 49:5406).
+
+             That menu is `ViewTab`'s, and it already owns Rename, Duplicate
+             and Delete — so the centred `ViewTitle` was a second copy of a
+             string the tab was already showing, with a second route to the
+             same rename. Dropping it costs nothing and removes the only place
+             in the product where one name was drawn twice on one row. */
           tabs={viewStrip}
-          title={
-            /* KEYED BY THE ACTIVE VIEW, for the reason `BoardLayout` is: this
-               holds the optimistic name until the refresh carrying the server's
-               lands, and switching views without a remount would leave one
-               view's typed name over another's board. */
-            <ViewTitle
-              key={activeView ?? "default"}
-              viewId={activeView}
-              name={viewTabs.find((v) => v.id === activeView)?.name ?? "Untitled"}
-              canEdit={access.can("create_flows")}
-            />
-          }
           actions={
             /* THE THREE HEADER ACTIONS, CO-LOCATED — fixed in the first
                review round, which found the Figma's own three ("+ Add",

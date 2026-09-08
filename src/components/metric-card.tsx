@@ -190,7 +190,9 @@ export function MetricCard({
                 `leading-none` — 28px — which is neither. */}
             <p
               className={cn(
-                "stat-numeral text-display-md leading-9 text-heading",
+                // See `frame.tsx` and globals.css: the numeral never wraps,
+                // and it is spelled as a utility so it stays overridable.
+                "stat-numeral whitespace-nowrap text-display-md leading-9 text-heading",
                 headline == null && "text-muted-foreground",
               )}
             >

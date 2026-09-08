@@ -190,7 +190,16 @@ export const PERIOD_PILL =
  * the right. The h1 is the ONLY page-title spelling in the product.
  */
 export type PageHeaderProps = {
-  title: React.ReactNode;
+  /**
+   * OPTIONAL SINCE 8 SEP 2026, AND ONLY THE BOARD LEAVES IT OUT.
+   *
+   * The board's header used to centre the view's name between its tab strip
+   * and its actions. Node 49:5399 draws two zones and puts the name on its own
+   * TAB, beside the options menu that already owns Rename — so a centred title
+   * there was one string drawn twice on one row, with two routes to the same
+   * edit. Every other call site passes a title and is untouched.
+   */
+  title?: React.ReactNode;
   lede?: React.ReactNode;
   actions?: React.ReactNode;
   /**
@@ -364,7 +373,21 @@ export function PageHeader({ title, lede, actions, tabs, back, className }: Page
              * tab strip's scroller as narrow as its content, which is the one
              * shape a scroller must never take.
              */
-            "flex flex-col items-stretch gap-3 md:grid md:grid-cols-[1fr_auto_1fr] md:items-center md:gap-x-4",
+            /**
+             * THREE TRACKS WITH A TITLE, TWO WITHOUT.
+             *
+             * `1fr auto 1fr` is what puts a title in the row's TRUE centre
+             * regardless of how wide the tabs or the actions are — equal side
+             * tracks, rather than whatever `justify-content: center` leaves
+             * over. With no title there is nothing to centre and the middle
+             * `auto` track collapses to zero, which would leave the tabs and
+             * the actions pushed to the ends by two `1fr` columns of dead
+             * space — the same row, arrived at by accident. `1fr auto` says it
+             * on purpose: the strip takes the slack, the actions take their
+             * own width.
+             */
+            "flex flex-col items-stretch gap-3 md:grid md:items-center md:gap-x-4",
+            title ? "md:grid-cols-[1fr_auto_1fr]" : "md:grid-cols-[1fr_auto]",
             back && "mt-3",
           )}
         >
@@ -387,14 +410,22 @@ export function PageHeader({ title, lede, actions, tabs, back, className }: Page
               track already carries in `app/dashboard/page.tsx`. */}
           <div className="quiet-scroll flex min-w-0 items-center overflow-x-auto -mx-1 px-1">{tabs}</div>
           {/* LEFT ON A PHONE, CENTRED ABOVE `md`. A centred title is what the
-              Figma draws BETWEEN two zones; on its own line with nothing either
-              side of it, centring is just a heading that has come loose from
-              the page's own reading edge. */}
-          <HeaderTitle
-            title={title}
-            lede={lede}
-            className="flex flex-col items-start gap-2 text-left md:items-center md:text-center"
-          />
+              4 Sep Figma drew BETWEEN two zones; on its own line with nothing
+              either side of it, centring is just a heading that has come loose
+              from the page's own reading edge.
+
+              GUARDED, because the board no longer passes one (node 49:5399
+              puts the name on its tab). Rendering `HeaderTitle` with an
+              undefined title emits an EMPTY `<h1>` into the middle track — a
+              heading with no text is a landmark that announces nothing and a
+              grid cell that still claims its `auto` width. */}
+          {title !== undefined && (
+            <HeaderTitle
+              title={title}
+              lede={lede}
+              className="flex flex-col items-start gap-2 text-left md:items-center md:text-center"
+            />
+          )}
           {actions && (
             /* WRAPS AT 8px, ALIGNED TO THE READING EDGE BELOW `md`. "+ Add",
                "Refresh All" and "Today ▾" are ~260px of `xs` controls: they fit

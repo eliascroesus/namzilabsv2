@@ -60,8 +60,22 @@ describe("the board is one column below md", () => {
 describe("the page header stacks below md", () => {
   const header = page.slice(page.indexOf("export function PageHeader"));
 
-  it("is a column below the breakpoint and a three-zone grid above it", () => {
-    expect(header).toContain("flex flex-col items-stretch gap-3 md:grid md:grid-cols-[1fr_auto_1fr]");
+  it("is a column below the breakpoint and a grid above it, with or without a title", () => {
+    /**
+     * THE TRACK COUNT IS CONDITIONAL SINCE 8 SEP 2026. `1fr auto 1fr` is what
+     * puts a title in the row's TRUE centre no matter how wide the tabs or the
+     * actions are. The board stopped passing a title (node 49:5399 puts the
+     * name on its own tab), and with nothing to centre the middle track
+     * collapses to zero — leaving the two zones pushed apart by two `1fr`
+     * columns of dead space, which is the same row arrived at by accident.
+     * `1fr auto` says it deliberately.
+     *
+     * What has NOT changed is the breakpoint or the stacking below it, which
+     * is what this file is actually about.
+     */
+    expect(header).toContain("flex flex-col items-stretch gap-3 md:grid md:items-center md:gap-x-4");
+    expect(header, "three tracks when there is a title to centre").toContain('md:grid-cols-[1fr_auto_1fr]');
+    expect(header, "two when there is not").toContain('md:grid-cols-[1fr_auto]');
     expect(header, "the sm rung belonged to a shell that broke at sm").not.toContain("sm:grid-cols-[1fr_auto_1fr]");
   });
 

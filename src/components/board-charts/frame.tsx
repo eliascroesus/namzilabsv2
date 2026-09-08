@@ -192,7 +192,10 @@ export function ChartFrame({
               nothing catches it, in light it is #313131 against #000000. */}
           <p
             className={cn(
-              "stat-numeral text-display-md text-heading",
+              // `whitespace-nowrap` rather than a rule on `.stat-numeral`: that
+              // class is unlayered and would outrank every Tailwind utility.
+              // See the note in globals.css.
+              "stat-numeral whitespace-nowrap text-display-md text-heading",
               headline == null && "text-muted-foreground",
             )}
           >

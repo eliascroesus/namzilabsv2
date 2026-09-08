@@ -1400,6 +1400,21 @@ select:-webkit-autofill {
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.03em;
   font-weight: 600;
+  /**
+   * NO `white-space` HERE, AND THE REASON IS A CASCADE ONE.
+   *
+   * A metric must never wrap — "0h 8m 39s" in a three-column tile broke across
+   * THREE lines and pushed its own card past its grid row, leaving the card
+   * below overlapping the card above. The obvious fix is `white-space: nowrap`
+   * on this class, and `base-layer-cascade.test.ts` rejects it: this rule is
+   * UNLAYERED, so it outranks every Tailwind utility, and an unlayered
+   * `white-space` disarms `truncate` and every `whitespace-*` on anything
+   * wearing `.stat-numeral` — a fix that quietly removes the ability to
+   * override it.
+   *
+   * So it is `whitespace-nowrap` at the two call sites (`board-charts/frame.tsx`
+   * and `metric-card.tsx`) instead: same result, still composable.
+   */
 }
 
 /**
