@@ -74,7 +74,8 @@
  *
  * IT IS RARELY THE RIGHT TOOL. Ninety-nine times in a hundred the answer is a
  * ROLE that already differs between the two blocks — `bg-card` is white here
- * and #111111 there (the chrome's own value, which `--card` aliases) without
+ * and #191919 there (the card's own value, which no longer aliases the
+ * chrome) without
  * a single `dark:` anywhere. Reach for the variant only when a value
  * genuinely has no role, and expect to be asked why.
  */
@@ -97,27 +98,30 @@
  * furniture, and furniture that shouts is the reason most operational tools
  * feel exhausting by 4pm.
  *
- * WHAT CHANGED, AND WHY: THREE SURFACES NOW, AND THE HAIRLINE STILL DOES THE
- * SEPARATING.
+ * WHAT CHANGED, AND WHY: ONE SURFACE AGAIN, AND THE HAIRLINE DOES ALL OF THE
+ * SEPARATING THERE IS LEFT TO DO.
  *
- * The product was a #2e2e2e BAND wrapping a #f5f5f5 page, then (2 September)
- * ONE COLOUR — rail, top bar and page all #1b191a, with every separation a 1px
+ * The product was a #2e2e2e BAND wrapping a #f5f5f5 page; then (2 September)
+ * ONE COLOUR — rail, top bar and page all #1b191a, every separation a 1px
  * hairline, because a single surface has no luminance step to find its own
- * edge with. The 4 September Figma reverses that again, but not back to the
- * band: it draws THREE surfaces instead of one — a page (#0F1011), a chrome
- * band carrying the top bar and the rail (#111111), and a content panel under
- * it (#181818) — each one to three counts from its neighbour.
+ * edge with; then (4 September) THREE — a page, a chrome band, and a content
+ * panel, each a count or two from its neighbour.
  *
- * That is closer to the old band's shape than to the one-surface theme's, but
- * the steps are too small to see unaided: #0F1011 to #111111 is two counts in
- * one channel. THE HAIRLINE IS STILL STRUCTURAL. A card whose border is
- * missing is not a slightly flatter card, it is an invisible one, exactly as
- * it was under one surface — there are simply three near-identical grounds to
- * separate now instead of one. Cards share the chrome's step (#111111) rather
- * than stepping up from it, which is the Figma's own choice.
+ * The 8 September Figma (node 49:5268) goes back to one. The page, the top
+ * bar, the rail and the content area are all #121214. The ONLY surface that
+ * steps away is the card, at #191919 — and that step measures 1.06:1, which
+ * is to say it is not visible on its own.
+ *
+ * SO THE HAIRLINE'S JOB NARROWS AND INTENSIFIES AT THE SAME TIME. There is no
+ * page/chrome edge and no chrome/panel edge left to draw: a rule between two
+ * identical surfaces draws nothing, which is the one-surface argument in its
+ * original form. What remains is the card's own edge, and #343434 carries the
+ * whole of it. A card whose border is missing is not a slightly flatter card,
+ * it is an invisible one — the same sentence as under every previous scheme,
+ * now with exactly one place left to apply it.
  *
  * THE RULE FOR COLOUR: the app is greyscale except for (a) the brand, which is
- * one blue doing one job, and (b) state, which is what needs the user. A
+ * one lime doing one job, and (b) state, which is what needs the user. A
  * console where everything is coloured can point at nothing.
  * ========================================================================== */
 @theme {
@@ -254,8 +258,8 @@
    *
    * Re-cut for a near-black ground. The old three were mixed to sit on white
    * and every one of them landed under 4.5:1 here; these are the same hues
-   * lifted until they clear it on #111111 (#FF8A5C 8.13:1, #FFB3B3 11.11:1,
-   * #A8A8F0 8.56:1).
+   * lifted until they clear it on #121214 (#FF8A5C 8.06:1, #FFB3B3 11.00:1,
+   * #A8A8F0 8.49:1).
    */
   --color-accent-orange: #ff8a5c;
   --color-accent-pink: #ffb3b3;
@@ -343,7 +347,7 @@
   --color-red-50: #2a1614;
   --color-red-100: #3d1c19;
   --color-red-200: #5a2621;
-  --color-red-600: #f0665c; /* 6.08:1 on #111111 */
+  --color-red-600: #f0665c; /* 6.02:1 on #121214, 5.66:1 on a card */
 
   /* --- Type scale ---------------------------------------------------------
    * UNTITLED UI'S PITCH, UNDER THE KIT'S DISCIPLINE.
@@ -650,21 +654,30 @@
  * 1. EVERY ROLE IS DECLARED IN BOTH BLOCKS. A role that exists in one and not
  *    the other inherits whatever the other left behind, which is how the metric
  *    tile once carried ink solved for the opposite surface.
- * 2. THE DIRECTIONS ARE MIRRORED, NOT COPIED. On dark, `--control` (#202020)
- *    and `--accent` (#3A3A3A) are both steps UP from the #111111 chrome and
- *    card — lighter, not recessed — and `--muted` (#181818) is a step up too,
- *    one below them, though it is never a hover. On light, `--control`
- *    (#F4F4F4) and `--accent` (#ECECEC) are both steps DOWN from the white
- *    card. Nothing "recesses" on dark; getting the direction backwards is the
- *    single easiest thing to get wrong here.
+ * 2. THE DIRECTIONS ARE MIRRORED, NOT COPIED. On dark, `--control` (#202020,
+ *    1.08:1) and `--accent` (#3A3A3A, 1.55:1) are both steps UP from the
+ *    #191919 card — lighter, not recessed. `--muted` shares `--control`'s step
+ *    rather than sitting below it: the value it used to take is the CARD now,
+ *    and a fill equal to the card it sits on is a card painted onto itself,
+ *    which broke six hovers into invisibility the last time the two collapsed.
+ *    On light, `--control` (#F4F4F4) and `--accent` (#ECECEC) are both steps
+ *    DOWN from the white card, and `--muted` shares `--control` there too.
+ *    Nothing "recesses" on dark; getting the direction backwards is the single
+ *    easiest thing to get wrong here.
  *
- * THE BRAND CANNOT BE ONE VALUE, AND THAT IS THE SAME TRAP THE YELLOW FELL IN.
- * #007BFF measures 3.98:1 white-on-fill — under the 4.5 a 15px label owes, in
- * the same way #eecf00 was invisible as a rule. So the FILL stays `brand-600`
- * (#0070E8, 4.68:1 white-on-fill) in both themes, and the STROKE step drops to
- * `brand-800` on white — 5.80:1 — where `brand-400` (the dark theme's stroke)
- * is 6.65:1 on the ground. Two rungs of one ramp, one role name each, which is
- * the arrangement `--primary` / `--marker` was built for.
+ * THE BRAND IS ONE VALUE ON DARK AND TWO ACROSS THEMES, WHICH IS THE YELLOW'S
+ * TRAP SPRUNG HALFWAY. #eecf00 was a superb fill under near-black and an
+ * invisible rule on white, so the kit needed two colours. #007BFF had a milder
+ * version of the same problem — 3.98:1 white-on-fill, under the bar a label
+ * owes — so the fill sat one rung below the named brand.
+ *
+ * #B6FF56 has neither problem ON DARK: 11.59:1 under its own #2C2C2C ink and
+ * 15.53:1 as a stroke on the page, so `brand-400` is the fill, the stroke and
+ * the chart series at once. It has the yellow's problem exactly ON WHITE,
+ * where it measures 1.20:1 — an absent line. So the split survives, moved:
+ * not fill-versus-stroke within a theme, but one value on dark and a
+ * solved-down `brand-800` (#4F7A00, 5.10:1) for light's stroke alone. One role
+ * name each, which is the arrangement `--primary` / `--marker` was built for.
  */
 :root {
   /* ---- Surface ----------------------------------------------------------- */
@@ -806,7 +819,7 @@
 
 .dark {
   /* ---- Surface ----------------------------------------------------------- */
-  --background: var(--color-neutral-950); /* #0F1011 — THE PAGE */
+  --background: var(--color-neutral-950); /* #121214 — THE PAGE */
   --foreground: var(--color-neutral-200); /* #FFFFFF — the Figma sets body AND titles in white */
   --heading: var(--color-neutral-200); /* #FFFFFF — the same value as `--foreground` now; see the light block's note for where they diverge */
 
@@ -834,7 +847,7 @@
   --panel: var(--background); /* #121214 */
 
   /* THE CONTROL SURFACE, AND THE DEPTH RULE STATED HONESTLY.
-     A field on this theme's chrome and cards (#111111) is a step UP: #202020,
+     A field on this theme's cards (#191919) is a step UP: #202020 (1.08:1),
      with `--accent` (#3A3A3A) a further step up again. On white it is the
      mirror — a step DOWN to #F4F4F4, hovering a further step down to
      #ECECEC. That is the invariant this file actually holds: the two themes
@@ -891,9 +904,12 @@
    * the page were both #f5f5f5; it survived the re-theme by being re-introduced
    * rather than by being kept.
    *
-   * Muted is `--panel` (#181818 — a skeleton's track, a table's head, a
-   * disabled fill, and the content area itself), a step DOWN from the
-   * #111111 chrome and card.
+   * Muted shares `--control`'s step (#202020 — a skeleton's track, a table's
+   * head, a disabled fill), which is a step UP from the #191919 card. It used
+   * to be the panel's own value; that value IS the card now, so following it
+   * would have walked straight back into the collapse described above. The
+   * light theme has always given `--muted` and `--control` the same step, so
+   * dark now mirrors it rather than inventing a fourth surface to avoid it.
    *
    * Accent used to share `--secondary`'s own step (#333333), which meant a
    * grey button's `hover:bg-accent` / `active:bg-accent` repainted the exact
@@ -922,14 +938,17 @@
   --destructive-foreground: var(--color-neutral-950);
 
   /* ---- The hairline ------------------------------------------------------
-   * STILL THE STRUCTURE, ACROSS THREE SURFACES NOW INSTEAD OF ONE.
+   * STILL THE STRUCTURE, AND NOW IT IS THE ONLY STRUCTURE.
    *
-   * #0F1011, #111111 and #181818 are up to seven counts of near-black apart
-   * (0x11 → 0x18, chrome to panel) — closer to each other than the old
-   * #1b191a/#272426 pair was, not further apart. Three surfaces did not buy
-   * this file a set of steps you can see without a border; it bought three
-   * steps you STILL cannot see without one. `--border` draws every one of
-   * those seams, exactly as it drew the one seam the one-surface theme had.
+   * There were three surfaces for four days and there is one again. The page,
+   * the top bar, the rail and the content area are all #121214 — a rule drawn
+   * where two of those meet draws nothing at all, so those seams are gone
+   * rather than fainter.
+   *
+   * What is left is the card, at #191919, which is 1.06:1 on the page. That is
+   * not a step you can see without a border; it is barely a step you can
+   * measure. `--border` is what makes it a surface instead of a rumour, and it
+   * now does that job alone.
    */
   --border: var(--color-neutral-600); /* #343434 — EVERY hairline */
   --input: var(--border);
@@ -944,10 +963,10 @@
 
   /* THE ACTIVE TAB'S RULE — NOT the stroke. The Figma draws this 1px bottom
      rule in grey (#7E7E7E); the role resolves to `--muted-foreground`
-     (#858585) rather than that exact value, for the ramp table's own reason —
-     #7E7E7E measures 4.37:1 on the panel, #858585 is 4.81:1 there — so the
-     active tab announces itself by weight and ink rather than by borrowing
-     the brand. */
+     (#828282) rather than that exact value, for the ramp table's own reason —
+     #7E7E7E measures 4.33:1 on a card, #828282 is 4.58:1 there — so the active
+     tab announces itself by weight and ink rather than by borrowing the
+     brand. */
   --tab-rule: var(--muted-foreground);
 
   /* shadcn components that do their own `calc()` off a single base radius. */
@@ -962,14 +981,16 @@
    * SUCCESS STAYS GREEN, SEPARATE FROM THE BRAND — a DONE badge and a New-flow
    * button being one colour would put the loudest state and the loudest act in
    * one vocabulary, and that was true when the brand was cyan and is equally
-   * true now that it is blue. The value is untouched by this re-theme, only
-   * re-measured against the new grounds: #00D492 is 9.83:1 on #0F1011 and
-   * 9.74:1 on #111111; the light theme's own #00734B is 5.91:1 on white.
+   * true now that it is lime — MORE true, in fact, since a lime brand and a
+   * green state are neighbours on the wheel rather than opposites. The value is
+   * untouched by this re-theme, only re-measured against the new ground:
+   * #00D492 is 9.65:1 on #121214 and 9.07:1 on a card; the light theme's own
+   * #00734B is 5.91:1 on white.
    *
    * STATUS IS QUIET WHEN FINE. A healthy thing carries a 6px dot; only a thing
    * that needs something wears a full pill.
    */
-  --success: #00d492; /* 9.83:1 on #0F1011, 9.74:1 on #111111 */
+  --success: #00d492; /* 9.65:1 on #121214, 9.07:1 on a card */
   --success-soft: rgb(0 212 146 / 0.1);
   --success-ink: #19d99c;
   --warn: #f5a524;
