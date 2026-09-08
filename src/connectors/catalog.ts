@@ -1816,9 +1816,11 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
      * leaky bucket, which is 120/minute. Declared at the sustained rate rather
      * than the 40-call burst capacity, because the bucket refills at the
      * sustained rate and a budget built on the burst would overrun every store
-     * that is not idle.
+     * that is not idle. Named per operation as well as on "*", because
+     * `orders.list` is what this connector actually claims against and an
+     * operation with no declared limit silently falls back to the default.
      */
-    rateLimits: { "*": { requestsPerMinute: 120 } },
+    rateLimits: { "*": { requestsPerMinute: 120 }, "orders.list": { requestsPerMinute: 120 } },
     credentialFields: [
       { key: "shopDomain", label: "Store domain", placeholder: "acme.myshopify.com" },
       { key: "accessToken", label: "Admin API access token (Settings → Apps → Develop apps)", placeholder: "shpat_…" },
@@ -1874,7 +1876,16 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
      * 3500/m. Declaring the burst would let a budget authorise 350 calls inside
      * one minute and blow the steady ceiling twenty times over.
      */
-    rateLimits: { "*": { requestsPerMinute: 3500 } },
+    rateLimits: {
+      "*": { requestsPerMinute: 150 },
+      "events.list": { requestsPerMinute: 3500 },
+      // The metrics list is a TWENTY-THIRD of the events budget (burst 10/s,
+      // steady 150/m), and it is the one the flow's Metric picker calls. A
+      // single account-wide figure would have to be either this one — starving
+      // the sync — or the events one, which would authorise 3500 calls a minute
+      // against a 150/minute endpoint. Per-operation is not tidiness here.
+      "metrics.list": { requestsPerMinute: 150 },
+    },
     credentialFields: [{ key: "apiKey", label: "Private API key (Settings → API keys)", placeholder: "pk_…" }],
     flowFields: [
       {
