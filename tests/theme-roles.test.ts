@@ -74,14 +74,27 @@ describe("--tab-rule: the active tab's rule, not the brand stroke", () => {
 });
 
 describe("--primary-hover / --primary-active: the fill's hover and press", () => {
-  it("hovers UP on dark (brand-500) and DOWN on light (brand-700)", () => {
-    expect(darkToken("primary-hover")).toBe("var(--color-brand-500)");
-    expect(lightToken("primary-hover")).toBe("var(--color-brand-700)");
+  /**
+   * THE SPLIT RETIRED WITH THE INK THAT NEEDED IT.
+   *
+   * Under blue, the fill hovered UP on dark (brand-500) and DOWN on light
+   * (brand-700), and the asymmetry was earned: the fill carried WHITE ink, so
+   * brightening it on a light ground moved it toward the white behind it and
+   * the label's contrast fell at the moment of the press.
+   *
+   * The lime fill carries NEAR-BLACK ink in both themes. Brightening it now
+   * RAISES the label's contrast rather than lowering it — brand-300 is 12.02:1
+   * under #2C2C2C where brand-400 is 11.59:1 — so the reason light had to move
+   * the other way is gone, and both themes hover to the lighter step.
+   */
+  it("hovers UP in BOTH themes now, because the ink on the fill is dark", () => {
+    expect(darkToken("primary-hover")).toBe("var(--color-brand-300)");
+    expect(lightToken("primary-hover")).toBe("var(--color-brand-300)");
   });
 
-  it("presses to brand-700 in both themes", () => {
-    expect(darkToken("primary-active")).toBe("var(--color-brand-700)");
-    expect(lightToken("primary-active")).toBe("var(--color-brand-700)");
+  it("presses to brand-500 in both themes", () => {
+    expect(darkToken("primary-active")).toBe("var(--color-brand-500)");
+    expect(lightToken("primary-active")).toBe("var(--color-brand-500)");
   });
 
   it("is bridged to bg-primary-hover and bg-primary-active", () => {

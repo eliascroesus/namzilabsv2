@@ -76,16 +76,16 @@ export const metadata = { title: "Namzilabs — UI kit" };
  * owes more room than a button's own ink needs.
  */
 const BRAND: Array<{ step: string; cls: string; hex: string }> = [
-  { step: "50", cls: "bg-brand-50", hex: "#e6f2ff" },
-  { step: "100", cls: "bg-brand-100", hex: "#cce5ff" },
-  { step: "200", cls: "bg-brand-200", hex: "#99cbff" },
-  { step: "300", cls: "bg-brand-300", hex: "#66b2ff" },
-  { step: "400", cls: "bg-brand-400", hex: "#3d9bff" },
-  { step: "500", cls: "bg-brand-500", hex: "#007bff" },
-  { step: "600", cls: "bg-brand-600", hex: "#0070e8" },
-  { step: "700", cls: "bg-brand-700", hex: "#0069d9" },
-  { step: "800", cls: "bg-brand-800", hex: "#0062cc" },
-  { step: "900", cls: "bg-brand-900", hex: "#0056b3" },
+  { step: "50", cls: "bg-brand-50", hex: "#f4ffe4" },
+  { step: "100", cls: "bg-brand-100", hex: "#e9ffc9" },
+  { step: "200", cls: "bg-brand-200", hex: "#dbffa6" },
+  { step: "300", cls: "bg-brand-300", hex: "#c9ff7d" },
+  { step: "400", cls: "bg-brand-400", hex: "#b6ff56" },
+  { step: "500", cls: "bg-brand-500", hex: "#a2e844" },
+  { step: "600", cls: "bg-brand-600", hex: "#8acc2e" },
+  { step: "700", cls: "bg-brand-700", hex: "#6fa61c" },
+  { step: "800", cls: "bg-brand-800", hex: "#4f7a00" },
+  { step: "900", cls: "bg-brand-900", hex: "#3d5e00" },
 ];
 /**
  * THE SURFACE HALF of the neutral ramp — eight steps now, because the
@@ -97,9 +97,9 @@ const BRAND: Array<{ step: string; cls: string; hex: string }> = [
  * is the heavier rule a checkbox or a switch track owes.
  */
 const SURFACE: Array<{ step: string; cls: string; hex: string }> = [
-  { step: "950", cls: "bg-neutral-950", hex: "#0f1011" },
-  { step: "925", cls: "bg-neutral-925", hex: "#111111" },
-  { step: "900", cls: "bg-neutral-900", hex: "#181818" },
+  { step: "950", cls: "bg-neutral-950", hex: "#121214" },
+  { step: "925", cls: "bg-neutral-925", hex: "#121214" },
+  { step: "900", cls: "bg-neutral-900", hex: "#191919" },
   { step: "850", cls: "bg-neutral-850", hex: "#202020" },
   { step: "800", cls: "bg-neutral-800", hex: "#333333" },
   { step: "700", cls: "bg-neutral-700", hex: "#3a3a3a" },
@@ -120,7 +120,7 @@ const SURFACE: Array<{ step: string; cls: string; hex: string }> = [
  */
 const INK: Array<{ step: string; cls: string; hex: string }> = [
   { step: "450", cls: "bg-neutral-450", hex: "#6e6e6e" },
-  { step: "400", cls: "bg-neutral-400", hex: "#858585" },
+  { step: "400", cls: "bg-neutral-400", hex: "#828282" },
   { step: "200", cls: "bg-neutral-200", hex: "#ffffff" },
   { step: "300", cls: "bg-neutral-300", hex: "#b5b5b5" },
   { step: "100", cls: "bg-neutral-100", hex: "#e5e5e5" },
@@ -179,8 +179,8 @@ const TYPE: Array<{ token: string; cls: string; px: string; use: string; sample:
   { token: "text-xl", cls: "text-xl font-semibold tracking-tight", px: "20px", use: "The step above a card title, where a section needs one", sample: "Speed to lead" },
   { token: "text-lg", cls: "text-lg font-semibold tracking-tight", px: "18px", use: "Card and modal titles", sample: "Speed to lead" },
   { token: "text-md", cls: "text-md font-semibold", px: "17px", use: "Panel titles, hero list rows", sample: "Speed to lead" },
-  { token: "text-sm", cls: "text-sm", px: "15px", use: "Body, menu items, table cells — the default", sample: "Speed to lead" },
-  { token: "text-xs", cls: "text-xs", px: "13px", use: "Helper text, captions, dense controls, buttons and field labels", sample: "Speed to lead" },
+  { token: "text-sm", cls: "text-sm", px: "14px", use: "Body, menu items, table cells — the default", sample: "Speed to lead" },
+  { token: "text-xs", cls: "text-xs", px: "12px", use: "Helper text, captions, dense controls, buttons and field labels", sample: "Speed to lead" },
   {
     token: "text-2xs",
     cls: "label-micro",

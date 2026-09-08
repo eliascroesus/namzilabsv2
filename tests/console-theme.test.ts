@@ -56,19 +56,20 @@ function darkToken(name: string): string | null {
 }
 
 describe("the console's supplied constants", () => {
-  it("fills with #0070e8", () => {
-    // The blue is the FILL step, because it was supplied as the shape of a
-    // button — `--primary` reads `brand-600` and nothing else may be the
-    // primary. #0070E8, not the Figma's own #007BFF: that value measures
-    // 3.98:1 white-on-fill, under the 4.5 a 15px label owes; one step deeper
-    // is indistinguishable beside it and clears the bar.
-    expect(token("color-brand-600")).toBe("#0070e8");
-    expect(token("primary")).toBe("var(--color-brand-600)");
+  it("fills with #b6ff56", () => {
+    // The lime IS the fill step, where the blue was not. Blue was supplied as
+    // #007BFF and had to sit one rung deeper (#0070E8) to carry white ink at
+    // 4.5:1. The lime carries NEAR-BLACK ink at 11.59:1, so the supplied value
+    // needs no correction and `--primary` reads the brand itself.
+    expect(token("color-brand-400")).toBe("#b6ff56");
+    expect(token("primary")).toBe("var(--color-brand-400)");
   });
 
-  it("grounds on #0f1011", () => {
-    // The page ground under the blue re-theme's three-surface model.
-    expect(token("color-neutral-950")).toBe("#0f1011");
+  it("grounds on #121214", () => {
+    // The page ground under the lime re-theme's ONE-surface model: the bar,
+    // the rail and the content area are all this value, and only the card
+    // steps away from it.
+    expect(token("color-neutral-950")).toBe("#121214");
   });
 
   it("keeps the canvas frozen even though the ground moved on without it", () => {
