@@ -18,7 +18,8 @@
     "inngest:dev": "npx inngest-cli@latest dev",
     "shot": "node scripts/screenshot.mjs",
     "board:drag": "node scripts/board-drag-check.mjs",
-    "canvas:check": "node scripts/canvas-check.mjs"
+    "canvas:check": "node scripts/canvas-check.mjs",
+    "geometry": "node scripts/geometry-check.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.0.0",

@@ -41,21 +41,38 @@ export const GRID_COLS = 12;
  * adding the gap on top — inflates every tile by 24px per row, which is 96px on
  * a number tile and looks like a padding bug rather than an arithmetic one.
  *
- * THE GAP IS 24 BECAUSE THE PAGE'S GUTTER IS 24. It was 16, which made this the
- * one grid in the product whose tiles sat closer to each other than the page
- * sits to its own edges. The ROW stays 24; only the gutter moved, so the pitch
- * went 40 -> 48 and every tile is proportionally taller.
+ * THE GAP IS 16, AND IT WENT BACK, BECAUSE THE FIGMA DRAWS 16.
+ *
+ * It was 16, then 24 on the argument that this was "the one grid in the product
+ * whose tiles sat closer to each other than the page sits to its own edges".
+ * That is a consistency argument, and both 8 September frames overrule it: node
+ * 49:5447 sets `gap-x-[16px] gap-y-[16px]` inside a `p-[24px]` main. The design
+ * packs the tiles tighter than the page inset ON PURPOSE — a board is one
+ * object made of cards, and spacing its cards as far apart as the page's own
+ * margin makes them read as separate objects that happen to be near each other.
+ *
+ * The measured cost of having it wrong: a four-column chart card came out
+ * 521.3px wide against the Figma's 526.67, and a ten-row card 456px tall
+ * against 384 — 72px, which is most of a stat tile. Both fall out of this one
+ * constant, which is why the numbers are here and not in a stylesheet.
+ *
+ * THE ROW STAYS 24. The pitch is the row PLUS the gap, so it moves with the
+ * gutter: 24 + 16 = 40. A tile `h` rows tall measures `h * ROW_UNIT_PX -
+ * GRID_GAP_PX` — a 10-row chart card is 384, which is the Figma's own number.
+ * Getting the pitch backwards — treating it as the row and adding the gap on
+ * top — inflates every tile by a gap per row, which looks like a padding bug
+ * rather than an arithmetic one.
  *
  * The CSS spells the same fact the other way round (`grid-auto-rows: 24px` with
- * `gap: 24px`), which is why both numbers live here rather than one here and
- * one in a stylesheet: the resize gesture converts pixels to rows with this
- * pitch, and if it and the grid disagreed a tile would settle a row away from
- * where it was dropped.
+ * `gap: 16px`), derived from these two rather than typed, which is why both
+ * live here: the resize gesture converts pixels to rows with this pitch, and if
+ * it and the grid disagreed a tile would settle a row away from where it was
+ * dropped.
  */
-export const ROW_UNIT_PX = 48;
+export const ROW_UNIT_PX = 40;
 
 /** The gutter between cells, both axes. Must equal the CSS `gap`. */
-export const GRID_GAP_PX = 24;
+export const GRID_GAP_PX = 16;
 
 /** Column counts the board is rendered into: desktop, tablet, phone. */
 export type GridCols = 12 | 6 | 1;
