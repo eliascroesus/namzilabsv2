@@ -155,3 +155,34 @@ describe("the recorded contrast substitutions", () => {
     expect(contrast("#4a4a4a", "#121214")).toBeLessThan(3);
   });
 });
+
+describe("shape: 8px on everything that contains something", () => {
+  it("the card and the surface come DOWN to the control's 8px", () => {
+    // They were `--radius-lg` (10px). The Figma draws one radius, not two.
+    expect(token("radius-card")).toBe("var(--radius-md)");
+    expect(token("radius-surface")).toBe("var(--radius-md)");
+    expect(token("radius-control")).toBe("var(--radius-md)");
+    expect(token("radius-md")).toBe("0.5rem");
+  });
+
+  it("retires the frame notch, because one surface reveals nothing", () => {
+    expect(token("radius-frame")).toBe("0");
+  });
+});
+
+describe("type: the Figma's sizes", () => {
+  it("the UI base is 14px — nav, tabs, card titles and buttons all sit here", () => {
+    expect(token("text-sm")).toBe("0.875rem");
+    expect(token("text-sm--line-height")).toBe("1.125rem"); // 18px
+  });
+
+  it("the small step is 12px — axis labels, legend, delta chip, Main Menu", () => {
+    expect(token("text-xs")).toBe("0.75rem");
+    expect(token("text-xs--line-height")).toBe("1rem"); // 16px
+  });
+
+  it("the metric numeral is 28px over 40px leading", () => {
+    expect(token("text-display-md")).toBe("1.75rem");
+    expect(token("text-display-md--line-height")).toBe("2.5rem");
+  });
+});

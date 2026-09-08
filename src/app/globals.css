@@ -390,8 +390,12 @@
    */
   --text-2xs: 0.6875rem; /* 11px — the caps badge, and nothing else */
   --text-2xs--line-height: 1rem;
-  --text-xs: 0.8125rem; /* 13px — labels, captions, dense controls */
-  --text-xs--line-height: 1.125rem;
+  /* 12px, DOWN FROM 13. The 8 September Figma sets every small string at 12 —
+     axis labels, the legend, the delta chip, "Main Menu", "1 hr ago" — and a
+     13px `xs` beside a 12px design is the near-miss a closed set exists to
+     stop. `2xs` keeps 11px for the caps badge, which is a different job. */
+  --text-xs: 0.75rem; /* 12px — labels, captions, dense controls */
+  --text-xs--line-height: 1rem;
   /**
    * 14px — A BUTTON'S LABEL, AND THE STEP THE KIT HAS BEEN CLAIMING IT HAD.
    *
@@ -412,8 +416,15 @@
    */
   --text-button: 0.875rem; /* 14px — every labelled button, at every rung */
   --text-button--line-height: 1.25rem;
-  --text-sm: 0.9375rem; /* 15px — the app's default body */
-  --text-sm--line-height: 1.375rem;
+  /* 14px, DOWN FROM 15 — the single largest reach of this re-theme, because
+     `--text-sm` is the app's default body and every surface inherits it. The
+     Figma's dominant UI size is 14: nav rows, tabs, card titles, the top bar's
+     strings and every button label. It now coincides with `--text-button`,
+     which was 14px all along precisely because 15 read a size too big inside a
+     32px box; that token keeps its name and its job rather than being retired
+     under a hundred call sites mid-re-theme. */
+  --text-sm: 0.875rem; /* 14px — the app's default body */
+  --text-sm--line-height: 1.125rem; /* 18px */
   --text-md: 1.0625rem; /* 17px — long-form reading prose, and the `lg` button */
   --text-md--line-height: 1.625rem;
   --text-lg: 1.125rem; /* 18px */
@@ -472,20 +483,26 @@
      was `9999px` for one commit and 51 files inherited it, so every text field,
      menu row and small panel went capsule-shaped. Those two components ask for
      `rounded-full` by name; this is the rectangle everything else shares. */
+  /* ONE RECTANGLE, NOT TWO. The card and the surface used to sit at `lg`
+     (10px) while a control sat at `md` (8px), which is a two-radius product
+     wherever a field sits inside a card — and the 8 September Figma draws a
+     single 8px corner on every box it has: cards, buttons, the search field,
+     nav rows, the invite panel. The ladder keeps `lg` for whatever asks for
+     10px by name; nothing in the kit's own vocabulary does any more. */
   --radius-control: var(--radius-md);
-  --radius-card: var(--radius-lg);
-  --radius-surface: var(--radius-lg);
+  --radius-card: var(--radius-md);
+  --radius-surface: var(--radius-md);
 
-  /* THE FRAME'S CORNER IS BACK, BECAUSE THERE IS A SECOND MATERIAL AGAIN.
-     It went to 0 when the rail, the bar and the page became one #1b191a
-     surface — cutting a corner between two identical materials draws a shape
-     nobody can see, and the token was kept only so `rounded-frame` stayed a
-     legal spelling for whatever the shell decided next. What it decided is a
-     THIRD surface: the content panel (#181818) sits under the top bar and
-     beside the rail, both #111111, and the panel's top corner where it meets
-     them is cut at 8px — half the old 16, because the panel is a much smaller
-     luminance step off the chrome than the light page ever was off the band. */
-  --radius-frame: 8px;
+  /* AND THE FRAME'S CORNER GOES AGAIN, BY ITS OWN ARGUMENT.
+     A radius reveals whatever is behind it. It went to 0 when the rail, the bar
+     and the page became one #1b191a surface; it came back at 8px on 4 September
+     because a third surface appeared for it to cut into. The 8 September Figma
+     removes that surface — the panel, the chrome and the page are all #121214 —
+     so the cut reveals #121214 against #121214 and draws nothing at all. This
+     is the same sentence that reinstated it, read in the other direction.
+     The token stays defined so `rounded-frame` remains a legal spelling for
+     whatever the shell decides next. */
+  --radius-frame: 0;
 
   /* --- Chrome band --------------------------------------------------------
    * How far the builder's floating panels stay clear of the canvas's top edge.
