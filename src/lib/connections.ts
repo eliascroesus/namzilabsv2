@@ -2,10 +2,13 @@ import "server-only";
 import { randomBytes } from "node:crypto";
 import { and, desc, eq, ne, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { backfillJobs, connections, sourceStreams } from "@/db/schema";
+import type { DB } from "@/db/types";
+import { backfillJobs, connections, rawEvents, sourceStreams } from "@/db/schema";
+import { effectiveEventTimeKey, eventTimeLive, readEventTime } from "@/lib/webhooks/event-time";
 import { CapError, connectionCap } from "@/lib/limits";
 import { encrypt, decrypt, getEncryptionKey } from "@/lib/crypto";
 import { getConnector } from "@/connectors/registry";
+import type { Connector } from "@/connectors/types";
 import { catalogEntry } from "@/connectors/catalog";
 import { getConnectionCredentials } from "@/lib/credentials";
 // From jobs.ts, deliberately not from backfill/run.ts: run.ts imports the
@@ -54,6 +57,43 @@ export type CreateConnectionInput = {
  * `webhookSecret` credential), use that instead — so the user can configure
  * the provider manually.
  */
+/**
+ * Is this connector an OPEN hook — one that accepts a delivery carrying no
+ * signature at all?
+ *
+ * Asked of the connector rather than declared in the catalog, because the
+ * connector's `verifySignature` IS the answer, and
+ * `tests/connectors-signatures.test.ts` already pins the set of sources that
+ * answer yes to exactly one. A second connector going open would fail that
+ * test before it could quietly widen what this function returns.
+ */
+function acceptsUnsigned(connector: Connector | undefined): boolean {
+  if (!connector) return false;
+  try {
+    return connector.verifySignature({ rawBody: "{}", headers: {}, secret: null }) === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Turn an open hook into a signed one: mint a secret, store it encrypted, and
+ * hand it back so the page can show it once. From the next delivery on, the
+ * connector's own HMAC check applies and an unsigned POST is refused.
+ */
+export async function enableWebhookSigning(orgId: string, id: string): Promise<string | null> {
+  const db = getDb();
+  const conn = await getConnection(orgId, id);
+  if (!conn) return null;
+  if (conn.signingSecretEncrypted) return getSigningSecret(conn);
+  const secret = randomSecret();
+  await db
+    .update(connections)
+    .set({ signingSecretEncrypted: encrypt(secret, getEncryptionKey()), updatedAt: new Date() })
+    .where(eq(connections.id, conn.id));
+  return secret;
+}
+
 export async function createConnection(input: CreateConnectionInput): Promise<Connection> {
   const db = getDb();
   const key = getEncryptionKey();
@@ -155,7 +195,17 @@ export async function createConnection(input: CreateConnectionInput): Promise<Co
     // the customer pasted nothing. An explicit paste still wins, because it is
     // the only way to name a key different from the one we hold.
     const fromCredentials = connector?.webhookSecretFromCredentials?.(rawCredentials) || null;
-    signingSecret = stripWebhookSecret ? pastedWebhookSecret : (fromCredentials ?? randomSecret());
+    // And before both of those sits the OPEN hook, which must mint nothing at
+    // all. `catchHookConnector` documents itself as open until a secret exists
+    // — "No secret configured => open catch-hook (accept)" — but this factory
+    // minted one for EVERY `instant` source, so the open hook was never open:
+    // a plain unsigned POST, the entire point of a catch-all URL, was rejected
+    // 401 and discarded. Zapier, Make and n8n all default to an unguessable
+    // URL with signing as an opt-in; so do we, and `enableWebhookSigning` is
+    // how a customer turns it on afterwards.
+    signingSecret = stripWebhookSecret
+      ? pastedWebhookSecret
+      : (fromCredentials ?? (acceptsUnsigned(connector) ? undefined : randomSecret()));
   }
 
   const patch: Partial<Connection> = {};
@@ -362,6 +412,66 @@ export function getSigningSecret(conn: Connection): string | null {
 }
 
 /** The connect-time "preview latest records" feature. */
+/**
+ * What actually arrived, read back from our own store.
+ *
+ * Normalized rather than shown raw, because the question a customer is asking
+ * at this moment is not "what did I send" — they know that — but "did it come
+ * out as something you can count, and did you read the right fields". So this
+ * runs the SAME mapper the ingestion pipeline runs, with the same context, and
+ * shows the events it produced. A payload that arrives and yields nothing is
+ * the failure worth surfacing, and it gets its own message rather than an empty
+ * table that reads as "nothing arrived".
+ *
+ * Read-only: it writes nothing, spends no provider call, and takes no rate-limit
+ * claim, which is why it sits outside the claimCalls path above.
+ */
+async function previewDelivered(db: DB, conn: Connection, connector: Connector, n: number): Promise<CanonicalEvent[]> {
+  const rows = await db
+    .select({ payload: rawEvents.payload, headers: rawEvents.headers, receivedAt: rawEvents.receivedAt })
+    .from(rawEvents)
+    .where(eq(rawEvents.connectionId, conn.id))
+    .orderBy(desc(rawEvents.receivedAt))
+    .limit(Math.max(n, 10));
+
+  if (rows.length === 0) {
+    throw new Error("Nothing has arrived here yet. Send a delivery to the webhook URL above, then preview again.");
+  }
+  if (!connector.normalize) {
+    // A stream-scoped source's webhook is a doorbell: the route rings it and
+    // drops the body, so there is nothing stored to show and nothing to map it
+    // with. Saying which is kinder than an empty table.
+    throw new Error("This source's webhook only triggers a refresh — its records arrive through the sync, not the delivery.");
+  }
+
+  // The CURRENT event-time answer, exactly as the pipeline resolves it, so the
+  // preview dates a delivery the way the next reprocess would.
+  const eventTime = eventTimeLive() ? { key: effectiveEventTimeKey(readEventTime(conn.config)) } : undefined;
+
+  const out: CanonicalEvent[] = [];
+  for (const r of rows) {
+    try {
+      out.push(
+        ...connector.normalize(r.payload, {
+          connectionId: conn.id,
+          headers: r.headers,
+          eventTime,
+          fallbackOccurredAt: r.receivedAt,
+        }),
+      );
+    } catch {
+      // One unmappable delivery must not hide the ones that mapped.
+    }
+    if (out.length >= n) break;
+  }
+
+  if (out.length === 0) {
+    const many = rows.length === 1 ? "1 delivery has" : `${rows.length} deliveries have`;
+    throw new Error(`${many} arrived, but none produced a countable record — check that the payload carries a date and the fields you expect.`);
+  }
+  return out.slice(0, n);
+}
+
 export async function previewLatest(orgId: string, id: string, n = 3): Promise<CanonicalEvent[]> {
   const db = getDb();
   const conn = await getConnection(orgId, id);
@@ -376,7 +486,14 @@ export async function previewLatest(orgId: string, id: string, n = 3): Promise<C
     if (connector?.poll) {
       throw new Error("Preview isn't available for this source yet — it syncs by polling, so records appear after the first sync.");
     }
-    throw new Error("Preview isn't available for this source (it's webhook-only — send a test event instead).");
+    // WEBHOOK-ONLY, which is not a reason to have nothing to show. There is no
+    // provider endpoint to call — that is what webhook-only means — but the
+    // deliveries are already sitting in our own table, so "send a test event
+    // instead" was telling someone to do the one thing that produces the answer
+    // and then refusing to show it to them. Zapier's catch hook is built
+    // entirely around this loop: send one, look at what landed, map the fields.
+    if (!connector) throw new Error(`No connector is registered for ${conn.source}.`);
+    return await previewDelivered(db, conn, connector, n);
   }
   // C17: Check if paused before attempting any fetch
   if (isPaused(conn)) {

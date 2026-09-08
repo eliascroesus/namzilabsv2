@@ -99,3 +99,77 @@ describe("catch-hook connector: normalization", () => {
     expect(n.eventId).toBe("webhook:conn-123:abc");
   });
 });
+
+describe("catch-hook connector: the envelope everyone actually posts", () => {
+  it("reads through a {type, data} wrapper — the shape Stripe made standard", () => {
+    const [ev] = catchHookConnector.normalize!(
+      { type: "order.created", data: { id: "ord_1", email: "a@b.io", amount: 42 } },
+      ctx,
+    );
+    // Before: no subject, no value, and an id hashed from the whole envelope.
+    expect(ev.eventId).toBe("webhook:conn-123:ord_1");
+    expect(ev.eventType).toBe("order.created");
+    expect(ev.subject).toBe("a@b.io");
+    expect(ev.value).toBe(42);
+  });
+
+  it("splits a batch, because fifty sales in one delivery are fifty events", () => {
+    const evs = catchHookConnector.normalize!(
+      { type: "orders.synced", events: [{ id: "a", amount: 1 }, { id: "b", amount: 2 }] },
+      ctx,
+    );
+    expect(evs).toHaveLength(2);
+    expect(evs.map((e) => e.eventId)).toEqual(["webhook:conn-123:a", "webhook:conn-123:b"]);
+    expect(evs.map((e) => e.value)).toEqual([1, 2]);
+    // The envelope's label rides along on every item.
+    expect(evs.map((e) => e.eventType)).toEqual(["orders.synced", "orders.synced"]);
+  });
+
+  it("the inner record wins a name collision with the envelope's label", () => {
+    const [ev] = catchHookConnector.normalize!({ id: "delivery_1", data: { id: "ord_9" } }, ctx);
+    expect(ev.eventId).toBe("webhook:conn-123:ord_9");
+  });
+
+  it("leaves a real record alone: two nested keys is data, not a wrapper", () => {
+    // `customer` and `line_items` are both objects, so this is somebody's order,
+    // not an envelope around one. Hoisting either would be a guess.
+    const [ev] = catchHookConnector.normalize!(
+      { id: "ord_2", email: "top@b.io", customer: { email: "inner@b.io" }, line_items: [{ sku: "x" }] },
+      ctx,
+    );
+    expect(ev.subject).toBe("top@b.io");
+    expect(ev.eventId).toBe("webhook:conn-123:ord_2");
+  });
+
+  it("leaves an unrecognised single wrapper alone rather than guessing", () => {
+    const [ev] = catchHookConnector.normalize!({ order: { id: "ord_3", email: "a@b.io" } }, ctx);
+    expect(ev.subject).toBeNull();
+    expect(ev.eventId).not.toContain("ord_3");
+  });
+
+  it("keeps the delivery verbatim in properties, so nothing hoisting missed is lost", () => {
+    const raw = { type: "t", data: { id: "1", weird_field: "keep me" } };
+    const [ev] = catchHookConnector.normalize!(raw, ctx);
+    expect(ev.properties).toMatchObject({ type: "t", weird_field: "keep me" });
+  });
+
+  it("dates a wrapped delivery from the ORIGINAL payload, so a data.* answer still resolves", () => {
+    const withKey = { ...ctx, eventTime: { key: "data.created_at" } };
+    const [ev] = catchHookConnector.normalize!(
+      { type: "t", data: { id: "1", created_at: "2026-03-04T05:06:07Z" } },
+      withKey,
+    );
+    expect(ev.occurredAt.toISOString()).toBe("2026-03-04T05:06:07.000Z");
+  });
+
+  it("dates each item of a split batch from the item itself", () => {
+    const evs = catchHookConnector.normalize!(
+      { events: [{ id: "a", occurred_at: "2026-01-01T00:00:00Z" }, { id: "b", occurred_at: "2026-02-02T00:00:00Z" }] },
+      ctx,
+    );
+    expect(evs.map((e) => e.occurredAt.toISOString())).toEqual([
+      "2026-01-01T00:00:00.000Z",
+      "2026-02-02T00:00:00.000Z",
+    ]);
+  });
+});

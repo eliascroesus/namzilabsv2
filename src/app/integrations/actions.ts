@@ -11,6 +11,7 @@ import {
   reconnectConnection,
   updateConnectionName,
   getConnection,
+  enableWebhookSigning,
 } from "@/lib/connections";
 import { catalogEntry } from "@/connectors/catalog";
 import { getConnector } from "@/connectors/registry";
@@ -193,6 +194,33 @@ export async function importHistoryAction(formData: FormData): Promise<void> {
     if (stream.status === "disabled") continue;
     await requestBackfill(db, { id: stream.id, orgId, connectionId: id, configHash: stream.configHash }, conn.source, target);
   }
+  redirect(`/connections/${id}`);
+}
+
+/**
+ * Close an open catch-hook: mint a signing secret and require it from then on.
+ *
+ * The hook ships OPEN, because an app that has no Namzilabs integration can only
+ * be pointed at a URL — asking it to sign first would put a wall in front of the
+ * one feature that exists to have no wall. Signing is therefore the second step,
+ * taken once the sender is known to work and known to be able to sign, which is
+ * the same order Zapier, Make and n8n put these in.
+ *
+ * One-way on purpose. There is no matching "turn it off": a customer who has
+ * told their sender to sign has a working signed hook, and an endpoint that
+ * could be re-opened by one click is a weaker promise than one that cannot.
+ * Removing signing means making a new connection, which forces the sender to be
+ * re-pointed — exactly the deliberate act that should be required.
+ */
+export async function enableSigningAction(formData: FormData): Promise<void> {
+  const ctx = await requireOrg();
+  const { orgId } = ctx;
+  if (await blockedFromManagingIntegrations(ctx)) throw new Error(RANK_BLOCKS_INTEGRATIONS);
+  const id = String(formData.get("id") ?? "");
+  const conn = await getConnection(orgId, id);
+  if (!conn) throw new Error("connection not found");
+  await enableWebhookSigning(orgId, id);
+  revalidatePath(`/connections/${id}`);
   redirect(`/connections/${id}`);
 }
 

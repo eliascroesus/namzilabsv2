@@ -11,6 +11,7 @@ import { headersToObject } from "@/lib/http";
 import { decrypt, getEncryptionKey } from "@/lib/crypto";
 import { promoteToBaseCadence } from "@/lib/sync/cadence";
 import { recordRejectedDelivery } from "@/lib/webhooks/rejections";
+import { parseWebhookBody, challengeFrom } from "@/lib/webhooks/parse-body";
 
 export const runtime = "nodejs";
 
@@ -52,6 +53,34 @@ const MAX_BODY_BYTES = 1_000_000;
  *   4. hand off to the durable queue for out-of-band processing.
  * No slow work happens inside the request.
  */
+/**
+ * The verification handshake, and the thing a customer does first.
+ *
+ * Several platforms refuse to SAVE a webhook URL until it answers a GET with a
+ * challenge echoed back verbatim, and a customer pasting the URL into a browser
+ * is doing the same thing by hand. Answering 405 to both — which is what a
+ * POST-only route does — reads as "your URL is broken" at the exact moment
+ * someone is deciding whether this product works.
+ *
+ * Deliberately says nothing about the connection beyond that it exists: this
+ * endpoint is public, so a 200 must not become an oracle for anything else.
+ */
+export async function GET(req: Request, ctx: { params: Promise<{ connectionId: string }> }) {
+  const { connectionId } = await ctx.params;
+  const db = getDb();
+  const [conn] = await db
+    .select({ id: connections.id, status: connections.status })
+    .from(connections)
+    .where(eq(connections.id, connectionId))
+    .limit(1);
+  if (!conn) return NextResponse.json({ error: "unknown connection" }, { status: 404 });
+  if (conn.status === "disabled") return NextResponse.json({ error: "connection disabled" }, { status: 403 });
+
+  const challenge = challengeFrom(new URL(req.url).searchParams);
+  if (challenge) return new NextResponse(challenge, { status: 200, headers: { "content-type": "text/plain; charset=utf-8" } });
+  return NextResponse.json({ ok: true, ready: true });
+}
+
 export async function POST(req: Request, ctx: { params: Promise<{ connectionId: string }> }) {
   const { connectionId } = await ctx.params;
   const db = getDb();
@@ -176,12 +205,12 @@ export async function POST(req: Request, ctx: { params: Promise<{ connectionId: 
     return NextResponse.json({ ok: true, swept: "connection" }, { status: 202 });
   }
 
-  let payload: unknown;
-  try {
-    payload = rawBody ? JSON.parse(rawBody) : {};
-  } catch {
-    payload = { _raw: rawBody };
-  }
+  // A catch-all URL has to understand what senders actually post: form bodies,
+  // JSON with a wrong or absent Content-Type, and the query string — all of
+  // which used to land as one opaque `{_raw: "…"}` with no readable field.
+  // Signature verification above ran on the RAW bytes, which is the only thing
+  // an HMAC can be computed over, so parsing here cannot weaken it.
+  const { payload } = parseWebhookBody(rawBody, req.headers.get("content-type"), new URL(req.url).searchParams);
 
   const raw = await storeRawEvent(db, {
     orgId: conn.orgId,

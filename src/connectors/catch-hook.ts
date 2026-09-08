@@ -28,10 +28,67 @@ export const catchHookConnector: Connector = {
   },
 
   normalize(rawPayload: unknown, ctx: NormalizeContext): CanonicalEvent[] {
-    const items = Array.isArray(rawPayload) ? rawPayload : [rawPayload];
-    return items.map((item, index) => toCanonical(item, ctx, index));
+    const { items, split } = unwrap(rawPayload);
+    // `split` says an ENVELOPE was opened, and it decides what gets dated.
+    // A single-item delivery is dated from the ORIGINAL payload, unchanged:
+    // `valueAt` already walks one level, so a connection that answered
+    // "data.created_at" keeps resolving, which it would not if dating moved to
+    // the unwrapped view. A batch that was split has no such answer to protect
+    // — it used to arrive as ONE event — so each item is dated from itself.
+    return items.map((item, index) => toCanonical(item, ctx, index, split ? item : rawPayload));
   },
 };
+
+/** Keys that carry the real content of a delivery rather than being content. */
+const ENVELOPE_KEYS = ["data", "payload", "event", "body", "object", "events", "items", "records", "results", "entries"];
+
+/**
+ * Open the envelope, if there is one.
+ *
+ * Almost nobody posts a bare event. They post `{"type": "order.created",
+ * "data": {...}}` (Stripe's shape, and by imitation half the web) or
+ * `{"events": [...]}` for a batch. Read literally, the first has no email and
+ * no amount at the top level — so subject and value came out empty — and the
+ * second counted fifty sales as one event, which is not a missing feature but a
+ * wrong number.
+ *
+ * The rule is deliberately narrow, because guessing wrong here silently
+ * discards a customer's data: unwrap only when EXACTLY ONE key holds an object
+ * or array and every other key is a scalar. That one key is then the content
+ * and the scalars beside it are its labels — `type`, `id`, `timestamp` — which
+ * is why they are merged back in underneath, with the inner values winning. Two
+ * object-valued keys means the shape is somebody's real record, not a wrapper,
+ * and it is left exactly as it came.
+ *
+ * Nothing is lost either way: `properties` on every event is the payload as
+ * delivered, so a flow can still map a field this never hoisted.
+ */
+function unwrap(payload: unknown): { items: unknown[]; split: boolean } {
+  if (Array.isArray(payload)) return { items: payload, split: true };
+  if (!payload || typeof payload !== "object") return { items: [payload], split: false };
+
+  const obj = payload as Record<string, unknown>;
+  const keys = Object.keys(obj);
+  const nested = keys.filter((k) => obj[k] !== null && typeof obj[k] === "object");
+  if (nested.length !== 1) return { items: [payload], split: false };
+
+  const key = nested[0]!;
+  if (!ENVELOPE_KEYS.includes(key)) return { items: [payload], split: false };
+
+  const scalars: Record<string, unknown> = {};
+  for (const k of keys) if (k !== key) scalars[k] = obj[k];
+
+  const inner = obj[key];
+  if (Array.isArray(inner)) {
+    // A batch. Each item carries the envelope's labels so `type` and friends
+    // survive, and one delivery of N records becomes N events.
+    return {
+      items: inner.map((it) => (it && typeof it === "object" && !Array.isArray(it) ? { ...scalars, ...(it as object) } : it)),
+      split: true,
+    };
+  }
+  return { items: [{ ...scalars, ...(inner as object) }], split: false };
+}
 
 /** Standard-webhooks delivery id headers (stable across redeliveries of one message). */
 function deliveryId(headers: Record<string, string> | undefined): string | null {
@@ -43,7 +100,7 @@ function deliveryId(headers: Record<string, string> | undefined): string | null 
   return null;
 }
 
-function toCanonical(item: unknown, ctx: NormalizeContext, index: number): CanonicalEvent {
+function toCanonical(item: unknown, ctx: NormalizeContext, index: number, dateSource: unknown): CanonicalEvent {
   const obj: Record<string, unknown> =
     item && typeof item === "object" ? (item as Record<string, unknown>) : { value: item };
 
@@ -51,15 +108,17 @@ function toCanonical(item: unknown, ctx: NormalizeContext, index: number): Canon
   // business record; (2) the delivery id header (standard-webhooks/svix) —
   // identical on every redelivery of the same message but distinct for two
   // deliveries that happen to carry equal payloads; (3) payload hash, last
-  // resort. Array payloads suffix the item index so one delivery of N items
-  // stays N events.
+  // resort. The item INDEX is part of both fallbacks: a batch of N items that
+  // carry no ids of their own is still N events, and two byte-identical rows in
+  // one delivery — two sales of the same product at the same second, say — must
+  // not collapse into one.
   const natural = firstString(obj, ["id", "event_id", "eventId", "uuid", "ID"]);
   const delivery = deliveryId(ctx.headers);
   const eventId = natural
     ? `webhook:${ctx.connectionId}:${natural}`
     : delivery
       ? `webhook:${ctx.connectionId}:delivery:${delivery}:${index}`
-      : hashId(`webhook:${ctx.connectionId}`, obj);
+      : hashId(`webhook:${ctx.connectionId}:${index}`, obj);
 
   const eventType = firstString(obj, ["event_type", "eventType", "type", "event"]) ?? "webhook.received";
   const subject = firstString(obj, ["email", "subject", "phone", "contact", "name", "user"]);
@@ -85,7 +144,11 @@ function toCanonical(item: unknown, ctx: NormalizeContext, index: number): Canon
    * exactly what `EventTimeState.coverage` counts — so the number that says
    * "20 of 25 would fall back" is the number that happens.
    */
-  const occurredAt = ctx.eventTime ? resolvedDate(obj, ctx.eventTime.key, ctx) : legacyDate(obj, ctx);
+  const dated: Record<string, unknown> =
+    dateSource && typeof dateSource === "object" && !Array.isArray(dateSource)
+      ? (dateSource as Record<string, unknown>)
+      : obj;
+  const occurredAt = ctx.eventTime ? resolvedDate(dated, ctx.eventTime.key, ctx) : legacyDate(dated, ctx);
 
   return { eventId, eventType, subject, occurredAt, value, properties: obj };
 }

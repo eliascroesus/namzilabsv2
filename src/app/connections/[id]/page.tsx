@@ -14,6 +14,7 @@ import {
   syncNewAction,
   fullResyncAction,
   reprocessAction,
+  enableSigningAction,
 } from "@/app/integrations/actions";
 import { getReadDb } from "@/db/client";
 import { unresolvedDeadLetters } from "@/lib/dead-letter";
@@ -236,6 +237,26 @@ export default async function ConnectionPage({
                   connect dialog uses to stop asking for that key twice. */}
               {signingSecret && !getConnector(conn.source)?.webhookSecretFromCredentials && (
                 <CopyField label="Signing secret" value={signingSecret} />
+              )}
+              {/* NO SECRET means this hook is OPEN, which is deliberate: an app
+                  with no Namzilabs integration can only be pointed at a URL, and
+                  demanding a signature first would wall off the one feature that
+                  exists to have no wall. Signing is the SECOND step, offered
+                  here once the sender is known to work — the order Zapier, Make
+                  and n8n all use. Saying so in the open state matters as much as
+                  the button: an endpoint whose protection is invisible is one a
+                  customer cannot reason about. */}
+              {!signingSecret && (
+                <form action={enableSigningAction} className="mt-3 flex flex-wrap items-center gap-3">
+                  <input type="hidden" name="id" value={conn.id} />
+                  <p className="min-w-0 flex-1 text-sm text-muted-foreground">
+                    Anyone with this URL can post to it. Once your app is sending, you can require a signature on every
+                    delivery.
+                  </p>
+                  <Button type="submit" variant="secondary" size="sm">
+                    Require signature
+                  </Button>
+                </form>
               )}
               {/* Only the catch-hook has this question. Every other source reads a
                   documented timestamp field of its own, so there is nothing to
