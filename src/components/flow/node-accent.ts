@@ -44,17 +44,31 @@ export const NODE_ACCENT: Record<string, string> = {
  * them and leave the rainbow lopsided — two blues, no yellow at all. These are
  * every ~30° from red to pink, so the picker reads as a spectrum.
  *
- * EVERY ONE IS SOLVED, NOT CHOSEN: the most vivid version of its hue that still
- * clears 3.05:1 against white. A hue too light at full saturation is darkened;
- * one too dark is lightened TOWARD WHITE, which is what makes indigo a
- * periwinkle rather than ink. Run that rule against the old values and it
- * reproduces them — blue comes back as the identical #009ED3 — which is how it
- * was checked before the rest were re-solved by it.
+ * EVERY ONE IS SOLVED, NOT CHOSEN — AND THE GROUND THEY ARE SOLVED AGAINST
+ * INVERTED ON 8 SEPTEMBER 2026. These used to be the most vivid version of each
+ * hue that still cleared 3.05:1 against WHITE, because a group dot and a tile
+ * accent sat on a white card. They now sit on #191919.
  *
- * `amber` is the honest cost of the rule. Real yellow measures about 1.1:1 on
- * white, so the brightest yellow that can also be an 8px dot on a white card is
- * a gold. Naming it amber is more truthful than shipping a yellow nobody can
- * see and calling the contrast rule optional.
+ * That is not a cosmetic difference, it reverses the direction of the whole
+ * solve. On white the bar capped how LIGHT a hue could be, so the rule darkened
+ * anything too pale; on near-black it caps how DARK it can be, so the rule
+ * lightens anything too deep. Run the old values against the new ground and
+ * they technically pass — every one clears 3:1 — but they cluster just above
+ * the floor (grey at 3.09:1), which on white was the BRIGHT end of the legal
+ * range and here is the dim one. They read as mud.
+ *
+ * So each hue is taken to the most saturated version that clears the bar with
+ * MARGIN rather than the least. Measured on #191919: grey 5.09, red 6.32,
+ * orange 7.50, amber 7.75, olive 8.78, green 8.25, teal 8.31, cyan 8.04,
+ * blue 7.48, indigo 7.38, violet 7.21, pink 6.89.
+ *
+ * `amber` stops being the honest cost of the rule, and it is worth recording
+ * why. On white, real yellow measures about 1.1:1, so the brightest yellow that
+ * could also be an 8px dot was a gold — and naming it amber was more truthful
+ * than shipping a yellow nobody could see. On near-black that constraint simply
+ * does not exist: yellow is one of the EASIEST hues to clear a dark ground
+ * with. The name is kept because a stored key may never change, but the value
+ * is no longer apologising for anything.
  *
  * NO KEY IS EVER REMOVED, only added. A group stores the key, so dropping one
  * would silently reset every column wearing it to grey.
@@ -70,25 +84,26 @@ export const NODE_ACCENT: Record<string, string> = {
  * to answer a node-type lookup is a coincidence waiting to be a bug.
  *
  * `grey` is the exception to the solve, and deliberately: it is the "no colour"
- * default, so it comes from the kit's own warm neutral ramp
- * (`--color-neutral-500`, the same value `--muted-foreground` uses) rather than
- * being pushed to the contrast edge. A neutral has no vividness to preserve,
- * and the edge-solved version was a washed-out beige that read as a rendering
- * fault next to eleven confident hues.
+ * default, so it is a plain neutral rather than a hue pushed to the contrast
+ * edge. A neutral has no vividness to preserve, and the edge-solved version was
+ * a washed-out beige that read as a rendering fault next to eleven confident
+ * hues. It is re-cut for the dark card like everything else here (#8A8A8A,
+ * 5.09:1) — the old #6b6660 was a WARM grey solved for white, and on #191919 it
+ * was both the dimmest value in the map and the only one with a colour cast.
  */
 export const GROUP_ACCENT: Record<string, string> = {
-  grey: "#6b6660", //      --color-neutral-500, the kit's own warm grey
-  red: "#FF5B55", //   2°
-  orange: "#ED6E00", //  28°
-  amber: "#BB8C00", //  45°
-  olive: "#78A000", //  75°
-  green: "#00AB17", // 128°
-  teal: "#00A780", // 166°
-  cyan: "#00A0C8", // 192°
-  blue: "#2B95FF", // 210°
-  indigo: "#9382FF", // 248°
-  violet: "#DD57FF", // 288°
-  pink: "#FF4DA6", // 330°
+  grey: "#8A8A8A", //      the "no colour" default, re-cut for the dark card
+  red: "#FF6B66", //   2°
+  orange: "#FF8A3D", //  28°
+  amber: "#D9A400", //  45°
+  olive: "#9BC61F", //  75°
+  green: "#2ECC4A", // 128°
+  teal: "#1FC9A0", // 166°
+  cyan: "#22BEE8", // 192°
+  blue: "#5AAEFF", // 210°
+  indigo: "#A99BFF", // 248°
+  violet: "#E27DFF", // 288°
+  pink: "#FF6FBA", // 330°
 };
 
 /** The order the picker offers them in — round the wheel, grey first. */

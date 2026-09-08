@@ -15,7 +15,7 @@ import { adoptDefaultView } from "@/lib/board/store";
 import { compact, GRID_COLS } from "@/lib/board/grid";
 import { asPreset } from "@/lib/board/presets";
 import { BLOCK_IDS, CHART_IDS, asChartId, blockKindOf, defaultSize, minSize } from "@/lib/board/charts";
-import { parseTileConfig, TILE_CONFIG_KEYS } from "@/lib/board/tile-config";
+import { parseTileConfig, randomTileColour, TILE_CONFIG_KEYS } from "@/lib/board/tile-config";
 import { asViewKind, UNSET_TILE_KEY, visibilityKeyOf, type BoardTileRow } from "@/lib/board/types";
 import { GROUP_ACCENT } from "@/components/flow/node-accent";
 import type { BoardGroup } from "@/lib/board/types";
@@ -1183,6 +1183,20 @@ export async function addCustomTileAction(
     } catch {
       config = {};
     }
+
+    /**
+     * THE TILE ARRIVES WEARING A COLOUR.
+     *
+     * Applied AFTER the seed block, so the `catch` path that resets `config`
+     * to `{}` cannot swallow it — a tile whose flow seed failed to read is
+     * still a tile, and it should still be coloured.
+     *
+     * Not folded into `parseTileConfig` above: the seed parse is best-effort
+     * decoration that is allowed to fail, and this is not. `randomTileColour`
+     * returns a `GROUP_ACCENT` key by construction, which is the same
+     * guarantee the schema's own `color` refinement enforces on the write path.
+     */
+    config = { ...config, color: randomTileColour() };
 
     const row: BoardTileRow = {
       id: crypto.randomUUID(),

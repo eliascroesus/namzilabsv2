@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { GROUP_ACCENT } from "@/components/flow/node-accent";
+import { GROUP_ACCENT, GROUP_COLOR_KEYS } from "@/components/flow/node-accent";
 import { MATERIALIZED_RANGES, type RangeKey } from "@/lib/metrics/range";
 import type { ChartId } from "./charts";
 
@@ -118,11 +118,13 @@ export function parseTileConfig(raw: unknown): TileConfig {
  * to the kit's own mark colour instead of rendering `undefined` into a style
  * attribute. The same argument `node-accent.ts` makes for group colours.
  *
- * THE DEFAULT IS `--color-brand-500`, NOT `--primary`. As of the 4 Sep 2026
- * blue retheme the ramp splits the two jobs the old single brand token did:
- * `--color-brand-600` (`--primary`) is the FILL controls take under white
- * ink, and `--color-brand-500` (`#007BFF`) is the chart-series step — the
- * colour a tile with no `GROUP_ACCENT` colour of its own draws in.
+ * THE DEFAULT IS `--color-brand-400`, WHICH IS ALSO `--primary`, and the
+ * collapse is the point. The 4 Sep blue ramp had to split these: `600` was the
+ * fill controls took under white ink and `500` was the chart-series step,
+ * because blue sat too tight under white for one value to do both. The lime
+ * has 11.59:1 under its ink and 15.53:1 as a mark on the page, so `400` is the
+ * fill, the stroke and the series at once — a tile with no `GROUP_ACCENT`
+ * colour of its own draws in the brand itself, exactly as the Figma does.
  */
 export function accentOf(color?: string): string {
   /**
@@ -131,7 +133,34 @@ export function accentOf(color?: string): string {
    * which React stringifies into the style attribute. An own-property check
    * closes the write path and degrades anything already stored to the default.
    */
-  return color && Object.hasOwn(GROUP_ACCENT, color) ? GROUP_ACCENT[color] : "var(--color-brand-500)";
+  return color && Object.hasOwn(GROUP_ACCENT, color) ? GROUP_ACCENT[color] : "var(--color-brand-400)";
+}
+
+/**
+ * THE COLOUR A NEWLY CREATED TILE WEARS.
+ *
+ * Every tile used to land on the column's `grey` default, so a fresh board was
+ * a dozen identical grey cards and the customer had to colour each one by hand
+ * before the board could be read at a glance. A tile now arrives wearing one.
+ *
+ * CHOSEN AT CREATION, NOT AT RENDER. A colour re-rolled on every read would
+ * change under the customer while they are looking at it, and would differ
+ * between two people opening the same board — this is workspace furniture, and
+ * furniture that moves is a bug. Storing it at insert makes it a fact about
+ * the tile rather than a property of the moment it was drawn.
+ *
+ * Stored as a KEY like every other tile colour, so re-solving the palette for
+ * a new surface restyles every board at once with no backfill — which is what
+ * the 8 September re-cut actually did.
+ *
+ * `grey` is excluded deliberately. It is the "no colour" default an unknown key
+ * degrades to, so handing it out as a CHOICE would make "never set" and
+ * "deliberately neutral" indistinguishable for ever after. The column keeps its
+ * `grey` default for rows written by anything but this function.
+ */
+export function randomTileColour(): string {
+  const hues = GROUP_COLOR_KEYS.filter((k) => k !== "grey");
+  return hues[Math.floor(Math.random() * hues.length)];
 }
 
 /**
