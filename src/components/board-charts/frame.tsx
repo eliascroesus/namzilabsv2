@@ -176,10 +176,20 @@ export function ChartFrame({
           number by six pixels is a suffix on the figure, a chip at the far end
           of the row is the card's second column.
 
-          `justify-between` with no gap of its own, exactly as `MetricCard`
-          spells it, so the two cards cannot drift apart again. */}
+          `justify-between`, exactly as `MetricCard` spells it, so the two cards
+          cannot drift apart again.
+
+          IT WRAPS, AND THAT IS THE OTHER HALF OF THE NUMERAL'S `nowrap`. The
+          figure must never break — "0h 8m 39s" split across three lines used to
+          push a tile past its own grid row — but a figure that cannot break and
+          a chip that cannot shrink is a row that simply overflows, and the card
+          clips it: the chip rendered as "−50% vs yes…" against the card's edge.
+          The Figma's own tile is ~400px and fits both on one line; a
+          three-column tile at 1440px is ~265px and cannot. Wrapping is what
+          makes the narrow case degrade instead of truncate — the chip drops to
+          its own line under the number rather than being cut in half. */}
       {headline !== undefined && (
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
           {/* NO `leading-none`. The step's own line-height is 40px
               (`--text-display-md--line-height`) and that is exactly what the
               export measures on a chart card's figure — the metric card is

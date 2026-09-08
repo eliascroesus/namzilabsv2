@@ -174,7 +174,7 @@ export function MetricCard({
           rather than as the card's second column. */}
       <div className="flex min-h-0 flex-1 flex-col justify-center p-4">
         {headline !== undefined && (
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
             {/* `text-heading`, SAID OUT LOUD. It used to inherit
                 `--card-foreground` and looked right, because in the dark
                 theme `--heading` and `--foreground` are the same white. In

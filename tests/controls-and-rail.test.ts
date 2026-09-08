@@ -105,15 +105,27 @@ describe("the top bar's centre belongs to the builder, not to a greeting", () =>
 });
 
 describe("a chart card's delta sits BESIDE its number, at the far end", () => {
-  it("puts the figure and the chip on one justify-between row", () => {
+  it("puts the figure and the chip on one justify-between row, and lets it wrap", () => {
     /**
      * It was stacked underneath on `mt-1.5`. The export draws the same row the
      * metric card does — figure hard left, chip hard right, the whole width
      * between them — and that gap is what stops the two competing.
+     *
+     * `flex-wrap` since 8 Sep 2026, and it is the other half of the numeral's
+     * `whitespace-nowrap`. The figure must never break: "0h 8m 39s" split
+     * across three lines pushed its tile past its own grid row and left the
+     * card below overlapping the card above. But a figure that cannot break
+     * beside a chip that cannot shrink is a row that overflows, and the card
+     * clips it — the chip rendered as "−50% vs yes…" against the card's edge.
+     * The Figma's tile is ~400px and fits both; a three-column tile at 1440px
+     * is ~265px and cannot. Wrapping degrades instead of truncating.
      */
     const c = code(frame);
-    expect(c).toMatch(/<div className="flex items-center justify-between gap-3">[\s\S]{0,400}\{delta\}/);
+    expect(c).toMatch(
+      /<div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">[\s\S]{0,400}\{delta\}/,
+    );
     expect(c, "the stacked wrapper is gone").not.toMatch(/\{delta && <div className="mt-1\.5">/);
+    expect(c, "and the figure itself still never breaks").toMatch(/stat-numeral whitespace-nowrap/);
   });
 });
 
