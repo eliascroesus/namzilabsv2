@@ -182,6 +182,21 @@ export async function AppShell({
          frame is taken against a 1660px content column, which is 1920 less a
          260px rail, and the rail is 260px unconditionally. */
       workspace={workspace}
+      /**
+       * THE NAME BESIDE THE AVATAR, WHICH WAS NEVER ACTUALLY PASSED.
+       *
+       * `TopBar` has accepted this through three re-themes and no caller
+       * has set it since the greeting was deleted — so the bar rendered the
+       * avatar and the gift with a gap where the name goes, on every route, and
+       * nothing failed because an optional prop nobody passes is not an error.
+       * Node 58:5930 draws it as "Elias Andersson" at 14px/600.
+       *
+       * `displayName`, not a first name: `getProfile` returns the whole name
+       * the customer set, and the Figma shows both parts. Null when the profile
+       * has none, which is the case the bar already guards — it renders the
+       * avatar alone rather than an empty span.
+       */
+      accountName={profile.displayName ?? undefined}
       views={await railViewsP}
       account={{
         initials,

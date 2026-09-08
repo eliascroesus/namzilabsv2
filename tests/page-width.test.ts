@@ -490,6 +490,57 @@ describe("the rail is always open", () => {
   });
 });
 
+/**
+ * THE PROP THAT WAS ACCEPTED, DOCUMENTED, AND NEVER PASSED.
+ *
+ * `TopBar` took a name for the account cluster through three re-themes and no
+ * caller ever set it, so the bar rendered an avatar and a gift with a gap
+ * where the name goes — on every authenticated route, in production. Nothing
+ * failed: an optional prop nobody passes is not a type error, not a lint
+ * error, and not visible to any test that reads one file at a time.
+ *
+ * Elias found it by looking at the app ("make sure the fucking top bar is
+ * fixed"), which is the second thing on that screen a person had to catch for
+ * us. This is the cheap half of not needing them to: the chain is asserted
+ * end to end, so a link that goes missing again fails here rather than
+ * shipping as a blank space.
+ *
+ * It is a SOURCE assertion because the shell is an async server component that
+ * fetches WorkOS memberships and a profile before it renders; standing that up
+ * to check one prop costs more than the prop is worth, and would test the
+ * mocks rather than the wiring.
+ */
+describe("the account name reaches the bar", () => {
+  const shell = read("src/components/app-shell.tsx");
+  const bar = read("src/components/top-bar.tsx");
+  const code = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+
+  it("the shell fills it from the profile", () => {
+    expect(code(shell), "AppShell must pass a name").toMatch(/accountName=\{profile\.displayName/);
+  });
+
+  it("the frame passes it straight through", () => {
+    const f = code(read("src/components/app-frame.tsx"));
+    expect(f).toMatch(/accountName,/);
+    expect(f).toMatch(/accountName=\{accountName\}/);
+  });
+
+  it("the bar renders it, and guards the empty case", () => {
+    const b = code(bar);
+    expect(b).toMatch(/\{accountName && \(/);
+    expect(b).toMatch(/\{accountName\}<\/span>/);
+  });
+
+  it("is not called firstName, because it holds a full name", () => {
+    // `getProfile` returns the whole name the customer set — "Elias Andersson"
+    // in node 58:5930, not "Elias". A prop named for the wrong half is how the
+    // next person truncates it.
+    for (const src of [shell, bar, read("src/components/app-frame.tsx")]) {
+      expect(code(src)).not.toMatch(/\bfirstName\b/);
+    }
+  });
+});
+
 describe("the frame's new shape — a full-width bar over [rail | panel]", () => {
   const frame = read("src/components/app-frame.tsx");
   const bar = read("src/components/top-bar.tsx");

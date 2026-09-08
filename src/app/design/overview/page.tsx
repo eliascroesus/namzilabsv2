@@ -210,6 +210,10 @@ export default async function OverviewLab({
         { id: "v3", name: "Calendar", pos: "c", kind: "calendar" },
       ]}
       workspace="Personal Workspace"
+      /* The name beside the avatar, as node 58:5930 draws it. The real shell
+         passes profile.displayName; this page is the only public place the
+         full bar can be seen, so it has to carry one too. */
+      accountName="Elias Andersson"
       surface="overflow-y-auto bg-panel"
       account={{ initials: "EL", panel: <p className="text-sm text-muted-foreground">elias@namzilabs.co</p> }}
     >

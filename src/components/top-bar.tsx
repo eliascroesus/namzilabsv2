@@ -48,21 +48,27 @@ import { cn } from "@/lib/utils";
 
 export function TopBar({
   account,
-  firstName,
+  accountName,
   menu,
   unread = 1,
 }: {
   account?: { initials: string; avatarUrl?: string | null; panel: ReactNode };
   /**
-   * The signed-in person's first name, beside their avatar.
+   * The signed-in person's name, beside their avatar (node 58:5930).
    *
-   * IT HAS A CONSUMER AGAIN. This prop spent two re-themes accepted-and-unused
-   * — it was the greeting's name, the greeting was deleted, and it stayed on
-   * the type because `AppShell` passed it and the bar was where a greeting
-   * would return. The Figma puts the name in the chrome permanently, next to
-   * the avatar, which is the use this was always waiting for.
+   * IT WAS `firstName`, AND IT WAS BOTH UNUSED AND MISNAMED. The prop spent
+   * three re-themes accepted-and-never-passed — it was the greeting's name, the
+   * greeting was deleted, and it stayed on the type because a caller was
+   * *believed* to pass it. None did, so the bar rendered the avatar and the
+   * gift with a gap where the name goes, on every route, and nothing failed
+   * because an optional prop nobody sets is not an error.
+   *
+   * Renamed with the fix: `AppShell` supplies `profile.displayName`, which is
+   * the whole name the customer set — "Elias Andersson" in the Figma, not
+   * "Elias". A prop called `firstName` holding a full name is the kind of lie
+   * that survives for years.
    */
-  firstName?: string;
+  accountName?: string;
   /**
    * The phone's way into the navigation — `MobileDrawer`, built by
    * `AppFrame` and handed down as a node.
@@ -100,8 +106,8 @@ export function TopBar({
             )}
           </Link>
         )}
-        {firstName && (
-          <span className="hidden shrink-0 text-sm font-semibold text-chrome-foreground sm:inline">{firstName}</span>
+        {accountName && (
+          <span className="hidden shrink-0 text-sm font-semibold text-chrome-foreground sm:inline">{accountName}</span>
         )}
 
         {/* THE OFFER, WITH A DOT ON IT. It was "Get Free Access" — a filled

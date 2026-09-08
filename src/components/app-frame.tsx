@@ -6,29 +6,37 @@ import { cn } from "@/lib/utils";
 import type { BoardView } from "@/lib/board/types";
 
 /**
- * THE FRAME — a full-width bar above a row of [rail | panel].
+ * THE FRAME — a full-height rail, then a column of [bar | panel].
  *
- * IT USED TO RUN THE OTHER WAY: the rail full height on the left, the bar
- * confined to the content column beside it, on the argument that a bar
+ * IT RAN THE OTHER WAY FOR FOUR DAYS: a full-width bar across the top with the
+ * rail hanging beneath its left end. The argument for it was that a bar
  * spanning both would put the workspace switcher above the navigation that
- * switches it. That argument dissolved when the switcher moved OFF the bar
- * and into the rail's own head block (see `Sidebar`) — there is no longer
- * anything in the bar for the rail to sit "above" in that sense, and the
- * Figma this re-theme follows draws one continuous bar across the top with
- * the rail hanging beneath its left end, which is what this file now does.
+ * switches it — true when the switcher was IN the bar, and moot once it moved
+ * into the rail's own head block.
  *
- * THREE SURFACES, NOT ONE. The bar and the rail are `--chrome`; the panel
- * under them is `--panel`, its own material, which is what gives a corner
- * something to reveal again after two days at `--radius-frame: 0`.
+ * Both 8 September frames draw the row, and their metadata is exact about it:
+ * in 58:5824 the sidebar is `x=0 y=0 260x1200`, the FULL height of the frame,
+ * and the top bar is `x=260 y=0 1660x65` — a child of the content column, not
+ * a sibling above it.
  *
- * IT IS THE TOP-RIGHT CORNER, AND THAT REVERSES THIS FILE'S OWN HISTORY.
- * Every previous era cut the panel's TOP-LEFT — the corner nearest the rail —
- * because the rail was a different material and the notch was how the page
- * wrapped around it. The 4 September Figma does not: the panel butts square
- * against the rail behind a hairline, and the corner it softens is the far
- * one, under the bar at the opposite end of the row. Followed literally
- * rather than corrected toward the old convention, and pinned in
- * `tests/page-width.test.ts` so the convention cannot quietly reassert itself.
+ * THE SYMPTOM OF HAVING IT BACKWARDS was reported as "the navbars are
+ * overlapping wrong entirely": the account cluster sat above the workspace
+ * switcher instead of beside it, and the rail began 60px down a screen where
+ * the design starts it at zero. `pnpm geometry` measures both boxes against
+ * those numbers now, because no source-reading test can see a laid-out pixel.
+ *
+ * TWO MATERIALS, AND ONLY ONE OF THEM HAS A THEME. The rail and the bar are
+ * `--chrome`, which is #121214 in BOTH themes — 49:5268 and 58:5824 draw that
+ * band identically and only the content beside it goes light. The panel is
+ * `--panel`, which does flip. That is why the chrome has its own ink, hairline
+ * and control roles (`--chrome-*`): it cannot borrow the content's, because it
+ * is not on the content's ground.
+ *
+ * THE NOTCH IS 0 AGAIN. `--radius-frame` cuts the panel's top-RIGHT corner —
+ * the far one, under the bar, which reversed this file's own convention when
+ * the 4 September Figma drew it there. It reveals whatever is behind it, and
+ * page, chrome and panel are one colour on dark now, so it reveals nothing.
+ * The spelling stays for the day the surfaces separate again.
  *
  * `surface` is still the caller's, because the pages genuinely disagree about
  * SCROLLING: list pages scroll, the builder does not.
@@ -36,7 +44,7 @@ import type { BoardView } from "@/lib/board/types";
 export function AppFrame({
   account,
   workspace,
-  firstName,
+  accountName,
   views,
   surface,
   hide,
@@ -47,14 +55,14 @@ export function AppFrame({
   /** The workspace's own name — shown beside its avatar in the rail's own head block, not the top bar (see `Sidebar`). */
   workspace?: string;
   /**
-   * The signed-in person's first name, for the top bar's greeting.
+   * The signed-in person's name, for the top bar's account cluster.
    *
-   * A SEAM, not a decoration: the greeting falls back to a nameless "Welcome
-   * back!" until something upstream can supply this, and the shell is the only
-   * place that can — it is the one component in the frame that has already
-   * resolved the session.
+   * A PASS-THROUGH the shell is the only place that can fill: it is the one
+   * component in the frame that has already resolved the session and read the
+   * profile. It was `firstName` and went unpassed for three re-themes — see
+   * the note on `TopBar`'s own prop.
    */
-  firstName?: string;
+  accountName?: string;
   /**
    * The workspace's dashboard views, for the rail's nested list under Dashboard.
    *
@@ -114,30 +122,6 @@ export function AppFrame({
    * so the kit page keeps its white sheet (`bg-card`) and the builder keeps
    * the canvas grey it pans over (`bg-canvas-bg`) by SAYING so, and every
    * other route gets the ground without mentioning it.
-   */
-  /**
-   * THE NOTCH IS BACK, ON THE OTHER SIDE — IN DARK. `--radius-frame` went to
-   * 0 when the rail, the bar and the page became one `#1B191A` — the cyan
-   * console's own ground, since retired for the blue retheme's `#0F1011`: a
-   * radius reveals whatever is BEHIND the element it is cut into, and cutting a
-   * corner out of a colour to reveal the same colour draws nothing at the
-   * cost of a gap the bar's hairline then has to stop short of. Dark has
-   * three surfaces again — the panel is `--panel` (`#181818`), the bar and
-   * rail `--chrome` (`#111111`) — so there is something behind the cut there,
-   * and the token is 8px.
-   *
-   * IT IS A DARK-THEME DEVICE, THOUGH, NOT A UNIVERSAL ONE — the spec says so
-   * explicitly (amended 5 Sep after the shell review) because this comment
-   * did not: in LIGHT, `--panel` is `var(--background)`, both `#F7F8F9`, so
-   * the exact failure above is what this corner does to itself there — a
-   * colour cut out of the same colour, drawing nothing. That is not a bug to
-   * fix; light was never meant to show a seam here, and `md:rounded-tr-frame`
-   * costs nothing to leave on where it is invisible.
-   *
-   * WHICH corner is the part that changed, in dark. Every previous notch was
-   * TOP-LEFT, nearest the rail. The 4 September Figma cuts the TOP-RIGHT
-   * instead and leaves the rail-side corner square, so that is what this
-   * spells.
    */
   /**
    * THE CORNER IS A DESKTOP FACT. It reveals the page behind the panel where
@@ -209,7 +193,7 @@ export function AppFrame({
             rendered at all. */}
         <TopBar
           account={account}
-          firstName={firstName}
+          accountName={accountName}
           menu={<MobileDrawer hide={hide} views={views} workspace={workspace} account={account} />}
         />
         {/* `min-h-0` is the vertical twin of the `min-w-0` above: without it a
