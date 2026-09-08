@@ -630,6 +630,21 @@ export async function syncStream(
         restamp: restampRequestedAt != null || owesDetection,
       });
       const { records, nextCursor, mirrorScope, unchanged } = mirrorRes;
+      // THE MIRROR BRANCH USED TO DROP THIS ON THE FLOOR, exactly as the paged
+      // branch below once did (see its comment at `pageRes.incomplete`) — and
+      // here it was not merely lost telemetry, it was deletion. A mirror read
+      // says "this is the whole resource", and `retireAbsent` below acts on
+      // that by tombstoning every stored row the read did not return. Google
+      // Sheets never sets `incomplete`, so the assumption held for as long as
+      // Sheets was the only mirror; Airtable is the first that can come back
+      // TRUNCATED — its walk stops at a page cap and reports
+      // `incomplete: read.offset != null` — and Airtable's own docs say a
+      // request with neither `sort` nor `view` returns records in an arbitrary
+      // order. So a base past the cap handed us an arbitrary prefix, and every
+      // row outside it was soft-deleted, on every sweep, silently: nothing else
+      // reads `incomplete` here, so the sweep recorded the stream as settled.
+      // ORed, never assigned, for the same reason as below.
+      if (mirrorRes.incomplete) incomplete = true;
       // Before the `unchanged` return below — a skip still spends the Drive
       // probe, and a probe nobody counts is how a "cheap" sweep stops being one.
       await settleUp(mirrorRes, claimedAt);
@@ -730,7 +745,15 @@ export async function syncStream(
           },
           toWrite,
         );
-        const gone = await retireAbsent(tx, conn, stream, toWrite, mirrorScope);
+        // A TRUNCATED READ RETIRES NOTHING. Absence from a partial read is not
+        // evidence of absence from the resource, and the write above still
+        // happens — rows that did arrive are upserted as usual, so a big base
+        // stays as correct as the prefix it can see, rather than losing its
+        // tail every night. Deliberately NOT fixed by having the connector
+        // declare a `mirrorScope` on a truncated read: the scope spans
+        // 1900-2100, so scoping would retire precisely the same rows while
+        // making the read look whole.
+        const gone = mirrorRes.incomplete ? 0 : await retireAbsent(tx, conn, stream, toWrite, mirrorScope);
         return { res, gone };
       });
       if (swap.acquired && swap.result) {
@@ -782,7 +805,11 @@ export async function syncStream(
          * Reported, never corrected. A sweep that "fixed" a discrepancy it does
          * not understand would destroy the evidence of the bug that caused it.
          */
-        const read = new Set(toWrite.map((r) => r.eventId)).size;
+        // Not on a truncated read: `read` is then a prefix and `stored` is the
+        // whole, so read < stored is the expected shape rather than evidence of
+        // a bug, and an alarm that cries on a known-partial scan trains the
+        // reader to ignore it on a real one.
+        const read = mirrorRes.incomplete ? -1 : new Set(toWrite.map((r) => r.eventId)).size;
         const [live] = await db
           .select({ c: sql<number>`count(*)::int` })
           .from(events)
@@ -790,7 +817,7 @@ export async function syncStream(
             and(eq(events.connectionId, conn.id), eq(events.streamHash, stream.configHash), isNull(events.deletedAt)),
           );
         const stored = live?.c ?? 0;
-        if (stored !== read) {
+        if (read >= 0 && stored !== read) {
           mirrorDrift = { read, stored };
           console.warn(`[mirror-drift] stream=${stream.id} source=${conn.source} read=${read} stored=${stored}`);
         }
