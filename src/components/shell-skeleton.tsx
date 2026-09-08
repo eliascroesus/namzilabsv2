@@ -40,7 +40,7 @@ export function ShellSkeleton({
             drawn there — see `Sidebar`. A ghost the real chrome will not
             replace is 57px of content jumping left when the route lands,
             which is the one failure this file exists to prevent. */}
-        <div className="hidden w-[56px] shrink-0 border-r border-border bg-chrome md:block" />
+        <div className="hidden w-65 shrink-0 border-r border-border bg-chrome md:block" />
         <div className="flex min-w-0 flex-1 flex-col">
           {/* THE PANEL'S GHOST — its own surface (`--panel`) and the same
               top-RIGHT corner the real content column carries under the bar.

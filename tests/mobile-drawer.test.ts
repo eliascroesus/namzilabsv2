@@ -118,8 +118,10 @@ describe("the phone's navigation drawer", () => {
     const rail = find(content, RailContent);
     expect(rail, "RailContent rendered inside the sheet").not.toBeNull();
     expect(rail!.props!.workspace).toBe("Acme");
-    // …including the control the top bar sheds on a phone.
-    expect(rail!.props!.invite).toBe(true);
+    // `invite` retired on 8 Sep 2026: the card is in the rail's foot at every
+    // width now, so the drawer has nothing to opt into — it renders the same
+    // tree the desktop column does.
+    expect(rail!.props!.invite).toBeUndefined();
   });
 
   it("closes when the route changes under it", () => {

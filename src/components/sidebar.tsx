@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
-import { ChevronDown, Gift, LayoutDashboard, Monitor, PanelLeftClose, PanelLeftOpen, Plug, Plus, Radio, Search, Settings, UserPlus, Workflow } from "lucide-react";
+import { ChevronDown, LayoutDashboard, Monitor, Plug, Plus, Radio, Search, Settings, UserPlus, Workflow } from "lucide-react";
 import { Fragment, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -277,44 +277,29 @@ function RailChip({ tone, children }: { tone: "rest" | "active"; children: React
 }
 
 /**
- * WHAT THE OPEN PANEL REVEALS — the one recipe every hidden thing in the rail
- * shares, so the names, the headings and the keycap all arrive together rather
- * than in three slightly different fades.
+ * THE REVEAL RECIPE IS GONE, AND SO IS THE THING IT REVEALED.
  *
- * OPACITY, NOT `hidden`. The strings stay in the DOM and in the accessibility
- * tree at every width — they are the accessible names of the controls they sit
- * in, and a name that only exists on hover is a name a screen reader never
- * hears. What hides them is the panel's own `overflow-hidden`: at 70px there is
- * nothing to the right of the chip to paint them in, which is also what stops a
- * transparent 150px label from swallowing pointer events over the page beside
- * it — a clipped box is not hit-testable.
+ * `REVEAL` was `opacity-0` plus three ways of getting back to `opacity-100` —
+ * `group-hover/rail`, `group-focus-within/rail` and `group-data-[pinned=true]`
+ * — because the rail rested at 56px and opened to 260. The 8 September Figma
+ * draws no closed state: the column is 260px, always, and there is nothing left
+ * to uncover. Every label it used to fade is simply present.
  *
- * `group-focus-within` IS NOT A COURTESY. Tab into the rail with no pointer and
- * `group-hover` never fires: a keyboard user would arrive on a row whose name
- * is clipped out of view, with the tooltips that used to cover for it now gone.
- * Focus opens the panel exactly as the pointer does.
- *
- * NO reduced-motion guard here, deliberately. globals.css ends with a blanket
- * `@media (prefers-reduced-motion: reduce)` that drops every transition in the
- * document to 0.01ms with `!important` — a second, weaker guard spelled here
- * would only be a place for the two to disagree.
+ * The careful parts of that mechanism are worth recording as retired rather
+ * than lost, because they were each fixing a real bug. Opacity rather than
+ * `hidden`, so a control's accessible name existed at every width. Focus as
+ * well as hover, so a keyboard user did not land on a row whose name was
+ * clipped out of view. Both problems only exist for a column that can be shut.
  */
-const REVEAL =
-  "opacity-0 transition-opacity duration-(--duration-fast) ease-(--ease-standard) group-hover/rail:opacity-100 group-focus-within/rail:opacity-100 group-data-[pinned=true]/rail:opacity-100";
 
 /**
  * The name beside a chip. `shrink-0` + `whitespace-nowrap` rather than a
- * flexible measure: a label that resolves its width against the ANIMATING
- * panel re-wraps and re-ellipsises on every frame of the open, which reads as
- * the text stuttering into place. Fixed at its natural width, it is simply
- * uncovered by the panel's edge, which is the motion the reference has.
+ * flexible measure: the column is a fixed 260px and a label that tries to
+ * resolve a flexible width inside it re-ellipsises against its siblings for no
+ * benefit. Fixed at its natural width, it simply sits where it is put.
  */
 function RailLabel({ children, className }: { children: ReactNode; className?: string }) {
-  return (
-    <span className={cn("shrink-0 whitespace-nowrap text-sm font-medium text-foreground", REVEAL, className)}>
-      {children}
-    </span>
-  );
+  return <span className={cn("shrink-0 whitespace-nowrap text-sm font-medium text-foreground", className)}>{children}</span>;
 }
 
 /**
@@ -435,19 +420,11 @@ export function RailContent({
   views = [],
   workspace,
   account,
-  invite = false,
 }: {
   hide?: string[];
   views?: BoardView[];
   workspace?: string;
   account?: { initials: string; avatarUrl?: string | null; panel: ReactNode };
-  /**
-   * Draw "Invite members" in the foot. The DRAWER sets it and the rail does
-   * not, because this is where that control lands when the top bar sheds it
-   * below `md` — above `md` it is still in the bar, and a second copy here
-   * would be two routes to one settings page a centimetre apart.
-   */
-  invite?: boolean;
 }) {
   const pathname = usePathname();
   const params = useSearchParams();
@@ -567,7 +544,7 @@ export function RailContent({
    */
   const ViewList = () => (
     <div
-      className="grid grid-rows-[0fr] transition-[grid-template-rows] duration-(--duration-base) ease-(--ease-standard) group-hover/rail:grid-rows-[1fr] group-focus-within/rail:grid-rows-[1fr] group-data-[pinned=true]/rail:grid-rows-[1fr]"
+      className="grid grid-rows-[1fr]"
     >
       <div className="overflow-hidden">
         {shown.map((v) => {
@@ -732,7 +709,7 @@ export function RailContent({
                         draws the trigger as two ends of a full-width row: the
                         chip and the name together on the left, the chevron
                         alone on the right. */}
-                    <span className={cn("flex min-w-0 flex-1 items-center justify-between gap-2", REVEAL)}>
+                    <span className="flex min-w-0 flex-1 items-center justify-between gap-2">
                       <span className="min-w-0 truncate text-sm font-semibold text-foreground">{workspace}</span>
                       <ChevronDown aria-hidden className="shrink-0 text-muted-foreground" />
                     </span>
@@ -917,7 +894,7 @@ export function RailContent({
                   className="flex flex-col gap-2 pb-1"
                 >
                   {results.length === 0 && (
-                    <p className={cn("px-1 py-2 text-xs text-muted-foreground", REVEAL)}>No matches.</p>
+                    <p className="px-1 py-2 text-xs text-muted-foreground">No matches.</p>
                   )}
                   {results.map((entry) =>
                     entry.kind === "theme" ? (
@@ -965,7 +942,7 @@ export function RailContent({
                 </div>
               ) : (
                 <>
-              <p className={cn("px-1 pb-1 pt-2 text-xs font-normal text-faint", REVEAL)}>Main Menu</p>
+              <p className="px-1 pb-1 pt-2 text-xs font-normal text-faint">Main Menu</p>
               {items
                 .map(({ label, href, icon: Icon }) => {
                   const active = pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
@@ -1048,237 +1025,117 @@ export function RailContent({
               runs unbroken from the switcher's square to the Get Free Access
               bell below — a DIFFERENT bell from the one the top bar carries
               for notifications; this one is the rail's own upsell row. */}
-          {/* IT BECOMES A BUTTON WHEN THERE IS ROOM TO BE ONE.
-              Collapsed, the brand is a 24px chip inside the icon column,
-              because a 48px rail has space for a mark and nothing else.
-              Expanded, the fill moves OUT of the chip and onto the row itself,
-              so "New flow" reads as a full-width primary — the row's OWN
-              filled state, not a match for the top bar's copy of the same
-              shortcut, which stays the ordinary secondary grey (blue is
-              reserved for the controls that add something, and this row
-              already is one of them without needing the bar's to agree too)
-              — which is what it looked like, and it is the one control in the
-              foot that is a verb.
-              The fill swaps rather than stacks: the chip is removed at the same
-              moment the row fills, so there is never a brand square sitting on
-              a brand bar. `-mx-1 px-1` lets the filled row breathe to the
-              gutter's edge without moving the chip, which is the whole point of
-              the icon column — every glyph in the rail stays on one vertical
-              line in both states. */}
+          {/* THE FOOT THE 8 SEPTEMBER FIGMA DRAWS — a card and an act, in that
+              order, and both of them changed hands.
+
+              INVITE MEMBERS STOPS BEING A GUEST. It used to appear here only
+              in the phone's drawer, because above `md` the top bar carried it
+              and two routes to one settings page a centimetre apart is worse
+              than either. Node 49:5734 moves it into the rail permanently and
+              takes it OUT of the bar, so there is still exactly one of it —
+              the `invite` prop that gated it has no second state left and is
+              gone with the arrangement that needed it.
+
+              It is a CARD rather than a row: two strings, a title and a line
+              of copy under it, which is not a shape the 36px nav slot can
+              hold. `--control` on the card is the same step the search field
+              takes at the head of the column, which is what makes the two read
+              as the same kind of object — a thing you act on, not a
+              destination you travel to. */}
           <Link
-            href="/dashboard/flows"
-            className={cn(
-              SLOT,
-              /* 32px, NOT the rail's 36. This is a filled BUTTON wearing a
-                 row's shape, and the owner's rule is that everything with a
-                 background stands at 32 — the top bar's buttons, the header's
-                 three, and this. The export measures it at 32 in the foot
-                 while the row above it ("Get Free Access") stays 36, which is
-                 the same split: one is an act, the other is a destination. */
-              "h-8",
-              "transition-colors duration-(--duration-fast) ease-(--ease-standard)",
-              "group-hover/rail:-mx-1 group-hover/rail:w-[calc(100%+0.5rem)] group-hover/rail:justify-center group-hover/rail:rounded-control group-hover/rail:bg-primary group-hover/rail:px-1",
-              "group-focus-within/rail:-mx-1 group-focus-within/rail:w-[calc(100%+0.5rem)] group-focus-within/rail:justify-center group-focus-within/rail:rounded-control group-focus-within/rail:bg-primary group-focus-within/rail:px-1",
-              // PINNED IS THE THIRD STATE, and every reveal in this file has to
-              // name it. A rail held open by choice that still showed a bare
-              // "+" chip and a collapsed view list was open in width only.
-              "group-data-[pinned=true]/rail:-mx-1 group-data-[pinned=true]/rail:w-[calc(100%+0.5rem)] group-data-[pinned=true]/rail:justify-center group-data-[pinned=true]/rail:rounded-control group-data-[pinned=true]/rail:bg-primary group-data-[pinned=true]/rail:px-1",
-            )}
+            href="/dashboard/settings"
+            /* THE HOVER RAISES THE EDGE, NOT THE FILL, and the column's own
+               rule is why. The rail has ONE raise — `--control` under the
+               active row — and a second one (`--accent`) made a hovered row
+               look more selected than the selected one, which is what
+               controls-and-rail.test.ts pins. This card RESTS on `--control`,
+               so it has nowhere to raise to that is not that mistake. Its
+               border brightens instead: feedback that costs no fill. */
+            className="flex w-full items-center gap-3 rounded-card border border-border bg-control px-3 py-2 transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:border-rule"
           >
-            <span
-              aria-hidden
-              className={cn(
-                "flex size-8 shrink-0 items-center justify-center [&_svg]:size-[18px]",
-                "rounded-control bg-primary text-primary-foreground transition-colors duration-(--duration-fast) ease-(--ease-standard) group-hover:bg-primary-hover",
-                /* THE "+" LEAVES WHEN THE WORDS ARRIVE. Collapsed, the glyph IS
-                   the control — it is the only thing a 48px rail can say.
-                   Expanded, the row reads "New flow" in full, and a plus beside
-                   those two words is the same instruction given twice. So the
-                   chip is removed from the layout entirely rather than made
-                   transparent: leaving a 40px invisible column in place would
-                   push the label off the button's centre, which is the one
-                   thing this control has to get right once it is a button. */
-                "group-hover/rail:hidden group-focus-within/rail:hidden group-data-[pinned=true]/rail:hidden",
-              )}
-            >
-              <Plus className="size-4" />
+            <UserPlus className="size-4 shrink-0 text-foreground" />
+            {/* NO GAP, and the rail's spacing rule is why. Every column in this
+                file stacks on 8 or 16 (pinned by page-width.test.ts), and the
+                Figma's 2px here is neither — it is the slack between two 16px
+                leadings rather than a gap anyone chose. `leading-4` on both
+                lines produces it without spending an off-scale number. */}
+            <span className="flex flex-col">
+              {/* 12px BOTH, and the weight is the only thing separating them.
+                  The Figma sets the title at 600 and the line under it at 400
+                  on the same size, which is what keeps a two-line card from
+                  reading as a heading with a caption — they are one object. */}
+              <span className="text-xs font-semibold leading-4 text-foreground">Invite Members</span>
+              <span className="text-xs leading-4 text-muted-foreground">Collaborate with your team.</span>
             </span>
-            {/* SEMIBOLD, NOT MEDIUM, AND IT IS THE ONE LABEL IN THE RAIL THAT
-                IS. The other seven are nav rows and take `font-medium` like
-                every other destination in the product. This one is a BUTTON —
-                the same button, with the same two words, that the top bar
-                carries at 14px/600. Shipping it at 500 meant the identical
-                control read at two weights depending on which end of the chrome
-                you looked at, which is exactly the drift the kit exists to
-                stop. */}
-            {/* `text-button` — 14px, because when the rail is open this row IS
-                a filled button and the kit's filled controls are all 14. The
-                rail's other labels stay at the body's 15: they are
-                destinations, not controls. */}
-            <RailLabel className="text-button font-semibold text-primary-foreground">New flow</RailLabel>
           </Link>
 
-          {/* GET FREE ACCESS — the upsell row the old bell placeholder becomes.
-              That control had no store behind it to read and nothing to do
-              when pressed; this is the row the export actually draws at the
-              foot of the rail, and it goes to the same place the dropped plan
-              card used to: Settings, where billing lives. */}
-          {/* A FILLED BUTTON, NOT A NAV ROW, and a PRESENT rather than a bell.
-              `node-id=14:44` draws this as `bg-[#333]` at 32px with its glyph
-              and label centred — the kit's `secondary` exactly — sitting under
-              the blue "New flow" as the second of two acts in the foot. It was
-              a `SLOT` row wearing a bell with a blue dot, which read as a
-              notification you had missed rather than as an offer, and put a
-              third left-aligned destination under two centred buttons.
+          {/* "NEW", NOT "NEW FLOW", AND IT IS A BUTTON THE WHOLE TIME.
+              The old row spent three blocks of classes becoming a button on
+              hover, on focus-within and on pinned — a chip that swapped for a
+              fill, a "+" that left when the words arrived — because it had to
+              be legible as a 48px glyph AND as a 260px control. The column no
+              longer has a narrow state, so all three collapse into what the
+              Figma actually draws: a full-width lime fill, 36px, with a plus
+              and one word centred in it.
 
-              The bell is also the top bar's own glyph for actual unread
-              notifications, so spending it here meant one picture for two
-              unrelated things in one chrome. A gift says what the row does.
-
-              `size="sm"` and `w-full`: the kit's filled rung is already 32px
-              at 14px type, so the height and the label size come from the
-              button rather than being spelled again here. */}
-          <Button asChild variant="secondary" size="sm" className="w-full">
-            <Link href="/dashboard/settings">
-              <Gift />
-              <RailLabel className="text-button font-medium text-secondary-foreground">Get Free Access</RailLabel>
+              GET FREE ACCESS IS NOT HERE ANY MORE. Its gift moved to the top
+              bar (node 51:5756), where it sits beside the account as an offer
+              rather than under two acts as a third one. */}
+          <Button asChild size="sm" className="h-9 w-full">
+            <Link href="/dashboard/flows">
+              <Plus />
+              <span className="text-button font-semibold">New</span>
             </Link>
           </Button>
-          {/* INVITE MEMBERS, WHICH IS A GUEST OF THIS FOOT RATHER THAN A
-              RESIDENT. It is a top-bar control; below `md` the bar has room
-              for a menu button, the mark and your avatar and nothing else, so
-              it comes here with "New flow" rather than being dropped. The rail
-              never sets `invite`, because up there the bar still carries it. */}
-          {invite && (
-            <Link
-              href="/dashboard/settings"
-              className={cn(SLOT, "text-muted-foreground hover:text-foreground")}
-            >
-              <span className={ICON_COL}>
-                <UserPlus className="size-[18px]" />
-              </span>
-              <RailLabel className="text-muted-foreground group-hover:text-foreground">Invite members</RailLabel>
-            </Link>
-          )}
         </div>
       </>
   );
 }
 
 /**
- * THE HOVER RAIL — the frame around `RailContent`, and nothing else.
+ * THE RAIL, WHICH NO LONGER HOVERS.
  *
- * What is left here is the geometry the CONTENT does not care about: the
- * footprint the page is laid out against, the panel that overlays rather
- * than pushes, the pin cookie, and the toggle straddling the hairline. The
- * rows, the search field and the foot are all `RailContent`, which the
- * phone's drawer renders too.
+ * What is left here is the geometry the CONTENT does not care about: a fixed
+ * 260px column and the hairline down its right edge. The rows, the search field
+ * and the foot are all `RailContent`, which the phone's drawer renders too.
  *
- * IT IS NOT RENDERED BELOW `md`. A hover rail on a touch screen is a column
- * of unlabelled glyphs that can never open — the panel's whole vocabulary is
- * `hover` and `focus-within`, and a finger produces neither. `hidden
- * md:block` on the FOOTPRINT rather than on the panel: hiding the panel
- * alone would leave 56px of empty column down the left of every phone
- * screen, laid out and painted, holding nothing.
+ * THREE MECHANISMS RETIRED TOGETHER, and they were one mechanism really. The
+ * column rested at 56px and opened to 260 on `hover` and `focus-within`; a pin
+ * cookie let you hold it open; `AppShell` read that cookie on the server so a
+ * pinned rail would not paint at 56 and snap to 260 a frame later, dragging the
+ * top bar and the page with it. The 8 September Figma draws one width, so the
+ * open state IS the state — there is nothing to reveal, nothing to remember,
+ * and no frame in which the two disagree.
+ *
+ * The layout-jump problem that the cookie existed to dodge is gone with it,
+ * rather than solved: a constant width cannot arrive late. `ShellSkeleton`
+ * still mirrors this number for the same reason it always did, and
+ * `tests/page-width.test.ts` still pins the two together.
+ *
+ * IT OVERLAYS NO MORE EITHER. The panel used to be `absolute` inside a
+ * narrower footprint so its extra 204px were taken from the page rather than
+ * given by it — widening in flow would have re-laid-out every tile on a
+ * pointer-move, and resized the builder's canvas under a drag. A column that
+ * never changes width can simply BE in the layout, which is one fewer stacking
+ * context and one fewer thing for a dropdown to escape.
+ *
+ * IT IS STILL NOT RENDERED BELOW `md`. 260px of permanent column on a phone is
+ * most of the screen; the drawer renders the same `RailContent` there.
  */
 export function Sidebar({
   hide,
   views = [],
-  /**
-   * PINNED OPEN, READ ON THE SERVER FROM A COOKIE.
-   *
-   * It arrives as a prop rather than being read here because the alternative
-   * is a layout jump on every cold load: `localStorage` is not knowable
-   * during render, so a pinned rail would paint at 56px and snap to 260px a
-   * frame later — dragging the top bar and the whole page with it. That is
-   * the exact failure `tests/page-width.test.ts` exists for, and a
-   * preference is not worth reintroducing it. `AppShell` reads the cookie;
-   * this only toggles it.
-   *
-   * THE FALLBACK IS OPEN, matching the cookie's own default — see the note in
-   * `app-shell.tsx` for why the 6 Sep 2026 export settles that. It matters
-   * beyond tidiness: `/design` and `/design/overview` mount this frame without
-   * passing the prop, so a `false` here drew the kit and the reference screen
-   * at a rail width the product no longer uses, which is the one thing those
-   * pages exist not to do.
-   */
-  pinned: initialPinned = true,
   workspace,
   account,
 }: {
   hide?: string[];
   views?: BoardView[];
-  pinned?: boolean;
   workspace?: string;
   account?: { initials: string; avatarUrl?: string | null; panel: ReactNode };
 }) {
-  /**
-   * Local state as well as the cookie, so the press is instant. The cookie is
-   * for the NEXT page load; this is for this one. Writing only the cookie
-   * would mean the rail did nothing until you navigated.
-   */
-  const [pinned, setPinned] = useState(initialPinned);
-  const togglePin = () => {
-    const next = !pinned;
-    setPinned(next);
-    // A year, path-wide, Lax: it is a display preference, so it wants to
-    // survive a restart and does not want to ride on cross-site requests.
-    document.cookie = `rail=${next ? "pinned" : "hover"}; path=/; max-age=31536000; samesite=lax`;
-  };
-
   return (
-    <aside className={cn("relative z-20 hidden h-full shrink-0 md:block", pinned ? "w-65" : "w-[56px]")}>
-      {/* THE PANEL — the whole rail, floated out of the layout. The hairline
-          travels with it: the rail and the panel beside it are two surfaces
-          now, and `border-r` is where one stops. `group/rail` is HERE and not
-          on the <aside>, which is what stops the toggle's own focus holding
-          the column open — see the note on the toggle below. */}
-      <div
-        className={cn(
-          "peer group/rail absolute inset-y-0 left-0 flex flex-col overflow-hidden border-r border-border bg-chrome transition-[width] duration-(--duration-base) ease-(--ease-standard)",
-          pinned ? "w-65" : "w-[56px] hover:w-65 focus-within:w-65",
-        )}
-        /* Read by `REVEAL` through `group-data-[pinned=true]/rail:`, so every
-           label, the keycap, the view list and the "New flow" fill open
-           together without any of them taking a prop. The drawer sets the
-           same attribute by hand for exactly that reason. */
-        data-pinned={pinned}
-      >
-        <RailContent hide={hide} views={views} workspace={workspace} account={account} />
-      </div>
-      {/* THE TOGGLE FOLLOWS THE PANEL'S EDGE, NOT THE FOOTPRINT'S, and it is
-          a sibling of the panel rather than a child: pressing it FOCUSES it,
-          and while it sat inside `group/rail` that focus held the panel open
-          after a collapse.
-
-          `-top-3` CENTRES IT ON THE ASIDE'S OWN TOP EDGE, NOT ON y=60 ANY
-          MORE. This used to read `top-12`, correctly, for a layout where the
-          bar sat BESIDE the rail: both started at y=0, the bar was 60px tall,
-          and a 24px (`iconXs`) button centred on that seam sits with its top
-          at 60 − 12 = 48, i.e. `top-12`. Task 7 moved the bar ABOVE this row
-          instead — so the aside's own top edge (its local y=0) now IS that
-          seam, 60px lower on the page than it used to be. `top-12` did not
-          adjust with it: it kept centring 48px into the aside's OWN frame,
-          which floated the button into the middle of the switcher's head
-          block, ~60px below the bar/rail corner it is supposed to sit on.
-          Centring a 24px button ON a point that is now the box's own edge
-          puts half of it outside the box: top = 0 − 12 = −12, i.e. `-top-3`
-          — half the button sits over the bar's own bottom-left corner, half
-          over the rail's, which is what "on the corner" has to mean once the
-          corner IS the aside's edge rather than a point inside it. */}
-      <Button
-        variant="ghost"
-        size="iconXs"
-        onClick={togglePin}
-        aria-pressed={pinned}
-        aria-label={pinned ? "Collapse the navigation" : "Keep the navigation open"}
-        className={cn(
-          "absolute -top-3 z-10 -translate-x-1/2 rounded-control border border-border bg-card text-muted-foreground shadow-card transition-[left] duration-(--duration-base) ease-(--ease-standard) hover:bg-accent hover:text-foreground",
-          pinned ? "left-65" : "left-14 peer-hover:left-65 peer-focus-within:left-65",
-        )}
-      >
-        {pinned ? <PanelLeftClose /> : <PanelLeftOpen />}
-      </Button>
+    <aside className="relative z-20 hidden h-full w-65 shrink-0 flex-col overflow-hidden border-r border-border bg-chrome md:flex">
+      <RailContent hide={hide} views={views} workspace={workspace} account={account} />
     </aside>
   );
 }

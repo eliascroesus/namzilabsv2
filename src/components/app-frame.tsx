@@ -40,7 +40,6 @@ export function AppFrame({
   views,
   surface,
   hide,
-  railPinned,
   ownsMain = false,
   children,
 }: {
@@ -68,13 +67,13 @@ export function AppFrame({
   surface: string;
   /** Rail items (by label) this viewer shouldn't see; AppShell decides. */
   hide?: string[];
-  /**
-   * Whether the rail is pinned open. A pass-through, read from a cookie by
-   * `AppShell` — it has to be known during RENDER, because a pinned rail is
-   * 260px of the layout rather than an overlay, and discovering that a frame
-   * later would drag the top bar and the whole page sideways on every load.
+  /*
+   * `railPinned` retired with the hover rail on 8 September 2026. It was a
+   * pass-through for a cookie `AppShell` read on the server, because a pinned
+   * rail is 260px of the LAYOUT rather than an overlay and discovering that a
+   * frame late would drag the top bar and the page sideways on every load.
+   * The column is now always 260px, so there is nothing to know during render.
    */
-  railPinned?: boolean;
   /**
    * Render the scroll region AS the page's `<main>` landmark.
    *
@@ -193,7 +192,7 @@ export function AppFrame({
           past its content's natural height, and the panel's own
           `overflow-y-auto` never gets anything to scroll AGAINST. */}
       <div className="flex min-h-0 flex-1">
-        <Sidebar hide={hide} views={views} pinned={railPinned} workspace={workspace} account={account} />
+        <Sidebar hide={hide} views={views} workspace={workspace} account={account} />
         {ownsMain ? (
           <main id="main" className={className}>
             {children}

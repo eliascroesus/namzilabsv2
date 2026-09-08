@@ -126,8 +126,19 @@ describe("the page container and the skeleton that stands in for it", () => {
       // Comments stripped first. Prose explaining the rule is not the rule —
       // the notes on both sides quote widths, and an unstripped scan reads the
       // first number it finds rather than the one in force.
+      //
+      // Both files spell the rail on the SCALE now (`w-65`) rather than as an
+      // arbitrary `w-[56px]`, so the extractor reads either shape — the claim
+      // being made is that the two agree, not how they are spelled.
       const code = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
-      const m = code.match(/w-\[(\d+)px\]/);
+      // Anchored on the RAIL'S OWN EDGE rather than on the first width in the
+      // file. Both files spell the column on the scale now (`w-65`), and a
+      // loose `w-(\d+)` scan finds a `w-2` in some unrelated row first — which
+      // would compare two numbers that are not the measurement in question and
+      // pass or fail for the wrong reason.
+      const rail = code.split("\n").find((l) => /border-r border-border/.test(l));
+      if (!rail) throw new Error("could not find the rail's own edge");
+      const m = rail.match(/w-\[(\d+)px\]/) ?? rail.match(/\bw-(\d+)\b/);
       if (!m) throw new Error("could not find a sidebar width");
       return m[1];
     };
@@ -223,7 +234,7 @@ describe("the page container and the skeleton that stands in for it", () => {
     // `hidden` precedes the width now — the ghost mirrors the rail's absence
     // below `md` as well as its 56px above it, or the skeleton reserves a
     // column the real chrome will not draw.
-    expect(code(skeleton)).toMatch(/hidden w-\[56px\][^"]*border-r border-border/);
+    expect(code(skeleton)).toMatch(/hidden w-65[^"]*border-r border-border/);
     // The bar's bottom edge, and its ghost.
     expect(code(read("src/components/top-bar.tsx"))).toMatch(/<header className="[^"]*border-b border-border/);
     expect(code(skeleton)).toMatch(/h-\[60px\][^"]*border-b border-border/);
@@ -402,108 +413,65 @@ describe("the calendar's day square", () => {
 });
 
 /**
- * THE RAIL'S TWO MODES, AND WHY THE PINNED ONE IS A LAYOUT FACT.
+ * THE RAIL HAS ONE MODE NOW, AND THAT IS THE LAYOUT FACT.
  *
- * Unpinned, the `<aside>` is a flat 56px footprint and the panel inside it
- * OVERLAYS — widening in flow on a pointer-move would re-lay-out every tile on
- * the dashboard as the cursor passed it.
+ * It had two. Unpinned, the `<aside>` was a flat 56px footprint and the panel
+ * inside it OVERLAID, because widening in flow on a pointer-move would
+ * re-lay-out every tile on the dashboard as the cursor passed it. Pinned, the
+ * aside itself was 260px so the bar and the page were laid out beside it — and
+ * the preference had to be a COOKIE read on the server, because the width had
+ * to be known in the first paint or the bar and the page snapped sideways a
+ * frame later.
  *
- * Pinned, the aside itself is 260px, so the top bar and the page are laid out
- * beside it. That is what "expanded" has to mean if the content is not to sit
- * underneath it — and it is why the preference is a COOKIE read on the server
- * rather than localStorage: the width has to be known in the first paint, or
- * the bar and the whole page snap sideways a frame later. That jump is the
- * exact failure this file exists to catch.
+ * The 8 September Figma (node 49:5268) draws one width and no toggle. All of
+ * that apparatus goes: no cookie, no `railPinned` thread, no overlay, no
+ * `peer-hover` chasing the panel's edge. The jump this file exists to catch
+ * cannot happen to a constant.
+ *
+ * These assertions are the RETIREMENT, not just its absence — each one fails
+ * if a piece of the old mechanism comes back, which is what stops it being
+ * reintroduced by a well-meaning "restore the collapse" change later.
  */
-describe("the rail's pinned mode", () => {
+describe("the rail is always open", () => {
   const shell = read("src/components/app-shell.tsx");
   const frame = read("src/components/app-frame.tsx");
 
-  it("is read on the server, from a cookie, and threaded to the rail", () => {
-    /**
-     * OPEN IS THE DEFAULT, SO THE TEST READS THE OTHER WAY — `!== "hover"`,
-     * not `=== "pinned"`.
-     *
-     * The 6 Sep 2026 export (`node-id=14:4`) draws a 260px rail with labels on
-     * it, and its own toggle is the node NAMED "Button - Collapse the
-     * navigation" — the label this control only carries WHILE PINNED. The
-     * frame was taken open, so an account that has never touched the toggle
-     * gets the open rail now.
-     *
-     * It is a LAYOUT fact, not a preference detail, which is why it is pinned
-     * here: every measurement in that export is taken against a 1660px content
-     * column, which is 1920 less a 260px rail. At the old 56px default the
-     * same board draws 589px chart cards where the export draws 521.33.
-     *
-     * What has NOT changed is the shape of the read: still a cookie, still on
-     * the server, still threaded to the rail as `railPinned`, and still
-     * degrading to the default on a missing or corrupted value — the whole
-     * point of the paragraph above this describe block.
-     */
-    expect(shell).toMatch(/cookies\(\)\)\.get\("rail"\)\?\.value !== "hover"/);
-    expect(shell).toMatch(/railPinned=/);
-    expect(frame).toMatch(/pinned=\{railPinned\}/);
+  it("carries no pin cookie, on the server or anywhere else", () => {
+    const code = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    expect(code(shell)).not.toMatch(/cookies\(\)/);
+    expect(code(shell)).not.toMatch(/railPinned/);
+    expect(code(frame)).not.toMatch(/railPinned/);
+    expect(code(sidebar)).not.toMatch(/document\.cookie/);
   });
 
-  it("changes the FOOTPRINT, not just the panel", () => {
-    // The panel widening alone is the hover behaviour. If only the inner div
-    // grows, a "pinned" rail covers the page instead of making room in it.
+  it("has no toggle, and no state for one to drive", () => {
     const code = sidebar.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
-    expect(code).toMatch(/<aside[\s\S]{0,400}pinned \? "w-65" : "w-\[56px\]"/);
+    expect(code).not.toMatch(/aria-pressed=\{pinned\}/);
+    expect(code).not.toMatch(/PanelLeftClose|PanelLeftOpen/);
+    expect(code).not.toMatch(/setPinned/);
   });
 
-  it("keeps the overlay behaviour when it is NOT pinned", () => {
+  it("is a flat 260px footprint that the page is laid out beside", () => {
+    // `w-65` on the <aside> ITSELF, not on an inner panel: the whole point of
+    // the retired overlay was that the panel could be wider than the footprint.
+    // If those two ever diverge again the content sits underneath the rail.
     const code = sidebar.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
-    expect(code).toMatch(/w-\[56px\] hover:w-65 focus-within:w-65/);
+    expect(code).toMatch(/<aside className="[^"]*\bw-65\b/);
+    expect(code).not.toMatch(/w-\[56px\]/);
   });
 
-  /**
-   * THE TOGGLE IS OUTSIDE THE GROUP, AND THAT IS A BEHAVIOUR RULE RATHER THAN
-   * A LAYOUT ONE.
-   *
-   * Pressing a button focuses it. While the toggle sat inside `group/rail`,
-   * `group-focus-within` then held the panel open — so collapsing the rail did
-   * nothing visible until focus moved, which is indistinguishable from a
-   * control that does not work. Measured before the fix: after a collapse the
-   * aside was 56 and the panel was still 260.
-   *
-   * The group belongs to the PANEL, the toggle is its sibling, and the toggle
-   * follows the panel's edge through `peer-hover` — which only resolves if the
-   * panel PRECEDES it in the DOM. All three facts are asserted, because any one
-   * of them alone puts the freeze back.
-   */
-  it("does not let the toggle hold the rail open", () => {
+  it("keeps no overlay apparatus — no absolute panel, no peer chasing its edge", () => {
     const code = sidebar.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
-    // The group is on the panel, not the <aside>.
-    expect(code).toMatch(/"peer group\/rail absolute/);
-    // The <aside>'s OWN class carries no group — a negative match against the
-    // element would always fail, because the panel that DOES carry it is a
-    // descendant. This is the aside's class string, asserted whole — and it
-    // now also carries the phone layout, because the FOOTPRINT is what has to
-    // go below `md`: hiding the panel alone would leave a 56px column of
-    // nothing down the left of every phone screen.
-    expect(code).toMatch(/"relative z-20 hidden h-full shrink-0 md:block"/);
-    // …and the toggle comes after it, or `peer-hover` resolves to nothing.
-    expect(code.indexOf("peer group/rail")).toBeLessThan(code.indexOf('aria-pressed={pinned}'));
-    expect(code).toMatch(/peer-hover:left-65/);
+    expect(code).not.toMatch(/peer group\/rail/);
+    expect(code).not.toMatch(/peer-hover:left-65/);
+    expect(code).not.toMatch(/hover:w-65|focus-within:w-65/);
   });
 
-  /**
-   * THE TOGGLE'S OWN ARITHMETIC MOVED WHEN THE BAR DID, AND THE CLASS DID
-   * NOT FOLLOW IT.
-   *
-   * `top-12` centred the 24px toggle on y=60 when the bar sat BESIDE the
-   * rail and both started at the page's own y=0. Task 7 put the bar ABOVE
-   * this row instead, so the aside's own top edge now IS that seam — and a
-   * positive `top-12` inside the aside's frame floats the button ~60px down
-   * into the middle of the switcher's own head block instead of on the
-   * corner where the bar's rule meets the rail's. Centring on a point that
-   * is now the box's own edge takes a NEGATIVE offset: `-top-3` (0 − 12).
-   */
-  it("centres the toggle on the aside's own top edge now that the bar sits above the row, not beside it", () => {
+  it("reveals nothing, because there is nothing left to reveal", () => {
     const code = sidebar.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
-    expect(code).toMatch(/absolute -top-3 z-10 -translate-x-1\/2 rounded-control/);
-    expect(code, "the old bar-beside-rail arithmetic must not come back").not.toMatch(/absolute top-12 z-10/);
+    expect(code).not.toMatch(/group-hover\/rail/);
+    expect(code).not.toMatch(/group-focus-within\/rail/);
+    expect(code).not.toMatch(/group-data-\[pinned=true\]\/rail/);
   });
 });
 
@@ -769,6 +737,6 @@ describe("the skeleton mirrors the frame's new order", () => {
   it("puts the two chrome ghosts on --chrome, matching the real bar and rail", () => {
     const code = skeleton.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
     expect(code).toMatch(/h-\[60px\][^"]*bg-chrome/);
-    expect(code).toMatch(/w-\[56px\][^"]*bg-chrome/);
+    expect(code).toMatch(/w-65[^"]*bg-chrome/);
   });
 });

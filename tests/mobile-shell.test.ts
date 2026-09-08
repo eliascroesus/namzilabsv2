@@ -23,16 +23,29 @@ const frame = read("src/components/app-frame.tsx");
 const skeleton = read("src/components/shell-skeleton.tsx");
 
 describe("the rail below md", () => {
-  it("is not rendered at all — footprint, panel and toggle together", () => {
-    // The <aside> IS the footprint. Hiding the panel alone would leave a
-    // 56px column of nothing on the left of every phone screen.
-    expect(code(sidebar)).toMatch(/"relative z-20 hidden h-full shrink-0 md:block"/);
+  it("is not rendered at all — the whole column, not just its contents", () => {
+    // The <aside> IS the footprint. Hiding its contents alone would leave
+    // 260px of empty column down the left of every phone screen — which is
+    // most of the screen, and worse than the 56px this used to guard against.
+    // `md:flex` rather than `md:block` since the panel and the footprint
+    // became one element on 8 Sep 2026.
+    expect(code(sidebar)).toMatch(/<aside className="relative z-20 hidden h-full w-65 shrink-0 flex-col[^"]*md:flex"/);
   });
 
   it("hands its content to a component both it and the drawer render", () => {
+    /**
+     * `invite` IS GONE FROM BOTH CALLS, and that is the arrangement changing
+     * rather than the guarantee weakening. The prop existed so the drawer
+     * could draw "Invite members" in the foot when the top bar shed it below
+     * `md`; the 8 September Figma puts that control in the rail's foot
+     * permanently and takes it out of the bar entirely, so there is no second
+     * state for a prop to select. Both callers now render the same tree with
+     * the same four props, which is a stronger version of the same claim.
+     */
     expect(sidebar).toMatch(/export function RailContent\(/);
-    expect(code(sidebar)).toMatch(/<RailContent hide=\{hide\} views=\{views\} workspace=\{workspace\} account=\{account\} \/>/);
-    expect(code(drawer)).toMatch(/<RailContent[\s\S]{0,160}invite/);
+    const call = /<RailContent hide=\{hide\} views=\{views\} workspace=\{workspace\} account=\{account\} \/>/;
+    expect(code(sidebar)).toMatch(call);
+    expect(code(drawer)).toMatch(call);
   });
 
   it("is not copied into the drawer, which is the whole point", () => {
@@ -87,10 +100,23 @@ describe("the drawer", () => {
     expect(stripped).toMatch(/removeEventListener\("change", closeAboveMd\)/);
   });
 
-  it("opens the rail's own tree by pinning it, not by re-styling it", () => {
-    // `REVEAL` fades on `group-data-[pinned=true]/rail`. No wrapper, no
-    // labels — this is the line that makes the reuse work.
-    expect(code(drawer)).toMatch(/group\/rail[^"]*"[\s\S]{0,120}data-pinned="true"/);
+  it("renders the rail's own tree plainly, with nothing left to open", () => {
+    /**
+     * IT USED TO HAVE TO PIN IT. Every label in that tree rode `REVEAL`, which
+     * faded on hover, on focus-within, or on `group-data-[pinned=true]/rail`.
+     * A touch screen produces neither of the first two, so the drawer wrapped
+     * `RailContent` in a `group/rail` carrying `data-pinned="true"` and claimed
+     * the third — a drawer being a rail held open.
+     *
+     * The rail has one width now and reveals nothing, so that attribute selects
+     * a state that does not exist. Asserting its ABSENCE is what stops it being
+     * carried forward as cargo: a `data-pinned` nothing reads looks load-bearing
+     * to whoever finds it next.
+     */
+    expect(code(drawer)).not.toMatch(/data-pinned/);
+    expect(code(drawer)).not.toMatch(/group\/rail/);
+    // The reuse itself is asserted above; this is only about how it is wrapped.
+    expect(code(drawer)).toMatch(/<div className="flex h-full min-h-0 flex-col overflow-y-auto">/);
   });
 
   it("closes on navigation, and on a change of view", () => {
@@ -106,9 +132,18 @@ describe("the drawer", () => {
     expect(code(drawer)).toMatch(/useEffect\([\s\S]{0,120}setOpen\(false\)[\s\S]{0,80}\[pathname, search\]\)/);
   });
 
-  it("carries the two acts the bar sheds", () => {
-    expect(code(drawer)).toMatch(/invite\b/);
-    expect(code(sidebar)).toMatch(/\{invite && \(/);
+  it("needs nothing shed to it any more, because the rail owns both acts", () => {
+    /**
+     * The bar used to carry "Invite members" and "New flow" above `md` and
+     * hand them to the drawer's foot below it — which is why the drawer set
+     * `invite` and the rail did not. Both now live in the rail's own foot at
+     * every width (nodes 49:5734 and 49:5744), so the drawer gets them by
+     * rendering `RailContent` like everything else, and the conditional that
+     * used to gate one of them is gone.
+     */
+    expect(code(sidebar), "the invite card is unconditional now").not.toMatch(/\{invite && \(/);
+    expect(code(sidebar)).toContain("Invite Members");
+    expect(code(sidebar), "and the act under it").toMatch(/>New</);
   });
 });
 
@@ -134,10 +169,25 @@ describe("the top bar below md", () => {
     expect(trigger).toContain("rounded-full border border-input bg-avatar");
   });
 
-  it("draws the bar's bell and avatar circles with the same outline", () => {
+  it("keeps the avatar's circle, and lets the bell off its plate", () => {
+    /**
+     * THEY USED TO MATCH, AND THE FIGMA SEPARATES THEM. Both were a 32px
+     * `--avatar` disc with an `--input` outline, on the argument that two
+     * round controls a centimetre apart should be one object drawn twice.
+     *
+     * Node 49:5370 draws the avatar as a filled disc — it holds your initials,
+     * so it needs a surface for them to sit on — and the bell as a bare glyph
+     * beside the moon and the gift, which are also bare. The bell belongs to
+     * THAT group now, not to the avatar; giving it a plate the other two lack
+     * would make it read as the only pressable thing among three.
+     */
     const stripped = code(bar);
-    expect(stripped).toContain("relative rounded-full border border-input bg-avatar");
-    expect(stripped).toContain("rounded-full border border-input bg-avatar text-xs font-semibold text-foreground");
+    expect(stripped, "the avatar keeps its disc").toContain(
+      "rounded-full border border-input bg-avatar text-xs font-semibold text-foreground",
+    );
+    expect(stripped, "the bell is bare, like the moon and the gift beside it").not.toContain(
+      "relative rounded-full border border-input bg-avatar",
+    );
   });
 
   it("drops both acts below md, and has no greeting left to drop", () => {
@@ -152,12 +202,18 @@ describe("the top bar below md", () => {
      * What the phone still owes is below: the two ACTS step aside at `md`.
      */
     expect(code(bar), "no greeting to hide").not.toContain("Welcome back");
-    // Exactly two controls step aside at `md` — Invite members and New flow.
-    // Counted over the CODE: the note above them names both by hand, and a
-    // rule that can read its own explanation counts to four.
-    expect(code(bar).match(/hidden md:inline-flex/g) ?? []).toHaveLength(2);
-    expect(code(bar)).toContain("Invite members");
-    expect(code(bar)).toContain("New flow");
+    /**
+     * AND NOTHING LEFT TO SHED EITHER, AS OF 8 SEP 2026. The two acts did not
+     * get a better phone rule — they left the bar. "Invite members" is a card
+     * in the rail's foot and "New flow" is the lime "New" under it, at every
+     * width, so there is no `hidden md:inline-flex` pair here to count.
+     *
+     * What the phone still owes is the SHARE control and the account name,
+     * which are this bar's own and step aside rather than move.
+     */
+    expect(code(bar), "the acts moved to the rail, not to a media query").not.toContain("New flow");
+    expect(code(bar)).not.toContain("Invite members");
+    expect(code(bar), "Share is the bar's own, and it steps aside").toContain("md:inline-flex");
   });
 });
 
@@ -177,7 +233,10 @@ describe("touch targets below md", () => {
 
 describe("the skeleton mirrors the phone layout too", () => {
   it("reserves no rail below md", () => {
-    expect(code(skeleton)).toMatch(/hidden w-\[56px\][^"]*md:block/);
+    // `w-65` since 8 Sep 2026 — the rail is a constant 260px above `md` and is
+    // not rendered below it, so what the ghost mirrors is the ABSENCE, and the
+    // width it reserves when present had to follow the rail up from 56.
+    expect(code(skeleton)).toMatch(/hidden w-65[^"]*md:block/);
   });
 
   it("drops the panel's corner below md, in both files", () => {

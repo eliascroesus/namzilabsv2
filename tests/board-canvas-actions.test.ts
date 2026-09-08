@@ -6,6 +6,25 @@ import { UNSET_TILE_KEY } from "@/lib/board/types";
 import type { DB } from "@/db/types";
 
 /**
+ * A TILE'S CONFIG WITHOUT THE COLOUR IT WAS BORN WITH.
+ *
+ * Since 8 Sep 2026 `addCustomTileAction` writes a random `GROUP_ACCENT` key
+ * into every new tile's config, so a fresh tile is no longer `{}`. These
+ * assertions are about SEEDING and PARSING — what the flow's published spec
+ * put there, and what the per-key parser let through — and pinning a value
+ * chosen by `Math.random` would make them flap.
+ *
+ * The colour itself is asserted below ("a new tile is born with a colour") and
+ * exhaustively in `tile-colour.test.ts`; stripping it here narrows each of
+ * these to the thing it actually tests.
+ */
+function seeded(config: unknown): Record<string, unknown> {
+  const { color: _color, ...rest } = (config ?? {}) as Record<string, unknown>;
+  return rest;
+}
+
+
+/**
  * WHO MAY PUT A CHART ON A BOARD, AND WHOSE BOARD.
  *
  * Every id here arrives from a browser, so the two questions each action has to
@@ -163,7 +182,25 @@ describe("adding a chart", () => {
     await addCustomTileAction("va", "block:heading", "heading");
     const [row] = await tilesOf("va");
     expect({ w: row.w, h: row.h }).toEqual({ w: 12, h: 2 });
-    expect(row.config).toEqual({});
+    expect(seeded(row.config)).toEqual({});
+  });
+
+  /**
+   * THE POSITIVE HALF OF `seeded()`.
+   *
+   * Every assertion above strips `color` so it can talk about seeding without
+   * flapping on a random value. That stripping is only honest if something
+   * asserts the colour is actually THERE — otherwise a regression that stopped
+   * writing it would pass this whole file silently.
+   *
+   * What the value must be is `tile-colour.test.ts`'s job; this is the wiring.
+   */
+  it("is born with a colour, so a fresh board is not a dozen identical grey cards", async () => {
+    await addCustomTileAction("va", "block:heading", "heading");
+    const [row] = await tilesOf("va");
+    const config = row.config as Record<string, unknown>;
+    expect(typeof config.color).toBe("string");
+    expect(config.color).not.toBe("grey");
   });
 
   it("refuses a row whose chart and key disagree about being a block", async () => {
@@ -266,11 +303,11 @@ describe("changing what a chart is", () => {
   it("stores a rename, and an empty one CLEARS it", async () => {
     const id = await seed();
     await setCustomTileAction(id, { title: "Revenue, this week" });
-    expect((await row(id)).config).toEqual({ title: "Revenue, this week" });
+    expect(seeded((await row(id)).config)).toEqual({ title: "Revenue, this week" });
     // Otherwise renaming a flow would silently stop updating a chart that had
     // once been renamed and then renamed back.
     await setCustomTileAction(id, { title: "  " });
-    expect((await row(id)).config).toEqual({});
+    expect(seeded((await row(id)).config)).toEqual({});
   });
 
   it("MERGES config on rename — an unrelated key survives", async () => {
@@ -358,7 +395,7 @@ describe("changing what a chart is", () => {
     expect((await setCustomTileAction(id, { config: { nonsense: 1 } })).ok).toBe(false);
     expect((await setCustomTileAction(id, { clear: ["nonsense"] })).ok).toBe(false);
     // None of the refusals wrote anything.
-    expect((await row(id)).config).toEqual({});
+    expect(seeded((await row(id)).config)).toEqual({});
   });
 
   it("refuses to half-turn an existing tile into a block", async () => {
@@ -377,10 +414,10 @@ describe("changing what a chart is", () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     await setCustomTileAction(r.tile.id, { config: { text: "  Acquisition  " } });
-    expect((await row(r.tile.id)).config).toEqual({ text: "Acquisition" });
+    expect(seeded((await row(r.tile.id)).config)).toEqual({ text: "Acquisition" });
     // And a value the schema refuses is refused, not silently dropped.
     expect((await setCustomTileAction(r.tile.id, { config: { text: "x".repeat(2001) } })).ok).toBe(false);
-    expect((await row(r.tile.id)).config).toEqual({ text: "Acquisition" });
+    expect(seeded((await row(r.tile.id)).config)).toEqual({ text: "Acquisition" });
   });
 
   it("refuses a chart it cannot draw, a key it cannot parse, and another org's row", async () => {
@@ -512,7 +549,7 @@ describe("a new tile starts from the flow's own presentation", () => {
     const r = await addCustomTileAction("va", `flow:${flow.id}:o1`, "number");
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.tile.config).toEqual({ precision: 2, target: 50000 });
+    expect(seeded(r.tile.config)).toEqual({ precision: 2, target: 50000 });
   });
 
   it("seeds nothing when the spec has nothing to say", async () => {
@@ -534,7 +571,7 @@ describe("a new tile starts from the flow's own presentation", () => {
     const r = await addCustomTileAction("va", `flow:${flow.id}:o1`, "number");
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.tile.config).toEqual({ precision: 0 });
+    expect(seeded(r.tile.config)).toEqual({ precision: 0 });
   });
 
   it("will not seed from another org's flow row", async () => {
@@ -556,6 +593,6 @@ describe("a new tile starts from the flow's own presentation", () => {
     const r = await addCustomTileAction("va", `flow:${flow.id}:o1`, "number");
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.tile.config).toEqual({});
+    expect(seeded(r.tile.config)).toEqual({});
   });
 });

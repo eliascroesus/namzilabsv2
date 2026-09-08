@@ -51,15 +51,24 @@ describe("the rail wears one fill for both selected and hovered", () => {
     expect(chip.slice(0, 600), "it is filled, not outlined").toContain("[&_svg]:fill-current");
   });
 
-  it("gives the foot a present, not a bell, on a filled secondary button", () => {
-    // A bell is the top bar's glyph for real unread notifications; spending it
-    // on an upsell put one picture on two unrelated things in one chrome.
+  it("keeps the present out of the rail's foot, where the bell also never went", () => {
+    /**
+     * THE GIFT MOVED UP, 8 SEP 2026. "Get Free Access" was a filled secondary
+     * button at the foot, carrying a present rather than a bell — a bell being
+     * the top bar's glyph for real unread notifications, and spending it here
+     * put one picture on two unrelated things in one chrome.
+     *
+     * Node 51:5756 puts the gift in the TOP BAR beside the account, as an
+     * offer among the account's own controls rather than as a third act under
+     * two others. The reasoning that kept the bell out of the rail is
+     * unchanged and now covers both glyphs: neither belongs in this column.
+     */
     const c = code(sidebar);
-    expect(c).toMatch(/<Gift \/>/);
-    expect(c, "Get Free Access is a filled button, not a nav row").toMatch(
-      /variant="secondary"[\s\S]{0,300}Get Free Access/,
-    );
-    expect(c, "the bell is gone from the rail").not.toMatch(/<Bell\b/);
+    expect(c, "the present went to the top bar").not.toMatch(/<Gift\b/);
+    expect(c, "the bell was never the rail's to spend").not.toMatch(/<Bell\b/);
+    expect(c, "and the row it sat on is gone with it").not.toMatch(/Get Free Access/);
+    // It has to be SOMEWHERE, or the offer was deleted rather than moved.
+    expect(code(topBar)).toMatch(/<Gift\b/);
   });
 });
 
@@ -75,10 +84,23 @@ describe("the top bar's centre belongs to the builder, not to a greeting", () =>
     expect(code(topBar), "an empty slot still claims no width").toContain("empty:hidden");
   });
 
-  it("drops the peer machinery that only existed to arbitrate the two", () => {
-    // A `peer` with no sibling reading it looks load-bearing to whoever finds
-    // it next.
-    expect(code(topBar)).not.toContain("peer-[:not(:empty)]:hidden");
+  it("keeps the peer machinery, which has a sibling reading it again", () => {
+    /**
+     * IT WAS DELETED FOR A GOOD REASON AND IS BACK FOR THE SAME ONE.
+     *
+     * `peer` + `empty:hidden` + `peer-[:not(:empty)]:hidden` let an occupied
+     * slot push the centre's other occupant aside without any page having to
+     * say which was which. When the greeting was deleted there was only one
+     * occupant, so the `peer` had no sibling reading it — a rule that looks
+     * load-bearing to whoever finds it next, and it went.
+     *
+     * The 8 September Figma puts a promo line in the centre (node 51:5788),
+     * so there are two occupants again: the builder's toolbar and a sentence.
+     * The arbitration is exactly the problem it was built for.
+     */
+    expect(code(topBar)).toContain("peer-[:not(:empty)]:hidden");
+    // …and the thing it arbitrates against must actually be a `peer`.
+    expect(code(topBar)).toMatch(/id="topbar-slot"[^>]*className="[^"]*\bpeer\b/);
   });
 });
 
@@ -155,12 +177,24 @@ describe("the rail, after the owner called it out beside the export", () => {
     expect(sidebar, "the shortcut is still announced").toMatch(/aria-keyshortcuts="Meta\+K"/);
   });
 
-  it("stands the head's switcher at 40 and the foot's filled row at 32", () => {
-    // The export measures the switcher at 40 (its search and nav rows are 36)
-    // and the foot's "New flow" at 32, which is the kit's filled-control rung.
+  it("stands the head's switcher at 40 and the foot's filled button at 36", () => {
+    /**
+     * THE FOOT'S BUTTON GREW FROM 32 TO 36, AND THE FIGMA IS THE ONLY REASON.
+     *
+     * The kit's filled-control rung is 32, and the header's three buttons
+     * (Add, Today, Refresh All) are all measured there in node 49:5423. The
+     * rail's own "New" is not: node 49:5744 draws it at 36, matching the
+     * search field and the nav rows it sits in a column with rather than the
+     * buttons it shares a vocabulary with.
+     *
+     * Followed rather than corrected toward the rung, because a full-width
+     * control in a 260px column is answering to the column's rhythm — every
+     * other row in that stack is 36 — and a 32px button between 36px
+     * neighbours reads as a mistake in a way it does not in a header row.
+     */
     const c = code(sidebar);
     expect(c, "the switcher is the one 40px row").toMatch(/cn\(SLOT, "h-10 /);
-    expect(c, "the filled foot row stands at 32").toMatch(/SLOT,\s*\n\s*"h-8",/);
+    expect(c, "the filled foot button stands at 36, with the column").toMatch(/size="sm" className="h-9 w-full"/);
   });
 });
 

@@ -11,10 +11,12 @@ import type { BoardView } from "@/lib/board/types";
 /**
  * THE PHONE'S NAVIGATION — the rail's own tree, in a drawer.
  *
- * A HOVER RAIL CANNOT SURVIVE A TOUCH SCREEN. Its 56px state is unlabelled
- * glyphs and everything that names them is `hover:` or `focus-within:`, so on
- * a phone it is a column you cannot read and cannot open. Below `md` the rail
- * is not rendered (see `Sidebar`) and this stands in: the bar grows a menu
+ * THE RAIL CANNOT SURVIVE A PHONE — for a NEW reason since 8 Sep 2026, landing
+ * in the same place. It used to be 56px of unlabelled glyphs whose every name
+ * was `hover:` or `focus-within:`, so on a touch screen it was a column you
+ * could not read and could not open. It is now always open and always 260px,
+ * which on a 390px screen is two thirds of the viewport. Below `md` it is not
+ * rendered either way (see `Sidebar`) and this stands in: the bar grows a menu
  * button, and pressing it slides the same rows in from the left.
  *
  * THE SAME COMPONENT TREE, NOT A COPY. `RailContent` is one export rendered
@@ -23,10 +25,14 @@ import type { BoardView } from "@/lib/board/types";
  * rows, two active-row rules, and a change to one of them landing on half the
  * product.
  *
- * `data-pinned="true"` ON A `group/rail` IS WHAT OPENS IT. Every label in
- * that tree rides `REVEAL`, which fades on hover, focus-within, or a pinned
- * rail. There is no hover here, so the wrapper claims the third: a drawer IS
- * a rail held open, which is what the attribute already means.
+ * THERE IS NOTHING LEFT TO OPEN. This wrapper carried `data-pinned="true"` on
+ * a `group/rail`, because every label in that tree rode `REVEAL` — which faded
+ * on hover, on focus-within, or on a pinned rail. There is no hover on a touch
+ * screen, so the drawer claimed the third state: a drawer IS a rail held open,
+ * which is what the attribute already meant. The rail has one width now and
+ * reveals nothing, so the attribute selects a state that does not exist and
+ * the group has no variant reading it. Both are gone; what remains is an
+ * ordinary scroll container.
  *
  * IT CLOSES ON NAVIGATION, INCLUDING A CHANGE OF VIEW. `usePathname` alone
  * would leave it standing over the board it just switched, because the
@@ -115,8 +121,8 @@ export function MobileDrawer({
             workspace switcher, which is a name for the WORKSPACE rather than
             for the panel. */}
         <SheetTitle className="sr-only">Navigation</SheetTitle>
-        <div className="group/rail flex h-full min-h-0 flex-col overflow-y-auto" data-pinned="true">
-          <RailContent hide={hide} views={views} workspace={workspace} account={account} invite />
+        <div className="flex h-full min-h-0 flex-col overflow-y-auto">
+          <RailContent hide={hide} views={views} workspace={workspace} account={account} />
         </div>
       </SheetContent>
     </Sheet>
