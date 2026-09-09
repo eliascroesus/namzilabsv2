@@ -247,7 +247,7 @@ describe("the bridge exposes every new role as a utility", () => {
     expect(bridge.length, "the @theme inline parser missed the block").toBeGreaterThan(200);
   });
 
-  for (const role of ["chrome", "panel", "avatar", "faint", "freshness-dot", "freshness-halo"]) {
+  for (const role of ["rail", "topbar", "panel", "avatar", "faint", "freshness-dot", "freshness-halo"]) {
     it(`--color-${role} is bridged to a utility`, () => {
       expect(bridge).toMatch(new RegExp(`--color-${role}:\\s*var\\(--${role}\\);`));
     });

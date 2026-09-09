@@ -115,7 +115,7 @@ export function MobileDrawer({
         side="left"
         showCloseButton={false}
         aria-describedby={undefined}
-        className="w-[280px] gap-0 border-border bg-chrome p-0"
+        className="w-[280px] gap-0 border-border bg-rail p-0"
       >
         {/* Radix names the dialog from this; the drawer's own head is the
             workspace switcher, which is a name for the WORKSPACE rather than

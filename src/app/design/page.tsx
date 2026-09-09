@@ -752,13 +752,13 @@ export default function DesignPage() {
           note="A 260px column on --chrome (#121214), the SAME value as the page beside it, separated by one hairline and nothing else. These tiles are a swatch — the real markup lives in src/components/sidebar.tsx and nowhere else, and it has moved on from what is drawn here: the column no longer opens or closes at all, and its foot carries an Invite Members card over the lime New button. The active row takes a neutral --control fill UNDER its glyph, and the glyph keeps text-marker on top of it — two signals, not the Figma's one — so the brand's 'location' job did not retire with the cyan after all; it just no longer carries the state alone."
         >
           <div className="flex items-stretch gap-4">
-            {/* `bg-chrome`, which is what the real rail is painted. It was
+            {/* `bg-rail`, which is what the real rail is painted. It was
                 `bg-background` while the rail, the bar and the page were one
                 colour and the distinction cost nothing; under three surfaces
                 that would draw the swatch on the PAGE's step and quietly
                 misreport the one thing this specimen exists to show. (`--rail`
                 itself is long retired — see the retired-token table.) */}
-            <div className="inline-flex items-start gap-3 rounded-card bg-chrome px-5 py-4">
+            <div className="inline-flex items-start gap-3 rounded-card bg-rail px-5 py-4">
               <span className="flex w-14 flex-col items-center">
                 {/* THE ACTIVE ROW IS NEUTRAL UNDER THE GLYPH, NOT INSTEAD OF
                     IT. The 4 Sep 2026 Figma marks the active row with a
@@ -806,7 +806,7 @@ export default function DesignPage() {
           title="Frame"
           note="THE NOTCH IS GONE AGAIN AND --radius-frame IS 0, by its own argument. A radius reveals whatever is BEHIND the element it is cut into. It went to 0 when the rail, the bar and the page were one colour; it came back at 8px on 4 September because a third surface appeared for it to cut into; and the 8 September Figma removes that surface — panel, chrome and page are all #121214 — so the cut reveals #121214 against #121214 and draws nothing at all. This is the same sentence that reinstated it, read in the other direction. The token stays defined so rounded-frame remains a legal spelling for whatever the shell decides next."
         >
-          <div className="flex h-40 overflow-hidden rounded-card bg-chrome">
+          <div className="flex h-40 overflow-hidden rounded-card bg-rail">
             {/* The rail's width, holding the chrome's own colour — the panel
                 butts square against it, which is the half of this specimen
                 that is easy to miss. */}

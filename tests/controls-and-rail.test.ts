@@ -29,11 +29,11 @@ describe("the rail wears one fill for both selected and hovered", () => {
     // The rail had TWO raises: `--control` (#202020) for the active row and
     // `--accent` (#3A3A3A) for hover — so a hovered row looked more selected
     // than the selected one.
-    // `--chrome-control` since 8 Sep: the rail is a permanently dark band in
+    // `--rail-control` since 8 Sep: the rail is a permanently dark band in
     // both themes (49:5268 and 58:5824 draw it identically), so it raises to
     // the CHROME's control step rather than the content's — `--control` is
     // #F4F4F4 on light and would flash white under the pointer.
-    expect(code(sidebar)).toMatch(/const SLOT = "[^"]*hover:bg-chrome-control/);
+    expect(code(sidebar)).toMatch(/const SLOT = "[^"]*hover:bg-rail-control/);
   });
 
   it("leaves no --accent hover anywhere in the column", () => {

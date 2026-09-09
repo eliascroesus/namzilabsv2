@@ -34,9 +34,17 @@ const SRC = join(ROOT, "src");
  * is whether the token is declared, not what it is called. Re-deleting the
  * roles re-arms the rule automatically, with no list to remember to update.
  */
-const LIVE_CHROME_ROLES = new Set(
-  [...readFileSync(join(ROOT, "src/app/globals.css"), "utf8").matchAll(/--chrome-([a-z-]+)\s*:/g)].map((m) => m[1]),
-);
+const LIVE_ROLES = (() => {
+  const css = readFileSync(join(ROOT, "src/app/globals.css"), "utf8");
+  const out = new Set<string>();
+  for (const [, name] of css.matchAll(/--([a-z][a-z0-9-]*)\s*:/g)) {
+    out.add(name);
+    // Tailwind v4 builds `bg-x` from `--color-x`, so the class carries the
+    // token's name WITHOUT that prefix and both spellings have to count.
+    if (name.startsWith("color-")) out.add(name.slice("color-".length));
+  }
+  return out;
+})();
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir)) {
@@ -326,14 +334,28 @@ const RULES: Rule[] = [
       )?.[0];
       if (!hit) return null;
       /**
-       * A `chrome-*` class is only a violation if the ROLE IS NOT DECLARED.
-       * See `LIVE_CHROME_ROLES` above: the chrome is a real surface again, and
-       * banning the prefix would ban the roles the shell is built out of. A
-       * name that globals.css does not define still fails here, which is the
-       * whole point of the rule.
+       * A NAME ON THIS LIST IS ONLY A VIOLATION IF THE ROLE IS NOT DECLARED,
+       * and that test now runs for every name rather than for `chrome-*` alone.
+       *
+       * The liveness check was added for the chrome, when nine dead
+       * `--chrome-*` roles were followed by seven live ones and a blanket
+       * prefix ban made the shell a build failure. The lesson was written down
+       * here at the time — "a name blacklist cannot tell a dead token from a
+       * reborn one; liveness can" — but the fix was applied to one prefix.
+       *
+       * `--rail` is the next name to come back: the 9 September Figma draws the
+       * rail and the top bar as two different colours, so `--chrome` splits into
+       * `--rail-*` and `--topbar-*` and `bg-rail` is correct code again. Under
+       * the old rule it was a hard-coded failure, and the honest fix is the one
+       * the comment already described rather than deleting `rail` from the list
+       * and waiting for the next resurrection.
+       *
+       * A name globals.css does not define still fails, which is the whole
+       * point of the rule, and re-deleting any of these re-arms it with no list
+       * to remember to update.
        */
-      const chrome = hit.match(/-chrome-([a-z-]+)$/);
-      if (chrome && LIVE_CHROME_ROLES.has(chrome[1])) return null;
+      const role = hit.replace(/^(?:bg|text|border|divide|ring|outline|fill|stroke|from|via|to|shadow)-/, "");
+      if (LIVE_ROLES.has(role)) return null;
       return hit;
     },
   },

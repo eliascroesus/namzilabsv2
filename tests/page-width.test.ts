@@ -136,7 +136,7 @@ describe("the page container and the skeleton that stands in for it", () => {
       // loose `w-(\d+)` scan finds a `w-2` in some unrelated row first — which
       // would compare two numbers that are not the measurement in question and
       // pass or fail for the wrong reason.
-      const rail = code.split("\n").find((l) => /border-r border-(?:chrome-)?border/.test(l));
+      const rail = code.split("\n").find((l) => /border-r border-(?:rail-)?border/.test(l));
       if (!rail) throw new Error("could not find the rail's own edge");
       const m = rail.match(/w-\[(\d+)px\]/) ?? rail.match(/\bw-(\d+)\b/);
       if (!m) throw new Error("could not find a sidebar width");
@@ -251,14 +251,14 @@ describe("the page container and the skeleton that stands in for it", () => {
   it("mirrors both of the chrome's hairlines, which now take real pixels", () => {
     const code = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
     // The rail's right edge, and the ghost standing in for it.
-    expect(code(sidebar)).toMatch(/border-r border-chrome-border/);
+    expect(code(sidebar)).toMatch(/border-r border-rail-border/);
     // `hidden` precedes the width now — the ghost mirrors the rail's absence
     // below `md` as well as its 56px above it, or the skeleton reserves a
     // column the real chrome will not draw.
-    expect(code(skeleton)).toMatch(/hidden w-65[^"]*border-r border-chrome-border/);
+    expect(code(skeleton)).toMatch(/hidden w-65[^"]*border-r border-rail-border/);
     // The bar's bottom edge, and its ghost.
-    expect(code(read("src/components/top-bar.tsx"))).toMatch(/<header className="[^"]*border-b border-chrome-border/);
-    expect(code(skeleton)).toMatch(/h-\[65px\][^"]*border-b border-chrome-border/);
+    expect(code(read("src/components/top-bar.tsx"))).toMatch(/<header className="[^"]*border-b border-topbar-border/);
+    expect(code(skeleton)).toMatch(/h-\[65px\][^"]*border-b border-topbar-border/);
   });
 });
 
@@ -744,8 +744,8 @@ describe("the rail's re-dress — a workspace switcher, Main Menu, a search fiel
      * a hue anyone has to be able to distinguish. The owner asked for white
      * directly. See `RailChip`.
      */
-    expect(sidebar).toContain('className={cn(SLOT, active && "bg-chrome-control")}');
-    expect(sidebar).toMatch(/tone === "active"\s*\n\s*\? "text-chrome-foreground \[&_svg\]:fill-current"/);
+    expect(sidebar).toContain('className={cn(SLOT, active && "bg-rail-control")}');
+    expect(sidebar).toMatch(/tone === "active"\s*\n\s*\? "text-rail-foreground \[&_svg\]:fill-current"/);
     expect(sidebar, "the active glyph must not go back to the brand").not.toMatch(/\? "text-marker"/);
     expect(sidebar, "the fill must not land back on the chip").not.toMatch(/"bg-control text-marker"/);
     expect(sidebar, "the hover step must not come back as the active fill").not.toMatch(/"bg-accent text-marker"/);
@@ -758,7 +758,7 @@ describe("the rail's re-dress — a workspace switcher, Main Menu, a search fiel
   });
 
   it("labels the nav list in the faint role, only", () => {
-    expect(sidebar).toMatch(/text-chrome-faint/);
+    expect(sidebar).toMatch(/text-rail-faint/);
     expect(sidebar).toMatch(/Main Menu/);
   });
 
@@ -780,7 +780,7 @@ describe("the rail's re-dress — a workspace switcher, Main Menu, a search fiel
      */
     const code = sidebar.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
     expect(code, "the search row is an Input").toMatch(/<Input\b[\s\S]{0,600}aria-keyshortcuts="Meta\+K"/);
-    expect(code, "wearing the rail's row geometry").toMatch(/cn\(SLOT, "border-chrome-border bg-chrome-control pl-9/);
+    expect(code, "wearing the rail's row geometry").toMatch(/cn\(SLOT, "border-rail-border bg-rail-control pl-9/);
     expect(code, "and it is no longer a Button pretending").not.toMatch(
       /<Button[^>]*aria-keyshortcuts="Meta\+K"/,
     );
@@ -826,7 +826,7 @@ describe("the skeleton mirrors the frame's new order", () => {
     // beside it, which is what both 8 September frames draw. See
     // `app-frame.tsx`. Asserting the new order is what stops the old shape
     // being restored in one file and not the other.
-    expect(code.indexOf("border-r border-chrome-border")).toBeLessThan(code.indexOf("border-b border-chrome-border"));
+    expect(code.indexOf("border-r border-rail-border")).toBeLessThan(code.indexOf("border-b border-topbar-border"));
   });
 
   it("gives its content ghost the panel's own surface and corner", () => {
@@ -834,9 +834,9 @@ describe("the skeleton mirrors the frame's new order", () => {
     expect(skeleton, "the mirror must not keep a corner the frame dropped").not.toMatch(/rounded-tl-frame/);
   });
 
-  it("puts the two chrome ghosts on --chrome, matching the real bar and rail", () => {
+  it("puts each ghost on the surface it mirrors — the rail's and the bar's", () => {
     const code = skeleton.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
-    expect(code).toMatch(/h-\[65px\][^"]*bg-chrome/);
-    expect(code).toMatch(/w-65[^"]*bg-chrome/);
+    expect(code).toMatch(/h-\[65px\][^"]*bg-topbar/);
+    expect(code).toMatch(/w-65[^"]*bg-rail/);
   });
 });

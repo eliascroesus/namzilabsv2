@@ -82,7 +82,7 @@ export function TopBar({
     // reads this bar's height by matching `<header className="…"`, and a
     // comment between the two breaks the check that keeps the loading
     // skeleton's band the same height as the real one.
-    <header className="flex h-[65px] shrink-0 items-center justify-between gap-4 border-b border-chrome-border bg-chrome px-6 py-4">
+    <header className="flex h-[65px] shrink-0 items-center justify-between gap-4 border-b border-topbar-border bg-topbar px-6 py-4">
       {/* ── WHO YOU ARE ──────────────────────────────────────────────────
           The menu button exists only below `md`, where there is no rail to the
           left of this bar — it is the phone's whole navigation, so it takes
@@ -95,7 +95,7 @@ export function TopBar({
             aria-label="Your profile"
             className={cn(
               buttonVariants({ variant: "ghost", size: "icon" }),
-              "rounded-full bg-chrome-accent text-xs font-semibold text-chrome-foreground hover:brightness-110 active:brightness-95",
+              "rounded-full bg-topbar-accent text-xs font-semibold text-topbar-foreground hover:brightness-110 active:brightness-95",
             )}
           >
             {account.avatarUrl ? (
@@ -107,7 +107,7 @@ export function TopBar({
           </Link>
         )}
         {accountName && (
-          <span className="hidden shrink-0 text-sm font-semibold text-chrome-foreground sm:inline">{accountName}</span>
+          <span className="hidden shrink-0 text-sm font-semibold text-topbar-foreground sm:inline">{accountName}</span>
         )}
 
         {/* THE OFFER, WITH A DOT ON IT. It was "Get Free Access" — a filled
@@ -122,7 +122,7 @@ export function TopBar({
           href="/dashboard/settings"
           aria-label="Get free access"
           title="Get free access"
-          className="relative flex size-5 shrink-0 items-center justify-center text-chrome-foreground transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:text-chrome-muted [&_svg]:size-5"
+          className="relative flex size-5 shrink-0 items-center justify-center text-topbar-foreground transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:text-topbar-muted [&_svg]:size-5"
         >
           <Gift />
           <span aria-hidden className="absolute -right-0.5 -top-0.5 size-1.5 rounded-full bg-primary" />
@@ -144,9 +144,9 @@ export function TopBar({
             and colour — which is how the Figma sets it (node 51:5788): the
             sentence leans, the NAME is what stands out inside it. `<em>` is
             already italic, so the class would be a second spelling of the tag. */}
-        <p className="hidden shrink-0 text-sm italic text-chrome-foreground peer-[:not(:empty)]:hidden lg:block">
+        <p className="hidden shrink-0 text-sm italic text-topbar-foreground peer-[:not(:empty)]:hidden lg:block">
           <em>Try </em>
-          <em className="font-black text-chrome-brand">Namzilabs</em>
+          <em className="font-black text-rail-brand">Namzilabs</em>
           <em> for free</em>
         </p>
       </div>
@@ -157,7 +157,7 @@ export function TopBar({
             cannot honestly claim a freshness it has not measured, so this
             stays a slot rather than a string — the builder already fills it,
             and it is where the dashboard's own freshness belongs. */}
-        <div id="topbar-status" className="flex shrink-0 items-center text-sm text-chrome-muted empty:hidden" />
+        <div id="topbar-status" className="flex shrink-0 items-center text-sm text-topbar-muted empty:hidden" />
 
         <ShareLink />
         <ThemeToggle />
@@ -166,11 +166,11 @@ export function TopBar({
           variant="ghost"
           size="icon"
           aria-label={unread > 0 ? `Notifications — ${unread} unread` : "Notifications"}
-          className="relative rounded-full text-chrome-foreground hover:bg-chrome-accent active:bg-chrome-accent"
+          className="relative rounded-full text-topbar-foreground hover:bg-topbar-accent active:bg-topbar-accent"
         >
           <Bell />
           {unread > 0 && (
-            <span className="absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full border border-chrome bg-primary text-2xs font-semibold leading-none text-primary-foreground">
+            <span className="absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full border border-topbar bg-primary text-2xs font-semibold leading-none text-primary-foreground">
               {unread > 9 ? "9+" : unread}
             </span>
           )}
@@ -222,7 +222,7 @@ function ShareLink() {
          the bar with no box. `h-auto px-0` takes the rung's height and padding
          off while keeping the variant's states, its focus ring and its
          disabled handling, which is the half that actually matters. */
-      className="hidden h-auto shrink-0 px-0 text-sm font-semibold text-chrome-foreground hover:bg-transparent hover:text-chrome-muted active:bg-transparent md:inline-flex [&_svg]:size-3.5"
+      className="hidden h-auto shrink-0 px-0 text-sm font-semibold text-topbar-foreground hover:bg-transparent hover:text-topbar-muted active:bg-transparent md:inline-flex [&_svg]:size-3.5"
     >
       <Link2 aria-hidden />
       {/* `aria-live` so the change is announced rather than only seen. */}
@@ -259,7 +259,7 @@ function ThemeToggle() {
       variant="ghost"
       onClick={() => setTheme(dark ? "light" : "dark")}
       aria-label={dark ? "Switch to the light theme" : "Switch to the dark theme"}
-      className="h-auto shrink-0 px-0 text-chrome-foreground hover:bg-transparent hover:text-chrome-muted active:bg-transparent [&_svg]:size-4"
+      className="h-auto shrink-0 px-0 text-topbar-foreground hover:bg-transparent hover:text-topbar-muted active:bg-transparent [&_svg]:size-4"
     >
       {mounted && (dark ? <Sun aria-hidden /> : <Moon aria-hidden />)}
     </Button>

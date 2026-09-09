@@ -66,7 +66,7 @@ describe("the drawer", () => {
   it("is the kit's sheet, on the left, at the export's width and fill", () => {
     expect(drawer).toContain('side="left"');
     expect(drawer).toContain("w-[280px]");
-    expect(drawer).toContain("bg-chrome");
+    expect(drawer).toContain("bg-rail");
     expect(drawer).toContain("border-border");
   });
 
@@ -182,11 +182,11 @@ describe("the top bar below md", () => {
      * would make it read as the only pressable thing among three.
      */
     const stripped = code(bar);
-    // `--chrome-*` since the bar became a permanently dark band: `bg-avatar`
+    // `--topbar-*` since the bar became a permanently dark band: `bg-avatar`
     // and `text-foreground` are content roles that invert with the theme, and
     // this surface does not.
     expect(stripped, "the avatar keeps its disc").toContain(
-      "rounded-full bg-chrome-accent text-xs font-semibold text-chrome-foreground",
+      "rounded-full bg-topbar-accent text-xs font-semibold text-topbar-foreground",
     );
     expect(stripped, "the bell is bare, like the moon and the gift beside it").not.toContain(
       "relative rounded-full border border-input bg-avatar",

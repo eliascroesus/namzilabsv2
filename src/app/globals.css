@@ -712,19 +712,33 @@
    * something to check, and so flipping one theme's chrome later is an edit in
    * the place you would look for it.
    */
-  --chrome: #121214;
-  --chrome-foreground: #ffffff; /* 18.71:1 */
-  --chrome-muted: #7e7e7e; /* 4.61:1 — the bar's "Updated just now", the rail's rest labels */
-  --chrome-faint: #6e6e6e; /* 3.67:1 — the "Main Menu" caps label ONLY, never a sentence */
-  --chrome-border: #343434; /* the rail's right edge and the bar's bottom */
-  --chrome-control: #202020; /* the search field, the active nav row, the invite card */
-  --chrome-accent: #3a3a3a; /* the avatar disc, and a chrome hover */
-  /* THE BRAND, ON THE CHROME. `--marker` cannot be used here: it is the lime
-     on dark and a solved-down #4F7A00 on LIGHT, and this band is dark in both
-     — so on light `text-marker` would paint dark olive on near-black. The
-     chrome always gets the bright value, because it always has the dark
-     ground that value was solved against. */
-  --chrome-brand: var(--color-brand-400); /* 15.53:1 on #121214 */
+  --rail: #121214;
+  --rail-foreground: #ffffff; /* 18.71:1 */
+  --rail-muted: #7e7e7e; /* 4.61:1 — the rail's rest labels */
+  --rail-faint: #6e6e6e; /* 3.67:1 — the "Main Menu" caps label ONLY, never a sentence */
+  --rail-border: #343434; /* the rail's right edge */
+  --rail-control: #202020; /* the active nav row, the invite card */
+  --rail-accent: #3a3a3a; /* the avatar disc, and a rail hover */
+  /* THE BRAND, ON THE RAIL. `--marker` cannot be used here: it is the lime on
+     dark and a solved-down #4F7A00 on LIGHT, and this column is dark in both —
+     so on light `text-marker` would paint dark olive on near-black. The rail
+     always gets the bright value, because it always has the dark ground that
+     value was solved against. */
+  --rail-brand: var(--color-brand-400); /* 15.53:1 on #121214 */
+
+  /* THE TOP BAR — STILL #121214 HERE, AND THAT IS THE POINT OF THIS COMMIT.
+     Node 0:5 draws this band WHITE on light, which is the change the branch
+     exists for. It is not white yet: bar 1 still holds white-on-dark content,
+     so moving the ground before the content is white on white. The SPLIT is
+     this commit; the Figma's values land with the bars rebuilt to carry them. */
+  --topbar: #121214;
+  --topbar-foreground: #ffffff;
+  --topbar-muted: #7e7e7e; /* the bar's "Updated just now" */
+  --topbar-faint: #6e6e6e;
+  --topbar-border: #343434; /* the bar's bottom rule */
+  --topbar-control: #202020; /* the search field, an icon button's hover fill */
+  --topbar-accent: #3a3a3a; /* the avatar disc, and an icon button's hover */
+  --topbar-active: #3a3a3a; /* the selected view tab */
 
   /* THE CARD — white, and it no longer borrows the chrome, because the chrome
      is dark here now. Node 58:6173 draws it `bg-white` with an #E1E1E1 rim. */
@@ -870,19 +884,33 @@
    * On THIS theme they coincide with the content roles; on light they do not,
    * and that is the whole reason they exist separately.
    */
-  --chrome: #121214;
-  --chrome-foreground: #ffffff; /* 18.71:1 */
-  --chrome-muted: #7e7e7e; /* 4.61:1 — the bar's "Updated just now", the rail's rest labels */
-  --chrome-faint: #6e6e6e; /* 3.67:1 — the "Main Menu" caps label ONLY, never a sentence */
-  --chrome-border: #343434; /* the rail's right edge and the bar's bottom */
-  --chrome-control: #202020; /* the search field, the active nav row, the invite card */
-  --chrome-accent: #3a3a3a; /* the avatar disc, and a chrome hover */
-  /* THE BRAND, ON THE CHROME. `--marker` cannot be used here: it is the lime
-     on dark and a solved-down #4F7A00 on LIGHT, and this band is dark in both
-     — so on light `text-marker` would paint dark olive on near-black. The
-     chrome always gets the bright value, because it always has the dark
-     ground that value was solved against. */
-  --chrome-brand: var(--color-brand-400); /* 15.53:1 on #121214 */
+  --rail: #121214;
+  --rail-foreground: #ffffff; /* 18.71:1 */
+  --rail-muted: #7e7e7e; /* 4.61:1 — the rail's rest labels */
+  --rail-faint: #6e6e6e; /* 3.67:1 — the "Main Menu" caps label ONLY, never a sentence */
+  --rail-border: #343434; /* the rail's right edge */
+  --rail-control: #202020; /* the active nav row, the invite card */
+  --rail-accent: #3a3a3a; /* the avatar disc, and a rail hover */
+  /* THE BRAND, ON THE RAIL. `--marker` cannot be used here: it is the lime on
+     dark and a solved-down #4F7A00 on LIGHT, and this column is dark in both —
+     so on light `text-marker` would paint dark olive on near-black. The rail
+     always gets the bright value, because it always has the dark ground that
+     value was solved against. */
+  --rail-brand: var(--color-brand-400); /* 15.53:1 on #121214 */
+
+  /* THE TOP BAR — STILL #121214 HERE, AND THAT IS THE POINT OF THIS COMMIT.
+     Node 0:5 draws this band WHITE on light, which is the change the branch
+     exists for. It is not white yet: bar 1 still holds white-on-dark content,
+     so moving the ground before the content is white on white. The SPLIT is
+     this commit; the Figma's values land with the bars rebuilt to carry them. */
+  --topbar: #121214;
+  --topbar-foreground: #ffffff;
+  --topbar-muted: #7e7e7e; /* the bar's "Updated just now" */
+  --topbar-faint: #6e6e6e;
+  --topbar-border: #343434; /* the bar's bottom rule */
+  --topbar-control: #202020; /* the search field, an icon button's hover fill */
+  --topbar-accent: #3a3a3a; /* the avatar disc, and an icon button's hover */
+  --topbar-active: #3a3a3a; /* the selected view tab */
 
   /* THE CARD NO LONGER SHARES THE CHROME. It is the one surface that steps
      away — #191919, at 1.06:1 on the page — which is the entire reason the
@@ -1116,14 +1144,22 @@
   --color-popover: var(--popover);
   --color-popover-foreground: var(--popover-foreground);
   --color-control: var(--control);
-  --color-chrome: var(--chrome);
-  --color-chrome-foreground: var(--chrome-foreground);
-  --color-chrome-muted: var(--chrome-muted);
-  --color-chrome-faint: var(--chrome-faint);
-  --color-chrome-border: var(--chrome-border);
-  --color-chrome-control: var(--chrome-control);
-  --color-chrome-accent: var(--chrome-accent);
-  --color-chrome-brand: var(--chrome-brand);
+  --color-rail: var(--rail);
+  --color-rail-foreground: var(--rail-foreground);
+  --color-rail-muted: var(--rail-muted);
+  --color-rail-faint: var(--rail-faint);
+  --color-rail-border: var(--rail-border);
+  --color-rail-control: var(--rail-control);
+  --color-rail-accent: var(--rail-accent);
+  --color-rail-brand: var(--rail-brand);
+  --color-topbar: var(--topbar);
+  --color-topbar-foreground: var(--topbar-foreground);
+  --color-topbar-muted: var(--topbar-muted);
+  --color-topbar-faint: var(--topbar-faint);
+  --color-topbar-border: var(--topbar-border);
+  --color-topbar-control: var(--topbar-control);
+  --color-topbar-accent: var(--topbar-accent);
+  --color-topbar-active: var(--topbar-active);
   --color-panel: var(--panel);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
@@ -1841,13 +1877,6 @@ html.dark {
   box-shadow: var(--shadow-float);
 }
 
-/* The rail's wash, as a utility so only one file decides it. It is the same
-   colour as the page now; the RULE at its right edge is what separates them. */
-@layer components {
-  .bg-rail {
-    background-color: var(--background);
-  }
-}
 
 /**
  * A CARD THAT ANSWERS THE POINTER. Nothing on a list should sit inert while
