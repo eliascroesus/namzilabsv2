@@ -35,44 +35,43 @@ export const GRID_COLS = 12;
 /**
  * ONE ROW'S PITCH IN PIXELS — THE GUTTER INCLUDED.
  *
- * Forty-eight is a row PLUS the gap beneath it, so a tile `h` rows tall
- * measures `h * ROW_UNIT_PX - GRID_GAP_PX`: a number tile at `h: 4` is 168px, a
- * chart at `h: 6` is 264px. Getting this backwards — treating 48 as the row and
- * adding the gap on top — inflates every tile by 24px per row, which is 96px on
- * a number tile and looks like a padding bug rather than an arithmetic one.
+ * A tile `h` rows tall measures `h * ROW_UNIT_PX - GRID_GAP_PX`. Getting that
+ * backwards — treating the pitch as the row and adding the gap on top —
+ * inflates every tile by a gap per row, which looks like a padding bug rather
+ * than an arithmetic one.
  *
- * THE GAP IS 16, AND IT WENT BACK, BECAUSE THE FIGMA DRAWS 16.
+ * THE GUTTER IS 24, AND IT HAS BEEN BOTH TWICE. This is the third time these
+ * two numbers have moved, so the reasoning matters more than the values:
  *
- * It was 16, then 24 on the argument that this was "the one grid in the product
- * whose tiles sat closer to each other than the page sits to its own edges".
- * That is a consistency argument, and both 8 September frames overrule it: node
- * 49:5447 sets `gap-x-[16px] gap-y-[16px]` inside a `p-[24px]` main. The design
- * packs the tiles tighter than the page inset ON PURPOSE — a board is one
- * object made of cards, and spacing its cards as far apart as the page's own
- * margin makes them read as separate objects that happen to be near each other.
+ *   - It was 24, on the argument that a board should not pack its cards tighter
+ *     than the page sits to its own edges.
+ *   - The 8 September frames overruled that: node 49:5447 draws `gap-16` inside
+ *     a `p-24` main, and the measured cost of 24 was a ten-row card 456px tall
+ *     against that frame's 384. So 24 -> 16, and the pitch with it, 48 -> 40.
+ *   - Node 0:5 (9 September) draws 24 again — chart cards 521.33 wide and 456
+ *     tall, stat cards 385 wide, its content column inset 24. Every one of
+ *     those falls out of this constant, which is why they are here and not in a
+ *     stylesheet.
  *
- * The measured cost of having it wrong: a four-column chart card came out
- * 521.3px wide against the Figma's 526.67, and a ten-row card 456px tall
- * against 384 — 72px, which is most of a stat tile. Both fall out of this one
- * constant, which is why the numbers are here and not in a stylesheet.
+ * So the 456 that was "72px too tall" in September is the frame's own number
+ * now. Nothing was wrong either time; the design changed, and the only reason
+ * that is legible is that the cost was measured rather than argued.
  *
- * THE ROW STAYS 24. The pitch is the row PLUS the gap, so it moves with the
- * gutter: 24 + 16 = 40. A tile `h` rows tall measures `h * ROW_UNIT_PX -
- * GRID_GAP_PX` — a 10-row chart card is 384, which is the Figma's own number.
- * Getting the pitch backwards — treating it as the row and adding the gap on
- * top — inflates every tile by a gap per row, which looks like a padding bug
- * rather than an arithmetic one.
+ * THE ROW ITSELF NEVER MOVED — it is 24 in all three arrangements. The PITCH is
+ * the row plus the gutter, so it tracks the gutter: 24 + 24 = 48. A ten-row
+ * chart card is `10 * 48 - 24` = 456, and a four-column card at a 24 gutter is
+ * 521.33, which is what node 0:5 draws.
  *
  * The CSS spells the same fact the other way round (`grid-auto-rows: 24px` with
- * `gap: 16px`), derived from these two rather than typed, which is why both
+ * `gap: 24px`), derived from these two rather than typed, which is why both
  * live here: the resize gesture converts pixels to rows with this pitch, and if
  * it and the grid disagreed a tile would settle a row away from where it was
- * dropped.
+ * dropped. `tests/board-grid.test.ts` asserts the pair.
  */
-export const ROW_UNIT_PX = 40;
+export const ROW_UNIT_PX = 48;
 
 /** The gutter between cells, both axes. Must equal the CSS `gap`. */
-export const GRID_GAP_PX = 16;
+export const GRID_GAP_PX = 24;
 
 /** Column counts the board is rendered into: desktop, tablet, phone. */
 export type GridCols = 12 | 6 | 1;

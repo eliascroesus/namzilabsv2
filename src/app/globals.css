@@ -1524,17 +1524,18 @@ html.dark {
   .board-canvas {
     display: grid;
     grid-template-columns: repeat(1, minmax(0, 1fr));
-    /* THE ROW IS 24 AND THE GUTTER IS 16, which is `ROW_UNIT_PX`(40) minus
-       `GRID_GAP_PX`(16) and `GRID_GAP_PX` itself. Those two constants live in
+    /* THE ROW IS 24 AND THE GUTTER IS 24, which is `ROW_UNIT_PX`(48) minus
+       `GRID_GAP_PX`(24) and `GRID_GAP_PX` itself. Those two constants live in
        `src/lib/board/grid.ts` and this rule is the other half of the same fact:
        the resize gesture converts pixels to rows with that pitch, so if the CSS
        and the constants disagree a tile settles a row away from where it was
        dropped. `tests/board-grid.test.ts` asserts the pair.
-       The gutter was 24 for consistency with the page's own inset; both 8
-       September frames draw 16 (node 49:5447), and the measured cost of the
-       larger value was a ten-row card 72px too tall. */
+       This gutter has been 24, then 16, then 24. The 8 September frames drew
+       16 (node 49:5447) and a ten-row card at 24 was 456 against their 384;
+       node 0:5 draws 24 and a ten-row card of 456. See `grid.ts`, which owns
+       the arithmetic and the history. */
     grid-auto-rows: 24px;
-    gap: 16px;
+    gap: 24px;
   }
   .board-cell {
     grid-column: var(--c1);

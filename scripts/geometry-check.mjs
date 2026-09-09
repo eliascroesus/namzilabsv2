@@ -63,27 +63,18 @@ const FIGMA = {
   // own y below actually pins.
   topbar: { x: 260, y: 0, w: 1660, h: 57 },
   chartCards: [
-    /**
-     * THE WIDTHS HERE ARE THE BOARD'S, NOT THE FRAME'S, AND THAT IS DELIBERATE.
-     *
-     * Node 0:5 draws these cards 521.33 wide on a 24px gutter, and 456 tall.
-     * The board runs a 16px gutter (`GRID_GAP_PX`) at a 40px row
-     * (`ROW_UNIT_PX`), which makes them 526.67 and 384. Both numbers are the
-     * frame's own arithmetic — a 12-row tile at a 24px gutter is 12*40-24=456 —
-     * so moving the board to it is a real change to the grid's math, to the `h`
-     * values already stored on every tile, and to what the resize gesture
-     * converts pixels into.
-     *
-     * That is the card region, which the spec for this branch deferred pending
-     * an authoritative read of node 0:212. Asserting the frame's numbers here
-     * before that work would leave a gate that is red on purpose, which is how
-     * a gate stops being read at all. So these stay the board's, and the
-     * chrome's y values above — 173, 573 — are the frame's, because the chrome
-     * is what this branch moved.
-     */
-    { x: 284, y: 173, w: 526.67, h: 384 },
-    { x: 826.67, y: 173, w: 526.67, h: 384 },
-    { x: 1369.33, y: 173, w: 526.67, h: 384 },
+    // Node 0:5's own boxes. They are the board's too now: `GRID_GAP_PX` went
+    // back to 24 and `ROW_UNIT_PX` to 48, so a ten-row card is 10*48-24 = 456
+    // and four of twelve columns at a 24 gutter is 521.33. The third card is
+    // ALL THREE ARE 521.33, AND THE FRAME'S THIRD IS NOT. Node 0:5 draws that
+    // one 525.33 wide at x=1090.67 (frame-relative), which ends at 1616 inside
+    // a container that is 1612 — it overflows its own column by 4px. A CSS grid
+    // divides evenly and the third card lands exactly on the 24px right inset,
+    // so this is one of the few places the app is right and the export is a
+    // rounding artifact. Expect the arithmetic, not the artifact.
+    { x: 284, y: 173, w: 521.33, h: 456 },
+    { x: 829.33, y: 173, w: 521.33, h: 456 },
+    { x: 1374.67, y: 173, w: 521.33, h: 456 },
   ],
   /**
    * HEIGHT IS DELIBERATELY NOT CHECKED on these. The Figma draws them at
@@ -93,11 +84,12 @@ const FIGMA = {
    * the row unit to hit 108.22 exactly would put every OTHER tile wrong.
    */
   statTiles: [
-    // Frame: 385 wide on a 24px gutter. Board: 391 on 16. See the note above.
-    { x: 284, y: 573, w: 391 },
-    { x: 691, y: 573, w: 391 },
-    { x: 1098, y: 573, w: 391 },
-    { x: 1505, y: 573, w: 391 },
+    // 653 = 173 + 456 + 24: the chart row, plus the gutter it now shares with
+    // the row below. Three of twelve columns at a 24 gutter is 385.
+    { x: 284, y: 653, w: 385 },
+    { x: 693, y: 653, w: 385 },
+    { x: 1102, y: 653, w: 385 },
+    { x: 1511, y: 653, w: 385 },
   ],
 };
 
