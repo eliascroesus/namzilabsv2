@@ -243,3 +243,47 @@ describe("bar two's slots are filled by the page that knows", () => {
     expect(harness).toMatch(/<TopBarFreshness/);
   });
 });
+
+/**
+ * THE REAL BOARD'S CONTROLS, NOT THE HARNESS'S.
+ *
+ * This block exists because the harness lied by omission for two commits.
+ * `/design/overview` builds its OWN four buttons — it has no board behind it,
+ * so it cannot instantiate `AddChartMenu` or a refresh form — which means it
+ * can be pixel-correct against the frame while the actual dashboard is not.
+ * That is exactly what happened: Add stayed lime, Refresh kept a lowercase "a",
+ * and Compare To was never added to the real row at all, while every screenshot
+ * of the harness looked right.
+ *
+ * So the assertions below read `dashboard/page.tsx` and `custom-board.tsx` —
+ * the files a customer actually sees — and the harness is checked separately
+ * above. A design page that cannot drift from the product is worth more than
+ * one that renders faster.
+ */
+describe("the board's own control row matches the frame", () => {
+  const board = readFileSync(join(__dirname, "..", "src/app/dashboard/page.tsx"), "utf8");
+  const canvas = readFileSync(join(__dirname, "..", "src/app/dashboard/custom-board.tsx"), "utf8");
+
+  it("draws Add outlined, not filled with the brand", () => {
+    expect(canvas).toMatch(/variant="white"\s*\n\s*size="bar"/);
+    expect(canvas).not.toMatch(/variant="accent"[^>]*onClick=\{\(\) => setOpen/);
+  });
+
+  it("carries Compare To, disabled until there is a series behind it", () => {
+    expect(board).toMatch(/Compare To/);
+    expect(board).toMatch(/disabled\s*\n\s*title="Comparison periods are not built yet"/);
+  });
+
+  it("capitalises Refresh All the way the frame does", () => {
+    expect(board).toMatch(/Refresh All/);
+    expect(board).not.toMatch(/>\s*Refresh all\s*</);
+  });
+
+  it("stands all four at the frame's 26px rung", () => {
+    // RangeMenu's trigger lives in board-controls.tsx; the other three here.
+    const controls = readFileSync(join(__dirname, "..", "src/app/dashboard/board-controls.tsx"), "utf8");
+    expect(controls).toMatch(/variant="white" size="bar"/);
+    expect(board.match(/size="bar"/g) ?? []).toHaveLength(2); // Compare To, Refresh All
+    expect(canvas).toMatch(/size="bar"/);
+  });
+});

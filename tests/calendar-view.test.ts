@@ -114,7 +114,7 @@ describe("the board still has its furniture", () => {
     expect(head, "the strip belongs to the header now, not to this branch").not.toMatch(/\{viewStrip\}/);
     expect(head, "boardActions is retired -- Refresh all moved to the header").not.toMatch(/\{boardActions\}/);
     expect(page).toMatch(/tabs=\{viewStrip\}/);
-    expect(page, "Refresh all lives in the header now").toMatch(/<RefreshCw \/>\s*Refresh all/);
+    expect(page, "Refresh All lives in the header now").toMatch(/<RefreshCw \/>\s*Refresh All/);
   });
 
   it("remounts the board when the view changes", () => {

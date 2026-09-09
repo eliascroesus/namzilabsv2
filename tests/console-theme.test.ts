@@ -184,12 +184,18 @@ describe("the console's supplied constants", () => {
     // the brand fill for "+ Add" and "New flow": `variant="accent"` IS that
     // fill (`bg-primary` under `text-primary-foreground`).
     expect(button).toMatch(/white:\s*"[^"]*\bbg-white\b/);
+    /**
+     * "+ Add" SPENDS NO BRAND ANY MORE, and this is the second reversal.
+     * It was `white`, then `accent` on `cd621bf` because the frame of the day
+     * filled the adds-something verb. Node 0:5 draws all four controls in that
+     * row identically — white, 26px, #E1E1E1 rim — so the fill goes.
+     */
     const custom = read("src/app/dashboard/custom-board.tsx");
-    expect(custom, "+ Add now reads the brand fill, variant=\"accent\"").toMatch(
-      /variant="accent"[\s\S]{0,200}?>\s*<Plus \/>\s*Add\b/,
-    );
-    expect(custom, "and no longer the bordered white chip").not.toMatch(
+    expect(custom, "+ Add is white with the rest of its row").toMatch(
       /variant="white"[\s\S]{0,200}?>\s*<Plus \/>\s*Add\b/,
+    );
+    expect(custom, "and no longer the brand fill").not.toMatch(
+      /variant="accent"[\s\S]{0,200}?>\s*<Plus \/>\s*Add\b/,
     );
   });
 

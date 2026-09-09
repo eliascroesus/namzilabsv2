@@ -899,17 +899,28 @@ function AddChartMenu({
       align="right"
       width={288}
       anchor={
-        /* THE BRAND IS SPENT HERE, AND ON "New flow", AND NOWHERE ELSE.
-           The bordered `white` button variant it wore was a chip from the
-           light-page era — on three near-black surfaces it is a white slab
-           beside two grey buttons. The Figma fills this one: it is the
-           control that ADDS something, which is the whole of the rule the
-           re-theme replaced "at most one yellow per screen" with. `accent`
-           IS the brand fill (`bg-primary` under `text-primary-foreground`);
-           the kit has no variant literally named `primary`. `xs` with a
-           16px glyph, the same rung and the same override as "Refresh all"
-           beside it. */
-        <Button variant="accent" onClick={() => setOpen(!open)} disabled={busy} aria-haspopup="menu" aria-expanded={open}>
+        /* THE BRAND IS NOT SPENT HERE ANY MORE, AND THIS IS THE SECOND
+           REVERSAL OF THAT ARGUMENT.
+
+           It was `white`, then `accent` on `cd621bf`: the Figma of the day
+           filled this one because it is the control that ADDS something, and a
+           bordered white button on three near-black surfaces read as a slab
+           beside two grey ones. Node 0:5 draws all four controls in this row
+           identically — white, 26px, with an #E1E1E1 rim — so the fill goes and
+           the rule it stood for ("at most one brand fill per screen, spent on
+           the adds-something verb") loses its last consumer in this row.
+
+           `size="bar"` rather than the kit's 32px default, for the reason the
+           rung itself documents: the frame's controls are 26 and the three bar
+           heights have to sum to 149. */
+        <Button
+          variant="white"
+          size="bar"
+          onClick={() => setOpen(!open)}
+          disabled={busy}
+          aria-haspopup="menu"
+          aria-expanded={open}
+        >
           <Plus />
           Add
         </Button>

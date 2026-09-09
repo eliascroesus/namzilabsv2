@@ -109,15 +109,22 @@ describe("the dashboard's page header, 4 Sep 2026 blue retheme", () => {
     expect(menu, "and so is the radio item").not.toContain("DropdownMenuRadioItem");
   });
 
-  it("promotes + Add to the brand fill at the header's own size", () => {
+  it("stands + Add in the row's own white, at the frame's 26px rung", () => {
+    /**
+     * RE-POINTED 9 SEP 2026. This asserted `variant="accent"` — the brand fill
+     * `cd621bf` gave the adds-something verb. Node 0:5 draws Add, Today,
+     * Compare To and Refresh All identically, so the fill has no consumer left
+     * in this row and the rung is the bar's 26 rather than the kit's 32.
+     */
     const custom = read("src/app/dashboard/custom-board.tsx");
     const add = custom.slice(custom.indexOf("function AddChartMenu"));
-    expect(add).toContain('variant="accent"');
+    expect(add).toContain('variant="white"');
+    expect(add).toContain('size="bar"');
     // RE-POINTED 6 SEP 2026 with its two neighbours: "the header's own size"
     // is the kit's one control height now, not the deleted `xs` rung.
     expect(add, "no retired xs rung").not.toContain('size="xs"');
     expect(add, "and no override of a class the rung already sets").not.toContain("[&_svg]:size-4");
-    expect(add, "the white variant it borrowed is gone from this control").not.toContain('variant="white"');
+    expect(add, "the brand fill is gone from this control").not.toContain('variant="accent"');
   });
 
   it("co-locates + Add, Today and Refresh All in the header, + Add gated to the canvas board", () => {

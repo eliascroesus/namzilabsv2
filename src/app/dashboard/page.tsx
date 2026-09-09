@@ -1,4 +1,4 @@
-import { RefreshCw, X } from "lucide-react";
+import { ChartLine, ChevronDown, RefreshCw, X } from "lucide-react";
 import Link from "next/link";
 import { eq, sql } from "drizzle-orm";
 import { getReadDb } from "@/db/client";
@@ -8,6 +8,7 @@ import { AppShell } from "@/components/app-shell";
 import { TopBarFreshness, TopBarTitle } from "@/components/topbar-slots";
 import { MetricCard } from "@/components/metric-card";
 import { EmptyBoard } from "@/components/board-empty";
+import { Button } from "@/components/ui/button";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { buttonVariants } from "@/components/ui/button";
 import { PageContainer, PageHeader } from "@/components/ui/page";
@@ -1181,6 +1182,24 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                   because the size variant's own descendant rule would win
                   over a class on the svg no matter which order they were
                   written in. */}
+              {/* COMPARE TO — DRAWN, AND NOT WIRED, and it belongs on the REAL
+                  board rather than only on the design harness. Node 0:5 puts it
+                  between the period and the refresh. What it would open is a
+                  comparison SERIES this product does not compute — DESIGN.md
+                  has recorded the two-series legend as unbuilt since before the
+                  chrome rebuild — so it ships disabled with a title that says
+                  so, rather than as a menu that opens onto nothing. */}
+              <Button
+                variant="white"
+                size="bar"
+                disabled
+                title="Comparison periods are not built yet"
+                className="shrink-0"
+              >
+                <ChartLine />
+                Compare To
+                <ChevronDown />
+              </Button>
               <form action={refreshAllFlowsAction} className="shrink-0">
                 <SubmitButton
                   /* WHITE, WITH "Today" BESIDE IT — node 49:5439. The two
@@ -1190,11 +1209,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                      twice, on two adjacent controls. Followed rather than
                      corrected; DESIGN.md owns the tension out loud. */
                   variant="white"
+                  size="bar"
                   pendingLabel="Refreshing…"
                   title="Recompute every published metric now"
                 >
                   <RefreshCw />
-                  Refresh all
+                  Refresh All
                 </SubmitButton>
               </form>
             </>
