@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarDays, ChevronDown, Copy as CopyIcon, MoreHorizontal, PenLine, Trash2 } from "lucide-react";
+import { Box, CalendarDays, ChevronDown, Copy as CopyIcon, LayoutDashboard, MoreHorizontal, PenLine, Trash2, Users } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -217,7 +217,7 @@ export function RangeMenu({
             `truncate max-w-40` because a dated label is longer than a preset's
             and this trigger shares a header slot with "+ Add" and "Refresh
             all". */}
-        <Button variant="white" aria-label={`Period — ${label}`}>
+        <Button variant="white" size="bar" aria-label={`Period — ${label}`}>
           <CalendarDays aria-hidden />
           <span className="truncate max-w-40">{label}</span>
           <ChevronDown aria-hidden />
@@ -284,7 +284,27 @@ export function RangeMenu({
  * or reordered into existence elsewhere), so there is nothing to write a `pos`
  * onto. It stays where it is and everything else moves around it.
  */
-export type StripView = { key: string; id: string | null; name: string; href: string; pos: string };
+import type { BoardViewKind } from "@/lib/board/types";
+
+export type StripView = {
+  key: string;
+  id: string | null;
+  name: string;
+  href: string;
+  pos: string;
+  /**
+   * THE TAB'S GLYPH IS A FACT ABOUT THE VIEW, not a rendering preference, which
+   * is why it travels rather than being looked up in the strip.
+   *
+   * Node 0:5 draws three tabs with three different icons — a box, a group and a
+   * calendar — and the rule is not `kind` alone: the DEFAULT board and a second
+   * `groups` view are the same kind and the frame draws them differently. The
+   * default board is the product's own board and takes the box; everything else
+   * takes its kind's picture.
+   */
+  kind?: BoardViewKind;
+  isDefault?: boolean;
+};
 
 export function ViewStrip({
   views,
@@ -371,7 +391,7 @@ export function ViewStrip({
          visible forces `overflow-y` to match, so padding on THIS element
          overflowed the scroller and Chromium drew a vertical scrollbar for it.
          The room has to be inside the scrolling box, not inside its child. */
-      className="-mx-1 flex flex-nowrap items-center gap-6 px-1 md:flex-wrap"
+      className="-mx-1 flex flex-nowrap items-center gap-2 px-1 md:flex-wrap"
     >
       {order.map((v) => (
         <div
@@ -452,6 +472,8 @@ export function ViewStrip({
             activeView={activeView}
             canEdit={canEdit}
             defaultHref={defaultHref}
+            kind={v.kind}
+            isDefault={v.isDefault}
           >
             {v.name}
           </ViewTab>
@@ -462,12 +484,28 @@ export function ViewStrip({
   );
 }
 
+/**
+ * THE TAB'S PICTURE.
+ *
+ * Node 0:5 draws a box on the default board, a group on a second `groups` view
+ * and a calendar on a calendar one — so the rule reads `isDefault` first and
+ * `kind` second. `custom` takes the board glyph, which is the row it behaves
+ * like; the frame draws no custom view, so that one is inference rather than a
+ * reading, and it is the only glyph here that is.
+ */
+function ViewGlyph({ kind, isDefault }: { kind?: BoardViewKind; isDefault?: boolean }) {
+  const Icon = isDefault ? Box : kind === "calendar" ? CalendarDays : kind === "custom" ? LayoutDashboard : Users;
+  return <Icon aria-hidden className="size-3.5 shrink-0" />;
+}
+
 export function ViewTab({
   href,
   viewId,
   activeView,
   canEdit,
   defaultHref,
+  kind,
+  isDefault,
   children,
 }: {
   href: string;
@@ -478,6 +516,9 @@ export function ViewTab({
   canEdit: boolean;
   /** Where to land after deleting the view you are standing on. */
   defaultHref: string;
+  /** Which picture the tab wears — see `ViewGlyph`. */
+  kind?: BoardViewKind;
+  isDefault?: boolean;
   children: ReactNode;
 }) {
   const router = useRouter();
@@ -662,7 +703,22 @@ export function ViewTab({
        * every other selected thing in the product runs.
        */
       className={cn(
-        "inline-flex shrink-0 items-center border-b text-sm transition-colors duration-(--duration-fast)",
+        /**
+         * A FILLED PILL, WHICH REPLACES AN UNDERLINE.
+         *
+         * The underline was the 8 September frame's answer and the note below
+         * it argued the case well: a grey rule carries no contrast claim, so
+         * the WEIGHT and the INK were what said where you are. Node 0:5 draws a
+         * filled pill instead — #DEDEDE under the active tab, #EFEFEF under the
+         * pointer — so the fill is what says it now and the label can stop
+         * changing weight to compensate.
+         *
+         * `px-2 py-1` on THIS element rather than the anchor inside it, because
+         * the frame's active pill wraps the label AND the options menu at a 4px
+         * gap; padding on the anchor alone would leave the menu outside the
+         * fill.
+         */
+        "inline-flex shrink-0 items-center gap-1 rounded-control px-2 py-1 text-[13px] leading-4 tracking-[-0.24px] transition-colors duration-(--duration-fast)",
         // THE ACTIVE TAB IS HEAVIER AS WELL AS WHITER. `--tab-rule` is a grey,
         // not a measured brand stroke, so it carries no contrast claim of its
         // own — the weight and the ink are what say WHERE YOU ARE now. The
@@ -671,8 +727,8 @@ export function ViewTab({
         // page title above it takes, so the two things that say WHERE YOU ARE
         // are spelled the same way.
         active
-          ? "border-tab-rule font-semibold text-heading"
-          : "border-transparent font-medium text-muted-foreground hover:text-foreground",
+          ? "bg-topbar-active text-topbar-foreground"
+          : "text-[color:var(--topbar-muted)] hover:bg-topbar-control",
       )}
     >
       {editing ? (
@@ -739,8 +795,9 @@ export function ViewTab({
              idle labels stay on one baseline; putting it on the active branch
              alone would make the row twitch by 4px each time you changed
              views. */
-          className={cn("inline-flex items-center gap-1.5 border-t border-t-transparent px-1 py-1", editable && "pr-0.5")}
+          className={cn("inline-flex items-center gap-1", editable && "pr-0.5")}
         >
+          <ViewGlyph kind={kind} isDefault={isDefault} />
           {renamed ?? children}
         </a>
       )}
@@ -774,7 +831,15 @@ export function ViewTab({
                  the light theme at all, while it read fine in dark, which is
                  exactly why it survived so long. The ROW'S own ink is the right
                  answer, because it follows the ground under both exposures. */
-                  className="mr-0.5 size-6 text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
+                  /* size-3.5, NOT size-6. Node 0:5 draws this menu in a 14px
+                     container inside the active pill, and the pill's own height
+                     is what the bar measures: a 24px kebab makes the active tab
+                     32 where the resting ones are 24, the band 49 where the
+                     frame draws 43, and the three bars sum to 155 instead of
+                     149 — so the board lands 6px low with every class correct.
+                     `mr-0` for the same reason the gap is 4: the frame puts the
+                     pill's own 4px between the label and this. */
+                  className="size-3.5 text-muted-foreground hover:bg-foreground/10 hover:text-foreground [&_svg]:size-3.5"
               onClick={() => setMenuOpen((o) => !o)}
               aria-label={`Options for ${name}`}
               aria-haspopup="menu"

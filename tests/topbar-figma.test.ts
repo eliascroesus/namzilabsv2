@@ -169,3 +169,41 @@ describe("the bars the frame draws", () => {
     expect(topBar).toMatch(/id="topbar-status"/);
   });
 });
+
+/**
+ * BAR THREE, WHICH IS THE BOARD'S. Asserted here beside the other two, because
+ * the number that matters is the SUM and no one file owns it.
+ */
+describe("the board's bar", () => {
+  const controls = readFileSync(join(__dirname, "..", "src/app/dashboard/board-controls.tsx"), "utf8");
+  const page = readFileSync(join(__dirname, "..", "src/components/ui/page.tsx"), "utf8");
+
+  it("is a full-bleed band that escapes the container's gutter", () => {
+    // `PageContainer` is `p-6`; without the negative margin the band sits
+    // inside a 24px inset with the page's ground showing around it.
+    expect(page).toMatch(/-m-6 mb-6 border-b border-topbar-border bg-topbar px-6 py-2/);
+  });
+
+  it("draws the tabs as pills with the frame's own padding and gaps", () => {
+    expect(controls).toMatch(/gap-1 rounded-control px-2 py-1/);
+    expect(controls).toMatch(/flex flex-nowrap items-center gap-2/);
+  });
+
+  it("gives every tab the glyph its kind earns", () => {
+    expect(controls).toMatch(/function ViewGlyph/);
+    expect(controls).toMatch(/isDefault \? Box/);
+    expect(controls).toMatch(/kind === "calendar" \? CalendarDays/);
+  });
+
+  it("keeps the options menu small enough not to stretch the band", () => {
+    // A 24px kebab makes the active pill 32 where the resting ones are 24, the
+    // band 49 where the frame draws 43, and the bars sum to 155 rather than
+    // 149 — with every class in the file still correct.
+    expect(controls).toMatch(/className="size-3\.5 text-muted-foreground/);
+  });
+
+  it("stands its controls at the frame's 26px, with a real target on a phone", () => {
+    const button = readFileSync(join(__dirname, "..", "src/components/ui/button.tsx"), "utf8");
+    expect(button).toMatch(/bar: "h-11 gap-1 px-2 py-1 text-\[13px\] leading-4 md:h-\[26px\]/);
+  });
+});

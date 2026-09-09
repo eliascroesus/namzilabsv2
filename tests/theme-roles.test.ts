@@ -118,9 +118,36 @@ describe("button.tsx's filled variant uses the roles, not the ramp directly", ()
   });
 });
 
-describe("board-controls.tsx's active view tab uses --tab-rule, not --marker", () => {
-  it("the active tab's class carries border-tab-rule", () => {
-    expect(boardControls).toMatch(/border-tab-rule/);
+/**
+ * THE VIEW TABS ARE PILLS NOW, AND --tab-rule IS NOT DEAD.
+ *
+ * These asserted an underline: `border-tab-rule` on the active wrapper, a
+ * matching transparent top border on the anchor so the box stayed symmetric,
+ * and no `border-b-2`. That was the 8 September frame's answer and the
+ * reasoning held — a grey rule carries no contrast claim, so the weight and the
+ * ink said where you were.
+ *
+ * Node 0:5 draws a filled pill instead: #DEDEDE under the active tab, #EFEFEF
+ * under the pointer. The fill says it now, so the underline and the border
+ * symmetry it needed both go.
+ *
+ * `--tab-rule` ITSELF STAYS. It is still the rule under `ui/tabs.tsx`'s active
+ * trigger, which is a different control on a different surface, and the swatch
+ * on /design still draws it. Only the BOARD's view tabs stopped using it, which
+ * is why this block moved rather than being deleted.
+ */
+describe("board-controls.tsx's active view tab is a filled pill", () => {
+  it("takes the bar's active fill, not a rule", () => {
+    expect(boardControls).toMatch(/bg-topbar-active/);
+    expect(boardControls).not.toMatch(/border-tab-rule/);
+  });
+
+  it("takes the bar's control fill under the pointer", () => {
+    expect(boardControls).toMatch(/hover:bg-topbar-control/);
+  });
+
+  it("is a rounded pill at the frame's own padding", () => {
+    expect(boardControls).toContain("gap-1 rounded-control px-2 py-1");
   });
 
   it("carries no border-marker anywhere in the file", () => {
@@ -149,14 +176,13 @@ describe("the active tab's rule is 1px on the wrapper, the anchor and both tab o
     // `border-b` prefix followed by `o`, not `-`) — the file has two of
     // those plus two comment mentions, so that regex passed even with
     // `border-b` deleted from the wrapper entirely. An exact literal of the
-    // wrapper's real class string is the only thing that pins the rule is
-    // actually there, not just that `border-b-2` is gone.
-    expect(boardControls).toContain("items-center border-b text-sm");
     expect(boardControls).not.toMatch(/border-b-2/);
   });
 
-  it("the anchor carries a matching 1px transparent top border", () => {
-    expect(boardControls).toContain("border-t border-t-transparent");
+  it("no longer needs the anchor's transparent top border", () => {
+    // It existed to keep the box symmetric against a bottom-only rule. With no
+    // rule there is nothing to balance, and the padding is on the pill.
+    expect(boardControls).not.toContain("border-t border-t-transparent");
     expect(boardControls).not.toMatch(/border-t-2/);
   });
 

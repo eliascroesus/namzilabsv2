@@ -2,7 +2,7 @@ import { AppFrame } from "@/components/app-frame";
 import { PageContainer, PageHeader } from "@/components/ui/page";
 import { BoardControls, RangeMenu, ViewStrip } from "@/app/dashboard/board-controls";
 import { Button } from "@/components/ui/button";
-import { Plus, RefreshCw } from "lucide-react";
+import { ChartLine, ChevronDown, Plus, RefreshCw } from "lucide-react";
 import { FlowTile, type FlowResultRow } from "@/components/flow-tile";
 import { ChartFrame } from "@/components/board-charts/frame";
 import { BarsVertical, LineChart } from "@/components/board-charts/cartesian";
@@ -184,19 +184,22 @@ export default async function OverviewLab({
   const viewStrip = (
     <ViewStrip
       views={[
-        { key: "default", id: null, name: "Overview", href: "#", pos: "a1" },
-        { key: "v2", id: "v2", name: "Group", href: "#", pos: "a2" },
-        { key: "v3", id: "v3", name: "Calendar", href: "#", pos: "a3" },
+        { key: "default", id: null, name: "Overview", href: "#", pos: "a1", kind: "groups" as const, isDefault: true },
+        { key: "v2", id: "v2", name: "Group", href: "#", pos: "a2", kind: "groups" as const },
+        { key: "v3", id: "v3", name: "Calendar", href: "#", pos: "a3", kind: "calendar" as const },
       ]}
       activeView={null}
       canEdit
       defaultHref="#"
     >
       {/* The "+" rides the strip as its last item rather than as a control
-          appended to it — the export draws it on the tabs' own 24px gap. The
+          appended to it — the frame draws it on the tabs' own gap. The
           dashboard's is `AddViewButton`, which owns a popover of templates;
-          this is the same rung and glyph without the machinery. */}
-      <Button variant="secondary" size="icon" aria-label="Add a view">
+          this is the same glyph without the machinery.
+          `iconXs` RATHER THAN `icon`: a 32px square here is the tallest thing
+          in a 43px band and stretches it to 49, which breaks the 149 the three
+          bars have to sum to. Node 0:5 draws this glyph at 16 with no box. */}
+      <Button variant="secondary" size="iconXs" aria-label="Add a view">
         <Plus />
       </Button>
     </ViewStrip>
@@ -218,20 +221,28 @@ export default async function OverviewLab({
     >
       <PageContainer width="full">
         <BoardControls>
-          {/* THE THREE HEADER ACTIONS THE EXPORT DRAWS, in its order: "+ Add"
-              (the brand's fill — one of exactly two adds-something verbs),
-              the period dropdown reading "Today", then "Refresh all". The
+          {/* THE FOUR HEADER ACTIONS THE FRAME DRAWS, in its order: "+ Add",
+              the period dropdown reading "Today", "Compare To", then
+              "Refresh All". The
               dashboard builds these from real state — `AddChartMenu` portals
               into a slot, `RefreshCw` submits a server action — so this page
               draws the same three controls at the same rungs rather than
               importing machinery that needs a board behind it. */}
           <PageHeader
+            band
             /* NO `title`: the name is on its own tab with the options menu
                beside it, which is the one place node 49:5399 draws it. */
             tabs={viewStrip}
             actions={
               <>
-                <Button variant="accent">
+                {/* WHITE, NOT LIME, AND THAT REVERSES `cd621bf`.
+                    That commit filled the two adds-something verbs with the
+                    brand, on the 8 September frame's own reading. Node 0:5
+                    draws all four of these controls identically — white, with
+                    an #E1E1E1 rim — so "Add" loses its fill along with the
+                    argument for it. The Figma is explicit and the owner asked
+                    for 1:1. */}
+                <Button variant="white" size="bar">
                   <Plus />
                   Add
                 </Button>
@@ -249,9 +260,21 @@ export default async function OverviewLab({
                     against "quiet chrome", and it is followed rather than
                     corrected: the Figma is explicit, twice, on two adjacent
                     controls. See DESIGN.md, which owns the tension. */}
-                <Button variant="white">
+                {/* COMPARE TO — DRAWN, AND NOT WIRED.
+                    The frame draws it between the period and the refresh, and
+                    the control is chrome, so it is built here at the frame's
+                    geometry. What it would open is a comparison SERIES the
+                    product does not compute — DESIGN.md records the two-series
+                    legend as unbuilt — so it ships disabled with a title that
+                    says so rather than as a menu that opens onto nothing. */}
+                <Button variant="white" size="bar" disabled title="Comparison periods are not built yet">
+                  <ChartLine />
+                  Compare To
+                  <ChevronDown />
+                </Button>
+                <Button variant="white" size="bar">
                   <RefreshCw />
-                  Refresh all
+                  Refresh All
                 </Button>
               </>
             }

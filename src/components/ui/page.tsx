@@ -215,6 +215,8 @@ export type PageHeaderProps = {
    */
   tabs?: React.ReactNode;
   back?: { href: string; label: string };
+  /** Render as the frame's full-bleed third bar rather than an in-content header. */
+  band?: boolean;
   className?: string;
 };
 
@@ -246,7 +248,7 @@ function HeaderTitle({
   );
 }
 
-export function PageHeader({ title, lede, actions, tabs, back, className }: PageHeaderProps) {
+export function PageHeader({ title, lede, actions, tabs, back, band, className }: PageHeaderProps) {
   /**
    * THE INSTITUTIONAL REASONING BEHIND FOUR CHOICES BELOW, KEPT IN ONE PLACE
    * NOW THAT THE TITLE MARKUP LIVES ONCE (`HeaderTitle`, above) RATHER THAN
@@ -330,7 +332,27 @@ export function PageHeader({ title, lede, actions, tabs, back, className }: Page
     // Measured at 1920: the Add button's bottom edge sits at 121 and the board
     // starts at 137. `pnpm geometry` pins the board; the 12px this replaced was
     // reported by Elias before any check could see it.
-    <header className={cn("pb-4", className)}>
+    <header
+      className={cn(
+        /**
+         * `band` IS THE FRAME'S THIRD BAR, AND IT HAS TO ESCAPE ITS CONTAINER.
+         *
+         * Node 0:5 draws the view tabs and the board controls as a full-bleed
+         * 43px band — white, with the same #F1F1F1 hairline as the two bars
+         * above it, running edge to edge. This header renders inside
+         * `PageContainer`, which is `p-6`, so the band would otherwise sit
+         * inside a 24px gutter with the page's own ground showing around it.
+         *
+         * `-m-6` cancels that padding on all four sides and `mb-6` puts the
+         * 24px back underneath, which is the inset the board starts at. The
+         * height falls out rather than being typed: 26px of button over 8+8 of
+         * padding and the 1px rule is 43, and 57 + 49 + 43 is the 149 the frame
+         * starts its content container at.
+         */
+        band ? "-m-6 mb-6 border-b border-topbar-border bg-topbar px-6 py-2" : "pb-4",
+        className,
+      )}
+    >
       {back && (
         /**
          * AN 8px CONTROL, NOT A LINE OF TEXT. This was the one navigation

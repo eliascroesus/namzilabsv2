@@ -107,8 +107,10 @@ describe("the page header stacks below md", () => {
     // …and the strip inside it has to stop wrapping, or it wraps INSIDE the
     // scroller and the scroller never has anything to scroll.
     // No `py-1` on the strip any more — the ring room moved out to the scroller
-    // above. What still matters here is `flex-nowrap`.
-    expect(read("src/app/dashboard/board-controls.tsx")).toMatch(/flex flex-nowrap items-center gap-6 px-1 md:flex-wrap/);
+    // above. What still matters here is `flex-nowrap`. The gap is 8 rather than
+    // 24 since node 0:5 made the tabs pills: 24 between filled pills reads as
+    // four separate controls rather than one strip.
+    expect(read("src/app/dashboard/board-controls.tsx")).toMatch(/flex flex-nowrap items-center gap-2 px-1 md:flex-wrap/);
   });
 
   it("left-aligns the title on its own line, and centres it only at md", () => {

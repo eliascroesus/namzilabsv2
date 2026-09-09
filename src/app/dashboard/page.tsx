@@ -706,6 +706,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                   name: v.name,
                   href: qs({ view: v.id ?? "" }),
                   pos: v.pos,
+                  kind: v.kind,
+                  isDefault: v.id === null,
                 }))}
                 activeView={activeView}
                 canEdit={access.can("create_flows")}
