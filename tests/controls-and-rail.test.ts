@@ -207,13 +207,19 @@ describe("the rail, after the owner called it out beside the export", () => {
      * buttons it shares a vocabulary with.
      *
      * Followed rather than corrected toward the rung, because a full-width
-     * control in a 260px column is answering to the column's rhythm — every
-     * other row in that stack is 36 — and a 32px button between 36px
-     * neighbours reads as a mistake in a way it does not in a header row.
+     * control in a 260px column is answering to the column's rhythm rather
+     * than a header row's.
+     *
+     * THE RHYTHM MOVED DOWN A STEP ON 9 SEP 2026. Node 0:5 draws the nav rows
+     * at 32 rather than 36, and the two full-width controls that bracket them —
+     * the switcher at the head and the filled "New" at the foot — at 36 rather
+     * than 40 and 36. So the shape of the rule is unchanged (the brackets stand
+     * one step above the rows they enclose) and both numbers came down with the
+     * frame.
      */
     const c = code(sidebar);
-    expect(c, "the switcher is the one 40px row").toMatch(/cn\(SLOT, "h-10 /);
-    expect(c, "the filled foot button stands at 36, with the column").toMatch(/size="sm" className="h-9 w-full"/);
+    expect(c, "the switcher stands one step above the rows").toMatch(/cn\(SLOT, "h-9 /);
+    expect(c, "the filled foot button stands at 36, with the switcher").toMatch(/size="sm" className="h-9 w-full"/);
   });
 });
 

@@ -17,7 +17,13 @@
  * than beside it), a four-column chart card 5.3px narrow, a ten-row card 72px
  * tall, and the board sitting 8px low under its own header.
  *
- * The expected numbers come from `get_metadata` on Figma nodes 49:5268 and
+ * RE-POINTED 9 SEP 2026 to node 0:5 in DWPyHPYAlD4czvPmppuf6y — the frame the
+ * chrome was rebuilt against. The numbers below are that frame's, read from
+ * `get_metadata`, and several of them moved: the bar is three bands now (57 +
+ * 49 + 43 = 149, where the frame starts its content container), the rail has no
+ * search, and the board grid runs a 24px gutter rather than 16.
+ *
+ * The previous expectations came from `get_metadata` on Figma nodes 49:5268 and
  * 58:5824 — both 1920x1200 frames of the same screen, dark and light. They are
  * written here as data rather than derived, because the point is to compare the
  * app against the DESIGN; deriving them from the app's own constants would make
@@ -52,11 +58,32 @@ const TOL = 1;
  */
 const FIGMA = {
   sidebar: { x: 0, y: 0, w: 260, h: 1200 },
-  topbar: { x: 260, y: 0, w: 1660, h: 65 },
+  // Bar ONE. The check measures the first <header>; bars two and three are
+  // asserted in tests/topbar-figma.test.ts, and their sum is what the board's
+  // own y below actually pins.
+  topbar: { x: 260, y: 0, w: 1660, h: 57 },
   chartCards: [
-    { x: 284, y: 137, w: 526.67, h: 384 },
-    { x: 826.67, y: 137, w: 526.67, h: 384 },
-    { x: 1369.33, y: 137, w: 526.67, h: 384 },
+    /**
+     * THE WIDTHS HERE ARE THE BOARD'S, NOT THE FRAME'S, AND THAT IS DELIBERATE.
+     *
+     * Node 0:5 draws these cards 521.33 wide on a 24px gutter, and 456 tall.
+     * The board runs a 16px gutter (`GRID_GAP_PX`) at a 40px row
+     * (`ROW_UNIT_PX`), which makes them 526.67 and 384. Both numbers are the
+     * frame's own arithmetic — a 12-row tile at a 24px gutter is 12*40-24=456 —
+     * so moving the board to it is a real change to the grid's math, to the `h`
+     * values already stored on every tile, and to what the resize gesture
+     * converts pixels into.
+     *
+     * That is the card region, which the spec for this branch deferred pending
+     * an authoritative read of node 0:212. Asserting the frame's numbers here
+     * before that work would leave a gate that is red on purpose, which is how
+     * a gate stops being read at all. So these stay the board's, and the
+     * chrome's y values above — 173, 573 — are the frame's, because the chrome
+     * is what this branch moved.
+     */
+    { x: 284, y: 173, w: 526.67, h: 384 },
+    { x: 826.67, y: 173, w: 526.67, h: 384 },
+    { x: 1369.33, y: 173, w: 526.67, h: 384 },
   ],
   /**
    * HEIGHT IS DELIBERATELY NOT CHECKED on these. The Figma draws them at
@@ -66,10 +93,11 @@ const FIGMA = {
    * the row unit to hit 108.22 exactly would put every OTHER tile wrong.
    */
   statTiles: [
-    { x: 284, y: 537, w: 391 },
-    { x: 691, y: 537, w: 391 },
-    { x: 1098, y: 537, w: 391 },
-    { x: 1505, y: 537, w: 391 },
+    // Frame: 385 wide on a 24px gutter. Board: 391 on 16. See the note above.
+    { x: 284, y: 573, w: 391 },
+    { x: 691, y: 573, w: 391 },
+    { x: 1098, y: 573, w: 391 },
+    { x: 1505, y: 573, w: 391 },
   ],
 };
 
@@ -98,12 +126,13 @@ const RAIL = {
    * So the box is on the gutter like every other row, exactly as node 58:5829
    * has it, and there is no departure left to record.
    */
-  "switcher": { x: 16, y: 14, h: 40 },
-  "search": { x: 16, y: 78, h: 36 },
-  "Main Menu": { x: 16, y: 138, h: 12 },
-  "Dashboard": { x: 16, y: 158, h: 36 },
-  "sub-nav 1st": { x: 48, y: 202, h: 32 },
-  "Activity": { x: 16, y: 306, h: 36 },
+  // NO "search" ROW. Node 0:5 draws the field in the top bar at 480x40 and
+  // draws none in the rail; `nav-search.tsx` is where it lives now.
+  "switcher": { x: 16, y: 8, h: 36 },
+  "Main Menu": { x: 16, y: 68, h: 12 },
+  "Dashboard": { x: 16, y: 88, h: 32 },
+  "sub-nav 1st": { x: 48, y: 128, h: 32 },
+  "Activity": { x: 16, y: 232, h: 32 },
 };
 
 const browser = await chromium.launch();
@@ -156,9 +185,8 @@ const got = await page.evaluate(() => {
       };
     };
     const text = (tag, t) => [...aside.querySelectorAll(tag)].find((e) => (e.textContent || "").trim() === t);
-    const head = aside.querySelector("div.mt-3\\.5");
+    const head = aside.querySelector("div.mt-2");
     rail["switcher"] = rel(head?.firstElementChild ?? head);
-    rail["search"] = rel(aside.querySelector("input")?.parentElement);
     /**
      * THE CONTENT BOX, NOT THE BORDER BOX AND NOT A RANGE.
      *

@@ -292,13 +292,13 @@ const ICON_COL = "flex size-8 shrink-0 items-center justify-center";
  *
  * 44px BELOW `md`, AND IT IS THE SAME ROW, NOT A SECOND ONE.
  *
- * `h-9` is 36 — over WCAG 2.2's 24px minimum and right for a pointer, and
+ * `h-8` is 32 — node 0:5's own row, over WCAG 2.2's 24px minimum, and
  * four pixels under what a finger asks for. `min-h-11` raises the computed
  * height to 44 on a phone without touching `h-9`, and `md:min-h-0` stands
  * down again above the breakpoint, so the rail keeps its density and the
  * drawer keeps its targets from one string.
  */
-const SLOT = "group flex h-9 min-h-11 w-full shrink-0 items-center justify-start gap-2.5 rounded-control text-left transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:bg-rail-control md:min-h-0";
+const SLOT = "group flex h-8 min-h-11 w-full shrink-0 items-center justify-start gap-2.5 rounded-control text-left transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:bg-rail-control md:min-h-0";
 
 /**
  * THE GUTTER, WRITTEN DOWN.
@@ -558,7 +558,7 @@ export function RailContent({
             L and nothing needs to line up across it.
             Node 58:5828 measures the block at y=14 and node 58:5829 the
             switcher row at 40px, which is what this spells. */}
-        <div className="mt-3.5 flex h-10 shrink-0 items-center px-4">
+        <div className="mt-2 flex h-9 shrink-0 items-center px-4">
           {workspace &&
             (account ? (
               <DropdownMenu>
@@ -603,7 +603,7 @@ export function RailContent({
                        right by the same 8. Putting it on the container instead
                        (which is what shipped first) narrowed the hover surface
                        and pushed the whole block off the rail's 16px edge. */
-                    className={cn(SLOT, "h-10 px-2 [&_svg]:size-5")}
+                    className={cn(SLOT, "h-9 px-2 [&_svg]:size-5")}
                     aria-label={`${workspace} — workspace and account`}
                   >
                     <span className={ICON_COL}>
@@ -735,7 +735,7 @@ export function RailContent({
                   sees and everybody feels. `pt-4` is the 24px node 58:5847
                   puts between the search and this line, minus the nav's own
                   8px gap. */}
-              <p className="pt-4 text-xs font-normal leading-3 text-rail-faint">Main Menu</p>
+              <p className="text-xs font-normal leading-3 text-rail-faint">Main Menu</p>
               {items
                 .map(({ label, href, icon: Icon }) => {
                   const active = pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
