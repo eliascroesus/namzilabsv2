@@ -132,7 +132,7 @@ export function CardHeader({ className, children, ...props }: React.ComponentPro
  * makes a board of ten cards read as ten pages.
  */
 export function CardTitle({ className, ...props }: React.ComponentProps<"h3">) {
-  return <h3 className={cn("truncate text-sm font-normal text-muted-foreground", className)} {...props} />;
+  return <h3 className={cn("truncate text-sm font-normal text-heading", className)} {...props} />;
 }
 
 /** The line under it: 12px/400, one rung down the ink ramp at 6.78:1. */

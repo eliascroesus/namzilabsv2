@@ -142,7 +142,21 @@ const buttonVariants = cva(
         // 49:5429 sets "Today" and "Refresh All" in — not `neutral-950`. The
         // ramp's dark end is the PAGE now (#121214), so spelling the ink there
         // put near-black-on-white on a control the Figma draws in a mid grey.
-        white: "border border-border bg-white text-neutral-500 shadow-xs hover:bg-neutral-50 active:bg-neutral-100",
+        /**
+         * THE INK IS `--heading`, NOT `--neutral-500`, AND THAT IS WHY THE ROW
+         * READ AS WASHED OUT.
+         *
+         * Measured against node 0:5: the frame sets every label in this row at
+         * #2E2E2E, 13.58:1 on white. This variant shipped `text-neutral-500` —
+         * #6B6B6B, 5.33:1 — so "Add", "Today", "Compare To" and "Refresh All"
+         * carried barely a third of the frame's contrast. At the same 13px,
+         * lighter ink reads as both thinner and SMALLER, which is what
+         * "everything looks small" turned out to mean.
+         *
+         * `--heading` is #313131 (12.6:1), one step off the frame's own value
+         * and the role a label of this weight belongs to.
+         */
+        white: "border border-border bg-white text-heading shadow-xs hover:bg-neutral-50 active:bg-neutral-100",
         /** THE REFERENCE'S OWN BADGE-AS-BUTTON: a 10% brand wash inside a 20%
          *  brand ring, carrying brand ink. On a light page this shape was
          *  impossible in the brand — a yellow wash under yellow ink needs
