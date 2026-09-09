@@ -1169,18 +1169,20 @@
  * none of it was here: these are the platform behaviours a design system has
  * to declare once or get wrong everywhere.
  */
-html {
-  /* SAYING WHICH THEME IS ON is not a no-op: it decides how the browser paints
-     scrollbars, spinners, native <select> popups and form controls, none of
-     which we style. Get it wrong and every native control on the page arrives
-     as a light widget on a near-black surface.
-     DECLARED PER THEME, because there are two again — and it is the app's own
-     class that decides, not `prefers-color-scheme`, so somebody who has chosen
-     light on a dark machine gets light scrollbars rather than the OS's. */
-  color-scheme: light;
-  /* Anchored headings otherwise land flush against the top of the viewport
-     with their first line under the edge. */
-  scroll-padding-top: 5rem;
+@layer base {
+  html {
+    /* SAYING WHICH THEME IS ON is not a no-op: it decides how the browser paints
+       scrollbars, spinners, native <select> popups and form controls, none of
+       which we style. Get it wrong and every native control on the page arrives
+       as a light widget on a near-black surface.
+       DECLARED PER THEME, because there are two again — and it is the app's own
+       class that decides, not `prefers-color-scheme`, so somebody who has chosen
+       light on a dark machine gets light scrollbars rather than the OS's. */
+    color-scheme: light;
+    /* Anchored headings otherwise land flush against the top of the viewport
+       with their first line under the edge. */
+    scroll-padding-top: 5rem;
+  }
 }
 
 html.dark {
@@ -1243,23 +1245,27 @@ html.dark {
  * one line to opt out of. Zoom itself is untouched — pinch still works, which
  * is why this is not `user-scalable=no`.
  */
-button,
-a,
-summary,
-label,
-[role="button"],
-[role="switch"],
-input,
-select,
-textarea {
-  touch-action: manipulation;
+@layer base {
+  button,
+  a,
+  summary,
+  label,
+  [role="button"],
+  [role="switch"],
+  input,
+  select,
+  textarea {
+    touch-action: manipulation;
+  }
 }
 
 /* Chosen rather than inherited: the default is a translucent grey block that
    ignores our radii, so a tapped pill flashes as a rectangle. The brand at 12%,
    which on this ground is a flash of green rather than a grey smear. */
-html {
-  -webkit-tap-highlight-color: rgb(0 212 146 / 0.12);
+@layer base {
+  html {
+    -webkit-tap-highlight-color: rgb(0 212 146 / 0.12);
+  }
 }
 
 /* IN `@layer base` for the same reason the heading rule below is: an
@@ -1327,15 +1333,17 @@ html {
  * NOT a licence to autofill: `ui/input.tsx` turns it off wherever it would be
  * wrong (see `NO_AUTOFILL`).
  */
-input:-webkit-autofill,
-input:-webkit-autofill:hover,
-input:-webkit-autofill:focus,
-textarea:-webkit-autofill,
-select:-webkit-autofill {
-  -webkit-text-fill-color: var(--foreground);
-  -webkit-box-shadow: 0 0 0 1000px var(--control) inset;
-  box-shadow: 0 0 0 1000px var(--control) inset;
-  caret-color: var(--foreground);
+@layer base {
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus,
+  textarea:-webkit-autofill,
+  select:-webkit-autofill {
+    -webkit-text-fill-color: var(--foreground);
+    -webkit-box-shadow: 0 0 0 1000px var(--control) inset;
+    box-shadow: 0 0 0 1000px var(--control) inset;
+    caret-color: var(--foreground);
+  }
 }
 
 /**
@@ -1633,8 +1641,10 @@ select:-webkit-autofill {
  * the heavy ones, which are deliberate — so re-spelling the default is a build
  * failure rather than a thing nobody sees.
  */
-:where(svg.lucide) {
-  stroke-width: 2.25;
+@layer base {
+  :where(svg.lucide) {
+    stroke-width: 2.25;
+  }
 }
 
 /**
@@ -1650,9 +1660,11 @@ select:-webkit-autofill {
  * all of them — a second spelling would be a second answer to a question that
  * has one.
  */
-:where(a, button, summary, [role="button"], [role="switch"], [tabindex]:not([tabindex="-1"])):focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 2px;
+@layer base {
+  :where(a, button, summary, [role="button"], [role="switch"], [tabindex]:not([tabindex="-1"])):focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
 }
 
 /**
@@ -1703,9 +1715,11 @@ select:-webkit-autofill {
  * selector. Verified by sabotage rather than assumed. What WOULD break it is
  * deleting the prose and leaving the rule flush against the brace above.
  */
-html[data-modality="pointer"]
-  :where(a, button, summary, [role="button"], [role="switch"], [tabindex]:not([tabindex="-1"])):focus-visible {
-  outline: none;
+@layer base {
+  html[data-modality="pointer"]
+    :where(a, button, summary, [role="button"], [role="switch"], [tabindex]:not([tabindex="-1"])):focus-visible {
+    outline: none;
+  }
 }
 
 /**
@@ -1785,10 +1799,12 @@ html[data-modality="pointer"]
  * default arrow cursor; restore the click affordance app-wide (disabled controls
  * keep the default/not-allowed cursor).
  */
-button:not(:disabled),
-[role="button"]:not([aria-disabled="true"]),
-summary {
-  cursor: pointer;
+@layer base {
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  summary {
+    cursor: pointer;
+  }
 }
 
 /*

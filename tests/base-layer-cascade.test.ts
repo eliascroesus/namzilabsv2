@@ -81,9 +81,30 @@ function unlayered(source: string): string {
   return out;
 }
 
+/**
+ * COMMENTS COME OUT BEFORE ANYTHING IS SCANNED, AND THAT IS NOT HOUSEKEEPING.
+ *
+ * The selector scan below keys on `(^|})\s*([^{}@/]+?)\s*\{`. Excluding `/`
+ * from a selector is right — no selector contains one — but it also means the
+ * pattern cannot step OVER a comment, and in this stylesheet nearly every rule
+ * is preceded by a long one. The effect was silent and total: the check saw 13
+ * of the 35 unlayered rules, could not see bare `html` at all, and matched
+ * prose from inside a comment as a selector (it reported "` or `" as CSS).
+ *
+ * So the guard reported success for a file whose `html`, `textarea` and
+ * `summary` rules were all outside every layer — the exact class of rule the
+ * second test exists to forbid. A guard that cannot see the thing it guards is
+ * worse than no guard, because its green is mistaken for evidence.
+ */
+function stripComments(source: string): string {
+  return source.replace(/\/\*[\s\S]*?\*\//g, "");
+}
+
 /** Declarations of `prop` that are not inside any `@layer`. */
 function unlayeredDeclarations(prop: string): string[] {
-  return [...unlayered(css).matchAll(new RegExp(`^\\s*${prop}\\s*:\\s*([^;]+);`, "gm"))].map((m) => m[1].trim());
+  return [...stripComments(unlayered(css)).matchAll(new RegExp(`^\\s*${prop}\\s*:\\s*([^;]+);`, "gm"))].map((m) =>
+    m[1].trim(),
+  );
 }
 
 /**
@@ -103,7 +124,7 @@ function unlayeredDeclarations(prop: string): string[] {
  */
 function unlayeredElementRules(): { selector: string; props: string[] }[] {
   const out: { selector: string; props: string[] }[] = [];
-  for (const m of unlayered(css).matchAll(/(^|})\s*([^{}@/]+?)\s*\{([^{}]*)\}/g)) {
+  for (const m of stripComments(unlayered(css)).matchAll(/(^|})\s*([^{}@/]+?)\s*\{([^{}]*)\}/g)) {
     const selector = m[2].trim();
     if (!selector || selector.startsWith("--")) continue;
     // A selector reaches bare elements when some comma-separated part, with
