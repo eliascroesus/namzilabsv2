@@ -24,6 +24,17 @@
  * this test pass by construction.
  *
  * Exits 1 on any mismatch outside tolerance, so it can gate a branch.
+ *
+ * ITS BLIND SPOT, NAMED. The default path is `/design/overview`, which composes
+ * the real cards at the real geometry but does NOT render `CustomBoard` — it
+ * builds its own grid. So a margin belonging to that component is invisible
+ * here, and one was: `board-canvas mt-4` stacked on `PageHeader`'s `pb-4` and
+ * put the real dashboard's board 32px under its tab row while this check
+ * reported a clean 16. Elias found it by looking.
+ *
+ * Pass a path to widen the net (`pnpm geometry /design/canvas`), and when a
+ * number below is wrong on the real dashboard but right here, suspect a wrapper
+ * that only the authenticated route renders.
  */
 import { chromium } from "playwright";
 
@@ -76,14 +87,18 @@ const FIGMA = {
  */
 const RAIL = {
   /**
-   * x=24, NOT the Figma's 16 — a deliberate departure, asked for directly:
-   * "on the workspace thing can you please add 8px padding on both left and
-   * right of it, to the container". It is the one row in the column that does
-   * not sit on the 16px gutter. Recorded HERE rather than left to fail, because
-   * a check that is expected to report one red line every run is a check people
-   * stop reading.
+   * BACK ON 16, AND THE 8px ASKED FOR IS INSIDE THE BUTTON.
+   *
+   * This briefly expected 24, because the first pass at "add 8px padding on
+   * both left and right of it" inset the CONTAINER — which narrowed the hover
+   * surface and pushed the block off the column's own edge. The ask was padding
+   * INSIDE the button: it stays `w-full`, so its fill and its focus ring still
+   * run the full 228px, and only the badge, the name and the chevron move in.
+   *
+   * So the box is on the gutter like every other row, exactly as node 58:5829
+   * has it, and there is no departure left to record.
    */
-  "switcher": { x: 24, y: 14, h: 40 },
+  "switcher": { x: 16, y: 14, h: 40 },
   "search": { x: 16, y: 78, h: 36 },
   "Main Menu": { x: 16, y: 138, h: 12 },
   "Dashboard": { x: 16, y: 158, h: 36 },

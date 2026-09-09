@@ -1163,8 +1163,13 @@ export function TileArea({
     );
   }
   if (canvas && canvas.length > 0) {
+    // NO `mt-4`: the real canvas dropped it (the header already owns that
+    // 16px), and a skeleton that keeps it puts the shimmer 16px below where the
+    // board lands — the one failure a skeleton exists to prevent. A line
+    // comment rather than a JSX one: `return (` takes a single expression, so a
+    // `{…}` node before the element is a second child and will not parse.
     return (
-      <div className="board-canvas mt-4" aria-busy="true" aria-live="polite">
+      <div className="board-canvas" aria-busy="true" aria-live="polite">
         <span className="sr-only">Loading metrics…</span>
         {canvasCells(canvas).map(({ tile, vars }) => (
           <div key={tile.id} className="board-cell" style={vars as React.CSSProperties}>

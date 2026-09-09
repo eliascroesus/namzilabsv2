@@ -634,8 +634,19 @@ export function CustomBoard({
         </p>
       )}
 
+      {/* NO TOP MARGIN ON EITHER BRANCH — THE HEADER OWNS THIS GAP, and it
+          owned it twice. `PageHeader` ends in `pb-4` and both of these carried
+          `mt-4`, so the board sat 32px under the tab row where node 58:5951
+          draws 16. The groups board settled the same argument in the other
+          direction and its own comment says so: one owner for a distance. It
+          keeps ITS `mt-4` because a "New group" row sits between it and the
+          header — that gap belongs to the row. Nothing sits between this
+          canvas and the header.
+          This note sits ABOVE the ternary because a branch is a single
+          expression and a JSX comment is a CHILD — one inside a branch is a
+          syntax error, not a comment. */}
       {empty ? (
-        <div className="mt-4 flex flex-col items-center justify-center rounded-surface border border-dashed border-border py-16 text-center">
+        <div className="flex flex-col items-center justify-center rounded-surface border border-dashed border-border py-16 text-center">
           <LayoutGrid className="size-5 text-muted-foreground" aria-hidden />
           <p className="mt-2 text-sm font-semibold text-foreground">Nothing on this view yet</p>
           <p className="mt-1 max-w-sm text-xs text-muted-foreground">
@@ -645,7 +656,7 @@ export function CustomBoard({
           </p>
         </div>
       ) : (
-        <div className="board-canvas mt-4" {...{ [CANVAS_ATTR]: "" }}>
+        <div className="board-canvas" {...{ [CANVAS_ATTR]: "" }}>
           {cells.map(({ tile, vars }, i) => (
             <div
               key={tile.id}

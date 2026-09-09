@@ -624,15 +624,7 @@ export function RailContent({
             L and nothing needs to line up across it.
             Node 58:5828 measures the block at y=14 and node 58:5829 the
             switcher row at 40px, which is what this spells. */}
-        {/* `px-6`, WHICH IS THE RAIL'S 16 PLUS 8 EITHER SIDE — asked for
-            directly ("on the workspace thing can you please add 8px padding on
-            both left and right of it, to the container").
-            It is the one row in this column that does NOT sit on the 16px
-            gutter, and that is the point of the request rather than a mistake
-            in it: the switcher is a header, not a nav item. The search field,
-            the caption and every row below stay on 16, so the column still has
-            one edge — this block is simply inset from it. */}
-        <div className="mt-3.5 flex h-10 shrink-0 items-center px-6">
+        <div className="mt-3.5 flex h-10 shrink-0 items-center px-4">
           {workspace &&
             (account ? (
               <DropdownMenu>
@@ -669,7 +661,15 @@ export function RailContent({
                        the column is the only thing above the search field, so
                        it carries the extra four pixels rather than the rail
                        opening on a row the same size as everything below it. */
-                    className={cn(SLOT, "h-10 [&_svg]:size-5")}
+                    /* `px-2` — 8px INSIDE the button, which is the ask and not
+                       the same thing as insetting the container. The button
+                       stays `w-full`, so its hover fill and its focus ring still
+                       run the full 228px of the column's gutter; only the badge
+                       and the name move in, and the chevron moves in from the
+                       right by the same 8. Putting it on the container instead
+                       (which is what shipped first) narrowed the hover surface
+                       and pushed the whole block off the rail's 16px edge. */
+                    className={cn(SLOT, "h-10 px-2 [&_svg]:size-5")}
                     aria-label={`${workspace} — workspace and account`}
                   >
                     <span className={ICON_COL}>
