@@ -194,6 +194,32 @@ function withTrends(
     // exist. Today and Yesterday are one day long by definition.
     if (points.length < 2) continue;
     slot.series = points;
+
+    /**
+     * THE PREVIOUS WINDOW, AS A SECOND SERIES — and it costs nothing to build.
+     *
+     * Node 0:5 draws two lines and a two-entry legend under a chart card. The
+     * comparison is the same window shifted back by its own length: this week
+     * against last week, these thirty days against the thirty before them.
+     *
+     * `all` already holds it. `calendarDayRanges` computes a bucket per day
+     * across whole calendar months and `trendKeys` starts from those, so for a
+     * day-bucketed window the buckets behind `r.start` were computed for the
+     * calendar and are sitting in the same map. Nothing new is measured; this
+     * reads what the run already produced.
+     *
+     * ALL OR NOTHING. A window missing a bucket at its far end is a shorter
+     * line drawn against a full one, which reads as a fall the data does not
+     * contain. `bucketWindowsFor` says how many buckets the window has; fewer
+     * than that and there is no comparison rather than a misleading one — which
+     * is what happens on 90d, whose weeks fall outside the calendar's months.
+     */
+    const span = r.end - r.start;
+    const prevWindows = bucketWindowsFor(r.start - span - 1, r.start - 1);
+    const prev = prevWindows
+      .map((b) => ({ bucket: b.key, value: all[b.key]?.value }))
+      .filter((p): p is { bucket: string; value: number } => p.value != null && Number.isFinite(p.value));
+    if (prev.length >= 2 && prev.length === prevWindows.length) slot.compare = prev;
     // NOT OPTIONAL: absent, the renderer reads the slot as a row written before
     // windows carried their own buckets and tells the customer to refresh, and
     // the axis falls back to the metric's declared unit and prints raw keys.

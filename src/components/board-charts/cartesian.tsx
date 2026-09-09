@@ -161,6 +161,7 @@ function Gridlines({ ticks, lo, hi }: { ticks: number[]; lo: number; hi: number 
  */
 export function LineChart({
   series,
+  compare,
   format,
   accent,
   unit,
@@ -169,6 +170,20 @@ export function LineChart({
   target,
 }: {
   series: SeriesPoint[];
+  /**
+   * THE SAME WINDOW, SHIFTED BACK BY ITS OWN LENGTH — node 0:5's second line.
+   *
+   * Plotted by INDEX rather than by bucket, which is the whole trick: its
+   * buckets are different dates, so there is no shared x scale to put them on.
+   * The nth bucket of last week sits under the nth bucket of this one, which is
+   * what "the same window, a week ago" means and what makes the two readable
+   * against each other at all.
+   *
+   * Its values join the axis calculation. Left out, a previous period taller
+   * than this one is drawn off the top of the frame — a comparison silently
+   * clipped is worse than none.
+   */
+  compare?: SeriesPoint[];
   format: ChartFormat;
   accent: string;
   unit?: BucketUnit;
@@ -178,7 +193,8 @@ export function LineChart({
   target?: number | null;
 }) {
   const points = padSeries(series, unit, pad);
-  const values = points.map((p) => p.value).filter((v): v is number => v != null);
+  const prior = compare && compare.length > 1 ? padSeries(compare, unit, pad) : [];
+  const values = [...points, ...prior].map((p) => p.value).filter((v): v is number => v != null);
   // The target bounds the axis in BOTH directions. Folded into the max alone,
   // a negative goal put the dashed line 250% below the viewBox — invisible,
   // with nothing to say the goal existed.
@@ -230,11 +246,43 @@ export function LineChart({
   points.forEach((p, i) => (p.value == null ? flush() : run.push({ i, v: p.value })));
   flush();
 
+  /**
+   * The previous window's path, on the CURRENT window's x positions — `xPrior`
+   * spaces it across its own count so a window with one bucket fewer still
+   * spans the frame rather than stopping short of the right edge.
+   */
+  const xPrior = (i: number) => (prior.length === 1 ? 50 : (i / (prior.length - 1)) * 100);
+  const priorRuns: string[] = [];
+  let priorOpen = false;
+  prior.forEach((p, i) => {
+    if (p.value == null) {
+      priorOpen = false;
+      return;
+    }
+    const at = `${xPrior(i)} ${yPct(p.value, lo, hi)}`;
+    priorRuns.push(priorOpen ? `L ${at}` : `M ${at} L ${at}`);
+    priorOpen = true;
+  });
+
   return (
     <AxisFrame ticks={ticks} format={format} labels={edgeLabels(points.map((p) => p.bucket), unit)}>
       <svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
         <Gridlines ticks={ticks} lo={lo} hi={hi} />
         {area && areaRuns.length > 0 && <path d={areaRuns.join(" ")} fill={accent} fillOpacity={0.12} />}
+        {/* BEHIND the current period, thinner, and never filled — it is the
+            reference, not the subject. Drawn before the target line so a goal
+            still reads over both. */}
+        {priorRuns.length > 0 && (
+          <path
+            d={priorRuns.join(" ")}
+            fill="none"
+            stroke="var(--color-series-compare)"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            vectorEffect="non-scaling-stroke"
+          />
+        )}
         {target != null && (
           <line
             x1="0"

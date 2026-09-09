@@ -951,6 +951,23 @@ export type TileSpec = {
       value?: number;
       series?: Array<{ bucket: string; value: number }>;
       /**
+       * THE SAME WINDOW SHIFTED BACK BY ITS OWN LENGTH — the second line under
+       * a chart card, and what the delta chip means by "vs compared".
+       *
+       * Stored rather than derived on read, and that is a cost decision. The
+       * board's query drops `byDay` in SQL because sixty day entries per tile
+       * on a read that runs every twelve seconds is real money on a database
+       * that bills by the byte; `byRange` is already selected, so a comparison
+       * that rides here is free to read. It is also free to BUILD — see
+       * `withTrends`, which assembles it from buckets `calendarDayRanges` has
+       * already computed for the calendar.
+       *
+       * Absent whenever the previous window is not wholly covered (90d's weeks
+       * fall outside the calendar's months), because a short line drawn against
+       * a full one reads as a fall the data does not contain.
+       */
+      compare?: Array<{ bucket: string; value: number }>;
+      /**
        * THE BUCKET SIZE OF **THIS** WINDOW'S SERIES, which is not the metric's
        * declared `timeUnit` and must not be read as it.
        *

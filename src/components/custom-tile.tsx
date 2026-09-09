@@ -96,6 +96,8 @@ export type CustomTileSource =
 type Windowed = {
   value?: number;
   series?: SeriesPoint[];
+  /** The same window shifted back by its own length — see `TileSpec.byRange`. */
+  compare?: SeriesPoint[];
   groups?: GroupRow[];
   funnel?: FunnelResult;
   undated?: number;
@@ -409,9 +411,26 @@ export function CustomTile({
    * name every row beside its own colour — a legend there would be the same
    * labels a second time.
    */
+  /**
+   * THE SECOND ENTRY APPEARS WITH THE SECOND LINE, never on its own.
+   *
+   * `w.compare` is the same window shifted back by its own length, stored by
+   * the materializer. It is absent whenever the previous window is not wholly
+   * covered, so the legend follows the drawing rather than promising it: a
+   * two-entry legend over one line names a series that is not there, which is
+   * the exact objection that kept this legend at one entry until the series
+   * existed.
+   *
+   * BARS GET NO COMPARISON. Node 0:5 draws its bar card with one entry, and two
+   * overlaid bar sets at this width is a worse reading of the same data.
+   */
+  const comparable = (chart === "line" || chart === "area") && (w.compare?.length ?? 0) > 1;
   const legend =
     hasSeries && (chart === "line" || chart === "area" || chart === "bar")
-      ? [{ color: accent, label: RANGE_OPTIONS.find((r) => r.key === rangeKey)?.label ?? "This period" }]
+      ? [
+          { color: accent, label: RANGE_OPTIONS.find((r) => r.key === rangeKey)?.label ?? "This period" },
+          ...(comparable ? [{ color: "var(--color-series-compare)", label: "Previous period" }] : []),
+        ]
       : undefined;
 
   const tableRows = hasSeries
@@ -492,6 +511,7 @@ export function CustomTile({
         ) : chart === "line" || chart === "area" ? (
           <LineChart
             series={w.series!}
+            compare={w.compare}
             format={bag}
             accent={accent}
             unit={unit}

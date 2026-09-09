@@ -750,6 +750,16 @@
   --topbar-accent-foreground: #ffffff; /* the initials inside it */
   --topbar-active: #dedede; /* the selected view tab, a step darker than the hover */
 
+  /* THE COMPARISON SERIES — the second line under a chart card, and the only
+     hue in this theme that is not the lime, a state colour or a neutral.
+     Node 0:5 draws it blue. The 8 September re-theme deliberately took blue
+     OUT of this product, so this is a knowing exception rather than drift: a
+     chart comparing two periods needs two colours a reader can tell apart, and
+     a second green beside #B6FF56 is not one. It is deliberately QUIETER than
+     the brand — the current period is the subject and the previous one is the
+     reference behind it. One token, so retuning it is one edit. */
+  --series-compare: #5aa9e6; /* 3.05:1 on white — a line, not text */
+
   /* THE CARD — white, and it no longer borrows the chrome, because the chrome
      is dark here now. Node 58:6173 draws it `bg-white` with an #E1E1E1 rim. */
   --card: #ffffff;
@@ -922,6 +932,16 @@
   --topbar-accent: #3a3a3a; /* the avatar disc */
   --topbar-accent-foreground: #ffffff;
   --topbar-active: #3a3a3a; /* the selected view tab */
+
+  /* THE COMPARISON SERIES — the second line under a chart card, and the only
+     hue in this theme that is not the lime, a state colour or a neutral.
+     Node 0:5 draws it blue. The 8 September re-theme deliberately took blue
+     OUT of this product, so this is a knowing exception rather than drift: a
+     chart comparing two periods needs two colours a reader can tell apart, and
+     a second green beside #B6FF56 is not one. It is deliberately QUIETER than
+     the brand — the current period is the subject and the previous one is the
+     reference behind it. One token, so retuning it is one edit. */
+  --series-compare: #7cc4f5; /* lifted for the #191919 card */
 
   /* THE CARD NO LONGER SHARES THE CHROME. It is the one surface that steps
      away — #191919, at 1.06:1 on the page — which is the entire reason the
@@ -1172,6 +1192,7 @@
   --color-topbar-accent: var(--topbar-accent);
   --color-topbar-accent-foreground: var(--topbar-accent-foreground);
   --color-topbar-active: var(--topbar-active);
+  --color-series-compare: var(--series-compare);
   --color-panel: var(--panel);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);

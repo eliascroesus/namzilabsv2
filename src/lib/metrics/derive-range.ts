@@ -38,6 +38,23 @@ export type RangeSlotLike = {
   value?: number;
   records?: number;
   series?: Array<{ bucket: string; value: number }>;
+  /**
+   * THE SAME WINDOW, SHIFTED BACK BY ITS OWN LENGTH — what "Compare To" draws
+   * as a second line and what the delta chip means by "vs compared".
+   *
+   * It is a stored series rather than something the dashboard derives, and that
+   * is a cost decision rather than a taste one: the read that feeds the board
+   * drops `byDay` in SQL because sixty day entries per tile on a query running
+   * every twelve seconds is real money on a database that bills by the byte.
+   * `byRange` is already selected, so a comparison that rides here is free to
+   * read; one derived from `byDay` would put those sixty entries back.
+   *
+   * It costs no extra engine work either. `calendarDayRanges` already computes
+   * a bucket per day across whole calendar months, so for a day-bucketed window
+   * (7d, 30d) the previous window's buckets are already in hand — `withTrends`
+   * reads them out of the same map it builds the current series from.
+   */
+  compare?: Array<{ bucket: string; value: number }>;
   unit?: string;
   assembled?: boolean;
   groups?: unknown;
