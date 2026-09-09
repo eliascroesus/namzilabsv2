@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { accentOf, fieldsFor, honoured, parseTileConfig, TILE_CONFIG_KEYS } from "@/lib/board/tile-config";
+import { GROUP_ACCENT } from "@/components/flow/node-accent";
 import { BLOCK_IDS, CHART_IDS } from "@/lib/board/charts";
 import { MATERIALIZED_RANGES } from "@/lib/metrics/range";
 
@@ -182,17 +183,26 @@ describe("the colour key is a key, not anything that answers to `in`", () => {
     // Belt and braces: a row written before the schema was tightened must not
     // render a function into a style attribute.
     //
-    // `--marker`, not a hex, since 8 Sep 2026 — and the hex it briefly was is
-    // why. `var(--color-brand-400)` is #B6FF56: 15.53:1 on the console and
-    // 1.20:1 on white, so every unconfigured tile drew an invisible line the
-    // moment the theme flipped. A role resolves per theme; a hex cannot.
-    expect(accentOf("constructor")).toBe("var(--marker)");
-    expect(accentOf("nope")).toBe("var(--marker)");
-    expect(accentOf(undefined)).toBe("var(--marker)");
-    expect(accentOf("teal")).not.toBe("var(--marker)");
-    // A known key resolves through the same theme-aware mix rather than to a
-    // raw hue, for the identical reason.
-    expect(accentOf("teal")).toContain("var(--series-mix");
-    expect(accentOf("teal")).toContain("var(--group-ink-end)");
+    /**
+      * BACK TO THE BRAND, IN BOTH THEMES, AND THE ROUND TRIP IS THE RECORD.
+      *
+      * It was `var(--color-brand-400)`, then `var(--marker)` for a day — the
+      * lime on dark, a solved-down #4F7A00 on light — because #B6FF56 measures
+      * 1.20:1 on white and a mark owes 3:1.
+      *
+      * Sampling the LIGHT frame settled it the other way: node 58:5824 draws
+      * its bars and its legend dot at #B6FF56 on a WHITE card, the same lime as
+      * the dark frame. Elias asked for it directly as well. So the design's own
+      * call stands and the deviation is recorded in `accentOf` and in
+      * BRAND_KIT rather than quietly corrected — the inverse of the two greys
+      * in the substitutions table, and for a stated reason: those carry TEXT,
+      * and a 46px bar is identified rather than read.
+      */
+    expect(accentOf("constructor")).toBe("var(--color-brand-400)");
+    expect(accentOf("nope")).toBe("var(--color-brand-400)");
+    expect(accentOf(undefined)).toBe("var(--color-brand-400)");
+    // A known key resolves to its own hue, unmixed, on both grounds.
+    expect(accentOf("teal")).toBe(GROUP_ACCENT.teal);
+    expect(accentOf("teal")).not.toContain("color-mix");
   });
 });

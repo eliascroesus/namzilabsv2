@@ -133,33 +133,29 @@ export function accentOf(color?: string): string {
    */
   const hue = color && Object.hasOwn(GROUP_ACCENT, color) ? GROUP_ACCENT[color] : null;
   /**
-   * THE DEFAULT IS `--marker`, NOT A HEX, BECAUSE A HEX CANNOT CHANGE THEME.
+   * THE SAME COLOUR IN BOTH THEMES, AND THAT IS THE FIGMA'S OWN CALL.
    *
-   * It was `var(--color-brand-400)` for one commit and that was a real bug on
-   * light: #B6FF56 is 15.53:1 on the console and **1.20:1 on white**, so every
-   * unconfigured tile drew a line nobody could see the moment the theme
-   * flipped. `--marker` is the same lime on dark and the solved-down #4F7A00
-   * (5.10:1) on light — the stroke role, which is exactly what a series is.
+   * This returned `var(--marker)` for a day — the lime on dark, a solved-down
+   * #4F7A00 on light — because #B6FF56 measures 1.20:1 on white and a mark
+   * owes 3:1. Sampling the LIGHT frame settles it against me: node 58:5824
+   * draws its bars at #B6FF56 and its legend dot at #B6FF56, the same lime as
+   * the dark frame, on a white card. Elias asked for it directly too ("make
+   * sure the charts are like our theme color the lime green one").
+   *
+   * So it is followed, and the deviation is RECORDED rather than silently
+   * substituted — the same treatment as the two Figma greys in BRAND_KIT's
+   * substitutions table, with the sign reversed: those were refused because
+   * they carry TEXT, and a chart mark is a large filled shape whose job is to
+   * be identified rather than read. A 46px lime bar on white is unmistakable
+   * at 1.20:1; a 14px label at the same ratio would not be.
+   *
+   * What still protects the reading is that no chart carries meaning by colour
+   * alone: every value goes through `formatMetricValue` into a tooltip and a
+   * headline, and the axis labels are `--muted-foreground`.
    */
-  if (!hue) return "var(--marker)";
-  /**
-   * AND A STORED HUE IS MIXED TOWARD THE THEME'S OWN FAR END.
-   *
-   * The twelve `GROUP_ACCENT` values are solved to clear 3:1 on the #191919
-   * card. On white the identical values measure 2.0–2.8:1 — the solve inverted
-   * with the ground, exactly as it did when they moved the other way. Rather
-   * than keep two palettes in step by hand, the ARITHMETIC is deferred to the
-   * browser, where the theme has already resolved: `--series-mix` is 100% on
-   * dark (the hue as solved, untouched) and 70% on light, which lands the worst
-   * hue at 3.69:1 on white while keeping all twelve recognisable.
-   *
-   * The same `color-mix` trick `groupWash`/`groupBadge`/`groupInk` in
-   * `node-accent.ts` already use, and for the identical reason: the surface
-   * being mixed into is a different colour in each theme, and a server render
-   * cannot know which one the browser will paint.
-   */
-  return `color-mix(in srgb, ${hue} var(--series-mix, 100%), var(--group-ink-end))`;
+  return hue ?? "var(--color-brand-400)";
 }
+
 
 /**
  * THE COLOUR A NEWLY CREATED TILE WEARS.

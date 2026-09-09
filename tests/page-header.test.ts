@@ -102,7 +102,10 @@ describe("PageHeader's title, with and without a tab strip beside it", () => {
     // child's focus ring, so without it a keyboard user tabbing to the first
     // or last tab loses its outline exactly when they reach it.
     const source = read("src/components/ui/page.tsx");
-    expect(source).toMatch(/flex min-w-0 items-center overflow-x-auto -mx-1 px-1/);
+    // The ring room is `-my-1 py-1` on THIS element now rather than on the strip
+    // inside it — see `ui/page.tsx`. Both axes are spelled the same way here:
+    // padding inside the scrolling box, negative margin outside it.
+    expect(source).toMatch(/-mx-1 -my-1 flex min-w-0 items-center overflow-x-auto px-1 py-1/);
   });
 
   it("never gives the title column its own min-w-0", () => {

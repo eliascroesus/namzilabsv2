@@ -48,7 +48,15 @@ const cardVariants = cva("border border-border bg-card", {
        * also moves the box is one motion too many (it also shifts the bounding
        * boxes `scripts/canvas-check.mjs` measures overlap with).
        */
-      tile: "rounded-surface shadow-card transition-colors duration-(--duration-base) ease-(--ease-standard) hover:border-rule",
+      /* NO SHADOW. Both 8 September frames draw a tile as a fill and a 1px
+         rim and nothing else — node 58:6173 is `bg-white border border-[#e1e1e1]
+         rounded-[8px]`, full stop. Two of the DARK frame's three chart cards do
+         carry a `0 1px 2px` drop and the third does not, and the light frame has
+         none at all: an inconsistency in the source rather than a design.
+         Asked for directly ("remove all the backdrop shadow on all the charts"),
+         and the light frame settles it. The border does the separating; on a
+         #191919 card at 1.06:1 on the page it is the only thing that can. */
+      tile: "rounded-surface transition-colors duration-(--duration-base) ease-(--ease-standard) hover:border-rule",
     },
     /**
      * 16px IS THE DEFAULT NOW, DOWN FROM 24.

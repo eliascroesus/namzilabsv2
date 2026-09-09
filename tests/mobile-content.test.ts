@@ -98,11 +98,17 @@ describe("the page header stacks below md", () => {
     // class from the live `className` left the assertion passing anyway. The
     // full literal is asserted rather than a loose `[^"]*` gap, so a future
     // reordering of the class string cannot reopen the same hole.
-    expect(pageCode).toContain("quiet-scroll flex min-w-0 items-center overflow-x-auto -mx-1 px-1");
+    // `-my-1 py-1` joined it: the focus-ring room moved OFF the strip and ON to
+    // the scroller, because `overflow-x: auto` forces `overflow-y` to match and
+    // padding on the child overflowed this box — Chromium drew a vertical
+    // scrollbar for it, a black pill beside the board's "+ Add".
+    expect(pageCode).toContain("quiet-scroll -mx-1 -my-1 flex min-w-0 items-center overflow-x-auto px-1 py-1");
     expect(pageCode, "md:overflow-visible must not come back anywhere in page.tsx").not.toMatch(/md:overflow-visible/);
     // …and the strip inside it has to stop wrapping, or it wraps INSIDE the
     // scroller and the scroller never has anything to scroll.
-    expect(read("src/app/dashboard/board-controls.tsx")).toMatch(/flex flex-nowrap items-center gap-6 px-1 py-1 md:flex-wrap/);
+    // No `py-1` on the strip any more — the ring room moved out to the scroller
+    // above. What still matters here is `flex-nowrap`.
+    expect(read("src/app/dashboard/board-controls.tsx")).toMatch(/flex flex-nowrap items-center gap-6 px-1 md:flex-wrap/);
   });
 
   it("left-aligns the title on its own line, and centres it only at md", () => {

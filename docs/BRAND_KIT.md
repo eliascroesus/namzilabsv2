@@ -135,6 +135,24 @@ different kinds of fact.
 `#4A4A4A` is still used exactly as drawn where it sits on WHITE — the "Today"
 and "Refresh All" ink — where it measures 8.86:1.
 
+**And one deviation that runs the OTHER WAY, recorded here for the same
+reason.** The chart marks are `#B6FF56` in BOTH themes, which on a white card
+measures **1.20:1** — far under the 3:1 a meaningful graphic owes. It is not a
+substitution and not an oversight: node 58:5824, the LIGHT frame, draws its bars
+and its legend dot at that exact value on white, sampled from the export, and it
+was asked for directly.
+
+What makes it a different case from the two greys above is what the colour is
+doing. Those carry TEXT, which has to be *read*; a 46px bar or a 3px series line
+is *identified*, and it is identified against a white card by shape and position
+as much as by contrast. Nothing on a chart carries meaning by colour alone here:
+every value goes through `formatMetricValue` into both a tooltip and a headline,
+the axis labels are `--muted-foreground`, and the legend names the series beside
+its own swatch.
+
+The honest summary is that this one is followed because the design and the owner
+both chose it, and it is written down so nobody re-derives it as a bug.
+
 **The white buttons are NOT a substitution, and are worth naming here so they
 are not mistaken for one.** Nodes 49:5429 and 49:5439 draw those two controls as
 white pills, adjacent and unambiguous. On a `#121214` console a white fill is the

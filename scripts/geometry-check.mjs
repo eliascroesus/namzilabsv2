@@ -75,7 +75,15 @@ const FIGMA = {
  * Figma's gap is 24, and every row below the search inherited it.
  */
 const RAIL = {
-  "switcher": { x: 16, y: 14, h: 40 },
+  /**
+   * x=24, NOT the Figma's 16 — a deliberate departure, asked for directly:
+   * "on the workspace thing can you please add 8px padding on both left and
+   * right of it, to the container". It is the one row in the column that does
+   * not sit on the 16px gutter. Recorded HERE rather than left to fail, because
+   * a check that is expected to report one red line every run is a check people
+   * stop reading.
+   */
+  "switcher": { x: 24, y: 14, h: 40 },
   "search": { x: 16, y: 78, h: 36 },
   "Main Menu": { x: 16, y: 138, h: 12 },
   "Dashboard": { x: 16, y: 158, h: 36 },

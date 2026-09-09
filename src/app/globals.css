@@ -845,12 +845,6 @@
 
   --group-ink-end: #0c111d;
 
-  /* HOW MUCH OF A SERIES HUE SURVIVES ON THIS GROUND — see `accentOf()`.
-     70% here: the twelve board hues are solved to clear 3:1 on the #191919
-     CARD, and on white the same values measure 2.0–2.8:1, which is under the
-     bar a data mark owes. Mixed 70% into `--group-ink-end` they clear 3.69:1
-     at the worst hue and stay recognisably themselves. */
-  --series-mix: 70%;
 }
 
 .dark {
@@ -1092,10 +1086,6 @@
      node-accent.ts. Near-white, because the badge is the dark thing. */
   --group-ink-end: #f9fafb;
 
-  /* 100% — the hue AS SOLVED. These values were cut for this exact ground, so
-     mixing anything into them here would undo the solve. The role exists so
-     the LIGHT theme can darken them without a component ever spelling `dark:`. */
-  --series-mix: 100%;
 }
 
 /**
@@ -1411,9 +1401,22 @@ select:-webkit-autofill {
 
    NOT GLOBAL. A page's own scrollbar is a navigation aid and stays the size the
    platform made it; this is for bars that sit inside the content. */
+/**
+ * THE THUMB IS A ROLE NOW, NOT A RAMP STEP — and it was showing as a BLACK PILL
+ * on the light theme.
+ *
+ * `--color-neutral-500` is #4A4A4A whatever the theme, so a thumb spelled with
+ * it is a near-black lozenge on a white page. Elias found one beside the
+ * board's "+ Add" button ("what is that black thing") — a VERTICAL scrollbar on
+ * a horizontal tab strip, which is a second bug (see `ui/page.tsx`) and was
+ * only visible because of this one.
+ *
+ * `--rule` is #4A4A4A on dark and #CFCFCF on light: the heavier of the two
+ * hairlines, which is what a scrollbar thumb is.
+ */
 .quiet-scroll {
   scrollbar-width: thin;
-  scrollbar-color: var(--color-neutral-500) transparent;
+  scrollbar-color: var(--rule) transparent;
 }
 .quiet-scroll::-webkit-scrollbar {
   height: 10px;
@@ -1425,11 +1428,11 @@ select:-webkit-autofill {
 .quiet-scroll::-webkit-scrollbar-thumb {
   border: 3px solid transparent;
   background-clip: content-box;
-  background-color: var(--color-neutral-500);
+  background-color: var(--rule);
   border-radius: 999px;
 }
 .quiet-scroll:hover::-webkit-scrollbar-thumb {
-  background-color: var(--color-neutral-400);
+  background-color: var(--muted-foreground);
 }
 
 /* THE CUSTOM VIEW'S CANVAS — one DOM, three renderings.

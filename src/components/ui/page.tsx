@@ -424,7 +424,17 @@ export function PageHeader({ title, lede, actions, tabs, back, className }: Page
               `-mx-1 px-1`: a bare `overflow-x-auto` clips the first and last
               tab's focus ring at both ends — the same compensation the period
               track already carries in `app/dashboard/page.tsx`. */}
-          <div className="quiet-scroll flex min-w-0 items-center overflow-x-auto -mx-1 px-1">{tabs}</div>
+          {/* THE RING ROOM LIVES ON THE SCROLLER, WHICH IS WHY THERE IS NO
+              VERTICAL SCROLLBAR. `overflow-x: auto` forces `overflow-y` to
+              match, so this element scrolls in BOTH axes whether or not anyone
+              wants it to. With the 4px of focus-ring padding on the strip
+              INSIDE it, the strip's border box stood 4px proud of this one top
+              and bottom — real vertical overflow, and Chromium drew a thumb for
+              it: the black pill beside "+ Add".
+              `py-1 -my-1` out here puts that padding INSIDE the scrolling box,
+              so nothing overflows, while the negative margin keeps the row 32
+              tall in the layout — which is what node 58:5951 measures. */}
+          <div className="quiet-scroll -mx-1 -my-1 flex min-w-0 items-center overflow-x-auto px-1 py-1">{tabs}</div>
           {/* LEFT ON A PHONE, CENTRED ABOVE `md`. A centred title is what the
               4 Sep Figma drew BETWEEN two zones; on its own line with nothing
               either side of it, centring is just a heading that has come loose
