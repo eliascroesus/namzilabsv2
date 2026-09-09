@@ -159,3 +159,50 @@ describe("base styles are layered", () => {
     expect(unlayeredElementRules()).toEqual([]);
   });
 });
+
+/**
+ * TWO THINGS THE FILE USED TO SAY TWICE, AND ONE IT SHOULD NOT SAY AT ALL.
+ *
+ * `html` was declared in two places — `color-scheme` and `scroll-padding-top`
+ * in one, `-webkit-tap-highlight-color` in another eighty lines later. They did
+ * not conflict, so nothing was broken; they were simply two answers to "what
+ * does this file say about `html`", which is one answer too many for the next
+ * person editing it.
+ *
+ * The tap highlight is the other one. Its comment said "the brand at 12%" and
+ * the value was `rgb(0 212 146)` — #00D492, which WAS the brand until the
+ * 8 September re-theme and then was not. The literal outlived the sentence
+ * describing it, so the highlight drew what is now `--success` — the freshness
+ * dot's green — while claiming to draw the product's colour.
+ *
+ * #00D492 IS NOT DEAD and must not be banned: it is `--success`, live in both
+ * themes as `--success-soft` and `--freshness-halo`, with its contrast ratios
+ * worked out in the stylesheet. The assertion below is therefore about what the
+ * tap highlight IS, not about what the file may no longer contain — a blanket
+ * ban on the value would fail on the success colour doing its job.
+ *
+ * NOT ASSERTED: that `@layer base` appears once. Wrapping rules where they sit
+ * left eleven blocks, and merging them would move two hundred lines of rules
+ * away from the prose that explains them. Every `@layer base` block contributes
+ * to the same layer with identical cascade behaviour, so the merge would buy
+ * nothing and cost the thing that makes this file readable.
+ */
+describe("the stylesheet says each thing once", () => {
+  const bare = css.replace(/\/\*[\s\S]*?\*\//g, "");
+
+  it("declares html exactly once", () => {
+    expect([...bare.matchAll(/^\s*html\s*\{/gm)]).toHaveLength(1);
+  });
+
+  it("sets the tap highlight in the brand, not in the success colour", () => {
+    expect(bare).toMatch(/-webkit-tap-highlight-color:\s*rgb\(182 255 86 \/ 0\.12\)/);
+    expect(bare).not.toMatch(/-webkit-tap-highlight-color:\s*rgb\(0 212 146/);
+  });
+
+  it("keeps #00D492 where it is still the right answer", () => {
+    // Guards the fix above from being over-applied: the success colour is not
+    // residue, and a later cleanup that greps for the old brand must not take
+    // the freshness dot with it.
+    expect(bare).toMatch(/--success:\s*#00d492/i);
+  });
+});

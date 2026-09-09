@@ -1184,6 +1184,19 @@
     /* Anchored headings otherwise land flush against the top of the viewport
        with their first line under the edge. */
     scroll-padding-top: 5rem;
+    /* Chosen rather than inherited: the default is a translucent grey block
+       that ignores our radii, so a tapped pill flashes as a rectangle. The
+       brand at 12%, which on this ground is a flash of green rather than a
+       grey smear.
+       IT SAID THAT AND DREW SOMETHING ELSE. The value was `rgb(0 212 146)` —
+       #00D492, which WAS the brand when this rule was written and stopped
+       being it at the 8 September re-theme. The literal stayed, so the comment
+       above went on claiming the brand while the highlight drew what is now
+       `--success`: the colour of the freshness dot, not of the product.
+       Nothing caught it because a tap highlight does not render on a desktop
+       browser, so no screenshot ever taken of this app could show it.
+       #00D492 itself is alive and correct elsewhere — it is `--success`. */
+    -webkit-tap-highlight-color: rgb(182 255 86 / 0.12);
   }
 }
 
@@ -1258,15 +1271,6 @@ html.dark {
   select,
   textarea {
     touch-action: manipulation;
-  }
-}
-
-/* Chosen rather than inherited: the default is a translucent grey block that
-   ignores our radii, so a tapped pill flashes as a rectangle. The brand at 12%,
-   which on this ground is a flash of green rather than a grey smear. */
-@layer base {
-  html {
-    -webkit-tap-highlight-color: rgb(0 212 146 / 0.12);
   }
 }
 
