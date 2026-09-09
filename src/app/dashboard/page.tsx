@@ -5,6 +5,7 @@ import { getReadDb } from "@/db/client";
 import { connections, flows } from "@/db/schema";
 import { requireOrg, requestAccess } from "@/lib/auth";
 import { AppShell } from "@/components/app-shell";
+import { TopBarFreshness, TopBarTitle } from "@/components/topbar-slots";
 import { MetricCard } from "@/components/metric-card";
 import { EmptyBoard } from "@/components/board-empty";
 import { SubmitButton } from "@/components/ui/submit-button";
@@ -486,6 +487,18 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
    * being that answer when custom views began computing only the classics they
    * reference.
    */
+  /**
+   * THE NEWEST THING ON THE BOARD, which is what "Updated …" in bar two means.
+   * Flow tiles carry `computedAt`; classic metrics compute live at render, so
+   * their freshness is now. Null when the board has neither, and the slot is
+   * `empty:hidden`, so an unknown freshness makes no claim.
+   */
+  const newestComputedAt: string | null =
+    flowTiles.reduce<string | null>((newest, r) => {
+      const at = r.computedAt ? new Date(r.computedAt).toISOString() : null;
+      return at && (!newest || at > newest) ? at : newest;
+    }, null) ?? null;
+
   const hasTiles = activeKind === "custom" || tiles.length > 0 || flowTiles.length > 0;
 
   /**
@@ -1052,6 +1065,17 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             which is worse than a fixed one that is true. It becomes editable
             the same day `dashboard_views` grows a nullable `subtitle` and
             `renameViewAction` gains a sibling to write it. */}
+        {/* BAR TWO'S LEFT HALF, from the page that knows what it is. The bar
+            is global — `AppFrame` renders it on every route — so it cannot know
+            what page it is on or when that page last computed anything, and a
+            bar cannot honestly claim a freshness it has not measured. These two
+            portal into the slots it draws (`#topbar-title`, `#topbar-status`),
+            the same arrangement the flow builder's toolbar already uses.
+            The title is the ACTIVE VIEW's name, so the filled tab below and the
+            heading above it say one word. */}
+        <TopBarTitle>{viewTabs.find((v) => v.id === activeView)?.name ?? viewTabs[0]?.name ?? "Dashboard"}</TopBarTitle>
+        <TopBarFreshness at={newestComputedAt} />
+
         <PageHeader
           /* TABS AND ACTIONS, AND NO THIRD ZONE ANY MORE.
              The 4 September Figma drew one row as tabs left, the view's name

@@ -207,3 +207,39 @@ describe("the board's bar", () => {
     expect(button).toMatch(/bar: "h-11 gap-1 px-2 py-1 text-\[13px\] leading-4 md:h-\[26px\]/);
   });
 });
+
+/**
+ * BAR TWO'S SLOTS HAVE CALLERS, which for one commit they did not.
+ *
+ * `top-bar.tsx` drew `<h1 id="topbar-title">` and `<div id="topbar-status">`,
+ * both `empty:hidden`, and nothing anywhere filled either one — so the left
+ * half of bar two rendered blank on every board route while the commit message
+ * said the slots were built. A slot with no caller is not a placeholder; it is
+ * the feature missing, and `empty:hidden` is what made it invisible rather than
+ * obviously broken.
+ */
+describe("bar two's slots are filled by the page that knows", () => {
+  const slots = readFileSync(join(__dirname, "..", "src/components/topbar-slots.tsx"), "utf8");
+  const board = readFileSync(join(__dirname, "..", "src/app/dashboard/page.tsx"), "utf8");
+  const harness = readFileSync(join(__dirname, "..", "src/app/design/overview/page.tsx"), "utf8");
+
+  it("portals into the two ids the bar draws", () => {
+    expect(slots).toMatch(/id="topbar-title"|Slot id="topbar-title"/);
+    expect(slots).toMatch(/topbar-status/);
+  });
+
+  it("names the board's own view, so the tab and the heading agree", () => {
+    expect(board).toMatch(/<TopBarTitle>/);
+    expect(board).toMatch(/viewTabs\.find\(\(v\) => v\.id === activeView\)\?\.name/);
+  });
+
+  it("passes a measured freshness rather than a string the bar invents", () => {
+    expect(board).toMatch(/<TopBarFreshness at=\{newestComputedAt\}/);
+    expect(board).toMatch(/const newestComputedAt/);
+  });
+
+  it("draws both on the design harness, which is what gets compared to the frame", () => {
+    expect(harness).toMatch(/<TopBarTitle>Overview<\/TopBarTitle>/);
+    expect(harness).toMatch(/<TopBarFreshness/);
+  });
+});

@@ -1,6 +1,7 @@
 import { AppFrame } from "@/components/app-frame";
 import { PageContainer, PageHeader } from "@/components/ui/page";
 import { BoardControls, RangeMenu, ViewStrip } from "@/app/dashboard/board-controls";
+import { TopBarFreshness, TopBarTitle } from "@/components/topbar-slots";
 import { Button } from "@/components/ui/button";
 import { ChartLine, ChevronDown, Plus, RefreshCw } from "lucide-react";
 import { FlowTile, type FlowResultRow } from "@/components/flow-tile";
@@ -69,17 +70,17 @@ const pair = (today: number, yesterday: number) => ({
   yesterday: { value: yesterday },
 });
 
+/**
+ * THE FOUR THE FRAME DRAWS, IN THE FRAME'S OWN ORDER.
+ *
+ * They were [Speed, Speed, Total, Total] at 30; node 0:5 draws
+ * [Total 31, Speed, Speed, Total 31]. On a page whose whole job is to be
+ * compared against that frame, a different order and a different headline is
+ * the page lying about the thing it exists to check.
+ */
 const METRICS: FlowResultRow[] = [
-  row("Speed To Lead (Armaan)", 519, {
-    tile: {
-      name: "Speed To Lead (Armaan)",
-      viz: "number",
-      format: "duration",
-      unit: "seconds",
-      durationDisplay: "hours",
-      value: 519,
-      byRange: pair(519, 1038),
-    },
+  row("Total Leads (Arman)", 31, {
+    tile: { name: "Total Leads (Arman)", viz: "number", format: "number", precision: 0, value: 31, byRange: pair(31, 20) },
   }),
   row("Speed To Lead (Armaan)", 519, {
     tile: {
@@ -92,11 +93,19 @@ const METRICS: FlowResultRow[] = [
       byRange: pair(519, 1038),
     },
   }),
-  row("Total Leads (Arman)", 30, {
-    tile: { name: "Total Leads (Arman)", viz: "number", format: "number", precision: 0, value: 30, byRange: pair(30, 20) },
+  row("Speed To Lead (Armaan)", 519, {
+    tile: {
+      name: "Speed To Lead (Armaan)",
+      viz: "number",
+      format: "duration",
+      unit: "seconds",
+      durationDisplay: "hours",
+      value: 519,
+      byRange: pair(519, 1038),
+    },
   }),
-  row("Total Leads (Arman)", 30, {
-    tile: { name: "Total Leads (Arman)", viz: "number", format: "number", precision: 0, value: 30, byRange: pair(30, 20) },
+  row("Total Leads (Arman)", 31, {
+    tile: { name: "Total Leads (Arman)", viz: "number", format: "number", precision: 0, value: 31, byRange: pair(31, 20) },
   }),
 ];
 
@@ -220,6 +229,14 @@ export default async function OverviewLab({
       account={{ initials: "EL", panel: <p className="text-sm text-muted-foreground">elias@namzilabs.co</p> }}
     >
       <PageContainer width="full">
+        {/* BAR TWO'S LEFT HALF — the frame draws "Overview" at 24/700 and
+            "Updated just now" at 13/400, and both are slots the page fills.
+            `new Date()` rather than HOUR_AGO on purpose: the tiles below are an
+            hour stale by design (they prove a formatted "1 hr ago" fits beside
+            a delta chip), but the BOARD was rendered now, and "Updated just
+            now" is the string node 0:5 draws. */}
+        <TopBarTitle>Overview</TopBarTitle>
+        <TopBarFreshness at={new Date()} />
         <BoardControls>
           {/* THE FOUR HEADER ACTIONS THE FRAME DRAWS, in its order: "+ Add",
               the period dropdown reading "Today", "Compare To", then
