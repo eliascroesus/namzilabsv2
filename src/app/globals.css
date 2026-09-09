@@ -52,14 +52,16 @@
  * exits get `exit` and run FASTER, because a slow dismissal reads as lag while
  * a slow entrance reads as grace.
  */
-:where([data-state="open"]).animate-in,
-:where([data-state="delayed-open"]).animate-in {
-  animation-duration: var(--duration-base);
-  animation-timing-function: var(--ease-spring);
-}
-:where([data-state="closed"]).animate-out {
-  animation-duration: var(--duration-fast);
-  animation-timing-function: var(--ease-exit);
+@layer components {
+  :where([data-state="open"]).animate-in,
+  :where([data-state="delayed-open"]).animate-in {
+    animation-duration: var(--duration-base);
+    animation-timing-function: var(--ease-spring);
+  }
+  :where([data-state="closed"]).animate-out {
+    animation-duration: var(--duration-fast);
+    animation-timing-function: var(--ease-exit);
+  }
 }
 
 /**
@@ -1422,25 +1424,27 @@ html.dark {
  * `--rule` is #4A4A4A on dark and #CFCFCF on light: the heavier of the two
  * hairlines, which is what a scrollbar thumb is.
  */
-.quiet-scroll {
-  scrollbar-width: thin;
-  scrollbar-color: var(--rule) transparent;
-}
-.quiet-scroll::-webkit-scrollbar {
-  height: 10px;
-  width: 10px;
-}
-.quiet-scroll::-webkit-scrollbar-track {
-  background: transparent;
-}
-.quiet-scroll::-webkit-scrollbar-thumb {
-  border: 3px solid transparent;
-  background-clip: content-box;
-  background-color: var(--rule);
-  border-radius: 999px;
-}
-.quiet-scroll:hover::-webkit-scrollbar-thumb {
-  background-color: var(--muted-foreground);
+@layer components {
+  .quiet-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: var(--rule) transparent;
+  }
+  .quiet-scroll::-webkit-scrollbar {
+    height: 10px;
+    width: 10px;
+  }
+  .quiet-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .quiet-scroll::-webkit-scrollbar-thumb {
+    border: 3px solid transparent;
+    background-clip: content-box;
+    background-color: var(--rule);
+    border-radius: 999px;
+  }
+  .quiet-scroll:hover::-webkit-scrollbar-thumb {
+    background-color: var(--muted-foreground);
+  }
 }
 
 /* THE CUSTOM VIEW'S CANVAS — one DOM, three renderings.
@@ -1464,51 +1468,55 @@ html.dark {
    are one fact spelled two ways, and src/lib/board/grid.ts owns it; a tile `h`
    rows tall measures `h * 40 - 16` px. If they ever disagree, a tile settles a
    row away from where it was dropped. */
-.board-canvas {
-  display: grid;
-  grid-template-columns: repeat(1, minmax(0, 1fr));
-  /* THE ROW IS 24 AND THE GUTTER IS 16, which is `ROW_UNIT_PX`(40) minus
-     `GRID_GAP_PX`(16) and `GRID_GAP_PX` itself. Those two constants live in
-     `src/lib/board/grid.ts` and this rule is the other half of the same fact:
-     the resize gesture converts pixels to rows with that pitch, so if the CSS
-     and the constants disagree a tile settles a row away from where it was
-     dropped. `tests/board-grid.test.ts` asserts the pair.
-     The gutter was 24 for consistency with the page's own inset; both 8
-     September frames draw 16 (node 49:5447), and the measured cost of the
-     larger value was a ten-row card 72px too tall. */
-  grid-auto-rows: 24px;
-  gap: 16px;
-}
-.board-cell {
-  grid-column: var(--c1);
-  grid-row: var(--r1);
-  min-width: 0;
-}
-@media (min-width: 768px) {
+@layer components {
   .board-canvas {
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    display: grid;
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+    /* THE ROW IS 24 AND THE GUTTER IS 16, which is `ROW_UNIT_PX`(40) minus
+       `GRID_GAP_PX`(16) and `GRID_GAP_PX` itself. Those two constants live in
+       `src/lib/board/grid.ts` and this rule is the other half of the same fact:
+       the resize gesture converts pixels to rows with that pitch, so if the CSS
+       and the constants disagree a tile settles a row away from where it was
+       dropped. `tests/board-grid.test.ts` asserts the pair.
+       The gutter was 24 for consistency with the page's own inset; both 8
+       September frames draw 16 (node 49:5447), and the measured cost of the
+       larger value was a ten-row card 72px too tall. */
+    grid-auto-rows: 24px;
+    gap: 16px;
   }
   .board-cell {
-    grid-column: var(--c6);
-    grid-row: var(--r6);
+    grid-column: var(--c1);
+    grid-row: var(--r1);
+    min-width: 0;
   }
-}
-@media (min-width: 1024px) {
-  .board-canvas {
-    grid-template-columns: repeat(12, minmax(0, 1fr));
+  @media (min-width: 768px) {
+    .board-canvas {
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+    }
+    .board-cell {
+      grid-column: var(--c6);
+      grid-row: var(--r6);
+    }
   }
-  .board-cell {
-    grid-column: var(--c12);
-    grid-row: var(--r12);
+  @media (min-width: 1024px) {
+    .board-canvas {
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+    }
+    .board-cell {
+      grid-column: var(--c12);
+      grid-row: var(--r12);
+    }
   }
 }
 
 /* Tabular numerals, opt-in per element — never global, per every reference
    product (Stripe: "tnum" on metric spans only). For numbers that update in
    place: a metric that reflows as it ticks reads as jitter, not change. */
-.tnum {
-  font-feature-settings: "tnum";
-  font-variant-numeric: tabular-nums;
+@layer components {
+  .tnum {
+    font-feature-settings: "tnum";
+    font-variant-numeric: tabular-nums;
+  }
 }
 
 /**
@@ -1527,29 +1535,31 @@ html.dark {
  * `tabular-nums` is not decoration: these numbers refresh in place, and
  * proportional figures make a tile twitch every time a 1 becomes a 4.
  */
-.stat-numeral {
-  font-feature-settings: "tnum";
-  font-variant-numeric: tabular-nums;
-  /* -1.08px at 28px, which is what nodes 49:5462 and 58:6186 measure. It was
-     -0.03em (-0.84px) — close enough to look right and wrong enough that a
-     four-character figure sat a quarter-pixel wide of the design. */
-  letter-spacing: -0.0386em;
-  font-weight: 600;
-  /**
-   * NO `white-space` HERE, AND THE REASON IS A CASCADE ONE.
-   *
-   * A metric must never wrap — "0h 8m 39s" in a three-column tile broke across
-   * THREE lines and pushed its own card past its grid row, leaving the card
-   * below overlapping the card above. The obvious fix is `white-space: nowrap`
-   * on this class, and `base-layer-cascade.test.ts` rejects it: this rule is
-   * UNLAYERED, so it outranks every Tailwind utility, and an unlayered
-   * `white-space` disarms `truncate` and every `whitespace-*` on anything
-   * wearing `.stat-numeral` — a fix that quietly removes the ability to
-   * override it.
-   *
-   * So it is `whitespace-nowrap` at the two call sites (`board-charts/frame.tsx`
-   * and `metric-card.tsx`) instead: same result, still composable.
-   */
+@layer components {
+  .stat-numeral {
+    font-feature-settings: "tnum";
+    font-variant-numeric: tabular-nums;
+    /* -1.08px at 28px, which is what nodes 49:5462 and 58:6186 measure. It was
+       -0.03em (-0.84px) — close enough to look right and wrong enough that a
+       four-character figure sat a quarter-pixel wide of the design. */
+    letter-spacing: -0.0386em;
+    font-weight: 600;
+    /**
+     * NO `white-space` HERE, AND THE REASON IS A CASCADE ONE.
+     *
+     * A metric must never wrap — "0h 8m 39s" in a three-column tile broke across
+     * THREE lines and pushed its own card past its grid row, leaving the card
+     * below overlapping the card above. The obvious fix is `white-space: nowrap`
+     * on this class, and `base-layer-cascade.test.ts` rejects it: this rule is
+     * UNLAYERED, so it outranks every Tailwind utility, and an unlayered
+     * `white-space` disarms `truncate` and every `whitespace-*` on anything
+     * wearing `.stat-numeral` — a fix that quietly removes the ability to
+     * override it.
+     *
+     * So it is `whitespace-nowrap` at the two call sites (`board-charts/frame.tsx`
+     * and `metric-card.tsx`) instead: same result, still composable.
+     */
+  }
 }
 
 /**
@@ -1557,9 +1567,11 @@ html.dark {
  * rather than bound to `h1` so that the ONE h1 recipe in ui/page.tsx stays the
  * single place a page title is decided.
  */
-.font-display {
-  font-family: var(--font-display);
-  letter-spacing: -0.022em;
+@layer components {
+  .font-display {
+    font-family: var(--font-display);
+    letter-spacing: -0.022em;
+  }
 }
 
 /**
@@ -1577,13 +1589,15 @@ html.dark {
  * allow-list entry to widen and no spelling convention for a consumer to get
  * wrong. The exception lives in exactly one rule in one file.
  */
-.wordmark {
-  /* No `font-family`: `--font-sans` leads with Inter now, so naming it here
-     would be a second copy of a value with exactly one home. The 900 weight
-     below is the real exception, and it still lives only here. */
-  font-size: 1.5rem; /* 24px */
-  line-height: 1.375rem; /* 22px */
-  font-weight: 900;
+@layer components {
+  .wordmark {
+    /* No `font-family`: `--font-sans` leads with Inter now, so naming it here
+       would be a second copy of a value with exactly one home. The 900 weight
+       below is the real exception, and it still lives only here. */
+    font-size: 1.5rem; /* 24px */
+    line-height: 1.375rem; /* 22px */
+    font-weight: 900;
+  }
 }
 
 /**
@@ -1596,12 +1610,14 @@ html.dark {
  * A class rather than four utilities because it was four utilities, spelled
  * slightly differently in eleven files, and `tracking-wide` in one of them.
  */
-.label-micro {
-  font-size: var(--text-2xs);
-  line-height: var(--text-2xs--line-height);
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: var(--tracking-label);
+@layer components {
+  .label-micro {
+    font-size: var(--text-2xs);
+    line-height: var(--text-2xs--line-height);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-label);
+  }
 }
 
 /**
@@ -1727,16 +1743,18 @@ html.dark {
  * or screen-reader user meets — without it, reaching the page means tabbing
  * through the whole rail on every navigation.
  */
-.skip-link {
-  position: fixed;
-  top: 0.75rem;
-  left: 0.75rem;
-  z-index: 100;
-  transform: translateY(-200%);
-  transition: transform var(--duration-fast) var(--ease-standard);
-}
-.skip-link:focus-visible {
-  transform: translateY(0);
+@layer components {
+  .skip-link {
+    position: fixed;
+    top: 0.75rem;
+    left: 0.75rem;
+    z-index: 100;
+    transform: translateY(-200%);
+    transition: transform var(--duration-fast) var(--ease-standard);
+  }
+  .skip-link:focus-visible {
+    transform: translateY(0);
+  }
 }
 
 /*
@@ -1821,8 +1839,10 @@ html.dark {
 
 /* The rail's wash, as a utility so only one file decides it. It is the same
    colour as the page now; the RULE at its right edge is what separates them. */
-.bg-rail {
-  background-color: var(--background);
+@layer components {
+  .bg-rail {
+    background-color: var(--background);
+  }
 }
 
 /**
