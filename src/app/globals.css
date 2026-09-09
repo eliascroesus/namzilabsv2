@@ -1370,10 +1370,6 @@ html.dark {
      */
     font-size: var(--text-sm); /* 14px */
     line-height: var(--text-sm--line-height); /* 18px */
-    /* Type rendering is part of the kit: without these, the same 13px label is
-       visibly heavier on macOS than the design was drawn at. */
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
     /* THE TRACKING IS BACK ON, BECAUSE THE FACE IT WAS TURNED OFF FOR IS NOT
        THE ONE RENDERING.
@@ -1701,6 +1697,36 @@ html.dark {
  * it is most of what separates an interface that feels built from one that
  * feels rendered — the click lands somewhere instead of just happening.
  */
+/**
+ * GREYSCALE ANTIALIASING, BUT ONLY ON DISPLAYS THAT CAN AFFORD IT.
+ *
+ * This was unconditional, with the note "without these, the same 13px label is
+ * visibly heavier on macOS than the design was drawn at" — which is true, and
+ * is the right call on a HiDPI screen: Apple turned subpixel antialiasing off
+ * system-wide in Mojave, so greyscale is what native macOS draws and what the
+ * design was drawn against.
+ *
+ * On a 1x display it is the wrong call, and measurably so. Subpixel
+ * antialiasing exists precisely for low-density screens: it triples the
+ * horizontal samples a glyph stem can use, and turning it off leaves a 13px
+ * label with about a fifth less ink and hard, unsmoothed edges. Thin plus
+ * jagged is what "small and pixelated" is — the strokes are not being drawn
+ * badly, they are being drawn with a third of the information.
+ *
+ * So it is scoped by resolution rather than applied to everyone: HiDPI gets the
+ * design's own rendering, 1x keeps the smoothing it needs. Both spellings of
+ * the query, because Safari only understands the `-webkit-` one.
+ *
+ * macOS ONLY, either way — this property does nothing on Windows, Linux,
+ * Android or iOS, so no other platform's rendering moves.
+ */
+@media (min-resolution: 2dppx), (-webkit-min-device-pixel-ratio: 2) {
+  body {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
 @media (prefers-reduced-motion: no-preference) {
   button:not(:disabled):active,
   [role="switch"]:not(:disabled):active {
