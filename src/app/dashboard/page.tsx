@@ -1078,6 +1078,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         <TopBarFreshness at={newestComputedAt} />
 
         <PageHeader
+          /* `band` — THE FRAME'S THIRD BAR, and its absence here is why the
+             board's controls sat on the page instead of on a white band while
+             /design/overview looked correct. The harness got this prop and the
+             page a customer opens did not. */
+          band
           /* TABS AND ACTIONS, AND NO THIRD ZONE ANY MORE.
              The 4 September Figma drew one row as tabs left, the view's name
              CENTRED, the actions right — so `PageHeader` grew a `tabs` slot

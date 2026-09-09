@@ -287,3 +287,33 @@ describe("the board's own control row matches the frame", () => {
     expect(canvas).toMatch(/size="bar"/);
   });
 });
+
+/**
+ * THE BOARD THE CUSTOMER OPENS GETS THE BAND, and this is the third time a
+ * change landed on the harness and not on it.
+ *
+ * `/design/overview` builds its own controls and passes its own props, so it
+ * can be pixel-correct against the frame while `dashboard/page.tsx` is not. It
+ * was, twice: Add stayed lime with Compare To missing, and then the third bar
+ * kept `PageHeader`'s in-content padding while the harness had `band` — so the
+ * board's controls sat on the page's own ground instead of on a white band,
+ * which is the first thing anyone notices.
+ *
+ * Asserted as a PAIR rather than one file at a time. A prop that has to be
+ * passed in two places is a prop that will be passed in one.
+ */
+describe("the harness and the board pass the same header", () => {
+  const board = readFileSync(join(__dirname, "..", "src/app/dashboard/page.tsx"), "utf8");
+  const harness = readFileSync(join(__dirname, "..", "src/app/design/overview/page.tsx"), "utf8");
+  const header = (src: string) => src.slice(src.indexOf("<PageHeader"), src.indexOf("<PageHeader") + 1400);
+
+  it("gives both the full-bleed band", () => {
+    expect(header(board), "the real board's PageHeader").toMatch(/^\s*<PageHeader[\s\S]*?\bband\b/m);
+    expect(header(harness), "the harness's PageHeader").toMatch(/^\s*<PageHeader[\s\S]*?\bband\b/m);
+  });
+
+  it("gives both the same tabs slot, so neither grows a second arrangement", () => {
+    expect(header(board)).toMatch(/tabs=\{viewStrip\}/);
+    expect(header(harness)).toMatch(/tabs=\{viewStrip\}/);
+  });
+});
