@@ -190,7 +190,10 @@ describe("the rail, after the owner called it out beside the export", () => {
   it("draws no ⌘K keycap", () => {
     expect(code(sidebar), "the chip is gone").not.toContain("⌘K");
     // The binding is the announced fact and must survive the chip.
-    expect(sidebar, "the shortcut is still announced").toMatch(/aria-keyshortcuts="Meta\+K"/);
+    // The field moved to the bar with node 0:5; the announcement moved with it.
+    expect(read("src/components/nav-search.tsx"), "the shortcut is still announced").toMatch(
+      /aria-keyshortcuts="Meta\+K"/,
+    );
   });
 
   it("stands the head's switcher at 40 and the foot's filled button at 36", () => {

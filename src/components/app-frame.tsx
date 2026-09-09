@@ -44,7 +44,6 @@ import type { BoardView } from "@/lib/board/types";
 export function AppFrame({
   account,
   workspace,
-  accountName,
   views,
   surface,
   hide,
@@ -54,15 +53,6 @@ export function AppFrame({
   account?: { initials: string; avatarUrl?: string | null; panel: ReactNode };
   /** The workspace's own name — shown beside its avatar in the rail's own head block, not the top bar (see `Sidebar`). */
   workspace?: string;
-  /**
-   * The signed-in person's name, for the top bar's account cluster.
-   *
-   * A PASS-THROUGH the shell is the only place that can fill: it is the one
-   * component in the frame that has already resolved the session and read the
-   * profile. It was `firstName` and went unpassed for three re-themes — see
-   * the note on `TopBar`'s own prop.
-   */
-  accountName?: string;
   /**
    * The workspace's dashboard views, for the rail's nested list under Dashboard.
    *
@@ -193,7 +183,8 @@ export function AppFrame({
             rendered at all. */}
         <TopBar
           account={account}
-          accountName={accountName}
+          views={views}
+          hide={hide}
           menu={<MobileDrawer hide={hide} views={views} workspace={workspace} account={account} />}
         />
         {/* `min-h-0` is the vertical twin of the `min-w-0` above: without it a

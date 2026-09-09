@@ -196,7 +196,6 @@ export async function AppShell({
        * has none, which is the case the bar already guards — it renders the
        * avatar alone rather than an empty span.
        */
-      accountName={profile.displayName ?? undefined}
       views={await railViewsP}
       account={{
         initials,

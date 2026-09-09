@@ -141,7 +141,18 @@ const RULES: Rule[] = [
      * browser, and nothing anywhere reports it. Everything else under `text-`
      * is a colour, policed by the raw-palette rule below.
      */
-    find: (line) => line.match(/\btext-[2-9]xl\b/)?.[0] ?? null,
+    find: (line) => {
+      const hit = line.match(/\btext-([2-9])xl\b/);
+      if (!hit) return null;
+      /**
+       * LIVENESS, NOT A NAME — the same correction the retired-token rule got.
+       * The stated crime is "compiles to NOTHING", so the test is whether the
+       * rung is declared, not what it is called. `--text-2xl` is a real rung as
+       * of node 0:5 (24/32 at 700, the wordmark and the page title); the rest
+       * of the range is still undeclared and still silently does nothing.
+       */
+      return LIVE_ROLES.has(`text-${hit[1]}xl`) ? null : hit[0];
+    },
   },
   {
     name: "retired type alias",

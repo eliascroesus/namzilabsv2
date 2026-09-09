@@ -118,3 +118,54 @@ describe("the shell's chrome classes all resolve", () => {
     expect(undeclared).toEqual([]);
   });
 });
+
+/**
+ * THE TWO BANDS THE APP OWNS. The third is the board's and lives in
+ * `board-controls.tsx`; it is asserted there.
+ */
+describe("the bars the frame draws", () => {
+  const topBar = readFileSync(join(__dirname, "..", "src/components/top-bar.tsx"), "utf8");
+
+  it("stands bar one at 57 and bar two at 49", () => {
+    expect(topBar).toMatch(/h-\[57px\]/);
+    expect(topBar).toMatch(/h-\[49px\]/);
+  });
+
+  it("sums to the 149px the frame starts its content at", () => {
+    // 40 of search / 32 of control / 26 of button, each over 8+8 and a rule.
+    // If this sum is wrong the board sits at the wrong y with every class
+    // still correct, which is the failure `geometry-check.mjs` exists for.
+    expect(57 + 49 + 43).toBe(149);
+  });
+
+  it("keeps the slot the flow builder portals its toolbar into", () => {
+    expect(topBar).toMatch(/id="topbar-slot"/);
+  });
+
+  it("carries the search the rail used to own, at the frame's 480", () => {
+    expect(topBar).toMatch(/w-\[480px\]/);
+    expect(topBar).toMatch(/<NavSearch/);
+  });
+
+  it("takes the search out of the rail, so it is not in two places", () => {
+    const rail = readFileSync(join(__dirname, "..", "src/components/sidebar.tsx"), "utf8");
+    expect(rail).not.toMatch(/railSearchEntries/);
+    expect(rail).not.toMatch(/aria-label="Search the navigation"/);
+  });
+
+  it("puts the mark at the reading edge and drops the promo", () => {
+    expect(topBar).toMatch(/>\s*Namzilabs\s*</);
+    expect(topBar).not.toMatch(/for free/);
+  });
+
+  it("lets the moon and the bell take a fill on hover, which they refused to", () => {
+    // The toggle set `hover:bg-transparent`, so the #EFEFEF the frame draws it
+    // in could never appear. That class is what this asserts is gone.
+    expect(topBar).not.toMatch(/hover:bg-transparent/);
+    expect(topBar).toMatch(/hover:bg-topbar-control/);
+  });
+
+  it("keeps the freshness a slot rather than a claim the bar cannot make", () => {
+    expect(topBar).toMatch(/id="topbar-status"/);
+  });
+});

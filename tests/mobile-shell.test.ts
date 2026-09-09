@@ -186,7 +186,7 @@ describe("the top bar below md", () => {
     // and `text-foreground` are content roles that invert with the theme, and
     // this surface does not.
     expect(stripped, "the avatar keeps its disc").toContain(
-      "rounded-full bg-topbar-accent text-xs font-semibold text-topbar-foreground",
+      "rounded-full bg-topbar-accent text-xs font-semibold text-topbar-accent-foreground",
     );
     expect(stripped, "the bell is bare, like the moon and the gift beside it").not.toContain(
       "relative rounded-full border border-input bg-avatar",

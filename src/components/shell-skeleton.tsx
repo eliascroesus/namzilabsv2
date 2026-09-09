@@ -42,10 +42,13 @@ export function ShellSkeleton({
           content jumping left when the route lands. */}
       <div className="hidden w-65 shrink-0 border-r border-rail-border bg-rail md:block" />
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* THE BAR'S GHOST — 65px, `--chrome`, its bottom hairline. Empty: the
-            real bar is about to occupy it, and a shimmering placeholder under
-            an account name that never moves is noise. */}
-        <div className="h-[65px] shrink-0 border-b border-topbar-border bg-topbar" />
+        {/* THE BAR'S GHOSTS — TWO NOW, 57 and 49, because the real chrome is
+            two bands. One 65px ghost under a 106px chrome is 41px of content
+            jumping up the moment the route lands, which is the whole failure
+            this mirror exists to prevent. Empty: a shimmering placeholder under
+            controls that never move is noise. */}
+        <div className="h-[57px] shrink-0 border-b border-topbar-border bg-topbar" />
+        <div className="h-[49px] shrink-0 border-b border-topbar-border bg-topbar" />
         {/* THE PANEL'S GHOST — its own surface (`--panel`) and the same
             top-RIGHT corner the real content column carries under the bar. */}
         <div className="min-h-0 flex-1 overflow-y-auto md:rounded-tr-frame bg-panel">

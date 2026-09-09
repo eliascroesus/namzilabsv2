@@ -258,7 +258,9 @@ describe("the page container and the skeleton that stands in for it", () => {
     expect(code(skeleton)).toMatch(/hidden w-65[^"]*border-r border-rail-border/);
     // The bar's bottom edge, and its ghost.
     expect(code(read("src/components/top-bar.tsx"))).toMatch(/<header className="[^"]*border-b border-topbar-border/);
-    expect(code(skeleton)).toMatch(/h-\[65px\][^"]*border-b border-topbar-border/);
+    expect(code(skeleton)).toMatch(/h-\[57px\][^"]*border-b border-topbar-border/);
+    // The second band mirrors bar two, on the same hairline.
+    expect(code(skeleton)).toMatch(/h-\[49px\][^"]*border-b border-topbar-border/);
   });
 });
 
@@ -497,53 +499,35 @@ describe("the rail is always open", () => {
 });
 
 /**
- * THE PROP THAT WAS ACCEPTED, DOCUMENTED, AND NEVER PASSED.
+ * THE ACCOUNT'S NAME LEFT THE BAR, AND THIS IS WHERE IT SAYS SO.
  *
- * `TopBar` took a name for the account cluster through three re-themes and no
- * caller ever set it, so the bar rendered an avatar and a gift with a gap
- * where the name goes — on every authenticated route, in production. Nothing
- * failed: an optional prop nobody passes is not a type error, not a lint
- * error, and not visible to any test that reads one file at a time.
+ * It arrived on 5 September as a fix: the prop had been accepted-and-never-
+ * passed through three re-themes, so the bar drew an avatar and a gift with a
+ * gap between them, and the chain from `AppShell` to the <span> was asserted
+ * here end to end so it could not go missing again.
  *
- * Elias found it by looking at the app ("make sure the fucking top bar is
- * fixed"), which is the second thing on that screen a person had to catch for
- * us. This is the cheap half of not needing them to: the chain is asserted
- * end to end, so a link that goes missing again fails here rather than
- * shipping as a blank space.
+ * Node 0:5 takes it back out. The reading edge is 480px of SEARCH now, and the
+ * frame draws the avatar and the gift alone beside it — there is no room for a
+ * name and no line drawn for one. So the prop is gone from `AppFrame` and
+ * `TopBar` rather than left accepted and unread, which is the state it spent
+ * three re-themes in and the reason it was worth a test at all.
  *
- * It is a SOURCE assertion because the shell is an async server component that
- * fetches WorkOS memberships and a profile before it renders; standing that up
- * to check one prop costs more than the prop is worth, and would test the
- * mocks rather than the wiring.
+ * Asserted as an ABSENCE, so reinstating the name means deleting this block
+ * deliberately rather than finding the old chain half-wired.
  */
-describe("the account name reaches the bar", () => {
-  const shell = read("src/components/app-shell.tsx");
-  const bar = read("src/components/top-bar.tsx");
+describe("the account's name is not in the bar", () => {
   const code = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 
-  it("the shell fills it from the profile", () => {
-    expect(code(shell), "AppShell must pass a name").toMatch(/accountName=\{profile\.displayName/);
+  it("is not threaded through the frame", () => {
+    expect(code(read("src/components/app-frame.tsx"))).not.toMatch(/accountName/);
   });
 
-  it("the frame passes it straight through", () => {
-    const f = code(read("src/components/app-frame.tsx"));
-    expect(f).toMatch(/accountName,/);
-    expect(f).toMatch(/accountName=\{accountName\}/);
+  it("is not rendered by the bar", () => {
+    expect(code(read("src/components/top-bar.tsx"))).not.toMatch(/accountName/);
   });
 
-  it("the bar renders it, and guards the empty case", () => {
-    const b = code(bar);
-    expect(b).toMatch(/\{accountName && \(/);
-    expect(b).toMatch(/\{accountName\}<\/span>/);
-  });
-
-  it("is not called firstName, because it holds a full name", () => {
-    // `getProfile` returns the whole name the customer set — "Elias Andersson"
-    // in node 58:5930, not "Elias". A prop named for the wrong half is how the
-    // next person truncates it.
-    for (const src of [shell, bar, read("src/components/app-frame.tsx")]) {
-      expect(code(src)).not.toMatch(/\bfirstName\b/);
-    }
+  it("is not passed by the shell either, so nothing is left half-wired", () => {
+    expect(code(read("src/components/app-shell.tsx"))).not.toMatch(/accountName/);
   });
 });
 
@@ -721,8 +705,14 @@ describe("the rail's re-dress — a workspace switcher, Main Menu, a search fiel
      * the pin was really about — 18px, like the seven glyphs below it — so
      * that is what it checks, still scoped to the search control's own slice.
      */
-    const searchField = code.slice(code.indexOf('aria-keyshortcuts="Meta+K"') - 800, code.indexOf('aria-keyshortcuts="Meta+K"') + 300);
-    expect(searchField, "the magnifier stands at the rail's own icon scale").toMatch(
+    // The field moved to the bar with node 0:5, so the magnifier is read from
+    // `nav-search.tsx`; the chevron above is still the rail's own.
+    const searchSrc = read("src/components/nav-search.tsx").replace(/\/\*[\s\S]*?\*\//g, "");
+    const searchField = searchSrc.slice(
+      searchSrc.indexOf('aria-keyshortcuts="Meta+K"') - 800,
+      searchSrc.indexOf('aria-keyshortcuts="Meta+K"') + 300,
+    );
+    expect(searchField, "the magnifier stands at the same 18px it did in the rail").toMatch(
       /<Search[\s\S]{0,300}size-\[18px\]/,
     );
   });
@@ -778,12 +768,21 @@ describe("the rail's re-dress — a workspace switcher, Main Menu, a search fiel
      * (`SLOT`, so the 44px touch minimum is not re-typed) and its left padding
      * opened for the magnifier standing in the icon column.
      */
-    const code = sidebar.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
-    expect(code, "the search row is an Input").toMatch(/<Input\b[\s\S]{0,600}aria-keyshortcuts="Meta\+K"/);
-    expect(code, "wearing the rail's row geometry").toMatch(/cn\(SLOT, "border-rail-border bg-rail-control pl-9/);
+    /**
+     * RE-POINTED AGAIN, 9 SEP 2026. This asserted the rail's row geometry —
+     * `SLOT` for the 44px touch minimum, a left padding opened for a magnifier
+     * standing in the icon column. Node 0:5 takes the field out of the rail
+     * entirely and draws it in the top bar at 480x40, so there is no row for it
+     * to wear. What survives is the fact underneath: it is a real field, it
+     * carries the shortcut it announces, and it is not a Button pretending.
+     */
+    const code = read("src/components/nav-search.tsx").replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    expect(code, "the search is a real field").toMatch(/<input\b[\s\S]{0,600}aria-keyshortcuts="Meta\+K"/);
+    expect(code, "at the frame's 40px, on its control fill").toMatch(/h-10[\s\S]{0,400}bg-topbar-control/);
     expect(code, "and it is no longer a Button pretending").not.toMatch(
       /<Button[^>]*aria-keyshortcuts="Meta\+K"/,
     );
+    expect(sidebar, "and the rail no longer draws one").not.toMatch(/aria-keyshortcuts="Meta\+K"/);
   });
 
   it("replaces the inert bell row with Get Free Access", () => {
@@ -836,7 +835,8 @@ describe("the skeleton mirrors the frame's new order", () => {
 
   it("puts each ghost on the surface it mirrors — the rail's and the bar's", () => {
     const code = skeleton.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
-    expect(code).toMatch(/h-\[65px\][^"]*bg-topbar/);
+    expect(code).toMatch(/h-\[57px\][^"]*bg-topbar/);
+    expect(code).toMatch(/h-\[49px\][^"]*bg-topbar/);
     expect(code).toMatch(/w-65[^"]*bg-rail/);
   });
 });

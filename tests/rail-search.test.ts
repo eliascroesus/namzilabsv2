@@ -21,6 +21,14 @@ import { railSearchEntries, viewHref } from "@/lib/rail-search";
 const root = join(__dirname, "..");
 const read = (p: string) => readFileSync(join(root, p), "utf8");
 const sidebar = read("src/components/sidebar.tsx");
+/**
+ * THE FIELD MOVED TO THE BAR. Node 0:5 draws the search at 480x40 in the top
+ * bar and draws none in the rail, so the markup half of these tests reads
+ * `nav-search.tsx` now. The DATA half — `railSearchEntries`, `viewHref` — did
+ * not move and is still the same function, which is why this file did not
+ * split in two.
+ */
+const search = read("src/components/nav-search.tsx");
 /** Comments explain the rules and must not be able to satisfy them. */
 const code = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 
@@ -79,8 +87,8 @@ describe("what the rail's search can find", () => {
 
 describe("the rail draws it as a field, not a button", () => {
   it("types into a real Input carrying the shortcut it announces", () => {
-    const c = code(sidebar);
-    expect(c).toMatch(/<Input\b[\s\S]{0,600}aria-keyshortcuts="Meta\+K"/);
+    const c = code(search);
+    expect(c).toMatch(/<input\b[\s\S]{0,600}aria-keyshortcuts="Meta\+K"/);
     expect(c, "and it is controlled").toMatch(/value=\{query\}/);
     expect(c, "no Button wearing the shortcut any more").not.toMatch(/<Button[^>]*aria-keyshortcuts/);
   });
@@ -91,14 +99,22 @@ describe("the rail draws it as a field, not a button", () => {
      * implemented it — an a11y claim the product could not honour. A listener
      * on the FIELD could never fire: the field is what the shortcut focuses.
      */
-    const c = code(sidebar);
+    const c = code(search);
     expect(c).toMatch(/e\.key !== "k" \|\| !\(e\.metaKey \|\| e\.ctrlKey\)/);
-    expect(c).toMatch(/searchRef\.current\?\.focus\(\)/);
+    expect(c).toMatch(/field\.current\?\.focus\(\)/);
     expect(c).toMatch(/window\.addEventListener\("keydown"[\s\S]{0,60}capture: true/);
     expect(c, "and unbinds it").toMatch(/window\.removeEventListener\("keydown"/);
   });
 
-  it("replaces the column with its matches rather than floating over it", () => {
+  it("is gone from the rail, so the product has one search and not two", () => {
+    // The column kept its data helpers for a while after the field left them;
+    // this is what says the markup went too.
+    expect(sidebar).not.toMatch(/aria-keyshortcuts="Meta\+K"/);
+    expect(sidebar).not.toMatch(/railSearchEntries/);
+    expect(sidebar).not.toMatch(/role="listbox"/);
+  });
+
+  it("floats its matches under the field, which the rail could not", () => {
     /**
      * THE CONSTRAINT, NOT A PREFERENCE. The <nav> is `overflow-y-auto`, which
      * makes it the clipping box for an absolutely-positioned child: a dropdown
@@ -106,20 +122,20 @@ describe("the rail draws it as a field, not a button", () => {
      * scroller behind it. Filtering in place needs no portal and is what
      * "search the nav things" means.
      */
-    const c = code(sidebar);
-    expect(c).toMatch(/\{q \? \(/);
+    const c = code(search);
+    expect(c).toMatch(/\{open && q && \(/);
     expect(c).toMatch(/role="listbox"/);
-    expect(c, "an empty query restores the navigation").toMatch(/Main Menu/);
+    expect(c, "an empty query draws no panel at all").toMatch(/\{open && q && \(/);
     expect(c, "no absolute panel under the field").not.toMatch(/absolute[^"]*top-full/);
   });
 
   it("filters over the SAME arrays the column renders", () => {
     // Not NAV and not `views` — `items` (post-`hide`) and `ordered` (sorted),
     // so the search cannot disagree with the rows above it.
-    expect(code(sidebar)).toMatch(/railSearchEntries\(\{ items, views: ordered, themes: CHOICES \}\)/);
+    expect(code(search)).toMatch(/railSearchEntries\(\{ items, views: viewStrip\(views\), themes: CHOICES \}\)/);
   });
 
   it("says so when nothing matches", () => {
-    expect(code(sidebar)).toMatch(/No matches\./);
+    expect(code(search)).toMatch(/No matches\./);
   });
 });

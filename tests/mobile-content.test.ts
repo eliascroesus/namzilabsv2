@@ -156,7 +156,20 @@ describe("no authenticated page is wider than a phone", () => {
     "src/app/design/page.tsx": ["w-[452px]"],
   };
 
-  const FIXED = /(?<!max-)\b(?:min-w|w)-\[(\d+)px\]/g;
+  /**
+   * `max-` is excluded because a maximum is a ceiling, not a floor.
+   *
+   * A BREAKPOINT PREFIX IS EXCLUDED FOR THE SAME KIND OF REASON, and it was
+   * added when the top bar took the Figma's 480px search group: every one of
+   * Tailwind's min-width breakpoints starts above 390 — `sm` at 640, `md` at
+   * 768 — so `md:w-[480px]` provably cannot apply on the phone this rule is
+   * protecting. Flagging it asks for an allowlist entry that says "this is
+   * fine", which is the sentence the allowlist exists to make people justify.
+   *
+   * Bare and state prefixes are NOT excluded: `hover:w-[480px]` applies at
+   * every width, and is exactly the sort of thing worth catching.
+   */
+  const FIXED = /(?<!max-)(?<!\b(?:sm|md|lg|xl|2xl):)\b(?:min-w|w)-\[(\d+)px\]/g;
 
   function tsx(dir: string, out: string[] = []): string[] {
     for (const entry of readdirSync(dir)) {

@@ -1,15 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
-import { ChevronDown, LayoutDashboard, Monitor, Plug, Plus, Radio, Search, Settings, UserPlus, Workflow } from "lucide-react";
+import { ChevronDown, LayoutDashboard, Plug, Plus, Radio, Settings, UserPlus, Workflow } from "lucide-react";
 import { Fragment, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { CHOICES } from "@/components/theme";
-import { railSearchEntries } from "@/lib/rail-search";
-import { useTheme } from "next-themes";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { viewStrip, type BoardView } from "@/lib/board/types";
@@ -76,7 +72,7 @@ import { GROUP_COLOR_KEYS, groupBadge, groupInk } from "@/components/flow/node-a
  * kind now, and it appears in the list of views nested under Dashboard below,
  * beside the reader's Columns and Custom boards.
  */
-const NAV: Array<{ label: string; href: string; icon: typeof LayoutDashboard; section: string }> = [
+export const NAV: Array<{ label: string; href: string; icon: typeof LayoutDashboard; section: string }> = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, section: "Workspace" },
   { label: "Activity", href: "/dashboard/activity", icon: Radio, section: "Workspace" },
   { label: "Flows", href: "/dashboard/flows", icon: Workflow, section: "Build" },
@@ -266,21 +262,6 @@ function RailLabel({ children, className }: { children: ReactNode; className?: s
  */
 const ICON_COL = "flex size-8 shrink-0 items-center justify-center";
 
-/**
- * The glyph a search result wears — looked up from the SAME two tables the
- * column draws from, so a result and the row it points at can never show two
- * different pictures. A view has no icon of its own and borrows Dashboard's,
- * which is the row it nests under.
- */
-function PageGlyph({ label }: { label: string }) {
-  const Icon = NAV.find((n) => n.label === label)?.icon ?? LayoutDashboard;
-  return <Icon className="size-[18px]" />;
-}
-
-function ThemeGlyph({ value }: { value: "light" | "dark" | "system" }) {
-  const Icon = CHOICES.find((c) => c.value === value)?.Icon ?? Monitor;
-  return <Icon className="size-[18px]" />;
-}
 
 /**
  * The row's own class string, shared by the mark, the nav links, the search
@@ -422,55 +403,8 @@ export function RailContent({
    * clipped at its foot. Filtering in place also happens to be what the owner
    * asked for in the first place ("search like the different nav things").
    */
-  const [query, setQuery] = useState("");
-  const searchRef = useRef<HTMLInputElement>(null);
-  /**
-   * NO `useRouter` HERE, and that is worth a line: a result is a real <a href>,
-   * so the browser navigates and a middle-click still opens a tab. It also
-   * keeps `next/navigation`'s surface in this file to the two hooks
-   * `tests/mobile-drawer.test.ts` already mocks — that file imports this one
-   * and Vite throws on a static binding its mock does not provide, so a third
-   * hook here would fail an unrelated suite at import time.
-   */
-  const { setTheme } = useTheme();
 
-  /**
-   * ⌘K FINALLY DOES SOMETHING. `aria-keyshortcuts="Meta+K"` has been on this
-   * control since the 264px column, announcing a binding no code implemented —
-   * an accessibility claim the product could not honour. It focuses the field.
-   *
-   * ON `window` RATHER THAN THE FIELD, because a shortcut whose only listener
-   * is the thing it focuses can never fire. Capture phase for the reason
-   * `input-modality.tsx` gives: the canvas and the modals stop propagation.
-   *
-   * MOUNTED TWICE ONLY WHILE THE PHONE DRAWER IS OPEN — `RailContent` is one
-   * tree rendered by the desktop <aside> and by the drawer's <SheetContent>,
-   * and Radix unmounts the latter when closed. Two listeners would both focus
-   * their own field; the drawer's is the one on screen, and it wins because it
-   * mounts second. Not worth a store to arbitrate.
-   */
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "k" || !(e.metaKey || e.ctrlKey)) return;
-      e.preventDefault();
-      searchRef.current?.focus();
-      searchRef.current?.select();
-    };
-    window.addEventListener("keydown", onKey, { capture: true });
-    return () => window.removeEventListener("keydown", onKey, { capture: true });
-  }, []);
 
-  /**
-   * The matches, over the SAME arrays the column renders — `items` is already
-   * through the `hide` gate, so a rank-restricted member cannot find Apps here
-   * after failing to find it above. Substring rather than fuzzy: the corpus is
-   * a dozen short labels, and a fuzzy scorer on twelve strings mostly produces
-   * surprises.
-   */
-  const q = query.trim().toLowerCase();
-  const results = q
-    ? railSearchEntries({ items, views: ordered, themes: CHOICES }).filter((e) => e.label.toLowerCase().includes(q))
-    : [];
 
   /**
    * THE VIEWS, NESTED UNDER DASHBOARD — Notion's shape, and Notion's rule that a
@@ -758,70 +692,6 @@ export function RailContent({
              geometry`'s rail pass is what caught it. */
           className={cn("quiet-scroll flex min-h-0 flex-1 flex-col gap-2 overflow-x-hidden overflow-y-auto pt-6 pb-4", GUTTER)}
         >
-              {/* THE SEARCH CONTROL OPENS THE COLUMN, which is where all
-                  three references (Miro, Figma, Make) put it: the fastest way
-                  into a product that holds far more objects than it has nav
-                  items.
-
-                  IT IS A REAL FIELD NOW, 7 SEP 2026. It was a `<Button>` that
-                  looked like a field, and the comment here argued that was "the
-                  honest spelling" because pressing it would open the vendored
-                  command palette. The palette was never wired: the button
-                  carried no handler, `aria-keyshortcuts="Meta+K"` announced a
-                  binding nothing implemented, and the whole control did
-                  nothing at all. The owner asked the question that follows from
-                  that — "why is the search a button and not an input field?" —
-                  and the answer is that there was no reason, only an unbuilt
-                  intention.
-
-                  THE RESULTS REPLACE THE NAV RATHER THAN FLOATING OVER IT, and
-                  that is a constraint rather than a preference. This <nav> is
-                  `overflow-y-auto`, which makes it the clipping box for any
-                  absolutely-positioned child: a dropdown panel under the field
-                  would be cut off at the column's foot and would lengthen the
-                  scroller behind it. Filtering the column in place has no such
-                  problem, needs no portal, and is what "search the nav things"
-                  literally means — the rows you are looking for are the rows
-                  this column already draws.
-
-                  THE KEYCAP STAYS GONE (6 Sep 2026, the owner's call) and the
-                  BINDING IS REAL NOW: `aria-keyshortcuts` is still the
-                  announced fact, and ⌘K finally does what it has been claiming
-                  to do — see the effect above, which focuses this field. */}
-              <div className="relative">
-                <Search
-                  aria-hidden
-                  /* Inside the field, on `ICON_COL`'s own axis: the magnifier
-                     has to stand on the same vertical line as the seven glyphs
-                     below it or the column has a kink in it. 18px, like every
-                     other icon in the rail — a 16px magnifier would be the one
-                     picture here that is quietly a size smaller. */
-                  className="pointer-events-none absolute left-[7px] top-1/2 size-[18px] -translate-y-1/2 text-rail-muted"
-                />
-                <Input
-                  ref={searchRef}
-                  type="search"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  onKeyDown={(e) => {
-                    // Escape clears rather than blurs: the field is the rail's
-                    // filter, so emptying it is what puts the navigation back.
-                    if (e.key === "Escape") setQuery("");
-                  }}
-                  placeholder="Search"
-                  aria-label="Search the navigation"
-                  aria-keyshortcuts="Meta+K"
-                  /* `cn(SLOT, …)` rather than a hand-spelled height: SLOT
-                     carries the 44px touch minimum that `md:min-h-0` stands
-                     down above the breakpoint, and spelling those two literals
-                     again here would be a third copy inside the slice
-                     tests/mobile-shell.test.ts counts. The field's own
-                     `border`/`bg-control`/`rounded-control` come from `Input`;
-                     what is overridden is the left padding, to clear the
-                     magnifier standing in the icon column. */
-                  className={cn(SLOT, "border-rail-border bg-rail-control pl-9 pr-2 text-rail-foreground placeholder:text-rail-muted")}
-                />
-              </div>
               {/* THE CAPS LABEL IS BACK, ON THE FIGMA'S OWN TERMS THIS TIME.
                   It was removed because a heading reserved at 70px pushed
                   every row below it down while the pointer was still moving
@@ -859,66 +729,6 @@ export function RailContent({
                   setting the theme is a press. Making both a <button> would
                   cost the first its middle-click; making both a link would
                   need an href for something that goes nowhere. */}
-              {q ? (
-                <div
-                  role="listbox"
-                  aria-label="Search results"
-                  /* `gap-2 pb-1` — the same 8px the nav rows it replaces
-                     stand at, and a class AFTER the gap on purpose: the
-                     rail's gap pin reads `gap-(\S+)` greedily, so a class
-                     string ENDING in a gap captures the closing quote with
-                     it and fails on a value that is otherwise correct. */
-                  className="flex flex-col gap-2 pb-1"
-                >
-                  {results.length === 0 && (
-                    <p className="px-1 py-2 text-xs text-rail-muted">No matches.</p>
-                  )}
-                  {results.map((entry) =>
-                    entry.kind === "theme" ? (
-                      <Button
-                        key={`theme:${entry.theme}`}
-                        variant="ghost"
-                        size="iconSm"
-                        role="option"
-                        aria-selected={false}
-                        className={cn(SLOT, "hover:bg-rail-control")}
-                        onClick={() => {
-                          setTheme(entry.theme);
-                          setQuery("");
-                        }}
-                      >
-                        <span className={ICON_COL}>
-                          <RailChip tone="rest">
-                            <ThemeGlyph value={entry.theme} />
-                          </RailChip>
-                        </span>
-                        <RailLabel className="text-rail-muted group-hover:text-rail-foreground">
-                          {entry.label}
-                        </RailLabel>
-                      </Button>
-                    ) : (
-                      <Link
-                        key={`${entry.kind}:${entry.label}:${entry.href}`}
-                        href={entry.href}
-                        role="option"
-                        aria-selected={false}
-                        className={cn(SLOT)}
-                        onClick={() => setQuery("")}
-                      >
-                        <span className={ICON_COL}>
-                          <RailChip tone="rest">
-                            {entry.kind === "page" ? <PageGlyph label={entry.label} /> : <LayoutDashboard className="size-[18px]" />}
-                          </RailChip>
-                        </span>
-                        <RailLabel className="text-rail-muted group-hover:text-rail-foreground">
-                          {entry.label}
-                        </RailLabel>
-                      </Link>
-                    ),
-                  )}
-                </div>
-              ) : (
-                <>
               {/* NO `px-1`. Every other row in this column starts its content at the
                   rail's own 16px gutter; the caption carried a further 4px and
                   sat at 20, which is the sort of single-element drift nobody
@@ -962,8 +772,6 @@ export function RailContent({
                     </Fragment>
                   );
                 })}
-                </>
-              )}
         </nav>
 
         {/* THE FOOT — what you can START, then what is waiting for you.

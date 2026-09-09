@@ -439,6 +439,15 @@
   --text-lg--line-height: 1.75rem;
   --text-xl: 1.25rem; /* 20px */
   --text-xl--line-height: 1.875rem;
+  /* 24px/32 AT 700 — the wordmark and the page title, and the only place in
+     the product that carries a fourth weight. Node 0:5 sets both at Inter 700,
+     and the kit ran 400/medium/semibold; rather than spell `font-bold` at two
+     call sites and allowlist them, the WEIGHT lives on the rung. `text-2xl` is
+     then one class that says size, leading and weight together, and
+     `check:ui`'s font-bold ban stays armed everywhere else. */
+  --text-2xl: 1.5rem;
+  --text-2xl--line-height: 2rem;
+  --text-2xl--font-weight: 700;
   --text-display-xs: 1.625rem; /* 26px — page headings */
   --text-display-xs--line-height: 2.125rem;
   --text-display-sm: 1.875rem; /* 30px */
@@ -731,14 +740,15 @@
      exists for. It is not white yet: bar 1 still holds white-on-dark content,
      so moving the ground before the content is white on white. The SPLIT is
      this commit; the Figma's values land with the bars rebuilt to carry them. */
-  --topbar: #121214;
-  --topbar-foreground: #ffffff;
-  --topbar-muted: #7e7e7e; /* the bar's "Updated just now" */
-  --topbar-faint: #6e6e6e;
-  --topbar-border: #343434; /* the bar's bottom rule */
-  --topbar-control: #202020; /* the search field, an icon button's hover fill */
-  --topbar-accent: #3a3a3a; /* the avatar disc, and an icon button's hover */
-  --topbar-active: #3a3a3a; /* the selected view tab */
+  --topbar: #ffffff; /* node 0:5 — and the one value this whole branch turns on */
+  --topbar-foreground: #2e2e2e; /* 12.63:1 on white — the frame's ink, not pure black */
+  --topbar-muted: #7e7e7e; /* 4.61:1 — "Updated just now", a resting tab's label */
+  --topbar-faint: #6e6e6e; /* 5.30:1 */
+  --topbar-border: #f1f1f1; /* the hairline under each of the three bands */
+  --topbar-control: #efefef; /* the search field, and the fill the moon takes ON HOVER */
+  --topbar-accent: #2e2e2e; /* the avatar disc — a dark disc on a white band */
+  --topbar-accent-foreground: #ffffff; /* the initials inside it */
+  --topbar-active: #dedede; /* the selected view tab, a step darker than the hover */
 
   /* THE CARD — white, and it no longer borrows the chrome, because the chrome
      is dark here now. Node 58:6173 draws it `bg-white` with an #E1E1E1 rim. */
@@ -904,12 +914,13 @@
      so moving the ground before the content is white on white. The SPLIT is
      this commit; the Figma's values land with the bars rebuilt to carry them. */
   --topbar: #121214;
-  --topbar-foreground: #ffffff;
-  --topbar-muted: #7e7e7e; /* the bar's "Updated just now" */
+  --topbar-foreground: #ffffff; /* 18.71:1 */
+  --topbar-muted: #7e7e7e; /* 4.61:1 */
   --topbar-faint: #6e6e6e;
-  --topbar-border: #343434; /* the bar's bottom rule */
-  --topbar-control: #202020; /* the search field, an icon button's hover fill */
-  --topbar-accent: #3a3a3a; /* the avatar disc, and an icon button's hover */
+  --topbar-border: #343434;
+  --topbar-control: #202020; /* the search field, and the moon's hover fill */
+  --topbar-accent: #3a3a3a; /* the avatar disc */
+  --topbar-accent-foreground: #ffffff;
   --topbar-active: #3a3a3a; /* the selected view tab */
 
   /* THE CARD NO LONGER SHARES THE CHROME. It is the one surface that steps
@@ -1159,6 +1170,7 @@
   --color-topbar-border: var(--topbar-border);
   --color-topbar-control: var(--topbar-control);
   --color-topbar-accent: var(--topbar-accent);
+  --color-topbar-accent-foreground: var(--topbar-accent-foreground);
   --color-topbar-active: var(--topbar-active);
   --color-panel: var(--panel);
   --color-primary: var(--primary);

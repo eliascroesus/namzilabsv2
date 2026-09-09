@@ -2,73 +2,63 @@
 
 import Link from "next/link";
 import { Bell, Gift, Link2, Moon, Sun } from "lucide-react";
+import { NavSearch } from "@/components/nav-search";
+import type { BoardView } from "@/lib/board/types";
 import { useTheme } from "next-themes";
 import { useEffect, useState, type ReactNode } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 /**
- * THE TOP BAR — who you are, what the product is selling, and the state of
- * what you are looking at. Three zones, and all three changed on 8 Sep 2026.
+ * THE TOP BAR — TWO BANDS OF THE FIGMA'S THREE.
  *
- * THE MARK LEFT, AND THE PERSON TOOK ITS PLACE. The wordmark sat at the reading
- * edge on the argument that the bar had nothing else to say there once the
- * workspace switcher moved into the rail. Node 49:5370 disagrees: the reading
- * edge is the ACCOUNT — avatar, name, and an offer — and the product's name
- * appears once, in the centre, inside the sentence selling it. Saying
- * "Namzilabs" in the corner of a product you are already inside is the same
- * observation the rail's own head block made about the switcher.
+ * Node 0:5 stacks three: 57px of search and account, 49px of page title and app
+ * controls, 43px of view tabs and board controls. The third belongs to the
+ * board and lives in `board-controls.tsx`; these two are the app's.
  *
- * THE TWO ACTS LEFT TOO, IN OPPOSITE DIRECTIONS. "Invite members" went DOWN
- * into the rail's foot as a card (node 49:5734) and "New flow" went down as the
- * lime "New" button under it; the gift that used to be the rail's "Get Free
- * Access" came UP here (node 51:5756). The bar and the rail swapped an act for
- * an offer, and each ended up where it has room to say what it is.
+ * THE HEIGHTS ARE NOT FREE NUMBERS. 57 + 49 + 43 = 149, which is exactly where
+ * the frame starts its content container. Each is its own content plus 8+8 of
+ * padding and a 1px rule: 40 of search, 32 of control, 26 of button. Get one
+ * wrong and the board sits at the wrong y with every class still correct — see
+ * `scripts/geometry-check.mjs`, which exists because that happened.
  *
- * THE CENTRE IS SHARED, AND THE BUILDER STILL WINS IT. `#topbar-slot` portals
- * the flow builder's whole toolbar into this bar — its controls hold the
- * canvas's undo stack and save state, so they cannot be lifted out of it.
- * The promo line is the centre's RESTING state and yields the moment the slot
- * is occupied, which is what the retired `peer` machinery used to do for the
- * greeting. It is back for the same reason it existed: two things want one
- * position and neither page should have to say which.
+ * THIS BAND IS WHITE NOW, ON LIGHT. It was `--chrome` at #121214 in both
+ * themes, and the reasoning was sound for the frames it was drawn from: 49:5268
+ * and 58:5824 draw the rail and the bar byte-identical. Node 0:5 draws the rail
+ * #121214 and the bar WHITE in the same picture, so the one token became two —
+ * `--rail-*` keeps every value it had, `--topbar-*` moved. Neither can borrow
+ * the content's vocabulary, which is why both are role families rather than
+ * `--foreground` and `--border`.
  *
- * 65px (node 58:5926), `--chrome` fill, `--chrome-border` bottom rule.
+ * TWO THINGS HERE REVERSE A DECISION THIS FILE USED TO ARGUE FOR, and they are
+ * the owner's call against an unambiguous frame rather than a drift. The
+ * wordmark is back at the reading edge, having left on the argument that naming
+ * the product inside the product says nothing; and the promo sentence that took
+ * the centre is deleted. The account's NAME went with it — the search occupies
+ * that space now, and node 0:5 draws avatar and gift alone.
  *
- * IT SITS BESIDE THE RAIL, NOT ABOVE IT — the frame is a row, and this bar is
- * a child of the content column, 1660 of the frame's 1920. See `app-frame.tsx`
- * for why that reversed.
+ * THE CENTRE IS STILL THE BUILDER'S. `#topbar-slot` portals the flow builder's
+ * whole toolbar into bar one — its controls hold the canvas's undo stack and
+ * save state, so they cannot be lifted out of it. The mark is the centre's
+ * resting state and yields the moment the slot is occupied.
  *
- * EVERY INK HERE IS A `--chrome-*` ROLE, and that is the point of them. This
- * band is #121214 in BOTH themes — 49:5268 and 58:5824 draw it identically —
- * so `text-foreground` would be near-black on it the moment the light theme is
- * on, and `border-border` would be #E1E1E1. A permanently dark surface cannot
- * borrow the content's vocabulary, because it is not on the content's ground.
+ * IT SITS BESIDE THE RAIL, NOT ABOVE IT — the frame is a row, and these bars
+ * are children of the content column, 1660 of the frame's 1920.
  */
+
 
 export function TopBar({
   account,
-  accountName,
+  views,
+  hide,
   menu,
   unread = 1,
 }: {
   account?: { initials: string; avatarUrl?: string | null; panel: ReactNode };
-  /**
-   * The signed-in person's name, beside their avatar (node 58:5930).
-   *
-   * IT WAS `firstName`, AND IT WAS BOTH UNUSED AND MISNAMED. The prop spent
-   * three re-themes accepted-and-never-passed — it was the greeting's name, the
-   * greeting was deleted, and it stayed on the type because a caller was
-   * *believed* to pass it. None did, so the bar rendered the avatar and the
-   * gift with a gap where the name goes, on every route, and nothing failed
-   * because an optional prop nobody sets is not an error.
-   *
-   * Renamed with the fix: `AppShell` supplies `profile.displayName`, which is
-   * the whole name the customer set — "Elias Andersson" in the Figma, not
-   * "Elias". A prop called `firstName` holding a full name is the kind of lie
-   * that survives for years.
-   */
-  accountName?: string;
+  /** The workspace's views, for the bar's search. */
+  views?: BoardView[];
+  /** Nav rows a restricted rank cannot reach, so search cannot find them either. */
+  hide?: string[];
   /**
    * The phone's way into the navigation — `MobileDrawer`, built by
    * `AppFrame` and handed down as a node.
@@ -78,105 +68,124 @@ export function TopBar({
   unread?: number;
 }) {
   return (
-    // The prose sits ABOVE the tag deliberately: tests/page-width.test.ts
-    // reads this bar's height by matching `<header className="…"`, and a
-    // comment between the two breaks the check that keeps the loading
-    // skeleton's band the same height as the real one.
-    <header className="flex h-[65px] shrink-0 items-center justify-between gap-4 border-b border-topbar-border bg-topbar px-6 py-4">
-      {/* ── WHO YOU ARE ──────────────────────────────────────────────────
-          The menu button exists only below `md`, where there is no rail to the
-          left of this bar — it is the phone's whole navigation, so it takes
-          the reading edge and the account steps right by 40px. */}
-      <div className="flex shrink-0 items-center gap-4">
-        {menu}
-        {account && (
-          <Link
-            href="/dashboard/profile"
-            aria-label="Your profile"
-            className={cn(
-              buttonVariants({ variant: "ghost", size: "icon" }),
-              "rounded-full bg-topbar-accent text-xs font-semibold text-topbar-foreground hover:brightness-110 active:brightness-95",
-            )}
-          >
-            {account.avatarUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={account.avatarUrl} alt="" className="size-full rounded-full object-cover" />
-            ) : (
-              account.initials
-            )}
-          </Link>
-        )}
-        {accountName && (
-          <span className="hidden shrink-0 text-sm font-semibold text-topbar-foreground sm:inline">{accountName}</span>
-        )}
+    <>
+      {/* ── BAR ONE, 57px ─────────────────────────────────────────────────
+          40px of search over 8+8 padding and a hairline. The three heights in
+          this file are not free numbers: 57 + 49 + 43 is 149, which is exactly
+          where node 0:5 starts its content container. If one of them is wrong
+          the sum breaks and the whole board sits at the wrong y.
 
-        {/* THE OFFER, WITH A DOT ON IT. It was "Get Free Access" — a filled
-            secondary button at the foot of the rail — and it is a bare glyph
-            here, because a filled button beside an avatar reads as an act you
-            are being pushed toward rather than an offer you may take.
-            The dot is `--primary`, and it is the one place in this bar the
-            brand appears as a fill. It is decoration, not a count: `aria-hidden`
-            so it is never announced as an unread number, which is the bell's
-            job three controls to the right. */}
-        <Link
-          href="/dashboard/settings"
-          aria-label="Get free access"
-          title="Get free access"
-          className="relative flex size-5 shrink-0 items-center justify-center text-topbar-foreground transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:text-topbar-muted [&_svg]:size-5"
-        >
-          <Gift />
-          <span aria-hidden className="absolute -right-0.5 -top-0.5 size-1.5 rounded-full bg-primary" />
-        </Link>
-      </div>
-
-      {/* ── WHAT THE PRODUCT IS, OR WHAT YOU ARE BUILDING ────────────────
-          KEEP THE ID. Losing `#topbar-slot` does not degrade the builder, it
-          breaks it: `document.getElementById("topbar-slot")` (see
-          `FlowToolbar.tsx`) returns null and the toolbar renders nowhere.
-
-          `peer` + `empty:hidden` + `peer-[:not(:empty)]:hidden` is the
-          arbitration: the slot claims no width while empty, and the promo
-          removes itself the moment the slot has anything in it. Neither page
-          has to know the other exists. */}
-      <div className="flex min-w-0 flex-1 items-center justify-center">
-        <div id="topbar-slot" className="peer flex min-w-0 flex-1 items-center gap-2 empty:hidden" />
-        {/* ALL THREE SPANS ARE ITALIC, and only the middle one carries weight
-            and colour — which is how the Figma sets it (node 51:5788): the
-            sentence leans, the NAME is what stands out inside it. `<em>` is
-            already italic, so the class would be a second spelling of the tag. */}
-        <p className="hidden shrink-0 text-sm italic text-topbar-foreground peer-[:not(:empty)]:hidden lg:block">
-          <em>Try </em>
-          <em className="font-black text-rail-brand">Namzilabs</em>
-          <em> for free</em>
-        </p>
-      </div>
-
-      {/* ── THE STATE OF WHAT YOU ARE LOOKING AT ─────────────────────────── */}
-      <div className="flex shrink-0 items-center gap-4">
-        {/* "Updated just now" lands HERE, from the page that knows. A bar
-            cannot honestly claim a freshness it has not measured, so this
-            stays a slot rather than a string — the builder already fills it,
-            and it is where the dashboard's own freshness belongs. */}
-        <div id="topbar-status" className="flex shrink-0 items-center text-sm text-topbar-muted empty:hidden" />
-
-        <ShareLink />
-        <ThemeToggle />
-
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label={unread > 0 ? `Notifications — ${unread} unread` : "Notifications"}
-          className="relative rounded-full text-topbar-foreground hover:bg-topbar-accent active:bg-topbar-accent"
-        >
-          <Bell />
-          {unread > 0 && (
-            <span className="absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full border border-topbar bg-primary text-2xs font-semibold leading-none text-primary-foreground">
-              {unread > 9 ? "9+" : unread}
-            </span>
+          The prose sits ABOVE the tag deliberately: tests/page-width.test.ts
+          reads a bar's height by matching `<header className="…"`, and a
+          comment between the two breaks it. */}
+      <header className="flex h-[57px] shrink-0 items-center justify-between gap-4 border-b border-topbar-border bg-topbar px-6 py-2">
+        {/* ── WHO YOU ARE, AND WHAT YOU ARE LOOKING FOR ──────────────────
+            480px, `gap-2`. The menu button exists only below `md`, where there
+            is no rail to the left of this bar — it is the phone's whole
+            navigation, so it takes the reading edge. */}
+        {/* 480 IS THE FRAME'S NUMBER, AND THE FRAME IS 1920 WIDE. Below `md`
+            a fixed 480 is wider than the phone it is on, so the group takes the
+            width it has and claims the Figma's only where there is room —
+            `tests/mobile-content.test.ts` fails on the unguarded version. */}
+        <div className="flex w-full min-w-0 items-center gap-2 md:w-[480px] md:shrink-0">
+          {menu}
+          <NavSearch views={views} hide={hide} />
+          {account && (
+            <Link
+              href="/dashboard/profile"
+              aria-label="Your profile"
+              className={cn(
+                buttonVariants({ variant: "ghost", size: "icon" }),
+                "size-8 shrink-0 rounded-full bg-topbar-accent text-xs font-semibold text-topbar-accent-foreground hover:brightness-110 active:brightness-95",
+              )}
+            >
+              {account.avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={account.avatarUrl} alt="" className="size-full rounded-full object-cover" />
+              ) : (
+                account.initials
+              )}
+            </Link>
           )}
-        </Button>
-      </div>
-    </header>
+
+          {/* THE OFFER, WITH A DOT ON IT. It was "Get Free Access" — a filled
+              secondary button at the foot of the rail — and it is a bare glyph
+              here, because a filled button beside an avatar reads as an act you
+              are being pushed toward rather than an offer you may take.
+              The dot is `--primary`: decoration, not a count, so `aria-hidden`
+              keeps it from being announced as an unread number. */}
+          <Link
+            href="/dashboard/settings"
+            aria-label="Get free access"
+            title="Get free access"
+            className="relative flex size-5 shrink-0 items-center justify-center text-topbar-foreground transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:text-topbar-muted [&_svg]:size-5"
+          >
+            <Gift />
+            <span aria-hidden className="absolute -right-0.5 -top-0.5 size-1.5 rounded-full bg-primary" />
+          </Link>
+        </div>
+
+        {/* ── WHAT YOU ARE BUILDING, OR WHAT THE PRODUCT IS ────────────────
+            KEEP THE ID. Losing `#topbar-slot` does not degrade the builder, it
+            breaks it: `document.getElementById("topbar-slot")` (see
+            `FlowToolbar.tsx`) returns null and the toolbar renders nowhere.
+
+            THE MARK IS BACK AT THE READING EDGE, and this file used to argue
+            against that: the wordmark left on the reasoning that naming the
+            product in the corner of a product you are already inside says
+            nothing. Node 0:5 puts it back, at 24/700 on the right, and deletes
+            the promo sentence that took the centre. Both are the owner's call
+            and the frame is unambiguous.
+
+            `peer` + `empty:hidden` + `peer-[:not(:empty)]:hidden` is unchanged:
+            the slot claims no width while empty, and the mark yields the moment
+            the builder fills it. Neither page has to know the other exists. */}
+        <div id="topbar-slot" className="peer flex min-w-0 flex-1 items-center gap-2 empty:hidden" />
+        <p className="shrink-0 text-2xl text-topbar-foreground peer-[:not(:empty)]:hidden">
+          Namzilabs
+        </p>
+      </header>
+
+      {/* ── BAR TWO, 49px ─────────────────────────────────────────────────
+          A 32px control over 8+8 and a hairline. It is GLOBAL rather than the
+          dashboard's, because Share, the moon and the bell are app controls
+          and putting them on one page's header would take the theme toggle
+          away from every other route.
+
+          The title arrives through a slot for the same reason the freshness
+          does: this bar cannot know what page it is on, and the nineteen
+          callers of `PageHeader` keep their in-content <h1> untouched. */}
+      <header className="flex h-[49px] shrink-0 items-center justify-between gap-4 border-b border-topbar-border bg-topbar px-6 py-2">
+        <h1 id="topbar-title" className="text-2xl text-topbar-foreground empty:hidden" />
+
+        {/* `ml-auto` rather than leaning on `justify-between`: the title beside
+            this is a SLOT, and an unfilled slot is `empty:hidden`, which leaves the
+            row one child and pushes the controls to the reading edge. */}
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          {/* "Updated just now" lands HERE, from the page that knows. A bar
+              cannot honestly claim a freshness it has not measured, so this
+              stays a slot rather than a string. */}
+          <div id="topbar-status" className="flex shrink-0 items-center p-2 text-[13px] leading-4 text-topbar-muted empty:hidden" />
+
+          <ShareLink />
+          <ThemeToggle />
+
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={unread > 0 ? `Notifications — ${unread} unread` : "Notifications"}
+            className="relative size-8 shrink-0 rounded-control text-topbar-foreground hover:bg-topbar-control active:bg-topbar-control [&_svg]:size-4"
+          >
+            <Bell />
+            {unread > 0 && (
+              <span className="absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full border border-topbar bg-primary text-2xs font-semibold leading-none text-primary-foreground">
+                {unread > 9 ? "9+" : unread}
+              </span>
+            )}
+          </Button>
+        </div>
+      </header>
+    </>
   );
 }
 
@@ -222,7 +231,7 @@ function ShareLink() {
          the bar with no box. `h-auto px-0` takes the rung's height and padding
          off while keeping the variant's states, its focus ring and its
          disabled handling, which is the half that actually matters. */
-      className="hidden h-auto shrink-0 px-0 text-sm font-semibold text-topbar-foreground hover:bg-transparent hover:text-topbar-muted active:bg-transparent md:inline-flex [&_svg]:size-3.5"
+      className="hidden h-auto shrink-0 gap-1 rounded-control p-2 text-[13px] font-normal leading-4 text-topbar-foreground hover:bg-topbar-control active:bg-topbar-control md:inline-flex [&_svg]:size-3"
     >
       <Link2 aria-hidden />
       {/* `aria-live` so the change is announced rather than only seen. */}
@@ -259,7 +268,7 @@ function ThemeToggle() {
       variant="ghost"
       onClick={() => setTheme(dark ? "light" : "dark")}
       aria-label={dark ? "Switch to the light theme" : "Switch to the dark theme"}
-      className="h-auto shrink-0 px-0 text-topbar-foreground hover:bg-transparent hover:text-topbar-muted active:bg-transparent [&_svg]:size-4"
+      className="size-8 shrink-0 rounded-control p-0 text-topbar-foreground hover:bg-topbar-control active:bg-topbar-control [&_svg]:size-4"
     >
       {mounted && (dark ? <Sun aria-hidden /> : <Moon aria-hidden />)}
     </Button>

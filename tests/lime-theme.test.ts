@@ -103,8 +103,10 @@ describe("one surface, one card", () => {
     // `--chrome-*` block in globals.css.
     expect(darkToken("rail")).toBe("#121214");
     expect(lightToken("rail")).toBe("#121214");
+    // THE BAR IS THE ONE SURFACE THAT FLIPS NOW. Node 0:5 draws the rail
+    // #121214 and the bar white in the same frame, which is why --chrome split.
     expect(darkToken("topbar")).toBe("#121214");
-    expect(lightToken("topbar")).toBe("#121214");
+    expect(lightToken("topbar")).toBe("#ffffff");
     expect(darkToken("panel")).toBe("var(--background)");
   });
 
