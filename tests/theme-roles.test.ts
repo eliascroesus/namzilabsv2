@@ -147,7 +147,7 @@ describe("board-controls.tsx's active view tab is a filled pill", () => {
   });
 
   it("is a rounded pill at the frame's own padding", () => {
-    expect(boardControls).toContain("gap-1 rounded-control px-2 py-1");
+    expect(boardControls).toContain("gap-1.5 rounded-control px-2.5 py-1.5");
   });
 
   it("carries no border-marker anywhere in the file", () => {

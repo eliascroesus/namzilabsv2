@@ -131,11 +131,11 @@ describe("the bars the frame draws", () => {
     expect(topBar).toMatch(/h-\[49px\]/);
   });
 
-  it("sums to the 149px the frame starts its content at", () => {
+  it("sums to 155, which is where the board starts", () => {
     // 40 of search / 32 of control / 26 of button, each over 8+8 and a rule.
     // If this sum is wrong the board sits at the wrong y with every class
     // still correct, which is the failure `geometry-check.mjs` exists for.
-    expect(57 + 49 + 43).toBe(149);
+    expect(57 + 49 + 49).toBe(155);
   });
 
   it("keeps the slot the flow builder portals its toolbar into", () => {
@@ -185,7 +185,7 @@ describe("the board's bar", () => {
   });
 
   it("draws the tabs as pills with the frame's own padding and gaps", () => {
-    expect(controls).toMatch(/gap-1 rounded-control px-2 py-1/);
+    expect(controls).toMatch(/gap-1\.5 rounded-control px-2\.5 py-1\.5/);
     expect(controls).toMatch(/flex flex-nowrap items-center gap-2/);
   });
 
@@ -202,9 +202,18 @@ describe("the board's bar", () => {
     expect(controls).toMatch(/className="size-3\.5 text-muted-foreground/);
   });
 
-  it("stands its controls at the frame's 26px, with a real target on a phone", () => {
+  it("stands its controls at the kit's one height, with no rung of their own", () => {
+    /**
+     * WAS the frame's 26px, in a `bar` rung added for it. Node 0:5 draws a 26px
+     * control and a 43px third bar; at that size a 13px label sits in a box
+     * half again its height and the whole chrome reads smaller than the CRM the
+     * frame was drawn against, which measures ~32px on the same control.
+     * `button.tsx`'s own note had it right — ONE control height — so the rung is
+     * gone rather than retuned, and the bars follow: 57 + 49 + 49 = 155.
+     */
     const button = readFileSync(join(__dirname, "..", "src/components/ui/button.tsx"), "utf8");
-    expect(button).toMatch(/bar: "h-11 gap-1 px-2 py-1 text-\[13px\] leading-4 md:h-\[26px\]/);
+    expect(button, "no second control height").not.toMatch(/^\s*bar: "/m);
+    expect(button).toMatch(/default: "h-8 px-3 text-button/);
   });
 });
 
@@ -265,7 +274,7 @@ describe("the board's own control row matches the frame", () => {
   const canvas = readFileSync(join(__dirname, "..", "src/app/dashboard/custom-board.tsx"), "utf8");
 
   it("draws Add outlined, not filled with the brand", () => {
-    expect(canvas).toMatch(/variant="white"\s*\n\s*size="bar"/);
+    expect(canvas).toMatch(/variant="white"/);
     expect(canvas).not.toMatch(/variant="accent"[^>]*onClick=\{\(\) => setOpen/);
   });
 
@@ -282,9 +291,10 @@ describe("the board's own control row matches the frame", () => {
   it("stands all four at the frame's 26px rung", () => {
     // RangeMenu's trigger lives in board-controls.tsx; the other three here.
     const controls = readFileSync(join(__dirname, "..", "src/app/dashboard/board-controls.tsx"), "utf8");
-    expect(controls).toMatch(/variant="white" size="bar"/);
-    expect(board.match(/size="bar"/g) ?? []).toHaveLength(2); // Compare To, Refresh All
-    expect(canvas).toMatch(/size="bar"/);
+    // No `size` at all now — the kit's default IS the bar's height.
+    expect(controls).toMatch(/variant="white"/);
+    expect(board).not.toMatch(/size="bar"/);
+    expect(canvas).not.toMatch(/size="bar"/);
   });
 });
 

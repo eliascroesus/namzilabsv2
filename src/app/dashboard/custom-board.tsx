@@ -910,12 +910,13 @@ function AddChartMenu({
            the rule it stood for ("at most one brand fill per screen, spent on
            the adds-something verb") loses its last consumer in this row.
 
-           `size="bar"` rather than the kit's 32px default, for the reason the
-           rung itself documents: the frame's controls are 26 and the three bar
-           heights have to sum to 149. */
+           The kit's 32px default, not a rung of its own. A 26px control was
+           added to hit the frame's 149px sum and made the whole chrome read
+           smaller than the CRM it was drawn against; the kit's "one control
+           height" was right and the frame's 26 was the outlier. */
         <Button
           variant="white"
-          size="bar"
+         
           onClick={() => setOpen(!open)}
           disabled={busy}
           aria-haspopup="menu"

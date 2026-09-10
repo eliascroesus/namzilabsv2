@@ -59,8 +59,13 @@ const TOL = 1;
 const FIGMA = {
   sidebar: { x: 0, y: 0, w: 260, h: 1200 },
   // Bar ONE. The check measures the first <header>; bars two and three are
-  // asserted in tests/topbar-figma.test.ts, and their sum is what the board's
-  // own y below actually pins.
+  // asserted in tests/topbar-figma.test.ts.
+  //
+  // THE SUM IS 155 NOW, NOT THE FRAME'S 149. Node 0:5 draws a 26px control and
+  // a 43px third bar; the kit's own rule is one 32px control height, and at 26
+  // the whole chrome read smaller than the CRM the frame was drawn against.
+  // The kit won, so bar three is 49 and the board starts at 179 rather than
+  // 173. Everything else here is still the frame's.
   topbar: { x: 260, y: 0, w: 1660, h: 57 },
   chartCards: [
     // Node 0:5's own boxes. They are the board's too now: `GRID_GAP_PX` went
@@ -72,9 +77,9 @@ const FIGMA = {
     // divides evenly and the third card lands exactly on the 24px right inset,
     // so this is one of the few places the app is right and the export is a
     // rounding artifact. Expect the arithmetic, not the artifact.
-    { x: 284, y: 173, w: 521.33, h: 456 },
-    { x: 829.33, y: 173, w: 521.33, h: 456 },
-    { x: 1374.67, y: 173, w: 521.33, h: 456 },
+    { x: 284, y: 179, w: 521.33, h: 456 },
+    { x: 829.33, y: 179, w: 521.33, h: 456 },
+    { x: 1374.67, y: 179, w: 521.33, h: 456 },
   ],
   /**
    * HEIGHT IS DELIBERATELY NOT CHECKED on these. The Figma draws them at
@@ -84,12 +89,12 @@ const FIGMA = {
    * the row unit to hit 108.22 exactly would put every OTHER tile wrong.
    */
   statTiles: [
-    // 653 = 173 + 456 + 24: the chart row, plus the gutter it now shares with
-    // the row below. Three of twelve columns at a 24 gutter is 385.
-    { x: 284, y: 653, w: 385 },
-    { x: 693, y: 653, w: 385 },
-    { x: 1102, y: 653, w: 385 },
-    { x: 1511, y: 653, w: 385 },
+    // 659 = 179 + 456 + 24: the chart row, plus the gutter it shares with the
+    // row below. Three of twelve columns at a 24 gutter is 385.
+    { x: 284, y: 659, w: 385 },
+    { x: 693, y: 659, w: 385 },
+    { x: 1102, y: 659, w: 385 },
+    { x: 1511, y: 659, w: 385 },
   ],
 };
 

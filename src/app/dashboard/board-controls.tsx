@@ -217,7 +217,7 @@ export function RangeMenu({
             `truncate max-w-40` because a dated label is longer than a preset's
             and this trigger shares a header slot with "+ Add" and "Refresh
             all". */}
-        <Button variant="white" size="bar" aria-label={`Period — ${label}`}>
+        <Button variant="white" aria-label={`Period — ${label}`}>
           <CalendarDays aria-hidden />
           <span className="truncate max-w-40">{label}</span>
           <ChevronDown aria-hidden />
@@ -718,7 +718,13 @@ export function ViewTab({
          * gap; padding on the anchor alone would leave the menu outside the
          * fill.
          */
-        "inline-flex shrink-0 items-center gap-1 rounded-control px-2 py-1 text-[13px] leading-4 tracking-[-0.24px] transition-colors duration-(--duration-fast)",
+        /**
+         * 28px — one step under the 32px control beside it, which is the
+         * relationship the reference CRM draws and the frame's 24 did not.
+         * `py-1.5` on a 16px line box is 28; the label comes up to the kit's
+         * 14px with the row.
+         */
+        "inline-flex shrink-0 items-center gap-1.5 rounded-control px-2.5 py-1.5 text-button leading-4 transition-colors duration-(--duration-fast)",
         // THE ACTIVE TAB IS HEAVIER AS WELL AS WHITER. `--tab-rule` is a grey,
         // not a measured brand stroke, so it carries no contrast claim of its
         // own — the weight and the ink are what say WHERE YOU ARE now. The

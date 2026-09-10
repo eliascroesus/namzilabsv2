@@ -277,7 +277,7 @@ export default async function OverviewLab({
                     an #E1E1E1 rim — so "Add" loses its fill along with the
                     argument for it. The Figma is explicit and the owner asked
                     for 1:1. */}
-                <Button variant="white" size="bar">
+                <Button variant="white">
                   <Plus />
                   Add
                 </Button>
@@ -302,12 +302,12 @@ export default async function OverviewLab({
                     product does not compute — DESIGN.md records the two-series
                     legend as unbuilt — so it ships disabled with a title that
                     says so rather than as a menu that opens onto nothing. */}
-                <Button variant="white" size="bar" disabled title="Comparison periods are not built yet">
+                <Button variant="white" disabled title="Comparison periods are not built yet">
                   <ChartLine />
                   Compare To
                   <ChevronDown />
                 </Button>
-                <Button variant="white" size="bar">
+                <Button variant="white">
                   <RefreshCw />
                   Refresh All
                 </Button>

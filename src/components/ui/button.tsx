@@ -230,27 +230,24 @@ const buttonVariants = cva(
         default: "h-8 px-3 text-button [&_svg]:size-4",
         lg: "h-10 px-4 text-button [&_svg]:size-4",
         /**
-         * THE BOARD BAR'S OWN RUNG — 26px, and the one exception to the note
-         * above.
+         * THE BOARD BAR'S RUNG IS THE KIT'S RUNG AGAIN — 32px, `default`.
          *
-         * That note is right and its reasoning still holds: one control height,
-         * 32px, because the previous Figma drew every control at 32 and "44
-         * beside 32 reads as two systems in one row". Node 0:5 draws the four
-         * board controls at 26 — 16px of line over 4+4 of padding and a 1px
-         * border, confirmed by the frame's own metadata at 61x26 — and the bar
-         * they sit in at 43. The three bar heights sum to 149, which is exactly
-         * where the frame starts its content container, so a 32px control here
-         * does not cost 6px of chrome; it costs the sum, and the board lands
-         * 6px low with every class correct.
+         * There was a `bar: 26px` here, added to hit node 0:5's own control
+         * (metadata: 61x26) and the 149px its three bands sum to. It was
+         * faithful to the frame and wrong for the product: at 26px a 13px label
+         * sits in a box half again its height, the row reads sparse, and the
+         * whole chrome looks smaller than the CRM it was drawn against — which
+         * measures ~32px on the same control.
          *
-         * `min-h-11` BELOW `md` IS NOT A COMPROMISE ON THE FRAME, it is the
-         * frame's own scope. 0:5 is a 1920 desktop artboard and says nothing
-         * about a phone, and 26px is under every pointer-target minimum there
-         * is — the same objection this file's `back` control was rebuilt for.
-         * So: the frame's 26 where the frame applies, a 44px target where it
-         * does not.
+         * The note above already had it right: ONE control height, and the
+         * frame's 26 was the outlier rather than the correction. So the rung is
+         * deleted rather than retuned, because a second height is what it was
+         * arguing against.
+         *
+         * The bars follow the controls: bar three is 32 + 8 + 8 + 1 = 49, and
+         * the three sum to 155 rather than 149. `geometry-check.mjs` carries
+         * that number and the reason.
          */
-        bar: "h-11 gap-1 px-2 py-1 text-[13px] leading-4 md:h-[26px] md:min-h-0 [&_svg]:size-3.5",
         icon: "size-8 [&_svg]:size-[18px]",
         iconSm: "size-7 [&_svg]:size-4",
         iconXs: "size-6 [&_svg]:size-3.5",

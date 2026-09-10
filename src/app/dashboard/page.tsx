@@ -1196,7 +1196,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                   so, rather than as a menu that opens onto nothing. */}
               <Button
                 variant="white"
-                size="bar"
+               
                 disabled
                 title="Comparison periods are not built yet"
                 className="shrink-0"
@@ -1214,7 +1214,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                      twice, on two adjacent controls. Followed rather than
                      corrected; DESIGN.md owns the tension out loud. */
                   variant="white"
-                  size="bar"
+                 
                   pendingLabel="Refreshing…"
                   title="Recompute every published metric now"
                 >

@@ -109,7 +109,7 @@ describe("the dashboard's page header, 4 Sep 2026 blue retheme", () => {
     expect(menu, "and so is the radio item").not.toContain("DropdownMenuRadioItem");
   });
 
-  it("stands + Add in the row's own white, at the frame's 26px rung", () => {
+  it("stands + Add in the row's own white, at the kit's one control height", () => {
     /**
      * RE-POINTED 9 SEP 2026. This asserted `variant="accent"` — the brand fill
      * `cd621bf` gave the adds-something verb. Node 0:5 draws Add, Today,
@@ -119,7 +119,8 @@ describe("the dashboard's page header, 4 Sep 2026 blue retheme", () => {
     const custom = read("src/app/dashboard/custom-board.tsx");
     const add = custom.slice(custom.indexOf("function AddChartMenu"));
     expect(add).toContain('variant="white"');
-    expect(add).toContain('size="bar"');
+    // The kit's default rung, not one of its own — see button.tsx.
+    expect(add).not.toContain('size="bar"');
     // RE-POINTED 6 SEP 2026 with its two neighbours: "the header's own size"
     // is the kit's one control height now, not the deleted `xs` rung.
     expect(add, "no retired xs rung").not.toContain('size="xs"');
