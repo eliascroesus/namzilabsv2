@@ -253,7 +253,7 @@ export default async function OverviewLab({
             hour stale by design (they prove a formatted "1 hr ago" fits beside
             a delta chip), but the BOARD was rendered now, and "Updated just
             now" is the string node 0:5 draws. */}
-        <TopBarTitle>Overview</TopBarTitle>
+        <TopBarTitle range="Sat, 1 Sep - Sat, 1 Sep">Overview</TopBarTitle>
         <TopBarFreshness at={new Date()} />
         <BoardControls>
           {/* THE FOUR HEADER ACTIONS THE FRAME DRAWS, in its order: "+ Add",

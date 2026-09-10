@@ -349,7 +349,7 @@ export function PageHeader({ title, lede, actions, tabs, back, band, className }
          * padding and the 1px rule is 43, and 57 + 49 + 43 is the 149 the frame
          * starts its content container at.
          */
-        band ? "-m-6 mb-6 border-b border-topbar-border bg-topbar px-6 py-2" : "pb-4",
+        band ? "-m-6 mb-6 border-b border-topbar-border bg-topbar px-6 pb-4 pt-2" : "pb-4",
         className,
       )}
     >

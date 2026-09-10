@@ -40,7 +40,11 @@ export function ShellSkeleton({
           NOTHING IS RESERVED FOR IT BELOW `md`, because nothing is drawn there
           — see `Sidebar`. A ghost the real chrome will not replace is 260px of
           content jumping left when the route lands. */}
-      <div className="hidden w-65 shrink-0 border-r border-rail-border bg-rail md:block" />
+      {/* NO `border-r` — the real rail dropped its right rule on 10 Sep 2026
+          (node 35:5918 draws none), and a ghost that keeps a rule the frame
+          lost paints a hairline for one frame and then removes it, which is
+          exactly the flicker this mirror exists to prevent. */}
+      <div className="hidden w-65 shrink-0 bg-rail md:block" />
       {/* THE GUTTER'S GHOST — three-sided, `md:` only, exactly as in
           `app-frame.tsx`. If this mirror misses the 8px the real frame takes,
           the whole panel slides 8px up and left at hydration, which is the
@@ -49,13 +53,15 @@ export function ShellSkeleton({
         {/* THE PANEL'S GHOST — one cornered, hairlined box holding the bars
             and the content, mirroring the real panel. */}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-panel md:rounded-frame md:border md:border-border">
-          {/* THE BAR'S GHOSTS — TWO, 57 and 49, because the real chrome is two
-              bands. One 65px ghost under a 106px chrome is 41px of content
-              jumping up the moment the route lands, which is the whole failure
-              this mirror exists to prevent. Empty: a shimmering placeholder
-              under controls that never move is noise. */}
-          <div className="h-[57px] shrink-0 border-b border-topbar-border bg-topbar" />
-          <div className="h-[49px] shrink-0 border-b border-topbar-border bg-topbar" />
+          {/* THE BAR'S GHOST — ONE, 56px, because the real chrome is one band
+              since 10 Sep 2026 (node 35:6027). It was two, 57 and 49, and
+              mirroring the old pair under the new chrome is 50px of content
+              jumping the moment the route lands — the whole failure this file
+              exists to prevent, caused by the file meant to prevent it.
+              NO `border-b`: the real bar dropped its rule to the board's own
+              row below it. Empty: a shimmering placeholder under controls that
+              never move is noise. */}
+          <div className="h-14 shrink-0 bg-topbar" />
           <div className="min-h-0 flex-1 overflow-y-auto bg-panel">
             {/* Not <main>: PageContainer renders the page's one main landmark. */}
             <div className={`mx-auto w-full p-6 ${width === "narrow" ? "max-w-3xl" : "max-w-6xl"}`}>

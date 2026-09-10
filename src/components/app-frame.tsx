@@ -221,12 +221,13 @@ export function AppFrame({
               list and `hide`; the bar holds none of them and should not start.
               Below `md` this is the only way into any of it — the rail is not
               rendered at all. */}
-          <TopBar
-            account={account}
-            views={views}
-            hide={hide}
-            menu={<MobileDrawer hide={hide} views={views} workspace={workspace} account={account} />}
-          />
+          {/* THE BAR TAKES ONLY THE DRAWER NOW. It used to be handed the
+              account, the view list and `hide` as well, because it carried a
+              search field and an avatar; both moved into the rail on 10 Sep
+              2026 (nodes 35:5931 and 35:6000), so the data goes only where it
+              is drawn. The drawer stays a prop because it is built HERE, where
+              the navigation data already is — the bar holds none of it. */}
+          <TopBar menu={<MobileDrawer hide={hide} views={views} workspace={workspace} account={account} />} />
           {/* `min-h-0` is the vertical twin of the `min-w-0` above: without it a
               flex column with a scrolling child never shrinks past its content's
               natural height, and the panel's `overflow-y-auto` never gets

@@ -136,7 +136,14 @@ describe("the page container and the skeleton that stands in for it", () => {
       // loose `w-(\d+)` scan finds a `w-2` in some unrelated row first — which
       // would compare two numbers that are not the measurement in question and
       // pass or fail for the wrong reason.
-      const rail = code.split("\n").find((l) => /border-r border-(?:rail-)?border/.test(l));
+      // ANCHORED ON `bg-rail`, NOT ON A BORDER. It was the rail's right rule
+      // until 10 Sep 2026, when node 35:5918 turned out to draw none — and a
+      // `find` on a class that no longer exists returns undefined and THROWS
+      // here, which is at least loud. The fill is the better anchor anyway: a
+      // rail without a border is still a rail, a rail without a ground is not.
+      // `(?![\w-])` so `bg-rail-control` — the search field, two hundred lines
+      // down and carrying `w-full` — cannot answer for the column.
+      const rail = code.split("\n").find((l) => /\bbg-rail(?![\w-])/.test(l) && /\bw-\d/.test(l));
       if (!rail) throw new Error("could not find the rail's own edge");
       const m = rail.match(/w-\[(\d+)px\]/) ?? rail.match(/\bw-(\d+)\b/);
       if (!m) throw new Error("could not find a sidebar width");
@@ -207,7 +214,11 @@ describe("the page container and the skeleton that stands in for it", () => {
     // `flex` — it opens with the scoped `dark` that re-inks whatever the flow
     // builder portals into it.
     const bar = band(topBar, /<header className="[^"]*?\bh-(\S+) shrink-0/, "the top bar's height");
-    expect(band(skeleton, /className="h-(\S+) shrink-0 border-b/, "the skeleton's top bar band")).toEqual(bar);
+    // NO `border-b` IN THE PATTERN ANY MORE. The real bar dropped its rule to
+    // the board's own row on 10 Sep 2026, so a mirror still matching on one
+    // would find nothing and report NOT FOUND rather than a mismatch — the
+    // silent-pass shape this file has been bitten by twice.
+    expect(band(skeleton, /className="h-(\S+) shrink-0 bg-topbar/, "the skeleton's top bar band")).toEqual(bar);
     /**
      * THE RAIL'S TOP BLOCK LEFT THIS COMPARISON ENTIRELY, in two steps, and the
      * second one is the lesson.
@@ -248,19 +259,36 @@ describe("the page container and the skeleton that stands in for it", () => {
    * which is the exact failure this file exists to catch, so both are asserted
    * on both sides rather than left to the height/width check above.
    */
-  it("mirrors both of the chrome's hairlines, which now take real pixels", () => {
+  it("mirrors the rail's ABSENCE of a hairline, and its ground", () => {
     const code = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
-    // The rail's right edge, and the ghost standing in for it.
-    expect(code(sidebar)).toMatch(/border-r border-rail-border/);
-    // `hidden` precedes the width now — the ghost mirrors the rail's absence
-    // below `md` as well as its 56px above it, or the skeleton reserves a
-    // column the real chrome will not draw.
-    expect(code(skeleton)).toMatch(/hidden w-65[^"]*border-r border-rail-border/);
-    // The bar's bottom edge, and its ghost.
-    expect(code(read("src/components/top-bar.tsx"))).toMatch(/<header className="[^"]*border-b border-topbar-border/);
-    expect(code(skeleton)).toMatch(/h-\[57px\][^"]*border-b border-topbar-border/);
-    // The second band mirrors bar two, on the same hairline.
-    expect(code(skeleton)).toMatch(/h-\[49px\][^"]*border-b border-topbar-border/);
+    /**
+     * THE RULE IS GONE FROM BOTH, AND THAT IS THE ASSERTION NOW.
+     *
+     * The owner asked for it on 10 Sep 2026 — "remove the stroke line on the
+     * left navbar that is to the right, it shouldn't exist" — and node 35:5918
+     * agrees: a bare `background: #F3F3F3` with no border of any kind. The
+     * frame's own hairline sits 8px away, so a second rule beside it is the
+     * double-seam this kit argues against everywhere else.
+     *
+     * It has to be checked on BOTH sides: a ghost that keeps a rule the frame
+     * lost paints a hairline for one frame and then removes it, which is the
+     * class of flicker this file exists to catch.
+     */
+    expect(code(sidebar), "the rail draws no right rule").not.toMatch(/border-r border-rail-border/);
+    expect(code(skeleton), "and the ghost does not either").not.toMatch(/border-r border-rail-border/);
+    // `hidden` precedes the width — the ghost mirrors the rail's absence below
+    // `md` as well as its 260px above it, or the skeleton reserves a column
+    // the real chrome will not draw.
+    expect(code(skeleton)).toMatch(/hidden w-65[^"]*bg-rail/);
+    // AND THE BAR'S BOTTOM EDGE IS GONE TOO, on both sides. Node 35:6027
+    // draws no rule; the one hairline in the chrome belongs to the board's own
+    // row beneath it (node 35:6044). A ghost that keeps it draws a line for
+    // one frame and then removes it.
+    expect(code(read("src/components/top-bar.tsx"))).not.toMatch(/<header className="[^"]*border-b border-topbar-border/);
+    expect(code(skeleton)).not.toMatch(/border-b border-topbar-border/);
+    // What the two must still agree on is the BAND, which the height check
+    // above compares — this is the pair that says neither grew a rule back.
+    expect(code(skeleton)).toMatch(/h-14[^"]*bg-topbar/);
   });
 });
 
@@ -583,9 +611,13 @@ describe("the frame's new shape — a full-width bar over [rail | panel]", () =>
     expect(read("src/components/sidebar.tsx")).toMatch(/workspace\?:\s*string/);
   });
 
-  it("moves the wordmark into the bar", () => {
-    expect(bar).toMatch(/\bwordmark\b/);
-    expect(bar).toMatch(/>\s*Namzilabs\s*</);
+  it("carries no wordmark, because the chrome names nothing now", () => {
+    // It left, came back at node 0:5, and is deleted again: no 10 September
+    // frame draws a product name anywhere in the chrome. The argument that
+    // took it off the first time is the one that stands — naming the product
+    // in the corner of a product you are already inside says nothing.
+    expect(bar).not.toMatch(/\bwordmark\b/);
+    expect(bar).not.toMatch(/>\s*Namzilabs\s*</);
   });
 
   it("stops threading the workspace name into the top bar", () => {
@@ -716,7 +748,7 @@ describe("the rail's re-dress — a workspace switcher, Main Menu, a search fiel
      */
     // The field moved to the bar with node 0:5, so the magnifier is read from
     // `nav-search.tsx`; the chevron above is still the rail's own.
-    const searchSrc = read("src/components/nav-search.tsx").replace(/\/\*[\s\S]*?\*\//g, "");
+    const searchSrc = read("src/components/sidebar.tsx").replace(/\/\*[\s\S]*?\*\//g, "");
     const searchField = searchSrc.slice(
       searchSrc.indexOf('aria-keyshortcuts="Meta+K"') - 800,
       searchSrc.indexOf('aria-keyshortcuts="Meta+K"') + 300,
@@ -785,13 +817,23 @@ describe("the rail's re-dress — a workspace switcher, Main Menu, a search fiel
      * to wear. What survives is the fact underneath: it is a real field, it
      * carries the shortcut it announces, and it is not a Button pretending.
      */
-    const code = read("src/components/nav-search.tsx").replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    const code = read("src/components/sidebar.tsx").replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
     expect(code, "the search is a real field").toMatch(/<input\b[\s\S]{0,600}aria-keyshortcuts="Meta\+K"/);
-    expect(code, "at the frame's 40px, on its control fill").toMatch(/h-10[\s\S]{0,400}bg-topbar-control/);
+    // 36px ON THE RAIL'S OWN CONTROL FILL. It was `h-10` on
+    // `bg-topbar-control` while the field lived in the bar at node 0:5's
+    // 480x40; node 35:5932 draws it 228x36 in the rail, and the fill has to be
+    // `--rail-control` there or the two dark modes get a white field with
+    // white-on-white text.
+    expect(code, "at the frame's 36px, on the RAIL's control fill").toMatch(/h-9[\s\S]{0,400}bg-rail-control/);
+    expect(code, "not the bar's fill, which is a different ground").not.toMatch(/bg-topbar-control/);
     expect(code, "and it is no longer a Button pretending").not.toMatch(
       /<Button[^>]*aria-keyshortcuts="Meta\+K"/,
     );
-    expect(sidebar, "and the rail no longer draws one").not.toMatch(/aria-keyshortcuts="Meta\+K"/);
+    // THE RAIL DRAWS IT AGAIN, and this line asserted the opposite for a day.
+    // The claim that matters is that there is exactly ONE search in the
+    // product; `topbar-figma.test.ts` holds the other half (the bar has none).
+    expect(sidebar, "the rail owns the announced shortcut").toMatch(/aria-keyshortcuts="Meta\+K"/);
+    expect(read("src/components/top-bar.tsx"), "and the bar does not").not.toMatch(/aria-keyshortcuts="Meta\+K"/);
   });
 
   it("replaces the inert bell row with Get Free Access", () => {
@@ -834,7 +876,12 @@ describe("the skeleton mirrors the frame's new order", () => {
     // beside it, which is what both 8 September frames draw. See
     // `app-frame.tsx`. Asserting the new order is what stops the old shape
     // being restored in one file and not the other.
-    expect(code.indexOf("border-r border-rail-border")).toBeLessThan(code.indexOf("border-b border-topbar-border"));
+    // `bg-rail` RATHER THAN `border-r border-rail-border`, because the rail
+    // dropped that rule on 10 Sep 2026 (node 35:5918 draws none) and an
+    // assertion keyed on a class that no longer exists compares -1 to -1 and
+    // passes for the wrong reason. The rail's FILL is the marker now: it
+    // cannot go away without the rail going away.
+    expect(code.indexOf("bg-rail")).toBeLessThan(code.indexOf("bg-topbar"));
   });
 
   it("gives its content ghost the same gutter, corner and hairline", () => {
@@ -848,8 +895,11 @@ describe("the skeleton mirrors the frame's new order", () => {
 
   it("puts each ghost on the surface it mirrors — the rail's and the bar's", () => {
     const code = skeleton.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
-    expect(code).toMatch(/h-\[57px\][^"]*bg-topbar/);
-    expect(code).toMatch(/h-\[49px\][^"]*bg-topbar/);
+    // ONE band of 56, where it was two of 57 and 49. Mirroring the old pair
+    // under the new chrome is 50px of content jumping the moment the route
+    // lands — the whole failure this mirror exists to prevent.
+    expect(code).toMatch(/h-14[^"]*bg-topbar/);
+    expect(code, "the old pair must not survive here either").not.toMatch(/h-\[57px\]|h-\[49px\]/);
     expect(code).toMatch(/w-65[^"]*bg-rail/);
   });
 });

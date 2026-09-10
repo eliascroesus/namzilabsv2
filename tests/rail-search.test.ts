@@ -20,15 +20,20 @@ import { railSearchEntries, viewHref } from "@/lib/rail-search";
  */
 const root = join(__dirname, "..");
 const read = (p: string) => readFileSync(join(root, p), "utf8");
-const sidebar = read("src/components/sidebar.tsx");
 /**
- * THE FIELD MOVED TO THE BAR. Node 0:5 draws the search at 480x40 in the top
- * bar and draws none in the rail, so the markup half of these tests reads
- * `nav-search.tsx` now. The DATA half — `railSearchEntries`, `viewHref` — did
- * not move and is still the same function, which is why this file did not
- * split in two.
+ * THE FIELD WENT TO THE BAR AND CAME BACK, so the markup half of these tests
+ * reads `sidebar.tsx` again.
+ *
+ * Node 0:5 drew the search at 480x40 in the top bar and none in the rail, and
+ * for one day it lived in `nav-search.tsx`. Nodes 35:5920–35:5939 draw it back
+ * in the column at 228x36 and draw none in the bar, so that file is deleted
+ * and its behaviour is inline in the rail.
+ *
+ * THE DATA HALF NEVER MOVED — `railSearchEntries`, `viewHref` — which is why
+ * this file did not split in two either time, and why the round trip cost one
+ * constant here rather than a rewrite.
  */
-const search = read("src/components/nav-search.tsx");
+const search = read("src/components/sidebar.tsx");
 /** Comments explain the rules and must not be able to satisfy them. */
 const code = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 
@@ -106,33 +111,43 @@ describe("the rail draws it as a field, not a button", () => {
     expect(c, "and unbinds it").toMatch(/window\.removeEventListener\("keydown"/);
   });
 
-  it("is gone from the rail, so the product has one search and not two", () => {
-    // The column kept its data helpers for a while after the field left them;
-    // this is what says the markup went too.
-    expect(sidebar).not.toMatch(/aria-keyshortcuts="Meta\+K"/);
-    expect(sidebar).not.toMatch(/railSearchEntries/);
-    expect(sidebar).not.toMatch(/role="listbox"/);
+  it("is gone from the BAR, so the product has one search and not two", () => {
+    // The direction of this assertion has now flipped twice. What it protects
+    // is unchanged: exactly one search in the chrome. `page-width.test.ts` and
+    // `topbar-figma.test.ts` hold the other halves.
+    const bar = read("src/components/top-bar.tsx");
+    expect(bar).not.toMatch(/aria-keyshortcuts="Meta\+K"/);
+    expect(bar).not.toMatch(/railSearchEntries/);
+    expect(bar).not.toMatch(/role="listbox"/);
   });
 
-  it("floats its matches under the field, which the rail could not", () => {
+  it("filters the column IN PLACE, because it still cannot float", () => {
     /**
-     * THE CONSTRAINT, NOT A PREFERENCE. The <nav> is `overflow-y-auto`, which
-     * makes it the clipping box for an absolutely-positioned child: a dropdown
-     * under the field would be cut at the column's foot and would lengthen the
-     * scroller behind it. Filtering in place needs no portal and is what
-     * "search the nav things" means.
+     * THE CONSTRAINT, NOT A PREFERENCE — and there are two of them now, where
+     * this comment used to name one. The <nav> is `overflow-y-auto`, which
+     * makes it the clipping box for an absolutely-positioned child; the
+     * <aside> around it is `overflow-hidden`, which makes it a second one.
+     * Either alone cuts a dropdown off at the column's foot. Filtering in
+     * place needs no portal and is what "search the nav things" means.
+     *
+     * The bar had neither box, which is why the field grew a floating panel
+     * during its day there — and why that panel could not come back with it.
      */
     const c = code(search);
-    expect(c).toMatch(/\{open && q && \(/);
     expect(c).toMatch(/role="listbox"/);
-    expect(c, "an empty query draws no panel at all").toMatch(/\{open && q && \(/);
+    expect(c, "a non-empty query is what swaps the column").toMatch(/\{q \? \(/);
     expect(c, "no absolute panel under the field").not.toMatch(/absolute[^"]*top-full/);
+    expect(c, "and none anywhere in the column").not.toMatch(/role="listbox"[\s\S]{0,200}absolute/);
   });
 
   it("filters over the SAME arrays the column renders", () => {
     // Not NAV and not `views` — `items` (post-`hide`) and `ordered` (sorted),
     // so the search cannot disagree with the rows above it.
-    expect(code(search)).toMatch(/railSearchEntries\(\{ items, views: viewStrip\(views\), themes: CHOICES \}\)/);
+    const c = code(search);
+    expect(c).toMatch(/railSearchEntries\(\{/);
+    expect(c).toMatch(/items: items\.map\(/);
+    expect(c).toMatch(/views: ordered,/);
+    expect(c).toMatch(/themes: CHOICES,/);
   });
 
   it("says so when nothing matches", () => {

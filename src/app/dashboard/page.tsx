@@ -57,7 +57,7 @@ import {
   type AggregateResult,
   type FunnelResult,
 } from "@/lib/metrics/compute";
-import { resolveRange } from "@/lib/metrics/range";
+import { resolveRange, windowLabel } from "@/lib/metrics/range";
 import { withDerivedRange } from "@/lib/metrics/derive-range";
 import { CustomRangeCompute } from "./custom-range-compute";
 import { formatMetricValue } from "@/lib/format";
@@ -1098,7 +1098,13 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             the same arrangement the flow builder's toolbar already uses.
             The title is the ACTIVE VIEW's name, so the filled tab below and the
             heading above it say one word. */}
-        <TopBarTitle>{viewTabs.find((v) => v.id === activeView)?.name ?? viewTabs[0]?.name ?? "Dashboard"}</TopBarTitle>
+        {/* THE WINDOW RIDES WITH THE NAME. `range` is the RESOLVED window,
+            already normalised by `resolveRange` — so a URL spelling a custom
+            pair that happens to equal a preset prints that preset's days, and
+            two spellings of one window cannot read differently. */}
+        <TopBarTitle range={windowLabel(range)}>
+          {viewTabs.find((v) => v.id === activeView)?.name ?? viewTabs[0]?.name ?? "Dashboard"}
+        </TopBarTitle>
         <TopBarFreshness at={newestComputedAt} />
 
         <PageHeader

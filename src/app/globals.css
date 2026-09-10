@@ -776,7 +776,7 @@
   --topbar-foreground: #2e2e2e; /* 12.63:1 on white — the frame's ink, not pure black */
   --topbar-muted: #7e7e7e; /* 4.61:1 — "Updated just now", a resting tab's label */
   --topbar-faint: #6e6e6e; /* 5.30:1 */
-  --topbar-border: #f1f1f1; /* the hairline under each of the three bands */
+  --topbar-border: #e1e1e1; /* the hairline under the board's own row — node 35:6044 draws #E1E1E1, the SAME value as `--border`, not the #F1F1F1 node 0:5 used under its three bands. There is one rule in the chrome now, and it sits where the content's own hairlines do. */
   --topbar-control: #efefef; /* the search field, and the fill the moon takes ON HOVER */
   --topbar-accent: #2e2e2e; /* the avatar disc — a dark disc on a white band */
   --topbar-accent-foreground: #ffffff; /* the initials inside it */

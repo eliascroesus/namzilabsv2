@@ -172,7 +172,11 @@ describe("the control that reaches the profile", () => {
      * present in the bar and the row still in the shell is the duplication;
      * neither present is a profile page nobody can reach.
      */
-    expect(read("src/components/top-bar.tsx")).toMatch(/href="\/dashboard\/profile"/);
+    // THE LINK MOVED TO THE RAIL'S FOOT on 10 Sep 2026 (node 35:6001). The
+    // PAIR is what matters and is unchanged: exactly one route to the profile
+    // page in the chrome, and it is the avatar.
+    expect(read("src/components/sidebar.tsx")).toMatch(/href="\/dashboard\/profile"/);
+    expect(read("src/components/top-bar.tsx")).not.toMatch(/href="\/dashboard\/profile"/);
     expect(shell).not.toMatch(/href="\/dashboard\/profile"/);
   });
 
@@ -187,7 +191,7 @@ describe("the control that reaches the profile", () => {
     // A profile page that changes nothing visible is a form that appears not to
     // have worked.
     expect(shell).toMatch(/profile\.avatarUrl \? \(/);
-    expect(read("src/components/top-bar.tsx")).toMatch(/account\.avatarUrl \? \(/);
+    expect(read("src/components/sidebar.tsx")).toMatch(/account\?\.avatarUrl \? \(/);
   });
 });
 

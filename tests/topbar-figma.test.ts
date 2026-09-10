@@ -145,36 +145,54 @@ describe("the shell's chrome classes all resolve", () => {
 describe("the bars the frame draws", () => {
   const topBar = readFileSync(join(__dirname, "..", "src/components/top-bar.tsx"), "utf8");
 
-  it("stands bar one at 57 and bar two at 49", () => {
-    expect(topBar).toMatch(/h-\[57px\]/);
-    expect(topBar).toMatch(/h-\[49px\]/);
+  it("stands as ONE band of 56, because there is one band now", () => {
+    // It was two, 57 and 49. Node 35:6027 draws a single 56px strip — 16 of
+    // top padding, a 32px control row, 8 under it — and the band that carried
+    // the search and the account is gone entirely.
+    expect(topBar).toMatch(/h-14\b/);
+    expect(topBar, "the old pair must not survive").not.toMatch(/h-\[57px\]|h-\[49px\]/);
   });
 
-  it("sums to 155, which is where the board starts", () => {
-    // 40 of search / 32 of control / 26 of button, each over 8+8 and a rule.
-    // If this sum is wrong the board sits at the wrong y with every class
-    // still correct, which is the failure `geometry-check.mjs` exists for.
-    expect(57 + 49 + 49).toBe(155);
+  it("draws no rule under itself, because the board's row carries it", () => {
+    // Node 35:6027 has no border; node 35:6044 below it has
+    // `border-bottom: 1px solid #E1E1E1`. Two rules 57px apart is the
+    // double-seam this kit argues against everywhere else.
+    expect(topBar).not.toMatch(/border-b border-topbar-border/);
+  });
+
+  it("sums to 113, which is where the board starts", () => {
+    // 56 of chrome + 57 of the board's own row. If this sum is wrong the board
+    // sits at the wrong y with every class still correct, which is the failure
+    // `geometry-check.mjs` exists for.
+    expect(56 + 57).toBe(113);
   });
 
   it("keeps the slot the flow builder portals its toolbar into", () => {
     expect(topBar).toMatch(/id="topbar-slot"/);
   });
 
-  it("carries the search the rail used to own, at the frame's 480", () => {
-    expect(topBar).toMatch(/w-\[480px\]/);
-    expect(topBar).toMatch(/<NavSearch/);
-  });
-
-  it("takes the search out of the rail, so it is not in two places", () => {
+  it("carries no search, because the rail owns it again", () => {
+    // Node 0:5 drew the field here at 480x40 and none in the rail; node
+    // 35:5931 draws it in the rail and none here. This reverses, and the
+    // assertion reverses with it — the product must have ONE search, and this
+    // pair is what stops it having two.
+    expect(topBar).not.toMatch(/NavSearch|w-\[480px\]/);
     const rail = readFileSync(join(__dirname, "..", "src/components/sidebar.tsx"), "utf8");
-    expect(rail).not.toMatch(/railSearchEntries/);
-    expect(rail).not.toMatch(/aria-label="Search the navigation"/);
+    expect(rail).toMatch(/aria-label="Search the navigation"/);
+    expect(rail).toMatch(/railSearchEntries/);
   });
 
-  it("puts the mark at the reading edge and drops the promo", () => {
-    expect(topBar).toMatch(/>\s*Namzilabs\s*</);
-    expect(topBar).not.toMatch(/for free/);
+  it("carries no account and no mark either — both left with the band", () => {
+    // The avatar went to the rail's foot (node 35:6000). The wordmark is
+    // deleted rather than moved: no 10 September frame draws a product name
+    // anywhere in the chrome, and the argument that took it off once already
+    // still holds. The gift went with it — node 51:5756 put it here and these
+    // frames draw nothing like it.
+    expect(topBar).not.toMatch(/>\s*Namzilabs\s*</);
+    expect(topBar).not.toMatch(/for free|<Gift/);
+    expect(topBar, "the avatar is the rail's now").not.toMatch(/account\.initials/);
+    const rail = readFileSync(join(__dirname, "..", "src/components/sidebar.tsx"), "utf8");
+    expect(rail).toMatch(/aria-label="Your profile"/);
   });
 
   it("lets the moon and the bell take a fill on hover, which they refused to", () => {
@@ -200,7 +218,9 @@ describe("the board's bar", () => {
   it("is a full-bleed band that escapes the container's gutter", () => {
     // `PageContainer` is `p-6`; without the negative margin the band sits
     // inside a 24px inset with the page's ground showing around it.
-    expect(page).toMatch(/-m-6 mb-6 border-b border-topbar-border bg-topbar px-6 py-2/);
+    // `pb-4 pt-2` — node 35:6044's own `padding: 8px 24px 16px`, where this
+    // was a symmetric `py-2`. The band is the only rule in the chrome now.
+    expect(page).toMatch(/-m-6 mb-6 border-b border-topbar-border bg-topbar px-6 pb-4 pt-2/);
   });
 
   it("draws the tabs as pills with the frame's own padding and gaps", () => {
@@ -257,8 +277,20 @@ describe("bar two's slots are filled by the page that knows", () => {
   });
 
   it("names the board's own view, so the tab and the heading agree", () => {
-    expect(board).toMatch(/<TopBarTitle>/);
+    expect(board).toMatch(/<TopBarTitle range=/);
     expect(board).toMatch(/viewTabs\.find\(\(v\) => v\.id === activeView\)\?\.name/);
+  });
+
+  it("hands the title the RESOLVED window, not the preset's label", () => {
+    /**
+     * Node 35:6028 draws "Overview - Sat, 1 Sep - Sat, 1 Sep" while the control
+     * to its right reads "Today". They are not duplicates: one is the name of a
+     * choice, the other is what that choice currently means, and a preset's
+     * meaning moves under it every midnight. `labelForRange` answers the first
+     * question and would make this strip say "Today - Today".
+     */
+    expect(board).toMatch(/windowLabel\(range\)/);
+    expect(board, "not the preset's word").not.toMatch(/<TopBarTitle range=\{labelForRange/);
   });
 
   it("passes a measured freshness rather than a string the bar invents", () => {
@@ -267,7 +299,11 @@ describe("bar two's slots are filled by the page that knows", () => {
   });
 
   it("draws both on the design harness, which is what gets compared to the frame", () => {
-    expect(harness).toMatch(/<TopBarTitle>Overview<\/TopBarTitle>/);
+    // The harness has no board behind it, so it spells the frame's own window
+    // rather than resolving one. It must still draw the CLUSTER — a harness
+    // that shows a bare title is pixel-correct against a frame the real board
+    // does not match, which is the failure this block already exists for.
+    expect(harness).toMatch(/<TopBarTitle range="[^"]+">Overview<\/TopBarTitle>/);
     expect(harness).toMatch(/<TopBarFreshness/);
   });
 });

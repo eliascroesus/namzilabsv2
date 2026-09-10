@@ -273,6 +273,44 @@ function resolvePresetResult(key: string | undefined, now: Date): { key: RangeKe
 const CUSTOM_RANGE_RE = /^(\d{4}-\d{2}-\d{2})\.\.(\d{4}-\d{2}-\d{2})$/;
 
 /**
+ * THE WINDOW IN DATES — "Sat, 1 Sep - Sat, 1 Sep", for the top bar's title.
+ *
+ * NOT `labelForRange`, AND THE DIFFERENCE IS THE POINT. That answers "which
+ * choice is selected" and says "Today"; this answers "which days is that",
+ * and the two are different facts that both belong on screen. Node 35:6028
+ * draws them together: the control on the right reads "Today" while the strip
+ * beside the page title reads the dates. A preset's meaning moves under it
+ * every midnight without the preset changing, so a bar that only printed the
+ * word would go stale silently.
+ *
+ * `to` IS INCLUSIVE — `resolvePresetResult` ends every window at 23:59:59.999
+ * of its last day — so it formats directly and needs no day subtracted. Get
+ * that wrong and every range in the product reads one day long.
+ *
+ * UTC, like `labelForRange` and `monthLabel`, and for the same reason: every
+ * window here is a UTC day, and `toLocaleDateString` without a `timeZone`
+ * would print the day before the one the customer picked for anyone west of
+ * Greenwich.
+ *
+ * ALL TIME RETURNS NULL rather than "Thu, 1 Jan". Its window opens at the
+ * epoch, which is not a date anyone chose and not a fact about the data; the
+ * caller drops the separator with it, so the bar simply shows the name.
+ */
+export function windowLabel(range: DateRange): string | null {
+  // A year before the epoch's own year is the only signal `all` leaves behind
+  // in a DateRange — it is the one preset with no start anybody picked.
+  if (range.from.getTime() <= 0) return null;
+  const day = (d: Date) =>
+    d.toLocaleDateString("en-US", {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+      timeZone: "UTC",
+    });
+  return `${day(range.from)} - ${day(range.to)}`;
+}
+
+/**
  * THE SPAN PAST WHICH A TREND CANNOT BE ASSEMBLED, and therefore the span past
  * which this refuses a window at all. `bucketWindowsFor` returns [] beyond 1200
  * days (engine.ts), so a wider range would render a figure with no chart and no

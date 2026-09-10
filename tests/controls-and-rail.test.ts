@@ -57,22 +57,23 @@ describe("the rail wears one fill for both selected and hovered", () => {
 
   it("keeps the present out of the rail's foot, where the bell also never went", () => {
     /**
-     * THE GIFT MOVED UP, 8 SEP 2026. "Get Free Access" was a filled secondary
-     * button at the foot, carrying a present rather than a bell — a bell being
-     * the top bar's glyph for real unread notifications, and spending it here
-     * put one picture on two unrelated things in one chrome.
+     * THE GIFT MOVED UP ON 8 SEP 2026 AND WAS DELETED ON 10 SEP.
      *
-     * Node 51:5756 puts the gift in the TOP BAR beside the account, as an
-     * offer among the account's own controls rather than as a third act under
-     * two others. The reasoning that kept the bell out of the rail is
-     * unchanged and now covers both glyphs: neither belongs in this column.
+     * "Get Free Access" was a filled secondary button at the foot carrying a
+     * present rather than a bell — a bell being the top bar's glyph for real
+     * unread notifications, and spending it here put one picture on two
+     * unrelated things in one chrome. Node 51:5756 moved it into the bar; no
+     * 10 September frame draws it at all, so it is gone from the product
+     * rather than relocated again.
+     *
+     * The rule this asserts is unchanged and now has nothing to argue with:
+     * neither glyph belongs in this column.
      */
     const c = code(sidebar);
-    expect(c, "the present went to the top bar").not.toMatch(/<Gift\b/);
-    expect(c, "the bell was never the rail's to spend").not.toMatch(/<Bell\b/);
-    expect(c, "and the row it sat on is gone with it").not.toMatch(/Get Free Access/);
-    // It has to be SOMEWHERE, or the offer was deleted rather than moved.
-    expect(code(topBar)).toMatch(/<Gift\b/);
+    expect(c).not.toMatch(/<Gift\b/);
+    expect(c).not.toMatch(/Get Free Access/i);
+    const bar = read("src/components/top-bar.tsx");
+    expect(bar, "and it did not survive in the bar either").not.toMatch(/<Gift\b/);
   });
 });
 
@@ -88,23 +89,29 @@ describe("the top bar's centre belongs to the builder, not to a greeting", () =>
     expect(code(topBar), "an empty slot still claims no width").toContain("empty:hidden");
   });
 
-  it("keeps the peer machinery, which has a sibling reading it again", () => {
+  it("keeps the builder's slot, and no longer arbitrates over it", () => {
     /**
-     * IT WAS DELETED FOR A GOOD REASON AND IS BACK FOR THE SAME ONE.
+     * THE `peer` PAIR IS GONE FOR THE SECOND TIME, BY ITS OWN ARGUMENT.
      *
      * `peer` + `empty:hidden` + `peer-[:not(:empty)]:hidden` let an occupied
-     * slot push the centre's other occupant aside without any page having to
-     * say which was which. When the greeting was deleted there was only one
-     * occupant, so the `peer` had no sibling reading it — a rule that looks
-     * load-bearing to whoever finds it next, and it went.
+     * slot push the centre's OTHER occupant aside without any page having to
+     * say which was which. It was deleted once when the greeting died and
+     * there was only one occupant left; it came back when node 51:5788 put a
+     * promo line beside the builder's toolbar.
      *
-     * The 8 September Figma puts a promo line in the centre (node 51:5788),
-     * so there are two occupants again: the builder's toolbar and a sentence.
-     * The arbitration is exactly the problem it was built for.
+     * The 10 September frames draw neither a promo nor a wordmark, so the slot
+     * has one occupant again and the arbitration has nothing to arbitrate. A
+     * rule that looks load-bearing to whoever finds it next is worse than no
+     * rule, which is exactly why it went the first time.
+     *
+     * WHAT MUST SURVIVE IS THE ID. Losing `#topbar-slot` does not degrade the
+     * flow builder, it breaks it: `getElementById` returns null and the
+     * toolbar renders nowhere.
      */
-    expect(code(topBar)).toContain("peer-[:not(:empty)]:hidden");
-    // …and the thing it arbitrates against must actually be a `peer`.
-    expect(code(topBar)).toMatch(/id="topbar-slot"[^>]*className="[^"]*\bpeer\b/);
+    const bar = read("src/components/top-bar.tsx");
+    expect(bar).toMatch(/id="topbar-slot"/);
+    expect(bar).toMatch(/empty:hidden/);
+    expect(bar, "nothing left to yield to").not.toMatch(/peer-\[:not\(:empty\)\]:hidden/);
   });
 });
 
@@ -189,11 +196,13 @@ describe("the rail, after the owner called it out beside the export", () => {
 
   it("draws no ⌘K keycap", () => {
     expect(code(sidebar), "the chip is gone").not.toContain("⌘K");
-    // The binding is the announced fact and must survive the chip.
-    // The field moved to the bar with node 0:5; the announcement moved with it.
-    expect(read("src/components/nav-search.tsx"), "the shortcut is still announced").toMatch(
-      /aria-keyshortcuts="Meta\+K"/,
-    );
+    // The binding is the announced fact and must survive the chip — and the
+    // two round trips it has now made. The field went to the bar with node 0:5
+    // and came back to the rail with node 35:5931; the announcement travelled
+    // both ways with it, and a claim in `aria-keyshortcuts` that no listener
+    // honours is the state this assertion exists to prevent.
+    expect(code(sidebar), "the shortcut is still announced").toMatch(/aria-keyshortcuts="Meta\+K"/);
+    expect(code(sidebar), "and still bound").toMatch(/e\.key !== "k" \|\| !\(e\.metaKey \|\| e\.ctrlKey\)/);
   });
 
   it("stands the head's switcher at 40 and the foot's filled button at 36", () => {

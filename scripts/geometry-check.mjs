@@ -42,11 +42,22 @@
  * 4×111.5 + 3×24 = 518 (was 521.33) and a three-column stat tile is
  * 3×111.5 + 2×24 = 382.5 (was 385).
  *
- * THE BAR HEIGHTS ARE UNTOUCHED BY THIS, and that is a deliberate scope
- * decision rather than an oversight. The 10 September frames also redraw the
- * chrome — two bands, search back in the rail, no wordmark — and the app is
- * NOT taking that half. So these stay node 0:5's 57 and 49, exactly as the
- * paragraph on `topbar` below already records, and only the frame moved.
+ * ── AND THEN THE CHROME FOLLOWED, so the bar heights moved after all ──
+ *
+ * The paragraph that stood here said the 10 September relayout was out of
+ * scope and the bars would stay node 0:5's 57 and 49. The owner asked for it
+ * on 10 Sep, so they did not. The chrome is now what nodes 35:6027 and 35:6044
+ * draw: ONE 56px band of title-and-app-controls, then the board's own white
+ * row, and no third band. The search went back to the rail, the account went
+ * to the rail's foot, and the wordmark is gone.
+ *
+ * ONE NUMBER HERE IS THE APP'S AND NOT THE FRAME'S, and it is the same
+ * departure this file has recorded twice already. Node 35:6044 draws the
+ * board's row 51px tall around a 26px control; the kit stands every labelled
+ * control at 32, and at 26 the whole chrome "read as small" — the owner's own
+ * words, and the reason commit 3973215 put the kit's rung back. So that row is
+ * 57 (8 + 32 + 16 + 1) rather than 51, and the six px land in the board's `y`
+ * below. Everything else is the frame's.
  *
  * NOTHING HERE IS DERIVED FROM THE APP. The offsets come from the Figma's own
  * gutter and border; the divisions are arithmetic on them. That the app agrees
@@ -110,7 +121,9 @@ const FIGMA = {
   // the whole chrome read smaller than the CRM the frame was drawn against.
   // The kit won, so bar three is 49 and the board starts at 179 rather than
   // 173. Everything else here is still the frame's.
-  topbar: { x: 260 + DX, y: 0 + DY, w: 1660 - GUTTER - 2 * HAIRLINE, h: 57 },
+  // Node 35:6027: 16 of top padding, a 32px control row, 8 under it. No rule
+  // beneath it any more — that hairline belongs to the board's row below.
+  topbar: { x: 260 + DX, y: 0 + DY, w: 1660 - GUTTER - 2 * HAIRLINE, h: 56 },
   chartCards: [
     // Node 0:5's own boxes. They are the board's too now: `GRID_GAP_PX` went
     // back to 24 and `ROW_UNIT_PX` to 48, so a ten-row card is 10*48-24 = 456
@@ -121,10 +134,11 @@ const FIGMA = {
     // divides evenly and the third card lands exactly on the 24px right inset,
     // so this is one of the few places the app is right and the export is a
     // rounding artifact. Expect the arithmetic, not the artifact.
-    //                        ↓ 284 + DX      ↓ 179 + DY   ↓ 4 cols of 111.5 + 3 gutters
-    { x: 285, y: 188, w: 518, h: 456 },
-    { x: 285 + 518 + 24, y: 188, w: 518, h: 456 },
-    { x: 285 + 2 * (518 + 24), y: 188, w: 518, h: 456 },
+    // y = 8 gutter + 1 border + 56 (bar) + 57 (the board's row) + 24 (its own
+    // padding) = 146. w = 4 cols of 111.5 plus 3 gutters of 24.
+    { x: 285, y: 146, w: 518, h: 456 },
+    { x: 285 + 518 + 24, y: 146, w: 518, h: 456 },
+    { x: 285 + 2 * (518 + 24), y: 146, w: 518, h: 456 },
   ],
   /**
    * HEIGHT IS DELIBERATELY NOT CHECKED on these. The Figma draws them at
@@ -134,12 +148,12 @@ const FIGMA = {
    * the row unit to hit 108.22 exactly would put every OTHER tile wrong.
    */
   statTiles: [
-    // 668 = 188 + 456 + 24: the chart row, plus the gutter it shares with the
-    // row below. Three of twelve columns at a 24 gutter is 382.5 now.
-    { x: 285, y: 668, w: 382.5 },
-    { x: 285 + 382.5 + 24, y: 668, w: 382.5 },
-    { x: 285 + 2 * (382.5 + 24), y: 668, w: 382.5 },
-    { x: 285 + 3 * (382.5 + 24), y: 668, w: 382.5 },
+    // 626 = 146 + 456 + 24: the chart row, plus the gutter it shares with the
+    // row below. Three of twelve columns at a 24 gutter is 382.5.
+    { x: 285, y: 626, w: 382.5 },
+    { x: 285 + 382.5 + 24, y: 626, w: 382.5 },
+    { x: 285 + 2 * (382.5 + 24), y: 626, w: 382.5 },
+    { x: 285 + 3 * (382.5 + 24), y: 626, w: 382.5 },
   ],
 };
 
@@ -168,13 +182,29 @@ const RAIL = {
    * So the box is on the gutter like every other row, exactly as node 58:5829
    * has it, and there is no departure left to record.
    */
-  // NO "search" ROW. Node 0:5 draws the field in the top bar at 480x40 and
-  // draws none in the rail; `nav-search.tsx` is where it lives now.
-  "switcher": { x: 16, y: 8, h: 36 },
-  "Main Menu": { x: 16, y: 68, h: 12 },
-  "Dashboard": { x: 16, y: 88, h: 32 },
-  "sub-nav 1st": { x: 48, y: 128, h: 32 },
-  "Activity": { x: 16, y: 232, h: 32 },
+  /**
+   * THE SEARCH ROW IS BACK, and every number under it moved with it.
+   *
+   * Node 0:5 drew the field in the top bar at 480x40 and none in the rail, so
+   * this table had no "search" and ran switcher 8 / Main Menu 68 / Dashboard
+   * 88. Nodes 35:5920–35:5939 put it back in the column and the whole rhythm
+   * is the frame's again: `Nav - Primary` is `padding: 24px 16px 0`, the
+   * switcher block is 36 tall with 24 under it, the field is 36, and the
+   * "Main Menu" group opens with another 24.
+   *
+   *   24  switcher      (36)    node 35:5922
+   *   84  search        (36)    node 35:5931  — 24 + 36 + 24
+   *  144  Main Menu     (12)    node 35:5940  — 84 + 36 + 24
+   *  164  Dashboard     (32)    node 35:5941  — 144 + 12 + 8
+   *  204  sub-nav 1st   (32)    node 35:5957  — 164 + 32 + 8
+   *  308  Activity      (32)    node 35:5966  — 204 + 96 + 8
+   */
+  "switcher": { x: 16, y: 24, h: 36 },
+  "search": { x: 16, y: 84, h: 36 },
+  "Main Menu": { x: 16, y: 144, h: 12 },
+  "Dashboard": { x: 16, y: 164, h: 32 },
+  "sub-nav 1st": { x: 48, y: 204, h: 32 },
+  "Activity": { x: 16, y: 308, h: 32 },
 };
 
 const browser = await chromium.launch();
@@ -227,8 +257,14 @@ const got = await page.evaluate(() => {
       };
     };
     const text = (tag, t) => [...aside.querySelectorAll(tag)].find((e) => (e.textContent || "").trim() === t);
-    const head = aside.querySelector("div.mt-2");
+    const head = aside.querySelector("div.mt-6");
     rail["switcher"] = rel(head?.firstElementChild ?? head);
+    /* THE FIELD, found by its input rather than by a class: the box around it
+       is a plain flex row whose classes are free to change, and the one thing
+       that cannot change without the feature going away is that it contains a
+       text input. `closest` walks back out to the bordered box the Figma
+       measures. */
+    rail["search"] = rel(aside.querySelector('input[aria-label="Search the navigation"]')?.parentElement ?? null);
     /**
      * THE CONTENT BOX, NOT THE BORDER BOX AND NOT A RANGE.
      *

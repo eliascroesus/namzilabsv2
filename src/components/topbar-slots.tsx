@@ -33,13 +33,42 @@ function Slot({ id, children }: { id: string; children: ReactNode }) {
 }
 
 /**
- * The page's name, in bar two. Node 0:5 draws "Overview" — the ACTIVE VIEW's
- * name, which is why the board passes the view rather than a route label: the
- * tab that is filled and the title above it say the same word, or the bar is
- * describing a page you are not on.
+ * The page's name AND the window it is showing, in the bar's one band.
+ *
+ * Node 35:6028 draws three children on an 8px gap — "Overview", a bare "-",
+ * and "Sat, 1 Sep - Sat, 1 Sep" — so this is a CLUSTER rather than a string,
+ * and the <h1> comes with it rather than being supplied by the bar. That is
+ * the right way round: the page owns its heading, and the bar owns the strip
+ * the heading sits in.
+ *
+ * THE NAME IS THE ACTIVE VIEW'S, not a route label — the tab that is filled
+ * and the title above it say the same word, or the bar is describing a page
+ * you are not on.
+ *
+ * `range` IS THE RESOLVED WINDOW IN DATES, NOT THE PRESET'S LABEL, and the
+ * Figma is explicit about it: the control to the right reads "Today" while
+ * this reads "Sat, 1 Sep - Sat, 1 Sep". They are not duplicates — one is the
+ * name of a choice and the other is what that choice currently means, which
+ * changes under a preset without the preset changing. Omitted, the dash goes
+ * with it rather than leaving a hanging separator.
  */
-export function TopBarTitle({ children }: { children: ReactNode }) {
-  return <Slot id="topbar-title">{children}</Slot>;
+export function TopBarTitle({ children, range }: { children: ReactNode; range?: string | null }) {
+  return (
+    <Slot id="topbar-title">
+      {/* `truncate` on the name and `shrink-0` on the dates: at a narrow panel
+          it is the view's name that should give way, because the window is
+          short, fixed-width and the thing the number on screen depends on. */}
+      <h1 className="truncate text-2xl text-topbar-foreground">{children}</h1>
+      {range ? (
+        <>
+          <span aria-hidden className="shrink-0 text-xs leading-4 text-topbar-muted">
+            -
+          </span>
+          <span className="shrink-0 text-xs leading-4 text-topbar-muted">{range}</span>
+        </>
+      ) : null}
+    </Slot>
+  );
 }
 
 /**

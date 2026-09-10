@@ -1,15 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
-import { ChevronDown, LayoutDashboard, Plug, Plus, Radio, Settings, UserPlus, Workflow } from "lucide-react";
+import { ChevronDown, LayoutDashboard, Plug, Plus, Radio, Search, Settings, UserPlus, Workflow } from "lucide-react";
 import { Fragment, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { viewStrip, type BoardView } from "@/lib/board/types";
 import { GROUP_COLOR_KEYS, groupBadge, groupInk } from "@/components/flow/node-accent";
+import { railSearchEntries } from "@/lib/rail-search";
+import { CHOICES } from "@/components/theme";
+import { useTheme } from "next-themes";
 
 /**
  * THE NAVIGATION COLUMN — 260px, always.
@@ -398,11 +401,51 @@ export function RailContent({
    * THE RAIL'S SEARCH — the field's text, and what it turns the column into.
    *
    * A NON-EMPTY QUERY REPLACES THE NAVIGATION with its matches. The alternative
-   * — a panel floating under the field — cannot work here without a portal:
-   * this column is `overflow-y-auto`, so an absolutely-positioned child is
-   * clipped at its foot. Filtering in place also happens to be what the owner
-   * asked for in the first place ("search like the different nav things").
+   * — a panel floating under the field — cannot work here without a portal, and
+   * for TWO reasons rather than the one this comment used to give: the <nav> is
+   * `overflow-y-auto`, and the <aside> around it is `overflow-hidden`. Either
+   * one alone clips an absolutely-positioned child; together they make a
+   * dropdown in this column impossible without escaping the DOM entirely.
+   * Filtering in place also happens to be what the owner asked for in the first
+   * place ("search like the different nav things").
+   *
+   * IT CAME BACK ON 10 SEP 2026, having spent a day in the top bar. Node
+   * 35:5931 draws a 228x36 white field with an #E1E1E1 rim in the rail and
+   * draws no search in the bar at all, which is the reverse of node 0:5.
    */
+  const [query, setQuery] = useState("");
+  const field = useRef<HTMLInputElement>(null);
+  const { setTheme } = useTheme();
+
+  /**
+   * ⌘K, WHICH CAME BACK WITH THE FIELD.
+   *
+   * `aria-keyshortcuts="Meta+K"` announced this binding for months before any
+   * code implemented it — an a11y claim the product could not honour — and it
+   * travelled to the top bar and back. It is bound on `window` and in the
+   * CAPTURE phase for two reasons: a listener on the FIELD can never fire,
+   * because the field is what the shortcut focuses; and the canvas and the
+   * modals stop propagation, so a bubbling listener is dead on the one screen
+   * where reaching for search is most likely.
+   */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "k" || !(e.metaKey || e.ctrlKey)) return;
+      e.preventDefault();
+      field.current?.focus();
+      field.current?.select();
+    };
+    window.addEventListener("keydown", onKey, { capture: true });
+    return () => window.removeEventListener("keydown", onKey, { capture: true });
+  }, []);
+  const q = query.trim().toLowerCase();
+  const results = q
+    ? railSearchEntries({
+        items: items.map(({ label, href }) => ({ label, href })),
+        views: ordered,
+        themes: CHOICES,
+      }).filter((e) => e.label.toLowerCase().includes(q))
+    : [];
 
 
 
@@ -558,7 +601,13 @@ export function RailContent({
             L and nothing needs to line up across it.
             Node 58:5828 measures the block at y=14 and node 58:5829 the
             switcher row at 40px, which is what this spells. */}
-        <div className="mt-2 flex h-9 shrink-0 items-center px-4">
+        {/* `mt-6` — 24px, which is the Figma's own top inset for this block
+            (node 35:5920 sets `Nav - Primary` to `padding: 24px 16px 0`, and
+            the switcher is that padding's first child). It was `mt-2`: correct
+            while the search lived in the top bar and this row was the only
+            thing above the nav, and 16px short once the field came back under
+            it, because every row below inherits the gap. */}
+        <div className="mt-6 flex h-9 shrink-0 items-center px-4">
           {workspace &&
             (account ? (
               <DropdownMenu>
@@ -692,6 +741,73 @@ export function RailContent({
              geometry`'s rail pass is what caught it. */
           className={cn("quiet-scroll flex min-h-0 flex-1 flex-col gap-2 overflow-x-hidden overflow-y-auto pt-6 pb-4", GUTTER)}
         >
+          {/* ── THE FIELD ────────────────────────────────────────────────
+              Node 35:5931/35:5932: 228x36, `--rail-control` fill, a
+              `--rail-border` rim, radius 8, a 32px box holding an 18px
+              magnifier, then the placeholder at 15/22.
+
+              `--rail-control` AND NOT `bg-white`: the Figma's #FFFFFF is the
+              LIGHT rail's step up from #F3F3F3, and the same field on the
+              near-black rail of `.mix`/`.dark` has to step up from #121214
+              instead. That is the whole reason the `--rail-*` family exists,
+              and spelling the hex here would give the two dark modes a white
+              field with white-on-white text — the exact bug `variant="white"`
+              shipped in the board's own header. */}
+          <div className="flex h-9 w-full shrink-0 items-center gap-2.5 rounded-control border border-rail-border bg-rail-control pr-3">
+            <span className={ICON_COL}>
+              <Search aria-hidden className="size-[18px] shrink-0 text-rail-muted" />
+            </span>
+            <input
+              ref={field}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => e.key === "Escape" && setQuery("")}
+              placeholder="Search"
+              aria-label="Search the navigation"
+              aria-keyshortcuts="Meta+K"
+              className="min-w-0 flex-1 bg-transparent text-sm text-rail-foreground outline-none placeholder:text-rail-muted"
+            />
+          </div>
+
+          {q ? (
+            /* ── THE MATCHES, IN PLACE OF THE COLUMN ──────────────────────
+               Not beside it and not under it: see the note on `query` above.
+               A destination is an <a> so the browser can still open it in a new
+               tab; setting the theme is a press, so it is a <button>. Making
+               both one element would cost the first its middle-click or give
+               the second an href that goes nowhere. */
+            <div role="listbox" aria-label="Search results" className="flex flex-col gap-2 pt-4">
+              {results.length === 0 ? (
+                <p className="px-2 py-1.5 text-xs text-rail-muted">No matches.</p>
+              ) : (
+                results.map((entry) =>
+                  entry.kind === "theme" ? (
+                    <Button
+                      key={entry.label}
+                      variant="ghost"
+                      onClick={() => {
+                        setTheme(entry.theme);
+                        setQuery("");
+                      }}
+                      className="h-8 w-full justify-start gap-2.5 rounded-control px-2 text-left text-sm font-normal text-rail-muted hover:bg-rail-control hover:text-rail-foreground"
+                    >
+                      {entry.label}
+                    </Button>
+                  ) : (
+                    <Link
+                      key={`${entry.kind}-${entry.label}-${entry.href}`}
+                      href={entry.href}
+                      onClick={() => setQuery("")}
+                      className="flex h-8 items-center gap-2.5 rounded-control px-2 text-sm text-rail-muted transition-colors duration-(--duration-fast) hover:bg-rail-control hover:text-rail-foreground"
+                    >
+                      {entry.label}
+                    </Link>
+                  ),
+                )
+              )}
+            </div>
+          ) : (
+          <>
               {/* THE CAPS LABEL IS BACK, ON THE FIGMA'S OWN TERMS THIS TIME.
                   It was removed because a heading reserved at 70px pushed
                   every row below it down while the pointer was still moving
@@ -735,7 +851,7 @@ export function RailContent({
                   sees and everybody feels. `pt-4` is the 24px node 58:5847
                   puts between the search and this line, minus the nav's own
                   8px gap. */}
-              <p className="text-xs font-normal leading-3 text-rail-faint">Main Menu</p>
+              <p className="pt-4 text-xs font-normal leading-3 text-rail-faint">Main Menu</p>
               {items
                 .map(({ label, href, icon: Icon }) => {
                   const active = pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
@@ -772,7 +888,48 @@ export function RailContent({
                     </Fragment>
                   );
                 })}
+          </>
+          )}
         </nav>
+
+        {/* ── THE ACCOUNT, AT THE FOOT OF THE COLUMN ─────────────────────
+            Node 35:6000/35:6001: a 64px row, `p-16`, `space-between`, holding a
+            32px round avatar on `--rail-control` inside a `--rail-border` rim,
+            and the settings glyph at the far end.
+
+            IT CAME DOWN FROM THE TOP BAR, where it sat beside a search field
+            and a gift. The 10 September frames draw no such band — the bar is
+            one 56px strip of title and app controls — so the avatar follows the
+            search into the column and the gift, which node 51:5756 put in the
+            bar and these frames do not draw at all, is gone rather than
+            relocated. A promo glyph with nowhere to live is not a thing to find
+            a home for.
+
+            `mt-auto` MOVED HERE from the block below, because this is the first
+            child of the foot now: the nav above is the flexible child and has
+            to keep its own scroll, so the foot is pinned by the space the nav
+            gives back rather than by the column's distribution. */}
+        <div className="mt-auto flex shrink-0 items-center justify-between p-4">
+          <Link
+            href="/dashboard/profile"
+            aria-label="Your profile"
+            className="flex size-8 shrink-0 items-center justify-center rounded-full border border-rail-border bg-rail-control text-xs font-semibold text-rail-foreground transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:border-rail-accent"
+          >
+            {account?.avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={account.avatarUrl} alt="" className="size-full rounded-full object-cover" />
+            ) : (
+              (account?.initials ?? "")
+            )}
+          </Link>
+          <Link
+            href="/dashboard/settings"
+            aria-label="Workspace settings"
+            className="flex size-8 items-center justify-center rounded-control text-rail-muted transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:bg-rail-control hover:text-rail-foreground"
+          >
+            <Settings aria-hidden className="size-[18px]" />
+          </Link>
+        </div>
 
         {/* THE FOOT — what you can START, then what is waiting for you.
             `mt-auto` rather than a `justify-between` on the column: the nav above
@@ -788,7 +945,7 @@ export function RailContent({
         {/* `gap-4 pb-6` — the export's own 16px between the foot's two acts and
             24px under them. It was 8 and 16, which stacked two filled buttons
             close enough to read as one two-line control. */}
-        <div className={cn("mt-auto flex shrink-0 flex-col gap-4 pb-6", GUTTER)}>
+        <div className={cn("flex shrink-0 flex-col gap-4 pb-6", GUTTER)}>
           {/* THE "+" IS THE COLUMN'S ONE FILLED OBJECT, AND THAT IS WHY IT CAN
               BE THE ONLY BRAND FILL IN THE RAIL.
               It has been a yellow slab, then a white chip with a hairline, and
@@ -930,7 +1087,15 @@ export function Sidebar({
   account?: { initials: string; avatarUrl?: string | null; panel: ReactNode };
 }) {
   return (
-    <aside className="relative z-20 hidden h-full w-65 shrink-0 flex-col overflow-hidden border-r border-rail-border bg-rail md:flex">
+    /* NO `border-r`, AND THAT IS THE 10 SEP 2026 ASK — "remove the stroke
+       line on the left navbar that is to the right, it shouldn't exist".
+       The Figma agrees and always did: node 35:5918 is a bare
+       `background: #F3F3F3` with no border of any kind, and the frame around
+       it draws its own hairline 8px away. Two rules a hair apart is the
+       double-seam this kit argues against everywhere else — and on `.mix` and
+       `.dark`, where the rail and the page are the same near-black, the rule
+       was the ONLY thing being drawn there. */
+    <aside className="relative z-20 hidden h-full w-65 shrink-0 flex-col overflow-hidden bg-rail md:flex">
       <RailContent hide={hide} views={views} workspace={workspace} account={account} />
     </aside>
   );

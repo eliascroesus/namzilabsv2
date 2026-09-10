@@ -148,10 +148,17 @@ describe("the drawer", () => {
 });
 
 describe("the top bar below md", () => {
-  it("takes a menu slot and draws it before the mark", () => {
+  it("takes a menu slot and draws it at the reading edge", () => {
+    /**
+     * IT WAS "before the mark", and there is no mark: the wordmark went with
+     * the band that carried it on 10 Sep 2026. What the assertion was really
+     * protecting is that the drawer comes FIRST — below `md` the rail is not
+     * rendered at all, so this button is the phone's entire navigation and
+     * belongs at the edge you read from, not after the app's controls.
+     */
     const header = bar.slice(bar.indexOf("<header"));
     expect(header.indexOf("{menu}")).toBeGreaterThan(-1);
-    expect(header.indexOf("{menu}")).toBeLessThan(header.indexOf("Namzilabs"));
+    expect(header.indexOf("{menu}")).toBeLessThan(header.indexOf('id="topbar-title"'));
     expect(code(frame)).toMatch(/<TopBar[\s\S]{0,240}menu=\{<MobileDrawer/);
   });
 
@@ -182,11 +189,18 @@ describe("the top bar below md", () => {
      * would make it read as the only pressable thing among three.
      */
     const stripped = code(bar);
-    // `--topbar-*` since the bar became a permanently dark band: `bg-avatar`
-    // and `text-foreground` are content roles that invert with the theme, and
-    // this surface does not.
-    expect(stripped, "the avatar keeps its disc").toContain(
-      "rounded-full bg-topbar-accent text-xs font-semibold text-topbar-accent-foreground",
+    /**
+     * THE AVATAR IS THE RAIL'S NOW, so the disc is asserted where it is drawn.
+     * Node 35:6001 puts it at the foot of the column — a 32px circle on the
+     * rail's own control fill inside a `--rail-border` rim — and the bar keeps
+     * none of it. The role family moves with the surface, which is the whole
+     * reason `--rail-*` and `--topbar-*` are two families: a disc solved for a
+     * white bar is invisible on a near-black column.
+     */
+    expect(stripped, "the bar keeps no avatar").not.toContain("bg-topbar-accent");
+    const rail = code(read("src/components/sidebar.tsx"));
+    expect(rail, "the avatar keeps its disc, in the rail").toContain(
+      "rounded-full border border-rail-border bg-rail-control",
     );
     expect(stripped, "the bell is bare, like the moon and the gift beside it").not.toContain(
       "relative rounded-full border border-input bg-avatar",
