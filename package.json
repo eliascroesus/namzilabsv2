@@ -19,7 +19,9 @@
     "shot": "node scripts/screenshot.mjs",
     "board:drag": "node scripts/board-drag-check.mjs",
     "canvas:check": "node scripts/canvas-check.mjs",
-    "geometry": "node scripts/geometry-check.mjs"
+    "geometry": "node scripts/geometry-check.mjs",
+    "frame": "node scripts/frame-check.mjs",
+    "shot:modes": "node scripts/shot-modes.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.0.0",

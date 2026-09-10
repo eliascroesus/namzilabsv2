@@ -237,20 +237,35 @@
    * LIGHTER `300` and presses to `500`. (Blue hovered to `500` and pressed to
    * `700` because its ramp ran the other way round the fill.)
    */
-  /* THE 8 SEPTEMBER FIGMA SUPPLIES #B6FF56 AND NOTHING ELSE. Every other step
-     here is solved from it: the pale end by lightening toward white for washes
-     that do not exist yet, the deep end by darkening until it clears 4.5:1 on
-     white, which is the one bar the Figma's own value cannot meet. */
-  --color-brand-50: #f4ffe4;
-  --color-brand-100: #e9ffc9;
-  --color-brand-200: #dbffa6;
-  --color-brand-300: #c9ff7d; /* hover of the fill — LIGHTER, because on near-black raised means lighter */
-  --color-brand-400: #b6ff56; /* THE BRAND — the fill, the dark stroke (`--marker` in `.dark`), and the default chart series. 15.53:1 on #121214, 11.59:1 under #2C2C2C ink */
-  --color-brand-500: #a2e844; /* pressed */
-  --color-brand-600: #8acc2e; /* reserved */
-  --color-brand-700: #6fa61c; /* reserved */
-  --color-brand-800: #4f7a00; /* THE LIGHT STROKE (`--marker` in `:root`) — 5.10:1 on white, where #B6FF56 is 1.20:1 */
-  --color-brand-900: #3d5e00; /* reserved — the light theme's hover-of-a-stroke, 7.50:1 on white */
+  /* THE 10 SEPTEMBER FIGMA SUPPLIES #568CFF AND NOTHING ELSE — nodes 35:5924
+     (the workspace chip), 35:6017 (New) and 35:7208 (the chart's series dot)
+     all draw that one value. Every other step here is solved from it exactly
+     as the lime's were: the pale end by lightening toward white, the deep end
+     by darkening until it clears 4.5:1 on white.
+   *
+   * THE RAMP IS BLUE AND THE LIME IS GONE. That reverses the 8 September
+   * re-theme and it is the owner's call against an unambiguous frame, not a
+   * drift — recorded here rather than in a commit message because the old
+   * value is quoted by name in a dozen comments below.
+   *
+   * ONE CONSEQUENCE IS WORTH ITS OWN SENTENCE, because it retires a rule this
+   * file used to need. #B6FF56 measures 1.20:1 on white, so the light theme
+   * could not draw the brand at all and `--marker` had to carry a solved-down
+   * substitute (#4F7A00) that shared nothing with it but a hue. #568CFF is
+   * 3.18:1 on white — past the 3:1 a LINE or an icon owes — so the same value
+   * now draws in both themes and `--marker` stops being a fork. `800` stays
+   * cut and named for the one job that still needs 4.5:1 on white: brand
+   * coloured TEXT, which a 3.18:1 stroke may not be. */
+  --color-brand-50: #eef4ff;
+  --color-brand-100: #dce8ff;
+  --color-brand-200: #c0d5ff;
+  --color-brand-300: #8fb2ff; /* hover of the fill — LIGHTER, because on near-black raised means lighter */
+  --color-brand-400: #568cff; /* THE BRAND — the fill, the stroke in BOTH themes, and the default chart series. 6.29:1 on #121214, 3.18:1 on white (a line, not text), 5.18:1 under #1F1F1F ink */
+  --color-brand-500: #3f73e6; /* pressed */
+  --color-brand-600: #3767d6; /* reserved */
+  --color-brand-700: #3462cf; /* reserved */
+  --color-brand-800: #2f5fd8; /* BRAND-COLOURED TEXT ON WHITE — 5.60:1, where #568CFF is 3.18:1 and may only draw lines */
+  --color-brand-900: #24489f; /* reserved — the light theme's hover-of-a-stroke, 8.36:1 on white */
 
   /* --- The decorative set -------------------------------------------------
    * The kit page draws its chips and pins in a fixed set beside the neutrals.
@@ -517,16 +532,21 @@
   --radius-card: var(--radius-md);
   --radius-surface: var(--radius-md);
 
-  /* AND THE FRAME'S CORNER GOES AGAIN, BY ITS OWN ARGUMENT.
+  /* AND THE FRAME'S CORNER IS BACK, BY THE SAME ARGUMENT, FOR THE THIRD TIME.
      A radius reveals whatever is behind it. It went to 0 when the rail, the bar
      and the page became one #1b191a surface; it came back at 8px on 4 September
-     because a third surface appeared for it to cut into. The 8 September Figma
-     removes that surface — the panel, the chrome and the page are all #121214 —
-     so the cut reveals #121214 against #121214 and draws nothing at all. This
-     is the same sentence that reinstated it, read in the other direction.
-     The token stays defined so `rounded-frame` remains a legal spelling for
-     whatever the shell decides next. */
-  --radius-frame: 0;
+     because a third surface appeared for it to cut into; it went to 0 again on
+     8 September when that surface was removed. The 10 September Figma
+     (35:6024) puts a REAL gutter back — 8px of page on the top, right and
+     bottom of the content column — and draws an 8px corner with a hairline on
+     the panel inside it. So the cut now reveals `--background` against
+     `--panel`, which is a step in all three modes, and the corner is doing
+     visible work again rather than being a legal spelling.
+
+     THE GUTTER IS `--spacing-frame`, BESIDE IT (so `p-frame` is the class), so the two cannot drift: a
+     radius on a panel with no inset is a corner cut into its own neighbour. */
+  --radius-frame: 0.5rem;
+  --spacing-frame: 0.5rem;
 
   /* --- Chrome band --------------------------------------------------------
    * How far the builder's floating panels stay clear of the canvas's top edge.
@@ -701,7 +721,7 @@
  */
 :root {
   /* ---- Surface ----------------------------------------------------------- */
-  --background: #f7f7f7; /* THE PAGE — sampled from node 58:5824, so a white card reads as one */
+  --background: #f3f3f3; /* THE PAGE — and, since 10 September, the 8px GUTTER around the panel. Node 35:6024 draws that band #F3F3F3, one count below the #F7F7F7 it used to be, because it now has a panel sitting ON it rather than being the panel. */
   --foreground: #121214; /* 18.71:1 on a card — node 58:6186 sets the numeral here, not at pure black */
   /* THE ONE INK THAT OUTRANKS THE BODY — a page title, the workspace name, and
      the active tab. In the dark theme it is now the SAME value as the body
@@ -712,35 +732,40 @@
      what carries that. */
   --heading: #313131;
 
-  /* ---- THE CHROME, WHICH DOES NOT CHANGE WITH THE THEME -----------------
-   * The sidebar and the top bar are #121214 in BOTH Figma frames — 49:5268
-   * (dark) and 58:5824 (light) draw them byte-identical, and only the content
-   * area and its cards go light. Sampled from both PNGs, not inferred.
+  /* ---- THE RAIL, WHICH IS NOW THE ONE THING THE MODES DISAGREE ABOUT ----
+   * IT NO LONGER "DOES NOT CHANGE WITH THE THEME", AND THAT SENTENCE IS WHAT
+   * THIS BLOCK USED TO BE CALLED. The claim was true of the frames it was
+   * written against — 49:5268 and 58:5824 draw the rail #121214 in both — and
+   * the 10 September Figma draws it THREE ways in three frames: #F3F3F3 in
+   * 35:5917, #121214 in 35:6331 over light content, #121214 in 35:6745 over
+   * dark. The middle one is the whole reason `.mix` exists.
    *
-   * That is why these are seven roles rather than one. A permanently dark
-   * surface needs its own INK, its own hairline and its own control fill: on
-   * light, `--foreground` is near-black and `--border` is #E1E1E1, and either
-   * of them on this band would be invisible. The chrome cannot borrow the
-   * content's vocabulary because it is not on the content's ground.
+   * SO THE SEVEN ROLES EARN THEIR KEEP TWICE OVER NOW. They were justified by
+   * a band that could not borrow the content's vocabulary because it was
+   * permanently dark; they are justified now by a band that is the ONLY thing
+   * separating `.mix` from `:root`. Because every rail value goes through a
+   * role, that entire mode is fourteen lines of overrides and nothing else —
+   * see the `.mix` block at the foot of this file.
    *
-   * They are declared IDENTICALLY in both blocks rather than once at `:root`,
-   * so `design-swatches.test.ts`'s "every role in both themes" rule still has
-   * something to check, and so flipping one theme's chrome later is an edit in
+   * They stay declared IN FULL in each block rather than inherited, so
+   * `design-swatches.test.ts`'s "every role in every mode" rule still has
+   * something to check, and so re-flipping one mode's rail later is an edit in
    * the place you would look for it.
    */
-  --rail: #121214;
-  --rail-foreground: #ffffff; /* 18.71:1 */
-  --rail-muted: #7e7e7e; /* 4.61:1 — the rail's rest labels */
-  --rail-faint: #6e6e6e; /* 3.67:1 — the "Main Menu" caps label ONLY, never a sentence */
-  --rail-border: #343434; /* the rail's right edge */
-  --rail-control: #202020; /* the active nav row, the invite card */
-  --rail-accent: #3a3a3a; /* the avatar disc, and a rail hover */
-  /* THE BRAND, ON THE RAIL. `--marker` cannot be used here: it is the lime on
-     dark and a solved-down #4F7A00 on LIGHT, and this column is dark in both —
-     so on light `text-marker` would paint dark olive on near-black. The rail
-     always gets the bright value, because it always has the dark ground that
-     value was solved against. */
-  --rail-brand: var(--color-brand-400); /* 15.53:1 on #121214 */
+  --rail: #f3f3f3; /* node 35:5918 — the SAME value as the page, so the gutter's left edge draws nothing and the panel's corner is the only thing cutting into the rail */
+  --rail-foreground: #2e2e2e; /* 12.24:1 on #F3F3F3 — node 35:5928 (the workspace name) and 35:5950 (the active row) */
+  --rail-muted: #6b6b6b; /* 4.80:1 — the rail's rest labels. The Figma draws #8E8E8E, which is 2.95:1 here: fine for the caps label below, not for a row you are meant to read and click. */
+  --rail-faint: #7e7e7e; /* 3.66:1 — the "Main Menu" caps label ONLY, never a sentence. Deliberately the mirror of the dark rail's 3.67:1. */
+  --rail-border: #e1e1e1; /* the rail's right edge — the content hairline, because this column is on the content's ground now */
+  --rail-control: #ffffff; /* the active nav row, the search field, the invite card — node 35:5941 draws them WHITE, a step UP where dark's #202020 is a step up from #121214 */
+  --rail-accent: #e9e9e9; /* a rail hover — a step DOWN from the rail, mirroring dark's step UP */
+  /* THE BRAND, ON THE RAIL, AND THIS ROLE STILL EARNS ITS NAME.
+     It existed because the rail was dark in BOTH themes and so could not
+     borrow `--marker`. The rail is light here and dark under `.mix` and
+     `.dark`, which is the same problem with the sign flipped: #568CFF measures
+     2.87:1 on #F3F3F3 — under the 3:1 a glyph owes — so light takes the
+     solved-down step and the two dark modes take the bright one. */
+  --rail-brand: var(--color-brand-800); /* 5.05:1 on #F3F3F3 */
 
   /* THE TOP BAR — STILL #121214 HERE, AND THAT IS THE POINT OF THIS COMMIT.
      Node 0:5 draws this band WHITE on light, which is the change the branch
@@ -758,14 +783,20 @@
   --topbar-active: #dedede; /* the selected view tab, a step darker than the hover */
 
   /* THE COMPARISON SERIES — the second line under a chart card, and the only
-     hue in this theme that is not the lime, a state colour or a neutral.
-     Node 0:5 draws it blue. The 8 September re-theme deliberately took blue
-     OUT of this product, so this is a knowing exception rather than drift: a
-     chart comparing two periods needs two colours a reader can tell apart, and
-     a second green beside #B6FF56 is not one. It is deliberately QUIETER than
-     the brand — the current period is the subject and the previous one is the
-     reference behind it. One token, so retuning it is one edit. */
-  --series-compare: #5aa9e6; /* 3.05:1 on white — a line, not text */
+     line that is not the brand, a state colour or a neutral.
+   *
+   * THE JOB CHANGED WHEN THE BRAND DID, and the old value stopped doing it.
+   * This was a BLUE because the series beside it was lime: two hues a reader
+   * can tell apart. Both are blue now, so hue is no longer available and the
+   * separation has to come from the other channel — LIGHTNESS, which is also
+   * the one channel every kind of colour-blind reader keeps. So this is a
+   * desaturated, lighter slate of the same family rather than a second
+   * saturated hue: unmistakably behind the subject, never competing with it.
+   *
+   * Node 35:7212 draws it rgba(10,151,213,0.5), which flattens to #84CBEA on
+   * white and measures 1.79:1 — an absent line. This is the same READ at a
+   * legal weight. One token, so retuning it is one edit. */
+  --series-compare: #7a90b8; /* 3.23:1 on white — a line, not text */
 
   /* THE CARD — white, and it no longer borrows the chrome, because the chrome
      is dark here now. Node 58:6173 draws it `bg-white` with an #E1E1E1 rim. */
@@ -776,10 +807,16 @@
   --popover: var(--card);
   --popover-foreground: var(--card-foreground);
 
-  /* THE PANEL — the content area beside the rail and under the bar. The page's
-     own colour: #F7F7F7, sampled from node 58:5824. The card's white is what
-     steps away from it, and the chrome is a different material entirely. */
-  --panel: var(--background);
+  /* THE PANEL — the content area beside the rail and under the bar, and now a
+     REAL surface rather than a pointer at the page.
+   *
+   * It was `var(--background)` for as long as the panel ran edge to edge:
+   * naming a second token for a value that could never be seen beside its own
+   * source would have been a step the eye could not check. Node 35:6024 insets
+   * it by 8px and rings it with a hairline, so page and panel are now adjacent
+   * on every edge and MUST differ or the gutter draws nothing. #FAFAFA is the
+   * board's own ground from node 35:6124, one count ABOVE the #F3F3F3 page. */
+  --panel: #fafafa;
 
   /* THE CONTROL SURFACE — a step DOWN from the white card it sits on, which is
      the MIRROR of the dark theme's step UP rather than a copy of it. See the
@@ -789,8 +826,20 @@
 
   /* ---- Brand ------------------------------------------------------------- */
   --primary: var(--color-brand-400); /* the fill does not change with the theme */
-  --primary-foreground: #2c2c2c; /* NEAR-BLACK, and dark in both themes: white on lime is 1.20:1 */
-  --marker: var(--color-brand-800); /* THE LIGHT STROKE — 5.10:1 on white, where the brand itself is 1.20:1 */
+  /* NEAR-BLACK, AND DARK IN BOTH THEMES — node 35:6023 draws the New button's
+     label at #2E2E2E on the blue, not white, and white on #568CFF is 3.18:1
+     and cannot carry a 13px label at any weight. #1F1F1F rather than the
+     Figma's own #2E2E2E: that value measures 4.27:1 on this fill, a hair under
+     the 4.5:1 a button's ink owes, and one count deeper takes it to 5.18:1
+     with nothing visibly different about it. */
+  --primary-foreground: #1f1f1f; /* 5.18:1 on #568CFF */
+  /* THE STROKE, AND THE FORK THAT JUST RETIRED. This was `brand-800` because
+     #B6FF56 is 1.20:1 on white and light could not draw the brand at all.
+     #568CFF is 3.18:1 — past the bar a LINE or a glyph owes — so light and
+     dark draw the same value here for the first time, which is what node
+     35:7208 does: one blue dot in both frames. Brand-coloured TEXT still owes
+     4.5:1 and still takes `brand-800`; nothing in the kit spells that yet. */
+  --marker: var(--color-brand-400); /* 3.18:1 on white — a line, not text */
   /* THE FILL'S HOVER — walks DOWN on light: brand-700, the same step as the
      press below it. The spec sets hover and press to that one shared step on
      light rather than giving hover a lighter rung of its own — 5.22:1
@@ -799,11 +848,11 @@
   /* THE PRESSED STEP — brand-700 in BOTH themes, the one step of the ramp
      that does not flip direction with the surface. */
   --primary-active: var(--color-brand-500);
-  --brand-soft: rgb(182 255 86 / 0.1);
+  --brand-soft: rgb(86 140 255 / 0.1);
   /* 30%, not the dark theme's 25%: the same alpha over white is a smaller edge
      than it is over the near-black surfaces, and a wash with no ring is not a
      badge. */
-  --brand-soft-line: rgb(182 255 86 / 0.3);
+  --brand-soft-line: rgb(86 140 255 / 0.3);
 
   /* ---- Neutral roles ----------------------------------------------------- */
   /* Both white with a `--input` outline — the Figma's grey buttons are white
@@ -918,12 +967,10 @@
   --rail-border: #343434; /* the rail's right edge */
   --rail-control: #202020; /* the active nav row, the invite card */
   --rail-accent: #3a3a3a; /* the avatar disc, and a rail hover */
-  /* THE BRAND, ON THE RAIL. `--marker` cannot be used here: it is the lime on
-     dark and a solved-down #4F7A00 on LIGHT, and this column is dark in both —
-     so on light `text-marker` would paint dark olive on near-black. The rail
-     always gets the bright value, because it always has the dark ground that
-     value was solved against. */
-  --rail-brand: var(--color-brand-400); /* 15.53:1 on #121214 */
+  /* THE BRAND, ON THE RAIL — the BRIGHT step, because this rail is near-black.
+     See `:root` for why the role exists at all now that the two grounds
+     disagree; `.mix` repeats this value for the same reason. */
+  --rail-brand: var(--color-brand-400); /* 6.29:1 on #121214 */
 
   /* THE TOP BAR — STILL #121214 HERE, AND THAT IS THE POINT OF THIS COMMIT.
      Node 0:5 draws this band WHITE on light, which is the change the branch
@@ -941,14 +988,20 @@
   --topbar-active: #3a3a3a; /* the selected view tab */
 
   /* THE COMPARISON SERIES — the second line under a chart card, and the only
-     hue in this theme that is not the lime, a state colour or a neutral.
-     Node 0:5 draws it blue. The 8 September re-theme deliberately took blue
-     OUT of this product, so this is a knowing exception rather than drift: a
-     chart comparing two periods needs two colours a reader can tell apart, and
-     a second green beside #B6FF56 is not one. It is deliberately QUIETER than
-     the brand — the current period is the subject and the previous one is the
-     reference behind it. One token, so retuning it is one edit. */
-  --series-compare: #7cc4f5; /* lifted for the #191919 card */
+     line that is not the brand, a state colour or a neutral.
+   *
+   * THE JOB CHANGED WHEN THE BRAND DID, and the old value stopped doing it.
+   * This was a BLUE because the series beside it was lime: two hues a reader
+   * can tell apart. Both are blue now, so hue is no longer available and the
+   * separation has to come from the other channel — LIGHTNESS, which is also
+   * the one channel every kind of colour-blind reader keeps. So this is a
+   * desaturated, lighter slate of the same family rather than a second
+   * saturated hue: unmistakably behind the subject, never competing with it.
+   *
+   * Node 35:7212 draws it rgba(10,151,213,0.5), which flattens to #84CBEA on
+   * white and measures 1.79:1 — an absent line. This is the same READ at a
+   * legal weight. One token, so retuning it is one edit. */
+  --series-compare: #7f93b5; /* 5.34:1 on the #191919 card — lifted, as every ink in this theme is */
 
   /* THE CARD NO LONGER SHARES THE CHROME. It is the one surface that steps
      away — #191919, at 1.06:1 on the page — which is the entire reason the
@@ -984,7 +1037,7 @@
      is which end of the ramp supplies the ink, because white on this fill is
      1.20:1 and cannot be read at any size. */
   --primary: var(--color-brand-400);
-  --primary-foreground: #2c2c2c;
+  --primary-foreground: #1f1f1f; /* see `:root` — the ink belongs to one object, not to a theme */
 
   /* THE STROKE. Every line, ring and coloured glyph: the focus ring, links,
      the active tab's rule, a selected edge. 6.65:1 on the ground, 6.59:1 on
@@ -1001,8 +1054,8 @@
   /* The brand as a WASH — the "Free" and "Developer" pills, a selected row, a
      soft banner. Alpha rather than a mixed step so it sits correctly on any of
      the dark surfaces without a second token. */
-  --brand-soft: rgb(182 255 86 / 0.1);
-  --brand-soft-line: rgb(182 255 86 / 0.25);
+  --brand-soft: rgb(86 140 255 / 0.1);
+  --brand-soft-line: rgb(86 140 255 / 0.25);
 
   /* ---- Neutral roles ----------------------------------------------------- */
   --secondary: var(--color-neutral-800); /* #333333 — grey buttons */
@@ -1157,6 +1210,48 @@
 }
 
 /**
+ * `.mix` — THE THIRD MODE, AND FOURTEEN LINES LONG ON PURPOSE.
+ *
+ * The 10 September Figma draws the screen three times: 35:5917 with a light
+ * rail over light content, 35:6745 dark throughout, and 35:6331 with the DARK
+ * rail over LIGHT content. That third frame is this block.
+ *
+ * IT IS NOT A NEW THEME, IT IS `:root` WITH ONE MATERIAL SWAPPED. Everything
+ * inside the panel — page, card, bar, hairline, ink, every state colour — is
+ * the light theme's and is inherited from `:root` rather than restated. What
+ * changes is the rail, and only the rail, which is exactly the shape the
+ * `--rail-*` family was cut for: seven roles so that a band on its own ground
+ * can be re-grounded without touching the content's vocabulary.
+ *
+ * SO THE COST OF THE MODE IS THE LIST BELOW AND NOTHING ELSE. If this block
+ * ever needs a fifteenth line, that is the signal a rail value has been
+ * hard-coded somewhere instead of going through a role — see `check:ui`.
+ *
+ * WHY IT IS WORTH HAVING AT ALL. This was the light theme for two days, and it
+ * is the arrangement Linear, Height and Vercel's dashboard all ship: a dark
+ * column holds navigation still while the working surface stays bright. Some
+ * people read it as focus and some read it as noise, which is a preference
+ * rather than a defect, and a preference is what a mode is for.
+ *
+ * IT IS NOT `.dark`, AND TAILWIND AGREES. The `dark` variant is wired to
+ * `&:where(.dark, .dark *)` at the top of this file, so no `dark:` utility
+ * fires here — correct, because everything a `dark:` utility would be styling
+ * is on the light ground. The rail does not use them: it reads `--rail-*`.
+ */
+.mix {
+  --rail: #121214;
+  --rail-foreground: #ffffff; /* 18.71:1 */
+  --rail-muted: #7e7e7e; /* 4.61:1 — the rail's rest labels */
+  --rail-faint: #6e6e6e; /* 3.67:1 — the "Main Menu" caps label ONLY, never a sentence */
+  --rail-border: #343434; /* the rail's right edge */
+  --rail-control: #202020; /* the active nav row, the invite card */
+  --rail-accent: #3a3a3a; /* the avatar disc, and a rail hover */
+  /* THE BRIGHT step, as in `.dark` — this rail has the near-black ground that
+     value was solved against, where `:root`'s light rail does not. */
+  --rail-brand: var(--color-brand-400); /* 6.29:1 on #121214 */
+}
+
+/**
  * THE BRIDGE.
  *
  * A role declared in `:root` is a custom property and nothing more — only an
@@ -1271,13 +1366,24 @@
        `--success`: the colour of the freshness dot, not of the product.
        Nothing caught it because a tap highlight does not render on a desktop
        browser, so no screenshot ever taken of this app could show it.
-       #00D492 itself is alive and correct elsewhere — it is `--success`. */
-    -webkit-tap-highlight-color: rgb(182 255 86 / 0.12);
+       #00D492 itself is alive and correct elsewhere — it is `--success`.
+       RE-POINTED AGAIN at the 10 September blue, for the same reason: a
+       literal here cannot follow `--color-brand-400`, so it has to be edited
+       when the ramp moves, and the last time it was not. */
+    -webkit-tap-highlight-color: rgb(86 140 255 / 0.12);
   }
 }
 
 html.dark {
   color-scheme: dark;
+}
+
+/* `.mix` IS A LIGHT SCHEME AND MUST SAY SO. The rail is near-black, but a
+   scrollbar, a native <select> popup and a date widget all belong to the
+   CONTENT, which is light here. Leaving this to `prefers-color-scheme` was the
+   bug the block above exists to prevent, one mode over. */
+html.mix {
+  color-scheme: light;
 }
 
 /**

@@ -5,8 +5,13 @@ import { describe, expect, it } from "vitest";
 /**
  * PINS THE PROSE THE SAME WAY design-swatches.test.ts PINS THE SWATCHES.
  *
- * Replaces `retheme-blue-docs.test.ts`, which did this job for the 4 September
- * blue re-theme and passed on claims that are now false in every particular.
+ * THIS FILE HAS NOW HELD BOTH NAMES, WHICH IS ITSELF THE LESSON. It was
+ * `retheme-blue-docs.test.ts` for the 4 September blue, became
+ * `retheme-lime-docs.test.ts` on 8 September, and is back under its first name
+ * for the 10 September blue (`#568CFF`, nodes 35:5917 / 35:6331 / 35:6745).
+ * Each time, the previous version passed on claims that had become false in
+ * every particular — which is exactly what it is for: the prose does not
+ * fail to compile.
  *
  * BRAND_KIT.md, DESIGN.md and /design have no compiler checking their prose
  * against the tokens they describe — which is how the kit page once showed
@@ -36,15 +41,27 @@ function frontMatter(): string {
 }
 
 describe("DESIGN.md's front matter states the theme in force", () => {
-  it("names the lime and its near-black ink as the accent", () => {
+  it("names the blue and its near-black ink as the accent", () => {
     const fm = frontMatter();
-    expect(fm).toMatch(/#B6FF56/i);
-    expect(fm).toMatch(/#2C2C2C/i);
+    expect(fm).toMatch(/#568CFF/i);
+    expect(fm).toMatch(/#1F1F1F/i);
   });
 
-  it("carries no blue brand in the values it declares", () => {
-    // History may name the blue; the declaration may not.
-    expect(frontMatter()).not.toMatch(/#007BFF|#0070E8|#3D9BFF/i);
+  it("carries no retired brand in the values it declares", () => {
+    // History may name the lime and the old blues — §2 does, at length, and
+    // the tables measuring why the lime needed two values are the most useful
+    // paragraphs in the file. The DECLARATION may not.
+    expect(frontMatter()).not.toMatch(/#B6FF56|#4F7A00|#007BFF|#0070E8|#3D9BFF/i);
+  });
+
+  it("declares the three modes, because there are three now", () => {
+    // `mix` is reachable only by choosing it; a front matter that still says
+    // "dark + light" is how a mode ships that nobody knows exists.
+    expect(frontMatter()).toMatch(/\bmix\b/i);
+  });
+
+  it("declares the frame's inset, since the radius alone does not draw it", () => {
+    expect(frontMatter()).toMatch(/8px from the page|inset 8px/i);
   });
 
   it("declares one ground and one card, not three surfaces", () => {
@@ -61,21 +78,40 @@ describe("DESIGN.md's front matter states the theme in force", () => {
   });
 });
 
-describe("BRAND_KIT.md describes the lime theme", () => {
+describe("BRAND_KIT.md describes the blue theme", () => {
   it("states ONE surface in its principles, not three", () => {
     const doc = brandKit();
     expect(doc).toMatch(/#121214/i);
     expect(doc).toMatch(/#191919/i);
   });
 
-  it("names the lime brand and the near-black ink it carries", () => {
+  it("names the blue brand and the near-black ink it carries", () => {
     const doc = brandKit();
-    expect(doc).toMatch(/#B6FF56/i);
-    expect(doc).toMatch(/#2C2C2C/i);
+    expect(doc).toMatch(/#568CFF/i);
+    expect(doc).toMatch(/#1F1F1F/i);
   });
 
-  it("does not still call the brand blue", () => {
-    expect(brandKit()).not.toMatch(/one blue|the blue brand|blue doing/i);
+  it("gives the ramp's every rung the value the stylesheet actually holds", () => {
+    // THE FAILURE THIS CATCHES IS A HALF-DONE RE-THEME: the table gets the
+    // headline rung and keeps nine stale ones underneath it, which is how the
+    // kit page once showed ultramarine tiles captioned with indigo hexes.
+    // Read from globals.css so the doc cannot be right about a value the
+    // stylesheet no longer has.
+    const css = read("src/app/globals.css");
+    const doc = brandKit();
+    const rungs = [...css.matchAll(/--color-brand-(\d+):\s*(#[0-9a-f]{6})/gi)];
+    expect(rungs.length).toBe(10);
+    for (const [, step, hex] of rungs) {
+      expect(doc, `BRAND_KIT is missing brand-${step} (${hex})`).toMatch(new RegExp(hex, "i"));
+    }
+  });
+
+  it("no longer presents the lime's fork as the arrangement in force", () => {
+    // The lime needed `--marker` to be a DIFFERENT rung on light. The blue
+    // does not, and that retirement is the main thing the re-theme bought —
+    // so a table still promising a solved-down stroke is the false claim most
+    // likely to survive a skim.
+    expect(brandKit()).not.toMatch(/one value on dark, a solved-down stroke on light/i);
   });
 
   it("records BOTH contrast substitutions with the numbers that condemn them", () => {

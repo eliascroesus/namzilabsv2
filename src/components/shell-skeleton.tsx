@@ -41,21 +41,27 @@ export function ShellSkeleton({
           — see `Sidebar`. A ghost the real chrome will not replace is 260px of
           content jumping left when the route lands. */}
       <div className="hidden w-65 shrink-0 border-r border-rail-border bg-rail md:block" />
-      <div className="flex min-w-0 flex-1 flex-col">
-        {/* THE BAR'S GHOSTS — TWO NOW, 57 and 49, because the real chrome is
-            two bands. One 65px ghost under a 106px chrome is 41px of content
-            jumping up the moment the route lands, which is the whole failure
-            this mirror exists to prevent. Empty: a shimmering placeholder under
-            controls that never move is noise. */}
-        <div className="h-[57px] shrink-0 border-b border-topbar-border bg-topbar" />
-        <div className="h-[49px] shrink-0 border-b border-topbar-border bg-topbar" />
-        {/* THE PANEL'S GHOST — its own surface (`--panel`) and the same
-            top-RIGHT corner the real content column carries under the bar. */}
-        <div className="min-h-0 flex-1 overflow-y-auto md:rounded-tr-frame bg-panel">
-          {/* Not <main>: PageContainer renders the page's one main landmark. */}
-          <div className={`mx-auto w-full p-6 ${width === "narrow" ? "max-w-3xl" : "max-w-6xl"}`}>
-            <Skeleton className="h-8 w-48" />
-            {children}
+      {/* THE GUTTER'S GHOST — three-sided, `md:` only, exactly as in
+          `app-frame.tsx`. If this mirror misses the 8px the real frame takes,
+          the whole panel slides 8px up and left at hydration, which is the
+          class of jump this file exists to prevent. */}
+      <div className="flex min-w-0 flex-1 flex-col md:py-frame md:pr-frame">
+        {/* THE PANEL'S GHOST — one cornered, hairlined box holding the bars
+            and the content, mirroring the real panel. */}
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-panel md:rounded-frame md:border md:border-border">
+          {/* THE BAR'S GHOSTS — TWO, 57 and 49, because the real chrome is two
+              bands. One 65px ghost under a 106px chrome is 41px of content
+              jumping up the moment the route lands, which is the whole failure
+              this mirror exists to prevent. Empty: a shimmering placeholder
+              under controls that never move is noise. */}
+          <div className="h-[57px] shrink-0 border-b border-topbar-border bg-topbar" />
+          <div className="h-[49px] shrink-0 border-b border-topbar-border bg-topbar" />
+          <div className="min-h-0 flex-1 overflow-y-auto bg-panel">
+            {/* Not <main>: PageContainer renders the page's one main landmark. */}
+            <div className={`mx-auto w-full p-6 ${width === "narrow" ? "max-w-3xl" : "max-w-6xl"}`}>
+              <Skeleton className="h-8 w-48" />
+              {children}
+            </div>
           </div>
         </div>
       </div>

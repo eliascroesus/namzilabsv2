@@ -22,21 +22,40 @@ import { describe, expect, it } from "vitest";
  */
 const css = readFileSync(join(__dirname, "..", "src/app/globals.css"), "utf8");
 
-/** The `:root` block — the light theme's semantic layer. */
+/** The `:root` block — the light mode's semantic layer. */
 const light = css.slice(css.indexOf(":root {"), css.indexOf(".dark {"));
-/** Everything from `.dark {` on — the dark theme's semantic layer. */
-const dark = css.slice(css.indexOf(".dark {"));
+/** `.dark {` up to `.mix {` — the dark mode's semantic layer, and ONLY it. */
+const dark = css.slice(css.indexOf(".dark {"), css.indexOf(".mix {"));
+/** The `.mix` block — a near-black rail over light content. */
+const mix = css.slice(css.indexOf(".mix {"));
 
 describe("the rail and the top bar are two surfaces", () => {
-  it("keeps the rail near-black in both themes", () => {
-    expect(light).toMatch(/--rail:\s*#121214/i);
+  it("draws the rail on its own ground in each of the three modes", () => {
+    // IT USED TO BE ONE VALUE, and this assertion said so: #121214 in both
+    // themes, because 49:5268 and 58:5824 drew it identically. The 10
+    // September frames draw it three ways, and the SPLIT between `--rail-*`
+    // and `--topbar-*` is what makes that a change to CSS rather than to the
+    // shell — which is the thing this file exists to protect.
+    expect(light).toMatch(/--rail:\s*#f3f3f3/i);
+    expect(mix).toMatch(/--rail:\s*#121214/i);
     expect(dark).toMatch(/--rail:\s*#121214/i);
   });
 
-  it("gives the rail every role it had as the chrome", () => {
+  it("keeps the bar WHITE over both of the light-content modes", () => {
+    // The rail moving must not drag the bar with it: `.mix` is a near-black
+    // rail against a white bar, which only works while these are two families.
+    expect(light).toMatch(/--topbar:\s*#ffffff/i);
+    expect(mix).not.toMatch(/--topbar:/);
+    expect(dark).toMatch(/--topbar:\s*#121214/i);
+  });
+
+  it("gives the rail every role it had as the chrome, in all three modes", () => {
     for (const role of ["foreground", "muted", "faint", "border", "control", "accent", "brand"]) {
-      expect(light).toMatch(new RegExp(`--rail-${role}\\s*:`));
-      expect(dark).toMatch(new RegExp(`--rail-${role}\\s*:`));
+      expect(light, `:root is missing --rail-${role}`).toMatch(new RegExp(`--rail-${role}\\s*:`));
+      expect(dark, `.dark is missing --rail-${role}`).toMatch(new RegExp(`--rail-${role}\\s*:`));
+      // A role `.mix` forgets inherits the LIGHT value onto a near-black
+      // column — near-black ink on near-black, visible only by looking.
+      expect(mix, `.mix is missing --rail-${role}`).toMatch(new RegExp(`--rail-${role}\\s*:`));
     }
   });
 

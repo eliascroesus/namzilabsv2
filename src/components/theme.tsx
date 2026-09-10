@@ -1,6 +1,6 @@
 "use client";
 
-import { Monitor, Moon, Sun } from "lucide-react";
+import { Contrast, Monitor, Moon, Sun } from "lucide-react";
 import { ThemeProvider as NextThemes, useTheme } from "next-themes";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -31,7 +31,28 @@ import { PERIOD_PILL, PERIOD_TRACK } from "@/components/ui/page";
  */
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   return (
-    <NextThemes attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+    /**
+     * `themes` HAS TO BE SPELLED OUT NOW, AND THAT IS THE WHOLE COST OF `mix`.
+     *
+     * next-themes defaults this list to `["light", "dark"]` and validates
+     * against it: a `setTheme("mix")` with the default list is accepted into
+     * storage and then never stamped on <html>, so the choice appears to save
+     * and does nothing — silently, with no error anywhere. Naming all three
+     * (plus `system`, which `enableSystem` would otherwise append on its own)
+     * is what makes the third mode real.
+     *
+     * `system` STILL RESOLVES TO TWO. The OS reports light or dark and has no
+     * opinion about a rail, so following the system can only ever land on one
+     * of those; `mix` is reachable by choosing it, which is the honest
+     * arrangement — see the note on `CHOICES`.
+     */
+    <NextThemes
+      attribute="class"
+      defaultTheme="system"
+      enableSystem
+      themes={["light", "mix", "dark", "system"]}
+      disableTransitionOnChange
+    >
       {children}
     </NextThemes>
   );
@@ -46,18 +67,45 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
  */
 export const CHOICES = [
   { value: "light", label: "Light", Icon: Sun },
+  /**
+   * THE THIRD MODE — a near-black rail against the light working surface.
+   *
+   * It is not a half-measure between the other two, which is why it is not
+   * called "auto" or "dim": it is a deliberate arrangement the 10 September
+   * Figma draws in full (node 35:6331), and the one this product actually
+   * shipped as its light theme for two days. Linear, Height and Vercel's
+   * dashboard all hold navigation still in a dark column while the work stays
+   * bright; some people read that as focus and some read it as noise.
+   *
+   * `Contrast` — the half-filled disc — because the glyph has to say "one side
+   * dark, one side light" rather than "between light and dark". A dimmed moon
+   * would say the second thing.
+   *
+   * IT SITS BETWEEN LIGHT AND DARK because the rungs are ordered by how much
+   * near-black is on the screen, so the control reads as a ramp rather than as
+   * a bag of options.
+   */
+  { value: "mix", label: "Mix", Icon: Contrast },
   { value: "dark", label: "Dark", Icon: Moon },
   { value: "system", label: "System", Icon: Monitor },
 ] as const;
 
 /**
- * THE CONTROL, AND WHY IT IS THREE OPTIONS RATHER THAN A SWITCH.
+ * THE CONTROL, AND WHY IT IS FOUR OPTIONS RATHER THAN A SWITCH.
  *
  * A toggle can only hold two states, so shipping one means quietly dropping
  * "follow the OS" — which is the state most people are actually in, and the one
  * that keeps the app in step with everything else on their machine when they
  * flip their system at sunset. The previous control was a toggle for exactly
  * that reason and it made `system` a starting point you could never get back to.
+ *
+ * FOUR RUNGS SINCE `mix` LANDED, and the same argument covers it: the OS
+ * cannot report a preference about the rail, so `mix` is unreachable from
+ * anything that only follows the system. The moon in the top bar stays a
+ * two-state quick toggle (light ↔ dark) on the same grounds a switch was
+ * rejected here — one glyph cannot say which of four states it is in — so this
+ * is the only control that can reach every mode, and `nav-search.tsx` reads
+ * the same list so the palette can too.
  *
  * IT IS THE PRODUCT'S OWN SEGMENTED CONTROL — `PERIOD_TRACK` / `PERIOD_PILL`,
  * the same pair the range picker and the calendar's month stepper wear. A

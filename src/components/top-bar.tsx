@@ -244,11 +244,19 @@ function ShareLink() {
  * THE MOON, WHICH IS THE ONE CONTROL IN THIS BAR THE FIGMA DRAWS AND THE
  * PRODUCT ALREADY HAD.
  *
- * `ThemeChoice` (three radio rungs — light, dark, system) lives in the rail's
- * account panel and stays there; this is the one-press version the chrome
- * asks for. It toggles between light and dark explicitly rather than cycling
- * through `system`, because a three-state control behind one glyph cannot say
- * which state it is in.
+ * `ThemeChoice` (FOUR radio rungs since 10 Sep 2026 — light, mix, dark,
+ * system) lives on the profile page and stays there; this is the one-press
+ * version the chrome asks for. It toggles between light and dark explicitly
+ * rather than cycling, because a four-state control behind one glyph cannot
+ * say which state it is in — and `mix` in particular is a deliberate choice
+ * rather than a step on a ramp, so landing on it by pressing a moon twice
+ * would be worse than not reaching it here at all.
+ *
+ * FROM `mix`, THIS GOES TO DARK, which is the honest answer: `resolvedTheme`
+ * is "mix", so `dark` is false, so the glyph is a moon and the moon means
+ * "make it dark". Getting back to mix is a trip to the profile page or the
+ * palette (`nav-search.tsx` offers all four), which is the cost of a mode the
+ * OS cannot report.
  *
  * MOUNTED-GUARDED. `useTheme` returns `undefined` on the server and on the
  * first client render, so painting a glyph before that resolves means

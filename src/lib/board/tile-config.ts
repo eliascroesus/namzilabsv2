@@ -135,10 +135,11 @@ export function accentOf(color?: string): string {
   /**
    * THE SAME COLOUR IN BOTH THEMES, AND THAT IS THE FIGMA'S OWN CALL.
    *
-   * This returned `var(--marker)` for a day — the lime on dark, a solved-down
-   * #4F7A00 on light — because #B6FF56 measures 1.20:1 on white and a mark
+   * This returned `var(--marker)` for a day — and back then that meant TWO
+   * values, the lime on dark and a solved-down #4F7A00 on light, because
+   * #B6FF56 measures 1.20:1 on white and a mark
    * owes 3:1. Sampling the LIGHT frame settles it against me: node 58:5824
-   * draws its bars at #B6FF56 and its legend dot at #B6FF56, the same lime as
+   * drew its bars and its legend dot at #B6FF56, the same lime as
    * the dark frame, on a white card. Elias asked for it directly too ("make
    * sure the charts are like our theme color the lime green one").
    *
@@ -146,7 +147,7 @@ export function accentOf(color?: string): string {
    * substituted — the same treatment as the two Figma greys in BRAND_KIT's
    * substitutions table, with the sign reversed: those were refused because
    * they carry TEXT, and a chart mark is a large filled shape whose job is to
-   * be identified rather than read. A 46px lime bar on white is unmistakable
+   * be identified rather than read. A 46px brand bar on white is unmistakable
    * at 1.20:1; a 14px label at the same ratio would not be.
    *
    * What still protects the reading is that no chart carries meaning by colour

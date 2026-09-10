@@ -242,8 +242,18 @@ describe("the skeleton mirrors the phone layout too", () => {
     expect(code(skeleton)).toMatch(/hidden w-65[^"]*md:block/);
   });
 
-  it("drops the panel's corner below md, in both files", () => {
-    expect(code(skeleton)).toContain("md:rounded-tr-frame bg-panel");
-    expect(code(frame)).toContain("md:rounded-tr-frame bg-panel");
+  it("drops the panel's corner AND its gutter below md, in both files", () => {
+    // A rounded, inset panel against the edge of a phone screen reads as a
+    // rendering fault rather than as a frame — and below `md` there is no rail
+    // for its left corners to cut into anyway. Both halves are `md:`-gated, so
+    // the phone gets an edge-to-edge panel exactly as it did before.
+    for (const [name, src] of [["skeleton", skeleton], ["frame", frame]] as const) {
+      expect(code(src), `${name}: the corner must be md-gated`).toContain("md:rounded-frame");
+      expect(code(src), `${name}: the gutter must be md-gated`).toContain("md:py-frame md:pr-frame");
+      expect(code(src), `${name}: an ungated corner would round against the viewport`)
+        .not.toMatch(/(?<!md:)\brounded-frame\b/);
+      expect(code(src), `${name}: an ungated gutter would inset the phone`)
+        .not.toMatch(/(?<!md:)\bp[yr]-frame\b/);
+    }
   });
 });

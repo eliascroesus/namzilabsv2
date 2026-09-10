@@ -1233,7 +1233,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 <SubmitButton
                   /* WHITE, WITH "Today" BESIDE IT — node 49:5439. The two
                      non-brand controls in this row are the loudest things on
-                     the screen after the lime, which reads against the kit's
+                     the screen after the brand, which reads against the kit's
                      own "quiet chrome" thesis and is drawn that way anyway,
                      twice, on two adjacent controls. Followed rather than
                      corrected; DESIGN.md owns the tension out loud. */

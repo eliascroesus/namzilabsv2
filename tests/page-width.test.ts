@@ -557,14 +557,23 @@ describe("the frame's new shape — a full-width bar over [rail | panel]", () =>
     expect(code.indexOf("<TopBar")).toBeGreaterThan(code.indexOf("<Sidebar"));
   });
 
-  it("gives the panel its own surface and a top-RIGHT corner", () => {
-    // THE FIGMA ROUNDS THE FAR CORNER, NOT THE NEAR ONE. The panel meets the
-    // rail on its left with a hairline and butts square against it; the corner
-    // the export softens is the one under the bar at the opposite end. This
-    // reverses the shell's own historical `rounded-tl-frame` convention, which
-    // is exactly why it is pinned rather than left to a comment.
-    expect(frame).toMatch(/rounded-tr-frame bg-panel/);
-    expect(frame, "the old top-left notch must not come back").not.toMatch(/rounded-tl-frame/);
+  it("insets the panel by 8px on three sides and rounds all four corners", () => {
+    // IT WAS ONE CORNER UNTIL 10 SEP 2026 — `rounded-tr-frame` on a panel that
+    // ran flush to every edge — and node 35:6024 draws something simpler: a
+    // gutter of page on three sides with an ordinary rounded, hairlined box
+    // inside it. So the radius is on the BOX now, not on the scroll region.
+    expect(frame).toMatch(/md:rounded-frame md:border md:border-border/);
+    expect(frame).toMatch(/md:py-frame md:pr-frame/);
+    // THE MISSING SIDE IS THE POINT. `pl` would put a strip of page between
+    // the rail and the panel and turn one seam into two.
+    expect(frame, "the panel butts against the rail; there is no left gutter").not.toMatch(/md:pl-frame/);
+    // COMMENTS STRIPPED FIRST — this file's own prose explains what the
+    // single corner USED to be, by name, and a bare match reads that as the
+    // class still being there. The assertion is about the class list.
+    const cls = frame.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    expect(cls, "the single-corner notch must not come back").not.toMatch(/rounded-t[lr]-frame/);
+    // The corner only draws if the box clips what the bar paints across it.
+    expect(frame).toMatch(/overflow-hidden bg-panel md:rounded-frame/);
   });
 
   it("hands the rail the workspace and the account it will need for its own switcher", () => {
@@ -828,9 +837,13 @@ describe("the skeleton mirrors the frame's new order", () => {
     expect(code.indexOf("border-r border-rail-border")).toBeLessThan(code.indexOf("border-b border-topbar-border"));
   });
 
-  it("gives its content ghost the panel's own surface and corner", () => {
-    expect(skeleton).toMatch(/rounded-tr-frame bg-panel/);
-    expect(skeleton, "the mirror must not keep a corner the frame dropped").not.toMatch(/rounded-tl-frame/);
+  it("gives its content ghost the same gutter, corner and hairline", () => {
+    // If the mirror misses the 8px the real frame takes, the whole panel slides
+    // 8px up and left the moment the route lands — the class of jump this
+    // mirror exists to prevent, caused by the mirror.
+    expect(skeleton).toMatch(/md:py-frame md:pr-frame/);
+    expect(skeleton).toMatch(/md:rounded-frame md:border md:border-border/);
+    expect(skeleton, "the mirror must not keep a corner the frame dropped").not.toMatch(/rounded-t[lr]-frame/);
   });
 
   it("puts each ghost on the surface it mirrors — the rail's and the bar's", () => {

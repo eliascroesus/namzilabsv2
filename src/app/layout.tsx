@@ -76,7 +76,7 @@ export const viewport: Viewport = {
    * mismatched band above the app on mobile with nothing failing.
    */
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f7f7f7" },
+    { media: "(prefers-color-scheme: light)", color: "#f3f3f3" },
     { media: "(prefers-color-scheme: dark)", color: "#121214" },
   ],
   colorScheme: "light dark",

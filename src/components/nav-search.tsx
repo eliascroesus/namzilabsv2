@@ -7,7 +7,7 @@ import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { CHOICES } from "@/components/theme";
 import { NAV } from "@/components/sidebar";
-import { railSearchEntries } from "@/lib/rail-search";
+import { railSearchEntries, type ThemeValue } from "@/lib/rail-search";
 import { viewStrip, type BoardView } from "@/lib/board/types";
 
 /**
@@ -42,7 +42,7 @@ function PageGlyph({ label }: { label: string }) {
   return <Icon aria-hidden className="size-[18px] shrink-0" />;
 }
 
-function ThemeGlyph({ value }: { value: "light" | "dark" | "system" }) {
+function ThemeGlyph({ value }: { value: ThemeValue }) {
   const Icon = CHOICES.find((c) => c.value === value)?.Icon ?? Monitor;
   return <Icon aria-hidden className="size-[18px] shrink-0" />;
 }

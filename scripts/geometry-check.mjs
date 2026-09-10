@@ -23,6 +23,37 @@
  * 49 + 43 = 149, where the frame starts its content container), the rail has no
  * search, and the board grid runs a 24px gutter rather than 16.
  *
+ * ── 10 SEP 2026: THE FRAME GAINED A GUTTER, AND EVERY NUMBER BELOW MOVED ──
+ *
+ * Node 35:6024 wraps the content column in `pr-[8px] py-[8px]` and puts a 1px
+ * hairline, 8px-cornered panel inside it. That is a pure OFFSET applied to
+ * everything the old constants named, and it is written out here rather than
+ * folded into the literals so the arithmetic can be checked:
+ *
+ *     x  += 1     the panel's left border (there is NO left gutter — node
+ *                 35:6024 sets `pr` and `py` only, so the panel butts against
+ *                 the rail and only its corners cut into it)
+ *     y  += 9     8px of top gutter, then the panel's top border
+ *     w  -= 10    8px of right gutter, plus a border on each side
+ *
+ * so the content column's usable width falls from 1660 to 1650 and the board's
+ * 12-column grid re-divides: 1650 − 48 of page padding = 1602, less eleven
+ * 24px gutters = 1338, which is 111.5 per column. A four-column chart card is
+ * 4×111.5 + 3×24 = 518 (was 521.33) and a three-column stat tile is
+ * 3×111.5 + 2×24 = 382.5 (was 385).
+ *
+ * THE BAR HEIGHTS ARE UNTOUCHED BY THIS, and that is a deliberate scope
+ * decision rather than an oversight. The 10 September frames also redraw the
+ * chrome — two bands, search back in the rail, no wordmark — and the app is
+ * NOT taking that half. So these stay node 0:5's 57 and 49, exactly as the
+ * paragraph on `topbar` below already records, and only the frame moved.
+ *
+ * NOTHING HERE IS DERIVED FROM THE APP. The offsets come from the Figma's own
+ * gutter and border; the divisions are arithmetic on them. That the app agrees
+ * to the pixel is the result, not the method — reading these off the app's CSS
+ * would make the check pass by construction, which is the trap the paragraph
+ * above this one exists to name.
+ *
  * The previous expectations came from `get_metadata` on Figma nodes 49:5268 and
  * 58:5824 — both 1920x1200 frames of the same screen, dark and light. They are
  * written here as data rather than derived, because the point is to compare the
@@ -56,7 +87,20 @@ const TOL = 1;
  * is 1612 and starts at x=284 (260 rail + 24) and y=89 (65 bar + 24). The
  * header row is 32 tall with a 16px gutter under it, putting the grid at 137.
  */
+/**
+ * THE FRAME'S OFFSET, APPLIED ONCE, so a future gutter change is one edit and
+ * cannot be half-applied across nine boxes. See the header for the derivation.
+ */
+const GUTTER = 8;
+const HAIRLINE = 1;
+/** Left edge: the panel's own border only — there is no left gutter. */
+const DX = HAIRLINE;
+/** Top edge: the gutter, then the border. */
+const DY = GUTTER + HAIRLINE;
+
 const FIGMA = {
+  // The rail is OUTSIDE the frame — it keeps the full height and starts at
+  // zero. The gutter is the content column's, not the shell's.
   sidebar: { x: 0, y: 0, w: 260, h: 1200 },
   // Bar ONE. The check measures the first <header>; bars two and three are
   // asserted in tests/topbar-figma.test.ts.
@@ -66,7 +110,7 @@ const FIGMA = {
   // the whole chrome read smaller than the CRM the frame was drawn against.
   // The kit won, so bar three is 49 and the board starts at 179 rather than
   // 173. Everything else here is still the frame's.
-  topbar: { x: 260, y: 0, w: 1660, h: 57 },
+  topbar: { x: 260 + DX, y: 0 + DY, w: 1660 - GUTTER - 2 * HAIRLINE, h: 57 },
   chartCards: [
     // Node 0:5's own boxes. They are the board's too now: `GRID_GAP_PX` went
     // back to 24 and `ROW_UNIT_PX` to 48, so a ten-row card is 10*48-24 = 456
@@ -77,9 +121,10 @@ const FIGMA = {
     // divides evenly and the third card lands exactly on the 24px right inset,
     // so this is one of the few places the app is right and the export is a
     // rounding artifact. Expect the arithmetic, not the artifact.
-    { x: 284, y: 179, w: 521.33, h: 456 },
-    { x: 829.33, y: 179, w: 521.33, h: 456 },
-    { x: 1374.67, y: 179, w: 521.33, h: 456 },
+    //                        ↓ 284 + DX      ↓ 179 + DY   ↓ 4 cols of 111.5 + 3 gutters
+    { x: 285, y: 188, w: 518, h: 456 },
+    { x: 285 + 518 + 24, y: 188, w: 518, h: 456 },
+    { x: 285 + 2 * (518 + 24), y: 188, w: 518, h: 456 },
   ],
   /**
    * HEIGHT IS DELIBERATELY NOT CHECKED on these. The Figma draws them at
@@ -89,12 +134,12 @@ const FIGMA = {
    * the row unit to hit 108.22 exactly would put every OTHER tile wrong.
    */
   statTiles: [
-    // 659 = 179 + 456 + 24: the chart row, plus the gutter it shares with the
-    // row below. Three of twelve columns at a 24 gutter is 385.
-    { x: 284, y: 659, w: 385 },
-    { x: 693, y: 659, w: 385 },
-    { x: 1102, y: 659, w: 385 },
-    { x: 1511, y: 659, w: 385 },
+    // 668 = 188 + 456 + 24: the chart row, plus the gutter it shares with the
+    // row below. Three of twelve columns at a 24 gutter is 382.5 now.
+    { x: 285, y: 668, w: 382.5 },
+    { x: 285 + 382.5 + 24, y: 668, w: 382.5 },
+    { x: 285 + 2 * (382.5 + 24), y: 668, w: 382.5 },
+    { x: 285 + 3 * (382.5 + 24), y: 668, w: 382.5 },
   ],
 };
 

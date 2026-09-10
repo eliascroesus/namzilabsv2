@@ -41,7 +41,7 @@ import { GROUP_COLOR_KEYS, groupBadge, groupInk } from "@/components/flow/node-a
  * square, the name, a chevron), a search field on `--control`, a "Main Menu"
  * caption at the faint step, the nav rows with the active one filled, a nested
  * view list under Dashboard, and a foot carrying an Invite Members CARD over
- * the lime "New". The last two arrived on 8 Sep 2026 from the top bar, which
+ * the brand "New". The last two arrived on 8 Sep 2026 from the top bar, which
  * gave up both acts and took the gift in exchange.
  *
  * EVERY ROW IS A 36px SLOT HOLDING A 32px ICON BOX, and the split still
@@ -866,7 +866,7 @@ export function RailContent({
               fill, a "+" that left when the words arrived — because it had to
               be legible as a 48px glyph AND as a 260px control. The column no
               longer has a narrow state, so all three collapse into what the
-              Figma actually draws: a full-width lime fill, 36px, with a plus
+              Figma actually draws: a full-width brand fill, 36px, with a plus
               and one word centred in it.
 
               GET FREE ACCESS IS NOT HERE ANY MORE. Its gift moved to the top

@@ -25,18 +25,27 @@ import type { BoardView } from "@/lib/board/types";
  * the design starts it at zero. `pnpm geometry` measures both boxes against
  * those numbers now, because no source-reading test can see a laid-out pixel.
  *
- * TWO MATERIALS, AND ONLY ONE OF THEM HAS A THEME. The rail and the bar are
- * `--chrome`, which is #121214 in BOTH themes — 49:5268 and 58:5824 draw that
- * band identically and only the content beside it goes light. The panel is
- * `--panel`, which does flip. That is why the chrome has its own ink, hairline
- * and control roles (`--chrome-*`): it cannot borrow the content's, because it
- * is not on the content's ground.
+ * THREE MATERIALS NOW, AND THE RAIL IS THE ONE THE MODES ARGUE ABOUT. It used
+ * to be true that the rail and the bar were one permanently-dark `--chrome`;
+ * the 9 September frame split them (`--rail-*` and `--topbar-*`), and the 10
+ * September frames give the rail three grounds across three modes — light in
+ * `:root`, near-black in `.mix`, near-black in `.dark`. Every value it draws
+ * goes through a `--rail-*` role for exactly that reason: a band on its own
+ * ground cannot borrow the content's ink, hairline or control fill, and now it
+ * cannot borrow them in either direction.
  *
- * THE NOTCH IS 0 AGAIN. `--radius-frame` cuts the panel's top-RIGHT corner —
- * the far one, under the bar, which reversed this file's own convention when
- * the 4 September Figma drew it there. It reveals whatever is behind it, and
- * page, chrome and panel are one colour on dark now, so it reveals nothing.
- * The spelling stays for the day the surfaces separate again.
+ * THE NOTCH IS A FRAME NOW. `--radius-frame` was 0 for two days on the
+ * argument that a corner cut into #121214 to reveal #121214 draws nothing —
+ * true, and it stopped being true the moment node 35:6024 put an 8px gutter of
+ * `--background` around the panel. There is a surface behind the corner again,
+ * so the corner is back, on all four rather than on the top-right alone, and
+ * `--spacing-frame` sits beside `--radius-frame` so the inset and the radius
+ * cannot drift apart.
+ *
+ * THE RAIL IS NOT A CONSTANT ANY MORE EITHER — see the paragraph above. It is
+ * light in `:root`, near-black in `.mix` and `.dark`, and every value it draws
+ * still goes through `--rail-*`, which is why that swap is a block of CSS and
+ * not a change to this file.
  *
  * `surface` is still the caller's, because the pages genuinely disagree about
  * SCROLLING: list pages scroll, the builder does not.
@@ -114,24 +123,27 @@ export function AppFrame({
    * other route gets the ground without mentioning it.
    */
   /**
-   * THE CORNER IS A DESKTOP FACT. It reveals the page behind the panel where
-   * the bar's rule ends and the rail's begins — and below `md` there is no
-   * rail, so the panel runs the full width of the viewport and the only thing
-   * an 8px notch could reveal is the 8px of `--background` outside it. A
-   * rounded corner against the edge of a phone screen reads as a rendering
-   * fault, which is the same argument that took the notch off when the
-   * surfaces were one colour, in a different axis.
+   * THE CORNER MOVED OUT OF THIS STRING, AND IT IS NOW FOUR CORNERS.
    *
-   * `md:rounded-tr-frame bg-panel` in that order on purpose: the pair is
-   * matched as a literal by `tests/page-width.test.ts`, on both sides of the
-   * frame/skeleton mirror.
+   * It used to be `md:rounded-tr-frame` right here — ONE corner, the top-right
+   * one, cut into a panel that was otherwise flush to every edge of the
+   * viewport. Node 35:6024 draws something different and simpler: the content
+   * column carries an 8px gutter on its top, right and bottom, and the panel
+   * inside it is an ordinary rounded, hairlined box. So the radius belongs to
+   * that box (see the JSX below) rather than to the scroll region, and this
+   * string is back to being about SCROLLING, which is all `surface` ever was.
+   *
+   * `bg-panel` stays here as well as on the box, and that is not redundant:
+   * the box paints the ground the corners cut into, and this paints the ground
+   * the content scrolls over. They are the same token and would have to be
+   * changed together anyway.
    */
   // `min-h-0` joins the list now that the panel is a flex COLUMN child rather
   // than a row one: a column child defaults to `min-height: auto`, refuses to
   // shrink below its content, and the `overflow-y-auto` in `surface` then has
   // nothing to scroll against — the page scrolls instead of the panel, and the
   // top bar leaves the screen with it.
-  const className = cn("relative min-h-0 min-w-0 flex-1 md:rounded-tr-frame bg-panel", surface);
+  const className = cn("relative min-h-0 min-w-0 flex-1 bg-panel", surface);
 
   return (
     // `h-dvh`, not `h-screen` — the dynamic viewport unit, so a phone's
@@ -171,33 +183,62 @@ export function AppFrame({
           workspace switcher at the same y as the bar's account cluster. */}
       <Sidebar hide={hide} views={views} workspace={workspace} account={account} />
 
-      {/* THE CONTENT COLUMN — bar, then panel. `min-w-0` is load bearing on a
-          flex child that contains a horizontally scrolling tab strip: without
-          it the column refuses to shrink below its content and the whole page
-          gains a sideways scrollbar. */}
-      <div className="flex min-w-0 flex-1 flex-col">
-        {/* THE DRAWER IS BUILT HERE BECAUSE THIS IS WHERE THE NAVIGATION DATA
-            IS. `AppFrame` already holds the workspace, the account, the view
-            list and `hide`; the bar holds none of them and should not start.
-            Below `md` this is the only way into any of it — the rail is not
-            rendered at all. */}
-        <TopBar
-          account={account}
-          views={views}
-          hide={hide}
-          menu={<MobileDrawer hide={hide} views={views} workspace={workspace} account={account} />}
-        />
-        {/* `min-h-0` is the vertical twin of the `min-w-0` above: without it a
-            flex column with a scrolling child never shrinks past its content's
-            natural height, and the panel's `overflow-y-auto` never gets
-            anything to scroll AGAINST. */}
-        {ownsMain ? (
-          <main id="main" className={className}>
-            {children}
-          </main>
-        ) : (
-          <div className={className}>{children}</div>
-        )}
+      {/* THE CONTENT COLUMN — the 8px GUTTER, and nothing else.
+          `min-w-0` is load bearing on a flex child that contains a
+          horizontally scrolling tab strip: without it the column refuses to
+          shrink below its content and the whole page gains a sideways
+          scrollbar.
+
+          THE GUTTER IS THREE-SIDED, AND THE MISSING SIDE IS THE POINT. Node
+          35:6024 is `pr-[8px] py-[8px]` with NO left padding, so the panel's
+          left edge sits flush against the rail and only its two left corners
+          cut into it. Adding `pl-frame` would put a strip of page between rail
+          and panel and turn one seam into two.
+
+          IT IS A DESKTOP FACT, hence `md:`. Below `md` there is no rail, the
+          panel runs the full width of the viewport, and an 8px gutter with a
+          rounded corner against the edge of a phone screen reads as a
+          rendering fault rather than as a frame. */}
+      <div className="flex min-w-0 flex-1 flex-col md:py-frame md:pr-frame">
+        {/* THE PANEL — ONE BOX: cornered, hairlined, and clipping the bars and
+            the board inside it.
+
+            `overflow-hidden` IS WHAT MAKES THE CORNER REAL. The top bar paints
+            its own `bg-topbar` to the full width of this box, so without a clip
+            the white band squares off the two corners it passes through and the
+            radius draws on nothing. Everything that has to escape the panel
+            already portals to `<body>` — every popover, dropdown, dialog and
+            tooltip in the kit — and the one inline overlay in the chrome
+            (`NavSearch`'s result list) drops 4px below a field at the top of
+            this box, nowhere near an edge.
+
+            `bg-panel` here as well as on the scroll region: this is the ground
+            the corners cut INTO, and a transparent box would show the page
+            through its own rounding. */}
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-panel md:rounded-frame md:border md:border-border">
+          {/* THE DRAWER IS BUILT HERE BECAUSE THIS IS WHERE THE NAVIGATION DATA
+              IS. `AppFrame` already holds the workspace, the account, the view
+              list and `hide`; the bar holds none of them and should not start.
+              Below `md` this is the only way into any of it — the rail is not
+              rendered at all. */}
+          <TopBar
+            account={account}
+            views={views}
+            hide={hide}
+            menu={<MobileDrawer hide={hide} views={views} workspace={workspace} account={account} />}
+          />
+          {/* `min-h-0` is the vertical twin of the `min-w-0` above: without it a
+              flex column with a scrolling child never shrinks past its content's
+              natural height, and the panel's `overflow-y-auto` never gets
+              anything to scroll AGAINST. */}
+          {ownsMain ? (
+            <main id="main" className={className}>
+              {children}
+            </main>
+          ) : (
+            <div className={className}>{children}</div>
+          )}
+        </div>
       </div>
     </div>
   );

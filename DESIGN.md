@@ -3,11 +3,11 @@ name: Namzilabs
 tagline: Six tools disagree; this one answers in a figure you can defend.
 register: quiet chrome, loud numbers
 surfaces: [page + chrome + panel (one colour), card (the only step), control, raised, floating]
-themes: dark (the console) + light · per device · defaults to the OS
-accent: one lime (#B6FF56) · a FILL under near-black ink (#2C2C2C) · the same value draws on dark · a solved-down #4F7A00 draws on light
+themes: light + mix (a near-black rail over light content) + dark (the console) · per device · defaults to the OS
+accent: one blue (#568CFF) · a FILL under near-black ink (#1F1F1F) · the SAME value draws in both themes, which the lime could not · #2F5FD8 is kept for brand-coloured TEXT on white
 neutral: one ramp — one ground (#121214) carrying page, bar and rail, one card (#191919) a hair above it, and one hairline (#343434) doing every separation that remains
 type: Inter · 11 · 12 · 14 · 15 · 17 · 18 · 20 · 26 · 28 · 30 · 48
-radius: 8 on everything that contains something · full on the delta chip, the freshness dot and the avatar
+radius: 8 on everything that contains something — including the frame itself, which is inset 8px from the page on its top, right and bottom · full on the delta chip, the freshness dot and the avatar
 status: chrome, furniture and primitives SETTLED · the chart card's two-series legend NOT built (needs a comparison series the product does not have)
 ---
 
@@ -157,29 +157,51 @@ Blue retired that split. `#007BFF` cleared its bar both ways, and the kit ran
 two rungs of one ramp: `--marker` drew, `--primary` filled one step deeper
 because blue under WHITE was tight at 3.98:1.
 
-**Lime springs the yellow's trap exactly halfway, and that decides everything
-below.**
+Lime sprang the yellow's trap exactly halfway: superb as a fill, absent as a
+stroke on white, which is why the light theme had to keep a second value.
 
-| | measured |
-|---|---|
-| `#B6FF56` under `#2C2C2C` ink | **11.59:1** |
-| `#B6FF56` as a stroke on `#121214` | **15.53:1** |
-| `#B6FF56` under WHITE ink | **1.20:1** |
-| `#B6FF56` as a stroke on WHITE | **1.20:1** |
+| | measured | |
+|---|---|---|
+| `#B6FF56` under `#2C2C2C` ink | **11.59:1** | a superb box |
+| `#B6FF56` as a stroke on `#121214` | **15.53:1** | and a superb line, on dark |
+| `#B6FF56` under WHITE ink | **1.20:1** | unreadable |
+| `#B6FF56` as a stroke on WHITE | **1.20:1** | an *absent* line |
 
-Two consequences, and neither is cosmetic:
+**The 10 September 2026 Figma replaces the lime with one blue, `#568CFF`
+(nodes 35:5917 / 35:6331 / 35:6745), and that is a reversal of the 8 September
+re-theme as deliberate as the 8 September re-theme was of the blue before it.**
+It is recorded here rather than quietly applied, because the section above is
+an argument the product won and then chose to stop winning.
 
-**The ink inverted.** Blue was a fill under white. Lime cannot be — white on
-lime is 1.20:1, which is not a dim label but an unreadable one. So
-`--primary-foreground` is **near-black in both themes**. The RULE did not
-change: a primary button is one object and its ink does not vary by theme. What
-changed is which end of the ramp supplies that ink.
+| | measured | |
+|---|---|---|
+| `#568CFF` under `#1F1F1F` ink | **5.18:1** | a legal fill |
+| `#568CFF` as a stroke on `#121214` | **6.29:1** | a line on dark |
+| `#568CFF` as a stroke on WHITE | **3.18:1** | **a line on light — the thing the lime could not do** |
+| `#568CFF` under WHITE ink | **3.18:1** | not a label |
 
-**The split moved rather than retiring.** On dark, one value does everything —
-`brand-400` is the fill, the stroke *and* the default chart series, where blue
-needed two rungs. On white, lime has the yellow's problem precisely, so light
-alone keeps a solved-down `brand-800` (`#4F7A00`, 5.10:1) for its stroke. The
-split is no longer fill-versus-stroke inside a theme; it is dark-versus-light.
+Three consequences, and none is cosmetic:
+
+**The ink did NOT invert back.** The reflex on a blue fill is white ink, and on
+this blue it is illegal — 3.18:1. So `--primary-foreground` stays **near-black
+in every mode**, which is what node 35:6023 draws anyway. It is `#1F1F1F`
+rather than the export's own `#2E2E2E` because that value measures 4.27:1 on
+this fill, a hair under what a 13px label owes; one count deeper is 5.18:1 and
+looks identical. The RULE is untouched: a primary button is one object and its
+ink does not vary by mode.
+
+**The split RETIRED, which is the thing the re-theme actually bought.** Lime
+needed `brand-800` on white because 1.20:1 is not a line at all. `#568CFF`
+clears the 3:1 a line or a glyph owes, so `--marker` is the same value in both
+themes for the first time — one blue dot in every frame, exactly as node
+35:7208 draws it. `brand-800` (`#2F5FD8`, 5.60:1 on white) survives for one
+narrower job: brand-coloured **text**, which 3.18:1 may not be. Nothing in the
+kit spells that yet.
+
+**The comparison series had to move with it.** It was a blue *because* the
+series beside it was lime — two hues a reader can tell apart. Both are blue
+now, so the separation comes from **lightness** instead, which is also the one
+channel every kind of colour-blind reader keeps.
 
 | | job | where |
 |---|---|---|
@@ -192,7 +214,7 @@ themes — because the Figma draws that rule in grey, not in the brand.
 **And two controls are white, which this file has to own rather than explain
 away.** "Today" and "Refresh All" are drawn as white pills with `#4A4A4A` ink
 (nodes 49:5429 and 49:5439), adjacent, unambiguous. On a `#121214` console a
-white fill is the loudest object on the screen after the lime itself, and
+white fill is the loudest object on the screen after the brand itself, and
 "quiet chrome, loud numbers" is this document's first sentence. They were
 shipped as drawn. The thesis survives in the half that carries meaning — the
 brand still marks only the two controls that ADD something — but a reader

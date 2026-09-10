@@ -56,12 +56,15 @@ function darkToken(name: string): string | null {
 }
 
 describe("the console's supplied constants", () => {
-  it("fills with #b6ff56", () => {
-    // The lime IS the fill step, where the blue was not. Blue was supplied as
-    // #007BFF and had to sit one rung deeper (#0070E8) to carry white ink at
-    // 4.5:1. The lime carries NEAR-BLACK ink at 11.59:1, so the supplied value
-    // needs no correction and `--primary` reads the brand itself.
-    expect(token("color-brand-400")).toBe("#b6ff56");
+  it("fills with #568cff", () => {
+    // THE SUPPLIED VALUE IS THE FILL, WHICH IS THE THIRD TIME THAT HAS BEEN
+    // TRUE OR NOT. The 2024 blue arrived as #007BFF and had to sit one rung
+    // deeper (#0070E8) to carry WHITE ink at 4.5:1. The lime carried
+    // near-black ink at 11.59:1 and needed no correction. This blue needs no
+    // correction either — but only because the ink stayed near-black: white on
+    // #568CFF is 3.18:1, so the fill is the Figma's and the INK is the thing
+    // that was solved. See `blue-theme.test.ts`, which measures it.
+    expect(token("color-brand-400")).toBe("#568cff");
     expect(token("primary")).toBe("var(--color-brand-400)");
   });
 
@@ -184,6 +187,36 @@ describe("the console's supplied constants", () => {
     // the brand fill for "+ Add" and "New flow": `variant="accent"` IS that
     // fill (`bg-primary` under `text-primary-foreground`).
     expect(button).toMatch(/white:\s*"[^"]*\bbg-white\b/);
+  });
+
+  it("gives that literal fill an ink that is a LITERAL too, not a role", () => {
+    /**
+     * THE BUG THIS PINS SHIPPED, AND NOTHING COULD SEE IT.
+     *
+     * The variant's fill is `bg-white` in BOTH themes, on purpose — nodes
+     * 49:5429 and 49:5439 draw "Today" and "Refresh All" as white pills on the
+     * console. Its ink was `text-heading`, which is #313131 on light and
+     * **#FFFFFF in `.dark`**. So on the dark dashboard "Add", "Today",
+     * "Compare To" and "Refresh All" rendered white-on-white: 1:1, four
+     * controls that were not dim but invisible.
+     *
+     * Every class in that string was individually correct, which is why no
+     * source test caught it and why this one is written as an INVARIANT rather
+     * than as a pin on the current value: a fill that does not change with the
+     * theme must not carry ink that does. It is the same rule that makes
+     * `--primary-foreground` near-black in both blocks.
+     *
+     * `--heading`, `--foreground` and `--card-foreground` are the three roles
+     * that flip; any of them here reintroduces the bug exactly.
+     */
+    const decl = button.match(/white:\s*"([^"]*)"/)?.[1];
+    expect(decl, "the white variant must still exist to be checked").toBeTruthy();
+    for (const role of ["text-heading", "text-foreground", "text-card-foreground"]) {
+      expect(decl, `white's ink must not be ${role}: it flips with the theme under a fill that does not`)
+        .not.toMatch(new RegExp(`\\b${role}\\b`));
+    }
+    // And it must actually SET one — inheriting is the same failure by omission.
+    expect(decl, "white must name its own ink").toMatch(/\btext-[a-z0-9-]+\b/);
     /**
      * "+ Add" SPENDS NO BRAND ANY MORE, and this is the second reversal.
      * It was `white`, then `accent` on `cd621bf` because the frame of the day

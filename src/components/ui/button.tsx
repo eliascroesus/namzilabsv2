@@ -143,20 +143,35 @@ const buttonVariants = cva(
         // ramp's dark end is the PAGE now (#121214), so spelling the ink there
         // put near-black-on-white on a control the Figma draws in a mid grey.
         /**
-         * THE INK IS `--heading`, NOT `--neutral-500`, AND THAT IS WHY THE ROW
-         * READ AS WASHED OUT.
+         * THE INK IS A RAMP VALUE, NOT A ROLE, BECAUSE THE FILL IS ONE TOO —
+         * AND GETTING THAT WRONG PAINTED FOUR CONTROLS WHITE ON WHITE.
          *
-         * Measured against node 0:5: the frame sets every label in this row at
-         * #2E2E2E, 13.58:1 on white. This variant shipped `text-neutral-500` —
-         * #6B6B6B, 5.33:1 — so "Add", "Today", "Compare To" and "Refresh All"
-         * carried barely a third of the frame's contrast. At the same 13px,
-         * lighter ink reads as both thinner and SMALLER, which is what
-         * "everything looks small" turned out to mean.
+         * The history in two steps. It shipped `text-neutral-500` (#6B6B6B,
+         * 5.33:1) where node 0:5 sets this row at #2E2E2E (13.58:1), so "Add",
+         * "Today", "Compare To" and "Refresh All" carried barely a third of the
+         * frame's contrast; at 13px, lighter ink reads as both thinner and
+         * SMALLER, which is what "everything looks small" turned out to mean.
+         * The fix was `text-heading` — #313131 on light, 12.6:1, correct.
          *
-         * `--heading` is #313131 (12.6:1), one step off the frame's own value
-         * and the role a label of this weight belongs to.
+         * AND `--heading` IS `#FFFFFF` IN THE DARK THEME. This variant's fill
+         * is a literal `bg-white` in BOTH themes (deliberately — nodes 49:5429
+         * and 49:5439 draw these two as white pills on the console, and
+         * BRAND_KIT §2 owns that as a departure from "quiet chrome"). So on
+         * dark the row rendered white ink on a white fill: 1:1, four controls
+         * that are not dim but INVISIBLE. No source test could see it — every
+         * class was correct — and a dark screenshot shows it instantly.
+         *
+         * THE RULE IT BROKE IS ALREADY WRITTEN DOWN, one variant up: a button
+         * is one object, and the ink on a fill that does not change with the
+         * theme must not change with the theme either. That is exactly why
+         * `--primary-foreground` is near-black in both blocks. A fixed fill
+         * takes a fixed ink, so this reads the RAMP (#333333, theme-invariant
+         * by construction) rather than a role that flips underneath it —
+         * 12.14:1 on white, one count off `--heading`'s own #313131 and two
+         * off the frame's #2E2E2E, which is the contrast the fix above was
+         * reaching for in the first place.
          */
-        white: "border border-border bg-white text-heading shadow-xs hover:bg-neutral-50 active:bg-neutral-100",
+        white: "border border-border bg-white text-neutral-800 shadow-xs hover:bg-neutral-50 active:bg-neutral-100",
         /** THE REFERENCE'S OWN BADGE-AS-BUTTON: a 10% brand wash inside a 20%
          *  brand ring, carrying brand ink. On a light page this shape was
          *  impossible in the brand — a yellow wash under yellow ink needs

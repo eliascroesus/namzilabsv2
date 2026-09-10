@@ -61,42 +61,51 @@ exhausting by 4pm.
 
 ## 2. Color
 
-### The brand ramp — one lime, and the ink that had to invert
+### The brand ramp — one blue, and the split that finally retired
 
 The kit ran **"yellow FILLS, violet DRAWS"** for one reason: `#EECF00` measures
 1.55:1 as a stroke on white and 11.24:1 as a fill under near-black — an *absent*
-line and a superb box, so one colour could never do both jobs. Blue retired that
-split by clearing its bar both ways.
+line and a superb box, so one colour could never do both jobs. The 2024 blue
+retired that split by clearing its bar both ways. **The lime brought it back**,
+springing the same trap halfway: 1.20:1 on white is not a dim line, it is no
+line, so the light theme had to carry a second value (`#4F7A00`) that shared
+nothing with the brand but a hue.
 
-**Lime springs the same trap halfway**, and that decides the whole ramp:
+**The 10 September 2026 Figma supplies `#568CFF`** (nodes 35:5917 / 35:6331 /
+35:6745), and it clears every bar the lime failed:
 
-| | measured |
-|---|---|
-| `#B6FF56` under `#2C2C2C` ink | **11.59:1** |
-| `#B6FF56` as a stroke on `#121214` | **15.53:1** |
-| `#B6FF56` under WHITE ink | **1.20:1** |
-| `#B6FF56` as a stroke on WHITE | **1.20:1** |
+| | measured | |
+|---|---|---|
+| `#568CFF` under `#1F1F1F` ink | **5.18:1** | a legal fill |
+| `#568CFF` as a stroke on `#121214` | **6.29:1** | a line on dark |
+| `#568CFF` as a stroke on WHITE | **3.18:1** | **a line on light** |
+| `#568CFF` under WHITE ink | **3.18:1** | not a label — see below |
 
-So the ink **inverted** — `--primary-foreground` is `#2C2C2C` in BOTH themes,
-because white on lime cannot be read at any size — and the split **moved**: on
-dark one value does the fill, the stroke and the chart series, while light
-alone needs a solved-down stroke.
+So the ink **stayed near-black**: `--primary-foreground` is `#1F1F1F` in every
+mode, because the reflex answer on a blue fill — white — measures 3.18:1 here
+and cannot be read at any size. Node 35:6023 draws `#2E2E2E`; that is 4.27:1 on
+this fill, a hair under what a 13px label owes, so the shipped ink is one count
+deeper and visually identical.
+
+And the split **retired**: `--marker` is `brand-400` in BOTH themes now, where
+the lime forced a fork. `brand-800` survives for the one job 3.18:1 cannot do —
+brand-coloured **text** on white — and nothing in the kit spells that yet.
 
 | Step | Hex | Role | Measured |
 |---|---|---|---|
-| 50 | `#F4FFE4` | wash on light | — |
-| 100 | `#E9FFC9` | | — |
-| 200 | `#DBFFA6` | | — |
-| 300 | `#C9FF7D` | hover of the fill — LIGHTER, because on near-black raised means lighter | 12.02:1 under `#2C2C2C` |
-| 400 | `#B6FF56` | **THE BRAND**: the fill (`--primary`), the dark stroke (`--marker` in `.dark`), and the default chart series | 15.53:1 on `#121214`; 11.59:1 under its own ink |
-| 500 | `#A2E844` | pressed | 9.42:1 under `#2C2C2C` |
-| 600 | `#8ACC2E` | reserved | — |
-| 700 | `#6FA61C` | reserved | — |
-| 800 | `#4F7A00` | **THE LIGHT STROKE** (`--marker` in `:root`): links, ring, active rule on white | 5.10:1 on white, where the brand itself is 1.20:1 |
-| 900 | `#3D5E00` | reserved — light hover of a stroke | 7.50:1 on white |
+| 50 | `#EEF4FF` | wash on light | — |
+| 100 | `#DCE8FF` | | — |
+| 200 | `#C0D5FF` | | — |
+| 300 | `#8FB2FF` | hover of the fill — LIGHTER, because on near-black raised means lighter | — |
+| 400 | `#568CFF` | **THE BRAND**: the fill (`--primary`), the stroke (`--marker`) in BOTH themes, and the default chart series | 6.29:1 on `#121214`; 5.18:1 under its own ink; 3.18:1 on white |
+| 500 | `#3F73E6` | pressed | — |
+| 600 | `#3767D6` | reserved | — |
+| 700 | `#3462CF` | reserved | — |
+| 800 | `#2F5FD8` | **BRAND-COLOURED TEXT ON WHITE** — the one thing `brand-400` may not be | 5.60:1 on white, where the brand itself is 3.18:1 |
+| 900 | `#24489F` | reserved — light hover of a stroke | 8.36:1 on white |
 
-`--brand-soft` is `rgb(182 255 86 / 0.10)`; `--brand-soft-line` is
-`rgb(182 255 86 / 0.25)` on dark and `0.30` on light — a 10% wash needs more
+`--brand-soft` is `rgb(86 140 255 / 0.10)`; `--brand-soft-line` is
+`rgb(86 140 255 / 0.25)` on dark and `0.30` on light — a 10% wash needs more
 ring on the lighter ground to keep an edge.
 
 **Hover now walks UP in BOTH themes**, and losing that asymmetry is a
@@ -135,12 +144,18 @@ different kinds of fact.
 `#4A4A4A` is still used exactly as drawn where it sits on WHITE — the "Today"
 and "Refresh All" ink — where it measures 8.86:1.
 
-**And one deviation that runs the OTHER WAY, recorded here for the same
-reason.** The chart marks are `#B6FF56` in BOTH themes, which on a white card
-measures **1.20:1** — far under the 3:1 a meaningful graphic owes. It is not a
-substitution and not an oversight: node 58:5824, the LIGHT frame, draws its bars
-and its legend dot at that exact value on white, sampled from the export, and it
-was asked for directly.
+**And one deviation that ran the OTHER WAY has now RETIRED, which is worth
+recording as carefully as it was worth recording when it was live.** The chart
+marks were `#B6FF56` in both themes, and on a white card that measures
+**1.20:1** — far under the 3:1 a meaningful graphic owes. It was not a
+substitution and not an oversight: node 58:5824, the LIGHT frame, drew its bars
+and its legend dot at that exact value on white and it was asked for directly.
+
+The 10 September blue closes it without anybody having to argue the point
+again: the same `brand-400` measures **3.18:1** on white, so the mark the
+Figma draws and the mark the guideline allows are finally the same value. This
+row stays in the table because a deviation that quietly disappears reads as one
+that was never real.
 
 What makes it a different case from the two greys above is what the colour is
 doing. Those carry TEXT, which has to be *read*; a 46px bar or a 3px series line
@@ -156,7 +171,7 @@ both chose it, and it is written down so nobody re-derives it as a bug.
 **The white buttons are NOT a substitution, and are worth naming here so they
 are not mistaken for one.** Nodes 49:5429 and 49:5439 draw those two controls as
 white pills, adjacent and unambiguous. On a `#121214` console a white fill is the
-loudest object on screen after the lime, which argues against this kit's own
+loudest object on screen after the brand, which argues against this kit's own
 "quiet chrome" thesis. They ship as drawn.
 
 ### The neutral ramp (dark), re-cut for one ground and one card
@@ -234,7 +249,7 @@ because dark has three surfaces again; light never stopped having two.
 | `--accent` (hover) | `#ECECEC` — one further step down; see the depth note above | — |
 | `--rule` (heavier control edge) | `#CFCFCF` — one clear step darker than `--border`, the relationship `#4A4A4A` has to `#343434` in dark | — |
 | `--popover` / `--popover-foreground` | `= --card` / `= --card-foreground`, in BOTH themes — a menu is a card that floats, and pointing rather than repeating is what stops the two drifting | — |
-| `--primary` / `--marker` | `#B6FF56` / `#4F7A00` | see the brand ramp above — one value on dark, a solved-down stroke on light |
+| `--primary` / `--marker` | `#568CFF` / `#568CFF` | see the brand ramp above — ONE value in both themes since 10 Sep 2026; `#2F5FD8` (`brand-800`) is kept for brand-coloured text on white |
 | `--success` etc. | unchanged (`#00734B` trio) | 5.91:1 on white |
 | `--freshness-dot` | `#34C759` on `rgb(0 212 146 / .15)` | 8.36:1 on `#121214` — the one Figma variable actually bound in the file (`Accents/Green`), and untouched by this re-theme. On white the dot keeps its halo: flat `#34C759` alone measures **2.22:1** there, so the halo is load-bearing, not decorative |
 
@@ -256,7 +271,7 @@ token`). The last three rows are a different case, flagged as such:
 | `--rail`, `--sidebar`, `--sidebar-accent` | `background`, `neutral-700` | — |
 | `--accent-yellow` | `primary` | two yellows four counts apart under two names |
 | `.focus-ring-light` | the global ring | the product's ring was invisible on the one dark surface |
-| blue `brand-400`/`brand-600` (`#3D9BFF`/`#0070E8`) | `brand-400` at `#B6FF56`, with 600 reserved | **not a dead class** — the 8 September 2026 Figma named a lime four days after this ramp last moved, and collapsed the fill and stroke onto ONE step. `bg-brand-600` still compiles and now paints a mid-olive nothing reads. A class surviving under a new value is the "plausible and wrong" case this table exists to catch in the DOCS, not the code |
+| blue `brand-400`/`brand-600` (`#3D9BFF`/`#0070E8`) | `brand-400` at `#568CFF`, with 600 reserved | **not a dead class** — and now a row that has been re-cut TWICE under one name. The 8 September 2026 Figma named a lime and collapsed fill and stroke onto ONE step; the 10 September Figma named a blue and kept that collapse while retiring the light/dark fork as well. `bg-brand-600` has compiled throughout and has painted a mid-blue, then a mid-olive, then a mid-blue again, with nothing reading any of them. A value that changes under a name that does not is exactly the "plausible and wrong" case this table exists to catch in the DOCS, not the code |
 | `rounded-full` on `buttonVariants`'s base class | `rounded-control` | **not a dead class either** — the shape rule flipped to a pill and back for the second time (§4); `rounded-full` still compiles on purpose (avatars, the bell badge, the freshness dot, the active-count numeral), so this row is a paper trail for the next flip rather than a dead-class warning |
 
 `neutral-300`, `neutral-100` and `neutral-50` are deliberately NOT in that
@@ -689,12 +704,22 @@ toolbar · **24** rail. `strokeWidth` 2 (2.25 only at ≤14px). Text glyphs
 
 ## 9. Data visualization
 
-**Marks are the BRAND now, not the marker.** The Figma's own chart draws
-its series in the same lime as its buttons: `--color-brand-400` (`#B6FF56`)
-is the default series colour, an area fill under a line is
-`rgb(0 123 255 / .12)` — which `Sparkbars` spells `bg-brand-500/12`, up from
-the 5% it had inherited, keeping its 25% border — and a bar is `#B6FF56`
-flat. Target-met
+**Marks are the BRAND, and since 10 Sep 2026 the brand and the marker are the
+same value anyway.** The Figma's own chart draws its series in the same blue as
+its buttons: `--color-brand-400` (`#568CFF`, node 35:7208) is the default
+series colour, an area fill under a line is `rgb(0 123 255 / .12)` — which
+`Sparkbars` spells `bg-brand-500/12`, up from the 5% it had inherited, keeping
+its 25% border — and a bar is `#568CFF` flat.
+
+**The comparison series is the one mark that had to be RE-CUT rather than
+re-pointed.** It was `#5AA9E6`, a blue, chosen because the series beside it was
+lime — two hues a reader can tell apart. Both are blue now, so hue is no longer
+available and the separation moved to **lightness**, which is also the one
+channel every kind of colour-blind reader keeps: `--series-compare` is a
+desaturated slate (`#7A90B8`, 3.23:1 on white; `#7F93B5` on the dark card),
+unmistakably behind the subject and never competing with it. Node 35:7212 draws
+it `rgba(10,151,213,0.5)`, which flattens to `#84CBEA` on white and measures
+**1.79:1** — an absent line, and one of this pass's two substitutions. Target-met
 stays `success`; bottleneck stays `danger`; tracks stay `bg-muted`.
 Headline numbers per §3 — 28px now, not 36, and inked with `--heading`
 rather than inherited, which is the same white in dark and `#313131` in
@@ -778,9 +803,10 @@ role values for a surface to be pinned against.
 
 **Heat is magnitude, never judgement.** The calendar tints each day by its
 share of the month's largest day, in the brand — `color-mix(in srgb,
-var(--color-brand-600) 12–56%, var(--card))`, a blue ramp in both themes: white
-on the deepest dark cell (`#B6FF56` at 56% over `#121214`) is 9.35:1, black on
-the deepest light cell is 9.10:1. It is a tint under a numeral, the shape
+var(--color-brand-600) 12–56%, var(--card))`, one ramp in both themes: white
+on the deepest dark cell (`#3767D6` at 56% over `#121214`) is 9.62:1, black on
+the deepest light cell is 9.14:1 — re-measured for the blue, and both still
+clear of the bar the old lime numbers cleared. It is a tint under a numeral, the shape
 `--accent` already takes behind a selected row — a SURFACE, not a verdict.
 Green-good/red-bad is the same mistake a coloured delta would be, which is why
 this stays the same hue as the fill rather than borrowing `--success`'s: HOW
@@ -821,7 +847,7 @@ rule carries the full substitution table in its own comment (and §2 above).
 
 **This pass adds two more rows to §2's table rather than a new mechanism.**
 The cyan ramp's own values (`#00CDF5`/`#00C0E8`) are retired now that the
-ramp holds `#B6FF56` instead — a class name that keeps compiling
+ramp holds `#568CFF` instead — a class name that keeps compiling
 under a new value is not the same failure a dead class is, but it earns a
 row for the same reason: a value that changed under a name that did not is
 exactly the kind of fact a comment forgets and a table does not.

@@ -68,7 +68,7 @@ export const metadata = { title: "Namzilabs — UI kit" };
  * THE BRAND RAMP IS ONE BLUE, ACROSS THREE JOBS.
  *
  * `600` fills (`--primary`, both themes, under white ink at 4.68:1). `500` is
- * the brand itself — the Figma's own #B6FF56 — bright enough to carry
+ * the brand itself — the Figma's own #568CFF — bright enough to carry
  * white text at 4.5:1 (3.98:1), so it never fills, but exactly right as the
  * hover of the fill, a decorative dot, a chart's default series and the
  * workspace-initial tint. `400` and `800` draw: the dark stroke and the light
@@ -76,16 +76,16 @@ export const metadata = { title: "Namzilabs — UI kit" };
  * owes more room than a button's own ink needs.
  */
 const BRAND: Array<{ step: string; cls: string; hex: string }> = [
-  { step: "50", cls: "bg-brand-50", hex: "#f4ffe4" },
-  { step: "100", cls: "bg-brand-100", hex: "#e9ffc9" },
-  { step: "200", cls: "bg-brand-200", hex: "#dbffa6" },
-  { step: "300", cls: "bg-brand-300", hex: "#c9ff7d" },
-  { step: "400", cls: "bg-brand-400", hex: "#b6ff56" },
-  { step: "500", cls: "bg-brand-500", hex: "#a2e844" },
-  { step: "600", cls: "bg-brand-600", hex: "#8acc2e" },
-  { step: "700", cls: "bg-brand-700", hex: "#6fa61c" },
-  { step: "800", cls: "bg-brand-800", hex: "#4f7a00" },
-  { step: "900", cls: "bg-brand-900", hex: "#3d5e00" },
+  { step: "50", cls: "bg-brand-50", hex: "#eef4ff" },
+  { step: "100", cls: "bg-brand-100", hex: "#dce8ff" },
+  { step: "200", cls: "bg-brand-200", hex: "#c0d5ff" },
+  { step: "300", cls: "bg-brand-300", hex: "#8fb2ff" },
+  { step: "400", cls: "bg-brand-400", hex: "#568cff" },
+  { step: "500", cls: "bg-brand-500", hex: "#3f73e6" },
+  { step: "600", cls: "bg-brand-600", hex: "#3767d6" },
+  { step: "700", cls: "bg-brand-700", hex: "#3462cf" },
+  { step: "800", cls: "bg-brand-800", hex: "#2f5fd8" },
+  { step: "900", cls: "bg-brand-900", hex: "#24489f" },
 ];
 /**
  * THE SURFACE HALF of the neutral ramp — eight steps now, because the
@@ -148,7 +148,7 @@ const DIRECTION: Array<{ rule: string; why: string }> = [
   },
   {
     rule: "One blue, two jobs",
-    why: "#B6FF56 replaces the blue everywhere, and it inverts the ink. Blue was a fill under WHITE; white on lime is 1.20:1, so --primary-foreground is near-black (#2C2C2C) at 11.59:1 in BOTH themes. On dark it needs no second step at all: brand-400 is the STROKE (--marker: links, the focus ring, a selected edge — NOT the active tab's rule, which is the grey --tab-rule role instead) at 15.53:1 on the page, and the FILL, and the default chart series. Light is where the split survives, because lime cannot draw on white: --marker there is a solved-down #4F7A00 at 5.10:1. The 'glyph is location' job the cyan carried folded into this one instead — the rail's active row takes a neutral --control fill UNDER the glyph, and RailChip keeps text-marker on the glyph itself, so location is now two signals rather than the Figma's one colourless fill. Success is still NOT the brand: it keeps the green the brand vacated, because a DONE badge and a New-flow button being one colour puts the loudest state and the loudest act in one vocabulary. Warn and danger are the other two state hues, and status is still quiet when fine.",
+    why: "#568CFF replaces the lime everywhere, and unlike that swap this one does NOT move the ink. The reflex on a blue fill is white; white on #568CFF is 3.18:1, so --primary-foreground stays near-black at #1F1F1F (5.18:1) in every mode — which is what node 35:6023 draws anyway. It is one count deeper than the export's own #2E2E2E because that measures 4.27:1, a hair under what a 13px label owes. What the blue DID retire is the fork: brand-400 is the STROKE (--marker: links, the focus ring, a selected edge — NOT the active tab's rule, which is the grey --tab-rule role instead), the FILL, and the default chart series, and it is the SAME value in both themes for the first time — 6.29:1 on the dark page and 3.18:1 on white, past the 3:1 a line owes where the lime's 1.20:1 was no line at all. brand-800 (#2F5FD8, 5.60:1 on white) survives for the one job 3.18:1 cannot do: brand-coloured TEXT. The 'glyph is location' job the cyan carried folded into this one — the rail's active row takes a neutral --control fill UNDER the glyph, and RailChip keeps text-marker on the glyph itself, so location is two signals rather than the Figma's one colourless fill. Success is still NOT the brand: it keeps the green the brand vacated, because a DONE badge and a New-flow button being one colour puts the loudest state and the loudest act in one vocabulary. Warn and danger are the other two state hues, and status is still quiet when fine.",
   },
   {
     rule: "Ten contains, eight presses",
@@ -382,7 +382,7 @@ export default function DesignPage() {
 
         <Section
           title="Colour"
-          note="ONE LIME, ONE VALUE ON DARK, and every number measured. #B6FF56 FILLS under NEAR-BLACK ink (#2C2C2C) at 11.59:1 — the inversion is the headline, because blue filled under WHITE and white on lime is 1.20:1, an unreadable label rather than a dim one. The same #B6FF56 DRAWS on dark at 15.53:1, so unlike blue it needs no second step to do both jobs. On white it has the yellow's old problem exactly — 1.20:1, an absent line — so light alone keeps a solved-down stroke at #4F7A00 (5.10:1). The split did not retire, it MOVED: not fill-versus-stroke inside a theme, but one value on dark and one for light's stroke. Beside them sits a three-colour accent set (orange, pink, periwinkle) for surfaces that need to be identifiable rather than to mean something; success, warn and danger keep the job of meaning, and the tile's freshness dot has its own #34C759 so retuning a status can never move it."
+          note="ONE BLUE, ONE VALUE EVERYWHERE, and every number measured. #568CFF FILLS under NEAR-BLACK ink (#1F1F1F) at 5.18:1 — the ink did NOT invert back to white, because white on this blue is 3.18:1, an unreadable label rather than a dim one, and node 35:6023 draws it dark anyway. The same #568CFF DRAWS on dark at 6.29:1 AND on white at 3.18:1, which is the headline: the lime measured 1.20:1 on white and so forced light to keep a solved-down stroke of its own (#4F7A00). That fork is gone — --marker is one value in both themes for the first time, exactly as node 35:7208 draws it. brand-800 (#2F5FD8, 5.60:1 on white) is kept for the one job 3.18:1 still cannot do: brand-coloured TEXT. Beside them sits a three-colour accent set (orange, pink, periwinkle) for surfaces that need to be identifiable rather than to mean something; success, warn and danger keep the job of meaning, and the tile's freshness dot has its own #34C759 so retuning a status can never move it."
         >
           <p className="mb-2 text-xs font-medium text-muted-foreground">Brand — 500 draws, 600 fills, brand-*</p>
           <div className="flex overflow-hidden rounded-card border border-border">
@@ -749,7 +749,7 @@ export default function DesignPage() {
 
         <Section
           title="Rail"
-          note="A 260px column on --chrome (#121214), the SAME value as the page beside it, separated by one hairline and nothing else. These tiles are a swatch — the real markup lives in src/components/sidebar.tsx and nowhere else, and it has moved on from what is drawn here: the column no longer opens or closes at all, and its foot carries an Invite Members card over the lime New button. The active row takes a neutral --control fill UNDER its glyph, and the glyph keeps text-marker on top of it — two signals, not the Figma's one — so the brand's 'location' job did not retire with the cyan after all; it just no longer carries the state alone."
+          note="A 260px column that is the one surface the three MODES disagree about: #F3F3F3 in light, #121214 in mix and dark. That is why every value it draws goes through a --rail-* role rather than borrowing the content's — a band on its own ground cannot use --foreground or --border in either direction, and `.mix` is fourteen lines of overrides and nothing else because of it. These tiles are a swatch; the real markup lives in src/components/sidebar.tsx and nowhere else, and it has moved on from what is drawn here: the column no longer opens or closes at all, and its foot carries an Invite Members card over the New button. The active row takes a neutral --control fill UNDER its glyph, and the glyph keeps text-marker on top of it — two signals, not the Figma's one — so the brand's 'location' job did not retire with the cyan after all; it just no longer carries the state alone."
         >
           <div className="flex items-stretch gap-4">
             {/* `bg-rail`, which is what the real rail is painted. It was
@@ -824,7 +824,7 @@ export default function DesignPage() {
 
         <Section
           title="Marks"
-          note="What a dashboard tile is made of. The series is the BRAND — --color-brand-400 (#B6FF56), the same lime as the buttons, with a wash under it — and on dark that is also the stroke step, because the lime clears its bar both ways where the blue did not. A breakdown walks that blue plus the accent three. TargetBar drew met in --success and in-progress in --marker, which were the same green while success WAS the brand — so it rendered both states identically and stopped reporting the only thing it exists to report. That collision is long gone, but the fix outlived it on its own merits: the unmet meter is greyscale and colour ARRIVES when the goal lands, which is the honest reading anyway — a bar at 40% is not good, it is 40%. Every value goes through formatMetricValue, so the tooltip and the headline say the same quantity the same way. A delta is never green or red: up is good for Booked Leads and bad for Speed to Lead, and nothing on a tile knows which — so it is coloured by WHETHER it moved, and the arrow alone carries direction."
+          note="What a dashboard tile is made of. The series is the BRAND — --color-brand-400 (#568CFF), the same blue as the buttons, with a wash under it — and it is the stroke step in BOTH themes now, because #568CFF clears the 3:1 a line owes on white where the lime's 1.20:1 did not. The comparison series had to be re-cut rather than re-pointed: it was a blue chosen to sit beside a lime, and with both series blue the separation moved to LIGHTNESS — a desaturated slate (#7A90B8) that is unmistakably behind the subject, and the one channel every kind of colour-blind reader keeps. A breakdown walks the brand plus the accent three. TargetBar drew met in --success and in-progress in --marker, which were the same green while success WAS the brand — so it rendered both states identically and stopped reporting the only thing it exists to report. That collision is long gone, but the fix outlived it on its own merits: the unmet meter is greyscale and colour ARRIVES when the goal lands, which is the honest reading anyway — a bar at 40% is not good, it is 40%. Every value goes through formatMetricValue, so the tooltip and the headline say the same quantity the same way. A delta is never green or red: up is good for Booked Leads and bad for Speed to Lead, and nothing on a tile knows which — so it is coloured by WHETHER it moved, and the arrow alone carries direction."
         >
           <div className="grid gap-4 rounded-card bg-canvas-bg p-4 sm:grid-cols-2">
             <div className="rounded-surface border border-border bg-card p-5 shadow-card">

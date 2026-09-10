@@ -26,7 +26,16 @@ export type RailSearchEntry =
   | { kind: "page"; label: string; href: string }
   | { kind: "view"; label: string; href: string }
   /** Not a destination — it sets the theme in place. See `ThemeChoice`. */
-  | { kind: "theme"; label: string; theme: "light" | "dark" | "system" };
+  | { kind: "theme"; label: string; theme: ThemeValue };
+
+/**
+ * A MODE THE APP CAN BE IN — named once, here, because the union used to be
+ * spelled out twice in this file and a third mode landing in `theme.tsx`
+ * turned both copies into a type error rather than a silently narrow list.
+ * That is the good failure; this alias is what makes it a one-line fix next
+ * time. `theme.tsx` owns the ORDER and the glyphs, this owns the vocabulary.
+ */
+export type ThemeValue = "light" | "mix" | "dark" | "system";
 
 /** The group each entry is listed under, in the order the panel draws them. */
 export const RAIL_SEARCH_GROUPS = ["Pages", "Views", "Theme"] as const;
@@ -48,8 +57,8 @@ export function railSearchEntries(opts: {
   items: Array<{ label: string; href: string }>;
   /** The workspace's views, already sorted by `viewStrip`. */
   views: Array<{ id: string | null; name: string; isDefault?: boolean }>;
-  /** The theme trio, from `theme.tsx` — passed in rather than imported, so this stays free of React. */
-  themes: ReadonlyArray<{ value: "light" | "dark" | "system"; label: string }>;
+  /** The modes, from `theme.tsx` — passed in rather than imported, so this stays free of React. */
+  themes: ReadonlyArray<{ value: ThemeValue; label: string }>;
 }): RailSearchEntry[] {
   return [
     ...opts.items.map(({ label, href }): RailSearchEntry => ({ kind: "page", label, href })),

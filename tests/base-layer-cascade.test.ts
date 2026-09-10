@@ -195,8 +195,15 @@ describe("the stylesheet says each thing once", () => {
   });
 
   it("sets the tap highlight in the brand, not in the success colour", () => {
-    expect(bare).toMatch(/-webkit-tap-highlight-color:\s*rgb\(182 255 86 \/ 0\.12\)/);
+    // THIS LITERAL CANNOT FOLLOW THE RAMP — a `-webkit-tap-highlight-color`
+    // takes no `var()` in the browsers that honour it — so it has to be edited
+    // by hand every time the brand moves, and the last time it was NOT: the
+    // value went on saying #00D492 for a month after the lime landed. It moved
+    // again with the 10 September blue, and this is what makes that a build
+    // failure rather than something no desktop screenshot can show.
+    expect(bare).toMatch(/-webkit-tap-highlight-color:\s*rgb\(86 140 255 \/ 0\.12\)/);
     expect(bare).not.toMatch(/-webkit-tap-highlight-color:\s*rgb\(0 212 146/);
+    expect(bare).not.toMatch(/-webkit-tap-highlight-color:\s*rgb\(182 255 86/);
   });
 
   it("keeps #00D492 where it is still the right answer", () => {
