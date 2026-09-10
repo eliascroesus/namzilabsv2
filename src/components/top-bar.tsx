@@ -165,7 +165,7 @@ export function TopBar({
           {/* "Updated just now" lands HERE, from the page that knows. A bar
               cannot honestly claim a freshness it has not measured, so this
               stays a slot rather than a string. */}
-          <div id="topbar-status" className="flex shrink-0 items-center p-2 text-[13px] leading-4 text-topbar-muted empty:hidden" />
+          <div id="topbar-status" className="flex shrink-0 items-center p-2 text-button leading-5 text-topbar-muted empty:hidden" />
 
           <ShareLink />
           <ThemeToggle />
@@ -231,7 +231,7 @@ function ShareLink() {
          the bar with no box. `h-auto px-0` takes the rung's height and padding
          off while keeping the variant's states, its focus ring and its
          disabled handling, which is the half that actually matters. */
-      className="hidden h-auto shrink-0 gap-1 rounded-control p-2 text-[13px] font-normal leading-4 text-topbar-foreground hover:bg-topbar-control active:bg-topbar-control md:inline-flex [&_svg]:size-3"
+      className="hidden h-auto shrink-0 gap-1.5 rounded-control p-2 text-button font-normal leading-5 text-topbar-foreground hover:bg-topbar-control active:bg-topbar-control md:inline-flex [&_svg]:size-3.5"
     >
       <Link2 aria-hidden />
       {/* `aria-live` so the change is announced rather than only seen. */}

@@ -184,8 +184,18 @@ describe("type: the Figma's sizes", () => {
     expect(token("text-sm--line-height")).toBe("1.125rem"); // 18px
   });
 
-  it("the small step is 12px — axis labels, legend, delta chip, Main Menu", () => {
-    expect(token("text-xs")).toBe("0.75rem");
+  it("the small step is 13px — axis labels, legend, delta chip, Main Menu", () => {
+    /**
+     * 12px UNTIL 10 SEP 2026, and it was the smallest thing in the product and
+     * the most used — the freshness line, both chart axes, the legend, the caps
+     * label, the invite card, every caption. Beside a 14px row it read as fine
+     * print, which is most of what "everything looks small" was once the
+     * controls came back to the kit's 32px.
+     *
+     * THE LINE BOX DID NOT MOVE. 16px at 13 rather than at 12, so no row grew
+     * and the three bars still sum to 155 — only the glyphs changed.
+     */
+    expect(token("text-xs")).toBe("0.8125rem");
     expect(token("text-xs--line-height")).toBe("1rem"); // 16px
   });
 

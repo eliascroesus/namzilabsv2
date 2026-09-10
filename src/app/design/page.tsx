@@ -180,12 +180,12 @@ const TYPE: Array<{ token: string; cls: string; px: string; use: string; sample:
   { token: "text-lg", cls: "text-lg font-semibold tracking-tight", px: "18px", use: "Card and modal titles", sample: "Speed to lead" },
   { token: "text-md", cls: "text-md font-semibold", px: "17px", use: "Panel titles, hero list rows", sample: "Speed to lead" },
   { token: "text-sm", cls: "text-sm", px: "14px", use: "Body, menu items, table cells — the default", sample: "Speed to lead" },
-  { token: "text-xs", cls: "text-xs", px: "12px", use: "Helper text, captions, dense controls, buttons and field labels", sample: "Speed to lead" },
+  { token: "text-xs", cls: "text-xs", px: "13px", use: "Helper text, captions, dense controls, buttons and field labels", sample: "Speed to lead" },
   {
     token: "text-2xs",
     cls: "label-micro",
-    px: "11px",
-    use: "The micro badge — ALL CAPS at --tracking-label, and never prose. At 11px a sentence is not small text, it is unreadable text",
+    px: "12px",
+    use: "The micro badge — ALL CAPS at --tracking-label, and never prose. At 12px a sentence is not small text, it is unreadable text",
     sample: "Speed to lead",
   },
 ];
