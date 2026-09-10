@@ -97,8 +97,8 @@ const BRAND: Array<{ step: string; cls: string; hex: string }> = [
  * is the heavier rule a checkbox or a switch track owes.
  */
 const SURFACE: Array<{ step: string; cls: string; hex: string }> = [
-  { step: "950", cls: "bg-neutral-950", hex: "#121214" },
-  { step: "925", cls: "bg-neutral-925", hex: "#121214" },
+  { step: "950", cls: "bg-neutral-950", hex: "#121212" },
+  { step: "925", cls: "bg-neutral-925", hex: "#151515" },
   { step: "900", cls: "bg-neutral-900", hex: "#191919" },
   { step: "850", cls: "bg-neutral-850", hex: "#202020" },
   { step: "800", cls: "bg-neutral-800", hex: "#333333" },

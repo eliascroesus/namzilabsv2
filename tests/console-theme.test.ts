@@ -68,11 +68,13 @@ describe("the console's supplied constants", () => {
     expect(token("primary")).toBe("var(--color-brand-400)");
   });
 
-  it("grounds on #121214", () => {
-    // The page ground under the lime re-theme's ONE-surface model: the bar,
-    // the rail and the content area are all this value, and only the card
-    // steps away from it.
-    expect(token("color-neutral-950")).toBe("#121214");
+  it("grounds on #121212", () => {
+    // The page, the rail, the 8px gutter and the board's own ground. It was
+    // #121214 and it carried the top bar too; the owner supplied #121212 for
+    // this step and #151515 for the bar on 11 Sep 2026, so the chrome is a
+    // real step off the page for the first time. See `blue-theme.test.ts`,
+    // which asserts all three surfaces and their order.
+    expect(token("color-neutral-950")).toBe("#121212");
   });
 
   it("keeps the canvas frozen even though the ground moved on without it", () => {
@@ -177,7 +179,7 @@ describe("the console's supplied constants", () => {
     for (const g of gaps) expect(["2", "4"], `a rail column at an off-scale gap: ${g}`).toContain(g);
   });
 
-  it("still defines the white button literally, though + Add moved off it", () => {
+  it("defines the white button as a ROLE now, not as a literal", () => {
     // Specified as a colour rather than a role, and #FFFFFF is not any token:
     // `--foreground` — the nearest role, and how `default` gets a light button
     // on the console — is #E8E6E7, four counts off. The literal `white`
@@ -186,7 +188,20 @@ describe("the console's supplied constants", () => {
     // being true the moment the 4 Sep 2026 blue retheme's header pass reserved
     // the brand fill for "+ Add" and "New flow": `variant="accent"` IS that
     // fill (`bg-primary` under `text-primary-foreground`).
-    expect(button).toMatch(/white:\s*"[^"]*\bbg-white\b/);
+    /**
+     * IT WAS A LITERAL, AND THAT IS WHAT PUT FOUR WHITE SLABS ON THE DARK
+     * BOARD. `bg-white` in both themes was defensible while nodes 49:5429 and
+     * 49:5439 were the reference — they draw two white pills on the console —
+     * and the owner overruled it on 11 Sep 2026: "fix all the button colors as
+     * well for the dark theme because it is completely wrong it is suppose to
+     * be #151515".
+     *
+     * `--secondary` already meant this: white with a hairline on light, and
+     * the button face on dark. So the variant reads the role and the literal
+     * is gone.
+     */
+    expect(button).toMatch(/white:\s*\n?\s*"[^"]*\bbg-secondary\b/);
+    expect(button, "the literal must not come back").not.toMatch(/white:\s*\n?\s*"[^"]*\bbg-white\b/);
   });
 
   it("gives that literal fill an ink that is a LITERAL too, not a role", () => {
@@ -232,15 +247,24 @@ describe("the console's supplied constants", () => {
     );
   });
 
-  it("keeps the white button's active state off white-on-white", () => {
-    // `--color-neutral-200` is #ffffff now (the Figma sets body ink in
-    // white), so the `white` variant's old `active:bg-neutral-200` pressed to
-    // the exact colour the button already was. `hover` moves to neutral-50,
-    // `active` to neutral-100, so the button still has somewhere to go.
-    const white = button.match(/white:\s*"([^"]+)"/)?.[1] ?? "";
-    expect(white).toMatch(/\bhover:bg-neutral-50\b/);
-    expect(white).toMatch(/\bactive:bg-neutral-100\b/);
-    expect(white, "the old white-on-white active state must be gone").not.toMatch(/\bactive:bg-neutral-200\b/);
+  it("keeps the white button's states on ROLES, so they follow its face", () => {
+    /**
+     * THE STATES USED TO BE RAMP LITERALS — `hover:bg-neutral-50`,
+     * `active:bg-neutral-100` — which was right while the face was a literal
+     * `bg-white`: a fixed fill takes fixed states. The face is `--secondary`
+     * now (#FFFFFF on light, #151515 on dark), so a literal hover would send a
+     * dark button to near-white on the way to being pressed.
+     *
+     * `--accent` is the role for exactly this: a step away from the surface,
+     * solved per theme, and the same one every other variant hovers to.
+     */
+    const white = button.match(/white:\s*\n?\s*"([^"]+)"/)?.[1] ?? "";
+    expect(white, "the white variant must still exist to be checked").toBeTruthy();
+    expect(white).toMatch(/\bbg-secondary\b/);
+    expect(white).toMatch(/\bhover:bg-accent\b/);
+    expect(white).toMatch(/\bactive:bg-accent\b/);
+    expect(white, "no ramp literal can survive a theme-aware face").not.toMatch(/bg-neutral-\d/);
+    expect(white, "and the face itself may not be a literal").not.toMatch(/\bbg-white\b/);
   });
 
   it("gives a workspace chip its fill and its ink from the same key", () => {

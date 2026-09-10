@@ -343,11 +343,25 @@
    * other, which is the invariant that actually holds — "raised" and
    * "recessed" do not survive the mirror and are not used.
    */
-  --color-neutral-950: #121214; /* THE PAGE — and the chrome, and the panel. One surface. */
-  --color-neutral-925: #121214; /* THE CHROME — top bar and rail. Same hex as the page here; a real step in `:root`. */
-  --color-neutral-900: #191919; /* THE CARD — the only surface that steps away, at 1.06:1 */
+  /* ── THE DARK SURFACES, SUPPLIED 11 SEP 2026 ─────────────────────────
+   * The owner named four values directly, which outranks anything derived:
+   * the page and the rail #121212, the top bar #151515, the card #191919, and
+   * every filled BUTTON #151515. So the ramp is a real three-step ladder now
+   * rather than one ground with a card 1.06:1 above it —
+   *
+   *     #121212  page, rail, the 8px gutter, the board's ground
+   *     #151515  top bar, and every button face      (1.11:1 on the page)
+   *     #191919  the card                            (1.20:1 on the page)
+   *
+   * and `925` stops holding the same hex as `950`, which it has done since the
+   * 8 September one-surface re-theme. Each step is small — this product's
+   * hairline is still doing most of the separating — but they are steps, and
+   * a button no longer has to be white to be found. */
+  --color-neutral-950: #121212; /* THE PAGE — the rail, the gutter and the board's ground */
+  --color-neutral-925: #151515; /* THE CHROME — the top bar, and the face of every filled button */
+  --color-neutral-900: #191919; /* THE CARD — the surface a metric's own number sits on */
   --color-neutral-850: #202020; /* THE CONTROL — fields, the search box, the active nav row */
-  --color-neutral-800: #333333; /* grey buttons (`--secondary`) */
+  --color-neutral-800: #333333; /* a hover step above the button face */
   --color-neutral-700: #3a3a3a; /* avatar and icon circles (`--avatar`); `--accent`'s hover step */
   --color-neutral-600: #343434; /* THE HAIRLINE — every separation in the product */
   --color-neutral-500: #4a4a4a; /* the heavier rule: switch track, table divider, ring track */
@@ -443,8 +457,20 @@
    * box rather than on the page, and 15px in a 32px box is the near-miss that
    * reads as a control a size too big for its own chrome.
    */
-  --text-button: 0.875rem; /* 14px — every labelled button, at every rung */
-  --text-button--line-height: 1.25rem;
+  /* 13px/16px — EVERY LABELLED CONTROL, AT EVERY RUNG, and measured against
+     the frames rather than chosen. It was 14/20, and node 35:6094 ("Add"),
+     35:6101 ("Today"), 35:6112 ("Compare To"), 35:6123 ("Refresh All"),
+     35:6039 ("Share"), 35:6051/35:6062/35:6083 (the view tabs) and 35:6023
+     ("New") ALL draw 13/16. Eight controls across two bars, one value, no
+     exceptions — which is what made this a rung rather than a call site.
+     The owner's ask on 11 Sep was for consistency ("the text of the share
+     button … the same as the add button"): they were the same SIZE already
+     and differed in WEIGHT, because the button base spelled `font-medium`
+     while Share overrode to `font-normal`. The frames set all eight at 400,
+     so the base carries 400 now and the two that are genuinely heavier —
+     "New" and the skip link — say `font-semibold` where they are written. */
+  --text-button: 0.8125rem; /* 13px */
+  --text-button--line-height: 1rem; /* 16px */
   /* 14px, DOWN FROM 15 — the single largest reach of this re-theme, because
      `--text-sm` is the app's default body and every surface inherits it. The
      Figma's dominant UI size is 14: nav rows, tabs, card titles, the top bar's
@@ -960,12 +986,12 @@
    * On THIS theme they coincide with the content roles; on light they do not,
    * and that is the whole reason they exist separately.
    */
-  --rail: #121214;
-  --rail-foreground: #ffffff; /* 18.71:1 */
-  --rail-muted: #7e7e7e; /* 4.61:1 — the rail's rest labels */
-  --rail-faint: #6e6e6e; /* 3.67:1 — the "Main Menu" caps label ONLY, never a sentence */
-  --rail-border: #343434; /* the rail's right edge */
-  --rail-control: #202020; /* the active nav row, the invite card */
+  --rail: #121212; /* the owner's value — the SAME as the page, so the gutter's left edge draws nothing */
+  --rail-foreground: #ffffff; /* 18.83:1 */
+  --rail-muted: #7e7e7e; /* 4.62:1 — the rail's rest labels */
+  --rail-faint: #6e6e6e; /* 3.68:1 — the "Main Menu" caps label ONLY, never a sentence */
+  --rail-border: #343434; /* the rail's own hairline — its right edge retired 10 Sep, but the search field and the invite card still take it */
+  --rail-control: #202020; /* the active nav row, the search field, the invite card */
   --rail-accent: #3a3a3a; /* the avatar disc, and a rail hover */
   /* THE BRAND, ON THE RAIL — the BRIGHT step, because this rail is near-black.
      See `:root` for why the role exists at all now that the two grounds
@@ -977,7 +1003,7 @@
      exists for. It is not white yet: bar 1 still holds white-on-dark content,
      so moving the ground before the content is white on white. The SPLIT is
      this commit; the Figma's values land with the bars rebuilt to carry them. */
-  --topbar: #121214;
+  --topbar: var(--color-neutral-925); /* #151515 — the owner's value, and the first time this band has been a real step off the page */
   --topbar-foreground: #ffffff; /* 18.71:1 */
   --topbar-muted: #7e7e7e; /* 4.61:1 */
   --topbar-faint: #6e6e6e;
@@ -1058,7 +1084,12 @@
   --brand-soft-line: rgb(86 140 255 / 0.25);
 
   /* ---- Neutral roles ----------------------------------------------------- */
-  --secondary: var(--color-neutral-800); /* #333333 — grey buttons */
+  /* THE BUTTON FACE — #151515, supplied. It was #333333, and against a
+     #121212 page that read as a light grey chip rather than as a control on
+     the same material as the bar; the owner's word was "completely wrong".
+     `variant="white"` reads this role now instead of a literal `bg-white`,
+     which is what put four white slabs on the dark board. */
+  --secondary: var(--color-neutral-925); /* #151515 */
   --secondary-foreground: var(--color-neutral-200);
 
   /* AVATAR AND ICON CIRCLES — a role of its own, one step lighter than
@@ -1217,15 +1248,30 @@
  * rail over LIGHT content. That third frame is this block.
  *
  * IT IS NOT A NEW THEME, IT IS `:root` WITH ONE MATERIAL SWAPPED. Everything
- * inside the panel — page, card, bar, hairline, ink, every state colour — is
- * the light theme's and is inherited from `:root` rather than restated. What
- * changes is the rail, and only the rail, which is exactly the shape the
- * `--rail-*` family was cut for: seven roles so that a band on its own ground
- * can be re-grounded without touching the content's vocabulary.
+ * inside the PANEL — card, bar, hairline, ink, every state colour — is the
+ * light theme's and is inherited from `:root` rather than restated. What
+ * changes is the CHROME, which is exactly the shape the `--rail-*` family was
+ * cut for: roles enough that a band on its own ground can be re-grounded
+ * without touching the content's vocabulary.
  *
- * SO THE COST OF THE MODE IS THE LIST BELOW AND NOTHING ELSE. If this block
- * ever needs a fifteenth line, that is the signal a rail value has been
- * hard-coded somewhere instead of going through a role — see `check:ui`.
+ * `--background` IS PART OF THE CHROME HERE, AND THAT IS THE 11 SEP CORRECTION.
+ * This block set the rail and nothing else, which left the 8px gutter around
+ * the panel on the LIGHT page — a near-black column, a bright rim, and a light
+ * panel inside it. The owner's words: "the color behind the padding on the
+ * outer edges … is still bright". The page is not content: on this mode it is
+ * the same material as the rail, and the panel is the only thing that stays
+ * light. So it moves with the rail.
+ *
+ * `--panel` DOES NOT FOLLOW IT, and that is what keeps the mode a mix at all.
+ * It is a literal `#FAFAFA` in `:root` rather than a pointer at
+ * `--background`, so re-grounding the page here leaves the board's own surface
+ * exactly where it was — which is the whole reason that token stopped being a
+ * pointer when the gutter arrived.
+ *
+ * SO THE COST OF THE MODE IS THE LIST BELOW AND NOTHING ELSE. Every line is a
+ * `--rail-*` or the page under it. A THIRD kind of name appearing here is the
+ * signal that a content value has been forked per-mode, which is how a
+ * two-theme kit becomes a three-theme one by accident.
  *
  * WHY IT IS WORTH HAVING AT ALL. This was the light theme for two days, and it
  * is the arrangement Linear, Height and Vercel's dashboard all ship: a dark
@@ -1239,16 +1285,21 @@
  * is on the light ground. The rail does not use them: it reads `--rail-*`.
  */
 .mix {
-  --rail: #121214;
-  --rail-foreground: #ffffff; /* 18.71:1 */
-  --rail-muted: #7e7e7e; /* 4.61:1 — the rail's rest labels */
-  --rail-faint: #6e6e6e; /* 3.67:1 — the "Main Menu" caps label ONLY, never a sentence */
-  --rail-border: #343434; /* the rail's right edge */
-  --rail-control: #202020; /* the active nav row, the invite card */
+  --rail: #121212; /* the owner's value — the SAME as the page, so the gutter's left edge draws nothing */
+  --rail-foreground: #ffffff; /* 18.83:1 */
+  --rail-muted: #7e7e7e; /* 4.62:1 — the rail's rest labels */
+  --rail-faint: #6e6e6e; /* 3.68:1 — the "Main Menu" caps label ONLY, never a sentence */
+  --rail-border: #343434; /* the rail's own hairline — its right edge retired 10 Sep, but the search field and the invite card still take it */
+  --rail-control: #202020; /* the active nav row, the search field, the invite card */
   --rail-accent: #3a3a3a; /* the avatar disc, and a rail hover */
   /* THE BRIGHT step, as in `.dark` — this rail has the near-black ground that
      value was solved against, where `:root`'s light rail does not. */
-  --rail-brand: var(--color-brand-400); /* 6.29:1 on #121214 */
+  --rail-brand: var(--color-brand-400); /* 6.29:1 on #121212 */
+
+  /* THE PAGE, WHICH IS CHROME ON THIS MODE — see the note above. It carries
+     the 8px gutter around the panel and the strip under the rail's foot, and
+     both of those are the rail's material rather than the board's. */
+  --background: var(--color-neutral-950); /* #121212 — the same value as the rail */
 }
 
 /**
@@ -1639,13 +1690,19 @@ html.mix {
    properties and the media query picks one. No JavaScript, no flash, no
    server/client mismatch to reconcile.
 
-   THE GAP IS THE PAGE'S OWN GUTTER. It was 16 against a 24px page inset and a
-   24px gap on every other board in the product, so the custom view was the one
-   grid in the app whose tiles sat closer together than the page's own edges —
-   which reads as the tiles being crowded rather than as a different rhythm.
-   One number: 24 on the sides, 24 to the top, 24 between two tiles.
+   THE GAP IS 16 INSIDE A 24px INSET, WHICH IS THE FRAME'S OWN PAIRING and not
+   the one number this comment used to argue for.
 
-   `grid-auto-rows` is 24px against a 24px gap, which is a PITCH of 48 — the
+   It said: "It was 16 against a 24px page inset … so the custom view was the
+   one grid in the app whose tiles sat closer together than the page's own
+   edges", and settled on 24 everywhere. That reasoning treats the inset and
+   the gutter as the same measurement, and they are not — the inset separates
+   the board from the CHROME, the gutter separates two cards from each other,
+   and a gutter smaller than the inset is what makes a grid read as one field
+   of cards rather than as a scatter. Node 35:6124 draws exactly that:
+   `padding: 24px; gap: 16px`. The owner asked for it directly on 11 Sep 2026.
+
+   `grid-auto-rows` is 24px against a 16px gap, which is a PITCH of 40 — the
    `ROW_UNIT_PX` the resize gesture converts pixels to rows with. The two numbers
    are one fact spelled two ways, and src/lib/board/grid.ts owns it; a tile `h`
    rows tall measures `h * 40 - 16` px. If they ever disagree, a tile settles a
@@ -1654,8 +1711,8 @@ html.mix {
   .board-canvas {
     display: grid;
     grid-template-columns: repeat(1, minmax(0, 1fr));
-    /* THE ROW IS 24 AND THE GUTTER IS 24, which is `ROW_UNIT_PX`(48) minus
-       `GRID_GAP_PX`(24) and `GRID_GAP_PX` itself. Those two constants live in
+    /* THE ROW IS 24 AND THE GUTTER IS 16, which is `ROW_UNIT_PX`(40) minus
+       `GRID_GAP_PX`(16) and `GRID_GAP_PX` itself. Those two constants live in
        `src/lib/board/grid.ts` and this rule is the other half of the same fact:
        the resize gesture converts pixels to rows with that pitch, so if the CSS
        and the constants disagree a tile settles a row away from where it was
@@ -1665,7 +1722,7 @@ html.mix {
        node 0:5 draws 24 and a ten-row card of 456. See `grid.ts`, which owns
        the arithmetic and the history. */
     grid-auto-rows: 24px;
-    gap: 24px;
+    gap: 16px;
   }
   .board-cell {
     grid-column: var(--c1);

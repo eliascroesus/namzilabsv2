@@ -235,26 +235,33 @@ describe("canvasCells — the properties the CSS actually reads", () => {
   });
 
   it("keeps the pixel pitch the CSS and the resize gesture must agree on", () => {
-    // 48 is a row PLUS its gutter, so `grid-auto-rows: 24px` with `gap: 24px`.
+    // 40 is a row PLUS its gutter, so `grid-auto-rows: 24px` with `gap: 16px`.
     // Sabotage: treat 40 as the row and add the gap on top and every tile grows
     // a gutter per row — 64px on a number tile, which reads as a padding bug.
     //
-    // THE GUTTER IS 24 AGAIN, AND THE ROW STILL NEVER MOVED. It has been 24,
-    // for consistency with the page's own inset — "the one grid in the product
-    // whose tiles sat closer to each other than the page sits to its own edges"
-    // — and both 8 September frames overrule that: node 49:5447 sets
-    // `gap-[16px]` inside a `p-[24px]` main. A board is one object made of
-    // cards, and spacing the cards as far apart as the page's margin makes them
-    // read as separate objects that happen to be adjacent.
+    // THE GUTTER IS 16 AGAIN, AND THE ROW HAS NEVER MOVED. That asymmetry is
+    // the whole design of this pair, and it is why no stored layout changes
+    // meaning when the gutter does: every tile's `h` is a count of ROWS.
     //
-    // Measured cost of the larger value, at 1920 (`pnpm geometry`): a
-    // four-column chart card 521.3px wide against the Figma's 526.67, and a
-    // ten-row card 456px tall against 384. Both fall out of this one number.
-    expect(ROW_UNIT_PX - GRID_GAP_PX).toBe(24);
-    expect(GRID_GAP_PX).toBe(24);
+    // 24 was argued for on consistency with the page's own inset — "the one
+    // grid in the product whose tiles sat closer to each other than the page
+    // sits to its own edges". That treats the inset and the gutter as one
+    // measurement and they are not: the inset separates the board from the
+    // CHROME, the gutter separates two cards from each other, and a gutter
+    // smaller than the inset is what makes a grid read as one field of cards.
+    // Node 35:6124 draws `padding: 24px; gap: 16px`; the owner asked for it
+    // directly on 11 Sep 2026.
+    //
+    // Measured at 1920 (`pnpm geometry`), and this is the confirmation that
+    // matters: at a 16 gutter a four-column chart card is 523.33 x 384, which
+    // is node 35:6126's own `width` and `height` to the decimal. At 24 it was
+    // 518 x 456 and the frame's 523.33 had to be explained away as a rounding
+    // artifact. It was not an artifact; it was the gutter.
+    expect(ROW_UNIT_PX - GRID_GAP_PX, "the ROW, which never moves").toBe(24);
+    expect(GRID_GAP_PX, "the GUTTER, which has now moved four times").toBe(16);
     const css = readFileSync(join(process.cwd(), "src/app/globals.css"), "utf8");
     expect(css).toMatch(/grid-auto-rows:\s*24px/);
-    expect(css).toMatch(/\.board-canvas\s*\{[^}]*gap:\s*24px/);
+    expect(css).toMatch(/\.board-canvas\s*\{[^}]*gap:\s*16px/);
   });
 });
 

@@ -148,12 +148,33 @@ describe("--marker is ONE value now, which is what the re-theme bought", () => {
 });
 
 describe("one surface on dark, and a rail that is no longer constant", () => {
-  it("page, chrome and panel are all #121214 ON DARK", () => {
-    expect(token("color-neutral-950")).toBe("#121214");
-    expect(token("color-neutral-925")).toBe("#121214");
+  it("draws THREE surface steps on dark, which it did not before", () => {
+    /**
+     * IT WAS ONE GROUND WITH A CARD 1.06:1 ABOVE IT — `950` and `925` held the
+     * same #121214 and the top bar was that value too, which is what the
+     * 8 September one-surface argument asked for. The owner supplied four
+     * values on 11 Sep 2026 and they make a real ladder:
+     *
+     *     #121212  the page, the rail, the 8px gutter, the board's ground
+     *     #151515  the top bar, and the face of every filled button
+     *     #191919  the card
+     *
+     * Each step is small and the hairline still does most of the separating —
+     * but they ARE steps, in the right order, and a button no longer has to be
+     * white to be found on a dark board.
+     */
+    expect(token("color-neutral-950")).toBe("#121212");
+    expect(token("color-neutral-925")).toBe("#151515");
+    expect(token("color-neutral-900")).toBe("#191919");
     expect(darkToken("background")).toBe("var(--color-neutral-950)");
-    expect(darkToken("topbar")).toBe("#121214");
+    expect(darkToken("topbar")).toBe("var(--color-neutral-925)");
     expect(darkToken("panel")).toBe("var(--background)");
+
+    // AND THE ORDER IS THE ASSERTION, not just the values: page darkest, card
+    // lightest. A ramp that inverts reads as a card cut INTO the page.
+    const lum = (h: string) => parseInt(h.slice(1, 3), 16);
+    expect(lum("#121212")).toBeLessThan(lum("#151515"));
+    expect(lum("#151515")).toBeLessThan(lum("#191919"));
   });
 
   it("THE RAIL FLIPS NOW, and that is the whole of `.mix`", () => {
@@ -161,21 +182,38 @@ describe("one surface on dark, and a rail that is no longer constant", () => {
     // September frames draw it three ways: light over light content (35:5917),
     // near-black over light content (35:6331), near-black over dark (35:6745).
     expect(lightToken("rail")).toBe("#f3f3f3");
-    expect(mixToken("rail")).toBe("#121214");
-    expect(darkToken("rail")).toBe("#121214");
+    expect(mixToken("rail")).toBe("#121212");
+    expect(darkToken("rail")).toBe("#121212");
     // The bar does NOT follow it — it is white over both light rails.
     expect(lightToken("topbar")).toBe("#ffffff");
     expect(mixToken("topbar")).toBeNull();
   });
 
-  it("`.mix` overrides the RAIL and nothing else", () => {
-    // This is the claim the block's own comment makes, and the one that keeps
-    // the third mode cheap. A non-rail role appearing here means a content
-    // value has been forked per-mode, which is how a two-theme kit becomes a
-    // three-theme kit by accident.
+  it("`.mix` overrides the CHROME and nothing else", () => {
+    /**
+     * IT WAS "the rail and nothing else", and that left the 8px gutter around
+     * the panel on the LIGHT page: a near-black column, a bright rim, and a
+     * light panel inside it. The owner's words — "the color behind the padding
+     * on the outer edges … is still bright".
+     *
+     * So `--background` joins the list, and the invariant widens by exactly
+     * one name rather than dissolving: on this mode the page is CHROME, not
+     * content. `--panel` deliberately does NOT follow it, which is what keeps
+     * the mode a mix at all — and it can only stay put because that token
+     * stopped being a pointer at `--background` when the gutter arrived.
+     *
+     * A THIRD kind of name here means a content value has been forked
+     * per-mode, which is how a two-theme kit becomes a three-theme kit by
+     * accident.
+     */
     const declared = [...mixBlock().matchAll(/--([a-z0-9-]+):/g)].map((m) => m[1]);
     expect(declared.length).toBeGreaterThan(0);
-    expect(declared.filter((n) => !n.startsWith("rail"))).toEqual([]);
+    expect(declared.filter((n) => !n.startsWith("rail") && n !== "background")).toEqual([]);
+    // The page moves WITH the rail, or the gutter is bright again.
+    expect(mixToken("background")).toBe("var(--color-neutral-950)");
+    // And the panel stays light, or it is not a mix.
+    expect(mixToken("panel")).toBeNull();
+    expect(lightToken("panel")).toBe("#fafafa");
   });
 
   it("every rail role is set in all three modes, so none can fall through", () => {

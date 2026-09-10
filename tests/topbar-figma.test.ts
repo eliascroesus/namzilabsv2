@@ -37,8 +37,8 @@ describe("the rail and the top bar are two surfaces", () => {
     // and `--topbar-*` is what makes that a change to CSS rather than to the
     // shell — which is the thing this file exists to protect.
     expect(light).toMatch(/--rail:\s*#f3f3f3/i);
-    expect(mix).toMatch(/--rail:\s*#121214/i);
-    expect(dark).toMatch(/--rail:\s*#121214/i);
+    expect(mix).toMatch(/--rail:\s*#121212/i);
+    expect(dark).toMatch(/--rail:\s*#121212/i);
   });
 
   it("keeps the bar WHITE over both of the light-content modes", () => {
@@ -46,7 +46,10 @@ describe("the rail and the top bar are two surfaces", () => {
     // rail against a white bar, which only works while these are two families.
     expect(light).toMatch(/--topbar:\s*#ffffff/i);
     expect(mix).not.toMatch(/--topbar:/);
-    expect(dark).toMatch(/--topbar:\s*#121214/i);
+    // #151515 THROUGH THE RAMP, not as a literal — it is the same value the
+    // button face takes, and naming it once is what keeps the bar and the
+    // controls on one material when either moves.
+    expect(dark).toMatch(/--topbar:\s*var\(--color-neutral-925\)/i);
   });
 
   it("gives the rail every role it had as the chrome, in all three modes", () => {

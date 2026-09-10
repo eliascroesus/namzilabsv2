@@ -141,14 +141,29 @@ describe("a chart card's delta sits BESIDE its number, at the far end", () => {
 });
 
 describe("a button's label is 14px, which the kit only now actually has", () => {
-  it("defines --text-button at 14px", () => {
+  it("defines --text-button at 13px, which is what every frame draws", () => {
     /**
-     * `ui/button.tsx` has argued for 14 since the heights came down — "14 on
-     * 32 leaves 6px above and below the cap height" — and every rung spelled
-     * `text-sm`, which is 15. The prose was documentation of a step the scale
-     * did not contain.
+     * IT WAS 15 (`text-sm`), THEN 14, AND IS 13.
+     *
+     * The 14 came from `ui/button.tsx`'s own argument — "14 on 32 leaves 6px
+     * above and below the cap height" — which was reasoning about a box rather
+     * than reading a frame. The 10 September frames set EIGHT labelled
+     * controls across two bars at 13/16/400 with no exceptions: Add, Today,
+     * Compare To, Refresh All, Share, and the three view tabs. One value that
+     * many times is a rung, not a coincidence.
+     *
+     * The owner's ask was for consistency — "the text of the share button …
+     * the same as the add button" — and they were the same SIZE already; what
+     * differed was WEIGHT, because the button base spelled `font-medium` and
+     * Share overrode to `font-normal`. Both halves are settled here: the rung
+     * is 13/16 and the base is 400.
      */
-    expect(globals).toMatch(/--text-button:\s*0\.875rem/);
+    expect(globals).toMatch(/--text-button:\s*0\.8125rem/);
+    expect(globals).toMatch(/--text-button--line-height:\s*1rem/);
+    const button = read("src/components/ui/button.tsx");
+    const base = button.match(/"inline-flex shrink-0[^"]+"/)?.[0] ?? "";
+    expect(base, "the base carries the frames' 400").toMatch(/\bfont-normal\b/);
+    expect(base, "not 500").not.toMatch(/\bfont-medium\b/);
   });
 
   it("is NOT named --text-control, which would compile to a colour", () => {

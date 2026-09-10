@@ -37,10 +37,25 @@
  *     w  -= 10    8px of right gutter, plus a border on each side
  *
  * so the content column's usable width falls from 1660 to 1650 and the board's
- * 12-column grid re-divides: 1650 − 48 of page padding = 1602, less eleven
- * 24px gutters = 1338, which is 111.5 per column. A four-column chart card is
- * 4×111.5 + 3×24 = 518 (was 521.33) and a three-column stat tile is
- * 3×111.5 + 2×24 = 382.5 (was 385).
+ * 12-column grid re-divides.
+ *
+ * ── 11 SEP 2026: THE GUTTER WENT BACK TO 16, AND THE FRAME AGREES EXACTLY ──
+ *
+ * The owner asked for a 16px gutter between cards. Node 35:6124 draws the
+ * board container `padding: 24px; gap: 16px`, and the arithmetic that falls
+ * out of it is the frame's own, to the decimal:
+ *
+ *     1650 − 48 of page padding      = 1602
+ *     less eleven 16px gutters       = 1426, so 118.833 per column
+ *     a four-column chart card       = 4×118.833 + 3×16 = 523.33
+ *     ten rows at the new pitch      = 10×40 − 16      = 384
+ *     a three-column stat tile       = 3×118.833 + 2×16 = 388.5
+ *
+ * and the Figma's own chart card is `width: 523.33px; height: 384px`. Both
+ * numbers land on the frame with nothing rounded, which is the strongest
+ * confirmation available that 16 is the gutter this board was drawn on — at a
+ * 24 gutter the same card measured 518×456 and the frame's 523.33 had to be
+ * explained away as a rounding artifact (see the note below, now retired).
  *
  * ── AND THEN THE CHROME FOLLOWED, so the bar heights moved after all ──
  *
@@ -128,17 +143,16 @@ const FIGMA = {
     // Node 0:5's own boxes. They are the board's too now: `GRID_GAP_PX` went
     // back to 24 and `ROW_UNIT_PX` to 48, so a ten-row card is 10*48-24 = 456
     // and four of twelve columns at a 24 gutter is 521.33. The third card is
-    // ALL THREE ARE 521.33, AND THE FRAME'S THIRD IS NOT. Node 0:5 draws that
-    // one 525.33 wide at x=1090.67 (frame-relative), which ends at 1616 inside
-    // a container that is 1612 — it overflows its own column by 4px. A CSS grid
-    // divides evenly and the third card lands exactly on the 24px right inset,
-    // so this is one of the few places the app is right and the export is a
-    // rounding artifact. Expect the arithmetic, not the artifact.
+    // THE "ROUNDING ARTIFACT" NOTE RETIRED HERE. It said node 0:5's third card
+    // was 4px wider than its own container and that the app was right where
+    // the export was not. At a 16px gutter there is no discrepancy to explain:
+    // 523.33 is both the arithmetic AND node 35:6126's own `width`, and the
+    // 384 height matches too. The disagreement was the gutter all along.
     // y = 8 gutter + 1 border + 56 (bar) + 57 (the board's row) + 24 (its own
-    // padding) = 146. w = 4 cols of 111.5 plus 3 gutters of 24.
-    { x: 285, y: 146, w: 518, h: 456 },
-    { x: 285 + 518 + 24, y: 146, w: 518, h: 456 },
-    { x: 285 + 2 * (518 + 24), y: 146, w: 518, h: 456 },
+    // padding) = 146. w and h are node 35:6126's own, to the decimal.
+    { x: 285, y: 146, w: 523.33, h: 384 },
+    { x: 285 + 523.33 + 16, y: 146, w: 523.33, h: 384 },
+    { x: 285 + 2 * (523.33 + 16), y: 146, w: 523.33, h: 384 },
   ],
   /**
    * HEIGHT IS DELIBERATELY NOT CHECKED on these. The Figma draws them at
@@ -148,12 +162,12 @@ const FIGMA = {
    * the row unit to hit 108.22 exactly would put every OTHER tile wrong.
    */
   statTiles: [
-    // 626 = 146 + 456 + 24: the chart row, plus the gutter it shares with the
-    // row below. Three of twelve columns at a 24 gutter is 382.5.
-    { x: 285, y: 626, w: 382.5 },
-    { x: 285 + 382.5 + 24, y: 626, w: 382.5 },
-    { x: 285 + 2 * (382.5 + 24), y: 626, w: 382.5 },
-    { x: 285 + 3 * (382.5 + 24), y: 626, w: 382.5 },
+    // 546 = 146 + 384 + 16: the chart row, plus the gutter it shares with the
+    // row below. Three of twelve columns at a 16 gutter is 388.5.
+    { x: 285, y: 546, w: 388.5 },
+    { x: 285 + 388.5 + 16, y: 546, w: 388.5 },
+    { x: 285 + 2 * (388.5 + 16), y: 546, w: 388.5 },
+    { x: 285 + 3 * (388.5 + 16), y: 546, w: 388.5 },
   ],
 };
 

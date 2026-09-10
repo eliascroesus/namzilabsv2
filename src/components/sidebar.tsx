@@ -246,7 +246,15 @@ function RailChip({ tone, children }: { tone: "rest" | "active"; children: React
  * benefit. Fixed at its natural width, it simply sits where it is put.
  */
 function RailLabel({ children, className }: { children: ReactNode; className?: string }) {
-  return <span className={cn("shrink-0 whitespace-nowrap text-sm font-medium text-rail-foreground", className)}>{children}</span>;
+  /* 13px, NOT 14, AND 400 RATHER THAN 500. Node 35:5950 sets the active row at
+     13/18/600 and 35:5975 / 35:5983 / 35:5992 / 35:5999 set the resting ones at
+     13/22/400 — so the SIZE is one value for the whole column and only the
+     weight separates a row you are on from a row you are not. `text-sm` (14px)
+     and `font-medium` were both a step above the frame, on every row at once,
+     which is the kind of drift that reads as "slightly wrong" without pointing
+     at anything. The active row spells its own `font-semibold` at the call
+     site, where the state that earns it is decided. */
+  return <span className={cn("shrink-0 whitespace-nowrap text-xs text-rail-foreground", className)}>{children}</span>;
 }
 
 /**
@@ -493,7 +501,7 @@ export function RailContent({
                  make it a child of the Dashboard chip above without pushing it
                  out to the parent's label, which is where it started. */
               className={cn(
-                "flex h-8 min-h-11 items-center pr-2 text-sm transition-colors duration-(--duration-fast) md:min-h-0",
+                "flex h-8 min-h-11 items-center pr-2 text-xs transition-colors duration-(--duration-fast) md:min-h-0",
                 /* NO FILL ON THE ACTIVE ROW, which is where this differs from
                    the rows above it. Node 49:5307 draws the current view as
                    white text beside a WHITE RULE and nothing else — the rule is
@@ -765,7 +773,7 @@ export function RailContent({
               placeholder="Search"
               aria-label="Search the navigation"
               aria-keyshortcuts="Meta+K"
-              className="min-w-0 flex-1 bg-transparent text-sm text-rail-foreground outline-none placeholder:text-rail-muted"
+              className="min-w-0 flex-1 bg-transparent text-xs text-rail-foreground outline-none placeholder:text-rail-muted"
             />
           </div>
 
@@ -879,7 +887,11 @@ export function RailContent({
                           </RailChip>
                         </span>
                         <RailLabel
-                          className={active ? "text-rail-foreground" : "text-rail-muted group-hover:text-rail-foreground"}
+                          className={
+                            active
+                              ? "font-semibold text-rail-foreground"
+                              : "text-rail-muted group-hover:text-rail-foreground"
+                          }
                         >
                           {label}
                         </RailLabel>

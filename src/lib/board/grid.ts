@@ -40,27 +40,37 @@ export const GRID_COLS = 12;
  * inflates every tile by a gap per row, which looks like a padding bug rather
  * than an arithmetic one.
  *
- * THE GUTTER IS 24, AND IT HAS BEEN BOTH TWICE. This is the third time these
- * two numbers have moved, so the reasoning matters more than the values:
+ * THE GUTTER IS 16, AND IT HAS NOW BEEN BOTH TWICE EACH. This is the FOURTH
+ * time these two numbers have moved, so the reasoning matters more than the
+ * values, and the sequence is worth keeping whole:
  *
  *   - It was 24, on the argument that a board should not pack its cards tighter
  *     than the page sits to its own edges.
  *   - The 8 September frames overruled that: node 49:5447 draws `gap-16` inside
  *     a `p-24` main, and the measured cost of 24 was a ten-row card 456px tall
  *     against that frame's 384. So 24 -> 16, and the pitch with it, 48 -> 40.
- *   - Node 0:5 (9 September) draws 24 again — chart cards 521.33 wide and 456
- *     tall, stat cards 385 wide, its content column inset 24. Every one of
- *     those falls out of this constant, which is why they are here and not in a
- *     stylesheet.
+ *   - Node 0:5 (9 September) drew 24 again — chart cards 521.33 wide and 456
+ *     tall, stat cards 385 wide, its content column inset 24.
+ *   - The owner asked for 16 on 11 September, directly: "fix the gap between
+ *     the metrics cards charts and stuff not be 24 and instead 16px". Node
+ *     35:6124 agrees with him — it draws the board container `padding: 24px;
+ *     gap: 16px`, a 24px inset around a 16px gutter, which is the same pairing
+ *     node 49:5447 had.
  *
- * So the 456 that was "72px too tall" in September is the frame's own number
- * now. Nothing was wrong either time; the design changed, and the only reason
- * that is legible is that the cost was measured rather than argued.
+ * So the 456 that was "72px too tall" in September was the frame's own number
+ * for two days and is 384 again. Nothing was wrong at any point; the design
+ * changed four times, and the only reason that is legible is that the cost was
+ * measured rather than argued.
  *
- * THE ROW ITSELF NEVER MOVED — it is 24 in all three arrangements. The PITCH is
- * the row plus the gutter, so it tracks the gutter: 24 + 24 = 48. A ten-row
- * chart card is `10 * 48 - 24` = 456, and a four-column card at a 24 gutter is
- * 521.33, which is what node 0:5 draws.
+ * THE ROW ITSELF HAS NEVER MOVED — it is 24 in all four arrangements. The PITCH
+ * is the row plus the gutter, so it tracks the gutter: 24 + 16 = 40. A ten-row
+ * chart card is `10 * 40 - 16` = 384, and a four-column card at a 16 gutter in
+ * a 1602px container is 522.5.
+ *
+ * NO STORED LAYOUT CHANGES MEANING. Every tile's `h` is a count of ROWS, and
+ * the row is the one number that did not move — so a ten-row card is still ten
+ * rows, drawn shorter. That is the whole return on storing rows rather than
+ * pixels, and this is the second time it has been collected.
  *
  * The CSS spells the same fact the other way round (`grid-auto-rows: 24px` with
  * `gap: 24px`), derived from these two rather than typed, which is why both
@@ -68,10 +78,10 @@ export const GRID_COLS = 12;
  * it and the grid disagreed a tile would settle a row away from where it was
  * dropped. `tests/board-grid.test.ts` asserts the pair.
  */
-export const ROW_UNIT_PX = 48;
+export const ROW_UNIT_PX = 40;
 
 /** The gutter between cells, both axes. Must equal the CSS `gap`. */
-export const GRID_GAP_PX = 24;
+export const GRID_GAP_PX = 16;
 
 /** Column counts the board is rendered into: desktop, tablet, phone. */
 export type GridCols = 12 | 6 | 1;

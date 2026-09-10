@@ -399,7 +399,16 @@ export function ViewStrip({
           data-view-tab={v.key}
           className={cn(
             "flex items-center",
-            canEdit && v.id ? "cursor-grab select-none [touch-action:none]" : "",
+            /* `cursor-pointer`, NOT `cursor-grab`. These tabs ARE draggable —
+               `[touch-action:none]` and the pointer handlers below are what
+               make that work, and they stay — but the owner's ask on 11 Sep
+               2026 was that hovering one show "the click thing", not the grab
+               hand. He is right about the priority: a view tab's first job is
+               to be pressed, and reordering is the rare second one. The open
+               hand advertised the rare job over the common one on every
+               hover. The grab cursor still appears WHILE dragging, from
+               `:active`, which is where it actually says something. */
+            canEdit && v.id ? "cursor-pointer select-none [touch-action:none] active:cursor-grabbing" : "",
             // THE DRAGGED TAB KEEPS ITS INK. It went to `opacity-50`, which on
             // an active tab means its white label and its green rule both fade
             // to grey — so the thing you are holding is the one thing you can
