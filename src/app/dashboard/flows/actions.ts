@@ -2,7 +2,7 @@
 
 import { PublishBlocked } from "@/lib/flow/store";
 import { redirect } from "next/navigation";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { eq, and, inArray } from "drizzle-orm";
 import { getDb, getReadDb } from "@/db/client";
 import { connections, flowResults, flows } from "@/db/schema";
@@ -11,6 +11,7 @@ import { effectiveAccess } from "@/lib/permissions";
 import { streamConfigHash } from "@/lib/sync/stream-hash";
 import { dateColumnChoice, dateColumnNote, dateColumnSettings, setDateColumn, type DateColumnChoice } from "@/lib/sync/date-column";
 import { createFlow, saveDraft, renameFlow, deleteFlow, publishFlow, getFlow, setFlowEnabled, type FlowState } from "@/lib/flow/store";
+import { flowTilesTag } from "@/lib/flow/tile-cache";
 import { CapError } from "@/lib/limits";
 import { forgetTilePlacements } from "@/lib/board/store";
 import { sampleAppFields } from "@/lib/flow/engine";
@@ -88,6 +89,19 @@ export async function setFlowEnabledAction(
     // The dashboard's tiles come and go with this, so it has to re-render too.
     revalidatePath("/dashboard/flows");
     revalidatePath("/dashboard");
+    /**
+     * AND THE TILE READ ITSELF, which the re-render above would otherwise serve
+     * out of cache. That cache is keyed by `resultsVersion` — stored results and
+     * backfill progress — and this action moves NEITHER: the results stay
+     * exactly where they are, as the note above says, and only the join stops
+     * matching them. Revalidating the path re-renders the route; it does not
+     * clear a data cache. See `flowTilesTag`.
+     *
+     * `updateTag` rather than `revalidateTag`: in a Server Action it is the one
+     * with read-your-own-writes semantics, so the render that follows this call
+     * cannot be served the tile that was just switched off.
+     */
+    updateTag(flowTilesTag(orgId));
     // The calendar is a VIEW of the same stored tiles now, so it is already
     // covered by the line above — it was its own route until this became a view
     // kind, and a revalidate naming a dead path is a silent no-op.
@@ -499,6 +513,17 @@ export async function publishFlowAction(
   // appears immediately (don't depend on async Inngest processing). If this fails
   // the publish still stands — we only warn that the number couldn't be computed.
   const mat = await materializeFlow(getDb(), orgId, id);
+
+  /**
+   * THE BOARD'S TILE READ NOW JOINS A ROW IT DID NOT JOIN A MOMENT AGO, so the
+   * cached copy of that read is wrong. A SUCCESSFUL materialize above already
+   * moved `resultsVersion`, which is that cache's key and would have been enough
+   * on its own — but a publish stands even when the materialize fails, and then
+   * nothing has moved. `materializeFlow` reports failure rather than throwing,
+   * so this runs either way. After the write, not before, so the invalidation
+   * cannot be repopulated by a read racing between the two. See `flowTilesTag`.
+   */
+  updateTag(flowTilesTag(orgId));
   // Best-effort async recompute as a backup; never affects the publish outcome.
   try {
     await inngest.send({ name: "flow/materialize.requested", data: { orgId, flowId: id } });

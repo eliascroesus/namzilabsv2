@@ -41,7 +41,8 @@ import {
   type TilePlacement,
 } from "@/lib/board/types";
 import { importProgressByStreamRef } from "@/lib/backfill/jobs";
-import { calendarFlowTiles, publishedFlowTiles, resultsVersion, unpublishedFlowIds } from "@/lib/flow/materialize";
+import { calendarFlowTiles, resultsVersion, unpublishedFlowIds } from "@/lib/flow/materialize";
+import { versionedFlowTiles } from "@/lib/flow/tile-cache";
 import { listFlowNames } from "@/lib/flow/store";
 import { CalendarBoard, type CalendarMetric } from "@/components/calendar/calendar-board";
 import { calendarMonths, dayKey } from "@/lib/metrics/calendar";
@@ -139,8 +140,10 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
    * endpoint, a single query is ~110ms warm and five in parallel are ~112ms.
    * A view switch was a chain of six to nine of them, and two of the links were
    * false: `access` was awaited at the top and not read until the metric filter
-   * two hundred lines down, and `publishedFlowTiles` takes only `db` and
-   * `orgId` yet queued behind every board read and the classic compute.
+   * two hundred lines down, and the tile read takes only `db` and `orgId` yet
+   * queued behind every board read and the classic compute. (It now chains
+   * behind `resultsVersionP`, which keys its cache — still overlapping those
+   * reads rather than preceding them, which is what this note is about.)
    *
    * Both now overlap the `Promise.all` below instead of preceding it. Rank
    * visibility still resolves once for the whole page — `effectiveAccess` is
@@ -167,10 +170,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const customRange = rangePreset == null;
 
   const accessP = requestAccess(orgId, userId, role);
-  const flowRowsP = publishedFlowTiles(db, orgId, { withDays: customRange }).catch((e) => {
-    console.error("[dashboard] published tiles read failed", e);
-    return null;
-  });
   /**
    * C16 — THE FRESHNESS POLLER'S SEED, started here for the same reason as
    * the two above. `resultsVersion` is the exact aggregate
@@ -180,10 +179,35 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
    * second query to drift from the route's. Swallowed rather than thrown: a
    * poller that fails to seed still works, it just starts from `null` the
    * way it always has (see `FreshnessPoller`'s own note on why that gap can
-   * miss a change). Awaited right before the return — nothing between here and
-   * there reads it.
+   * miss a change).
+   *
+   * IT IS ALSO THE TILE READ'S CACHE KEY now — see the block directly below —
+   * so it is no longer merely awaited before the return. The same string that
+   * tells an open dashboard its numbers moved is what makes the next render
+   * re-read them, which is why there is one query for it and not two.
    */
   const resultsVersionP = resultsVersion(db, orgId).catch(() => undefined);
+
+  /**
+   * THE TILE READ, AT MOST ONCE PER RESULTS VERSION — see `tile-cache.ts`.
+   *
+   * This read does not depend on the RANGE: the selected window picks a key out
+   * of each tile's `byRange` long after the rows arrive. So 7d -> today -> 7d
+   * was three identical queries for a tile jsonb per published Output, on the
+   * most-rendered page in the product, against a database that bills every byte
+   * it returns. Keyed by `resultsVersionP`, a range switch now reads nothing.
+   *
+   * IT STILL OVERLAPS THE BOARD READS, which is the property the note above
+   * cares about. It chains behind the version rather than starting beside it,
+   * but it is awaited after the `Promise.all` below — so the extra hop runs
+   * while those are in flight rather than adding to the page's depth.
+   */
+  const flowRowsP = resultsVersionP
+    .then((version) => versionedFlowTiles(db, orgId, { withDays: customRange, version }))
+    .catch((e) => {
+      console.error("[dashboard] published tiles read failed", e);
+      return null;
+    });
 
   const boardSource = one(sp.source) || null;
   /**
