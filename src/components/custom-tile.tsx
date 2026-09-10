@@ -401,42 +401,22 @@ export function CustomTile({
     chart === "number" && config.showDelta !== false ? deriveDelta(stored, { ...stored, ...w }, rangeKey) : null;
 
   /**
-   * THE LEGEND — ONE ENTRY, BECAUSE ONE SERIES IS DRAWN.
+   * THE LEGEND IS GONE, AND SO IS THE ARITHMETIC THAT BUILT IT.
    *
-   * Both 8 September frames put a legend on the card's floor (nodes 58:6094,
-   * 58:6157, 58:6713): a dot in the series' colour and the period it covers.
-   * Two of the three cards show TWO entries, because the Figma draws a
-   * period-over-period comparison — this product computes that comparison as a
-   * DELTA but plots a single line, so a second entry would name a series that
-   * is not on the card. The third card (bars) shows exactly one, which is what
-   * every card here draws.
+   * Both 8 September frames put one on the card's floor (nodes 58:6094,
+   * 58:6157, 35:7205): a dot in the series' colour and the period it covers.
+   * It was one entry, because one series is drawn, with a second appearing
+   * only when `w.compare` actually carried a second line — that care is why it
+   * never named a series that was not there.
    *
-   * Only for marks that plot a SERIES over time. A scorecard has no line for a
-   * swatch to point at, and a breakdown, funnel, pipeline and table already
-   * name every row beside its own colour — a legend there would be the same
-   * labels a second time.
+   * The owner asked it out on 11 Sep 2026 so the chart could have the space.
+   * The cost was always higher than it looked: the one entry read "Last 7
+   * days", which repeats the range control two rows above it, and its swatch
+   * pointed at the only mark on the card.
+   *
+   * `w.compare` IS STILL DRAWN — this deleted the label, not the line. See
+   * `comparable` at the mark itself.
    */
-  /**
-   * THE SECOND ENTRY APPEARS WITH THE SECOND LINE, never on its own.
-   *
-   * `w.compare` is the same window shifted back by its own length, stored by
-   * the materializer. It is absent whenever the previous window is not wholly
-   * covered, so the legend follows the drawing rather than promising it: a
-   * two-entry legend over one line names a series that is not there, which is
-   * the exact objection that kept this legend at one entry until the series
-   * existed.
-   *
-   * BARS GET NO COMPARISON. Node 0:5 draws its bar card with one entry, and two
-   * overlaid bar sets at this width is a worse reading of the same data.
-   */
-  const comparable = (chart === "line" || chart === "area") && (w.compare?.length ?? 0) > 1;
-  const legend =
-    hasSeries && (chart === "line" || chart === "area" || chart === "bar")
-      ? [
-          { color: accent, label: RANGE_OPTIONS.find((r) => r.key === rangeKey)?.label ?? "This period" },
-          ...(comparable ? [{ color: "var(--color-series-compare)", label: "Previous period" }] : []),
-        ]
-      : undefined;
 
   const tableRows = hasSeries
     ? w.series!.map((p) => ({ label: bucketLabel(p.bucket, unit), value: fmt(p.value) }))
@@ -469,14 +449,12 @@ export function CustomTile({
        */
       chartLabel={chart === "number" || cols < 4 ? undefined : (CHARTS.find((c) => c.id === chart) ?? CHARTS[0]).label}
       rangeLabel={rangeLabel}
-      legend={legend}
       /* A funnel, a pipeline and a table have no single figure to head. */
       headline={
         chart === "funnel" || chart === "pipeline" || chart === "table" ? undefined : w.unavailable ? null : fmt(w.value)
       }
       delta={delta ? <Delta current={delta.current} previous={delta.previous} format={bag} since={delta.since} /> : null}
       status={source.kind === "flow" ? source.status : undefined}
-      computedAt={source.kind === "flow" ? source.computedAt : undefined}
       unavailable={w.unavailable}
       emptyReason={emptyReason}
       error={source.kind === "flow" ? source.error : undefined}

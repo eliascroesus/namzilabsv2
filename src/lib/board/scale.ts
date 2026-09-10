@@ -27,13 +27,57 @@
 export type BucketUnit = "hour" | "day" | "week" | "month" | "quarter" | "year";
 
 /**
+ * THE STEPS A TIME AXIS MAY LAND ON, in SECONDS.
+ *
+ * A count axis steps on the decimal ladder — 1, 2, 2.5, 5 times a power of ten
+ * — because that is what reads as round in base ten. Time is not base ten, and
+ * running the decimal ladder over it produces steps like 1000 seconds, which
+ * is 16 minutes 40 seconds: a round number of the wrong unit, and the reason
+ * an axis read "0s / 16m 40s / 33m 20s".
+ *
+ * These are the boundaries a person actually thinks in. The ladder is coarse
+ * on purpose past an hour: nobody reads a 45-minute gridline on a 12-hour
+ * chart.
+ */
+const DURATION_TICK_STEPS_SEC = [
+  1, 5, 10, 15, 30,
+  60, 120, 300, 600, 900, 1_800,
+  3_600, 7_200, 10_800, 21_600, 43_200,
+  86_400, 172_800, 604_800,
+];
+
+/**
+ * The same ladder expressed in whatever unit the VALUES are in, so a metric
+ * stored in minutes and one stored in seconds snap to the same wall-clock
+ * boundaries. An unrecognised unit falls back to the decimal ladder rather
+ * than guessing — see `formatDuration`, which takes the same position.
+ */
+export function durationTickSteps(valueUnit: string): number[] | undefined {
+  const per: Record<string, number> = { seconds: 1, minutes: 60, hours: 3_600, days: 86_400 };
+  const p = per[valueUnit];
+  return p == null ? undefined : DURATION_TICK_STEPS_SEC.map((s) => s / p);
+}
+
+/**
  * Nice axis ticks covering `[min(0, lo), max(0, hi)]`.
  *
- * Steps snap to the {1, 2, 2.5, 5} × 10^n ladder, so an axis reads 0 / 25 / 50
- * rather than 0 / 23.7 / 47.4. Degenerate inputs get a real axis rather than a
- * crash: an all-zero series spans [0, 1].
+ * Steps snap to the {1, 2, 2.5, 5} × 10^n ladder by default, so an axis reads
+ * 0 / 25 / 50 rather than 0 / 23.7 / 47.4 — or to an explicit ladder when the
+ * caller has one, which is how a DURATION axis lands on 0 / 15m / 30m instead
+ * of on a round number of the wrong unit. Degenerate inputs get a real axis
+ * rather than a crash: an all-zero series spans [0, 1].
  */
-export function niceTicks(lo: number, hi: number, count = 4): { ticks: number[]; lo: number; hi: number } {
+export function niceTicks(
+  lo: number,
+  hi: number,
+  count = 4,
+  /**
+   * An explicit ladder of allowed steps, ascending, in the values' own unit.
+   * Omitted, the decimal ladder is used — which is right for every axis that
+   * counts things and wrong for every axis that measures time.
+   */
+  steps?: number[],
+): { ticks: number[]; lo: number; hi: number } {
   let min = Math.min(0, lo, hi);
   let max = Math.max(0, lo, hi);
   if (!Number.isFinite(min)) min = 0;
@@ -43,7 +87,12 @@ export function niceTicks(lo: number, hi: number, count = 4): { ticks: number[];
   const span = max - min;
   const raw = span / Math.max(1, count);
   const mag = Math.pow(10, Math.floor(Math.log10(raw)));
-  const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => s >= raw) ?? 10 * mag;
+  const step = steps
+    ? // Past the ladder's top, keep stepping by its largest rung rather than
+      // collapsing to one tick: a 3-week duration axis is still readable at a
+      // week per division, where a single step would draw no grid at all.
+      (steps.find((s) => s >= raw) ?? steps[steps.length - 1] * Math.ceil(raw / steps[steps.length - 1]))
+    : ([1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => s >= raw) ?? 10 * mag);
 
   const lo2 = Math.floor(min / step) * step;
   const hi2 = Math.ceil(max / step) * step;

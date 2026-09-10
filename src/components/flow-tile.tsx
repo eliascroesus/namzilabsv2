@@ -186,7 +186,15 @@ export function FlowTile({ row, rangeKey }: { row: FlowResultRow; rangeKey?: str
          fresh is true and useless there — what the customer asked about has no
          answer — so the healthy marker is withheld and only the states that
          still mean something (refreshing, computing, error) keep their pill. */
-      marker={missing && row.status === "fresh" ? null : <Freshness status={row.status} />}
+      /* THE HEALTHY MARKER IS WITHHELD ALWAYS NOW, not only when the row is
+         `missing`. The narrower rule above was already most of the way here —
+         "the row being fresh is true and useless" — and the owner asked for the
+         general case on 11 Sep 2026: no freshness mark in a card's corner. The
+         states that still MEAN something (refreshing, computing, error) keep
+         their pill, for the reason `frame.tsx` gives at length: those are
+         claims about whether a number can be trusted, not about how recently it
+         refreshed. */
+      marker={row.status === "fresh" ? null : <Freshness status={row.status} />}
       headline={unavailable ? null : fmt(t.value, t)}
       delta={delta && <Delta current={delta.current} previous={delta.previous} format={t} since={delta.since} />}
       provenance={

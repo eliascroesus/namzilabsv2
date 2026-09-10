@@ -344,16 +344,12 @@ export default async function OverviewLab({
               <ChartFrame
                 title={c.title}
                 headline={c.headline}
+                /* "fresh" DRAWS NOTHING NOW, and the harness keeps passing it
+                   on purpose: this page exists to be compared against the
+                   frame, and a card that renders a mark for a healthy tile
+                   would be the drift it is here to catch. The legend that sat
+                   beside it went on 11 Sep 2026 — see `frame.tsx`. */
                 status="fresh"
-                computedAt={HOUR_AGO}
-                legend={
-                  c.shape === "bar"
-                    ? [{ color: accentOf(), label: "Today" }]
-                    : [
-                        { color: accentOf(), label: "Today" },
-                        { color: "var(--color-series-compare)", label: "Previous period" },
-                      ]
-                }
               >
                 {c.shape === "bar" ? (
                   <BarsVertical series={SERIES} format={FMT[c.shape]} accent={accentOf()} />

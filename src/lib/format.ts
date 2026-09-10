@@ -75,6 +75,79 @@ export function formatDuration(value: number, valueUnit: string, display: string
   return `${neg}${sec}s`;
 }
 
+/**
+ * A DURATION AXIS SPEAKS ONE UNIT, IN WHOLE NUMBERS.
+ *
+ * `formatDuration`'s "auto" gives the two largest units that carry information
+ * — "33m 20s", "11h 6m" — which is exactly right for a HEADLINE, where the
+ * number is the answer and every digit of it is wanted. On an AXIS it is
+ * wrong twice over: the labels are a ruler rather than answers, and three
+ * ticks reading "0s / 16m 40s / 33m 20s" ask the reader to do arithmetic in
+ * two units to see that they are evenly spaced. The owner's words: "dont have
+ * seconds if it is talking about minutes … so there is only one prefix of time
+ * showing on the y axis".
+ *
+ * SO THE UNIT IS CHOSEN ONCE FOR THE WHOLE AXIS, from its largest tick, and
+ * every label renders in it: 0m / 15m / 30m, or 0h / 1h / 2h. Picking per
+ * label would put "45s" under "2m" and reintroduce the arithmetic.
+ *
+ * IT ONLY READS AS WHOLE NUMBERS BECAUSE THE TICKS LAND ON WHOLE ONES — see
+ * `DURATION_TICK_STEPS` in `board/scale.ts`, which snaps the step to a real
+ * time boundary (15s, 30s, 1m, 5m, 15m, 1h …) instead of to the decimal
+ * ladder a count axis uses. Without that, 2000 seconds over two divisions
+ * gives a 1000s step and this prints "17m" for 1000s — a whole number, and a
+ * meaningless one. The two halves are one feature.
+ *
+ * A residual fraction is still printed rather than hidden: a tick that does
+ * not divide is a bug in the step ladder, and "1.5h" says so where a silently
+ * rounded "2h" would not.
+ */
+/**
+ * THE UNIT COMES FROM THE STEP, NOT FROM THE LARGEST TICK — and the difference
+ * is the whole of "whole numbers".
+ *
+ * The obvious rule is "use the biggest unit the top of the axis reaches", and
+ * it produces halves. A speed-to-lead series topping out at 2000s steps by
+ * 1800 (thirty minutes) and runs to 3600; picking the unit off that ceiling
+ * gives hours, and the axis reads 0h / 0.5h / 1h. The step is what every gap
+ * on the axis actually IS, so the largest unit that divides it evenly is the
+ * largest one in which every label is an integer.
+ *
+ * That also settles what looks like an inconsistency and is not: a step of
+ * 1800s labels its top tick "60m" rather than "1h". One prefix down the whole
+ * gutter is the ask — "so there is only one prefix of time showing on the y
+ * axis" — and 0m / 30m / 60m reads as a ruler where 0m / 30m / 1h does not.
+ */
+export function durationAxisUnit(stepSeconds: number): { per: number; suffix: string } {
+  const s = Math.abs(stepSeconds);
+  if (!Number.isFinite(s) || s <= 0) return { per: 1, suffix: "s" };
+  for (const [per, suffix] of [
+    [86_400, "d"],
+    [3_600, "h"],
+    [60, "m"],
+  ] as const) {
+    if (s >= per && Number.isInteger(s / per)) return { per, suffix };
+  }
+  return { per: 1, suffix: "s" };
+}
+
+export function formatDurationAxis(value: number, valueUnit: string, stepSeconds: number): string {
+  const per = SECONDS_PER[valueUnit];
+  if (per == null || !Number.isFinite(value)) return "—";
+  const unit = durationAxisUnit(stepSeconds);
+  const n = (value * per) / unit.per;
+  // A residual fraction is PRINTED rather than hidden: with the step ladder in
+  // `board/scale.ts` every tick divides, so a decimal here means the ladder and
+  // the formatter have drifted apart — and "1.5h" says so where a silently
+  // rounded "2h" would put a wrong number on a chart.
+  // NOT NAMED `rounded`: `check:ui`'s off-kit-radius rule greps the bare word
+  // across `.ts` as well as `.tsx`, so a local called that fails the build from
+  // a file with no class names in it. The rule is over-broad and the variable
+  // is not worth arguing about.
+  const shown = Math.round(n * 10) / 10;
+  return `${Number.isInteger(shown) ? shown : shown.toFixed(1)}${unit.suffix}`;
+}
+
 /** "4 minutes ago" / "2 hours ago" / a date past a week — for freshness lines. */
 export function relativeTime(then: Date, now: Date = new Date()): string {
   /**

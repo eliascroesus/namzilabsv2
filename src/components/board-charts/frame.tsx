@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { formatDateTime, relativeTime } from "@/lib/format";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ImportProgress } from "@/components/charts";
 import { Freshness, NotLive } from "@/components/flow-tile";
@@ -40,7 +39,6 @@ export function ChartFrame({
   headline,
   delta,
   status,
-  computedAt,
   unavailable,
   emptyReason,
   error,
@@ -48,7 +46,6 @@ export function ChartFrame({
   unpublished,
   importing,
   footer,
-  legend,
   children,
 }: {
   title: string;
@@ -69,8 +66,20 @@ export function ChartFrame({
    */
   headline?: string | null;
   delta?: ReactNode;
+  /**
+   * THE TILE'S HEALTH, AND ONLY WHEN IT IS BAD.
+   *
+   * `computedAt` sat beside this and rendered "6 min ago" in the card's
+   * corner; it went on 11 Sep 2026 with the healthy dot, and the prop went
+   * with it rather than being left accepted-and-ignored — an optional prop
+   * nobody reads is not a type error, not a lint error, and invisible to a
+   * test that reads one file at a time. This codebase has shipped that exact
+   * shape before (`TopBar`'s account name, unset through three re-themes).
+   *
+   * "fresh" now draws nothing. Every other value still draws its pill: see the
+   * note at the render site for why that half stayed.
+   */
   status?: string;
-  computedAt?: Date | string | null;
   /** The period could not be answered. Replaces the mark. */
   unavailable?: string;
   /** The chart is legal and this period is simply empty. Replaces the mark. */
@@ -81,20 +90,6 @@ export function ChartFrame({
   importing?: ImportCoverage;
   /** An honesty line the mark itself computed — "Top 4 of 11", excluded slices. */
   footer?: ReactNode;
-  /**
-   * ONE ENTRY PER SERIES THE CHART ACTUALLY DRAWS.
-   *
-   * Both 8 September frames put a legend under every chart card (nodes 58:6094,
-   * 58:6157, 58:6713) — a dot in the series' own colour and the period it
-   * covers, centred on the card's floor.
-   *
-   * The Figma shows TWO entries on two of the three cards, because it draws a
-   * period-over-period comparison. This product computes a delta but plots one
-   * line, so a two-entry legend here would name a series that is not on the
-   * card. The array is what the card DRAWS: one entry today, two the day a
-   * comparison series exists, and nothing at all for a scorecard.
-   */
-  legend?: Array<{ color: string; label: string }>;
   children: ReactNode;
 }) {
   const blocked = unavailable ?? emptyReason;
@@ -165,13 +160,27 @@ export function ChartFrame({
             that have no menu and buys every card's freshness landing on the
             same line as every other card's. Shifting it on hover instead would
             move the text under the cursor, which is worse than the overlap. */}
-        <span className="flex shrink-0 items-center gap-1.5 pr-6 text-xs text-muted-foreground">
-          {status && <Freshness status={status} />}
-          {computedAt && (
-            <span className="whitespace-nowrap" title={formatDateTime(new Date(computedAt))}>
-              {relativeTime(new Date(computedAt))}
-            </span>
-          )}
+        {/* NO TIMESTAMP, AND NO DOT WHEN THE TILE IS FINE — the owner's ask on
+            11 Sep 2026: "remove the like activity or like how recent it
+            refreshed thing in the top right".
+
+            WHAT SURVIVES IS THE NOT-FINE STATES, and that is a deliberate
+            narrowing of the ask rather than a partial job. "Refreshing soon",
+            "Computing…" and "Error" are not claims about how RECENTLY a number
+            refreshed — they are claims about whether it can be trusted at all,
+            and a card that silently shows a stale figure with no mark on it is
+            the one failure this whole freshness vocabulary was built to
+            prevent. The quiet-when-fine rule (see `Freshness`) already said a
+            healthy tile should say almost nothing; this takes it the last step
+            and lets it say nothing.
+
+            The `pr-6` kebab lane stays even when this renders empty: the board
+            floats a tile menu at `absolute right-2 top-2` and the two
+            components cannot see each other, so the width is reserved rather
+            than negotiated. Losing it would put the menu on top of a long
+            title on every card that has one. */}
+        <span className="flex shrink-0 items-center gap-1.5 pr-6 text-2xs text-muted-foreground">
+          {status && status !== "fresh" && <Freshness status={status} />}
         </span>
       </CardHeader>
       {/* NO TOP PADDING — the header above already opened the card's 16px box
@@ -234,7 +243,12 @@ export function ChartFrame({
           its tile should sit ON the card's floor, not float in the middle of it
           with dead space above and below. A tall breakdown tile used to leave a
           third of a card empty under two bars. */}
-      <div className="mt-3 flex min-h-0 flex-1 flex-col justify-end">
+      {/* `justify-stretch`, NOT `justify-end` — the mark FILLS the space now
+          that nothing sits under it. It was pushed to the floor so that a
+          short chart met the legend rather than floating above it with dead
+          air between; with the legend gone that rule strands the chart at the
+          bottom of a tall card instead. */}
+      <div className="mt-3 flex min-h-0 flex-1 flex-col">
         {blocked ? (
           <p className="text-xs text-muted-foreground" title={blocked}>
             {blocked.length > 160 ? `${blocked.slice(0, 160)}…` : blocked}
@@ -244,29 +258,21 @@ export function ChartFrame({
         )}
       </div>
 
-      {/* THE LEGEND — the Figma's own geometry: centred on the card's floor, an
-          8px dot in a 12px box, the label at 12px muted, 10px between entries.
-          `pb-4` rather than a margin, so a card with no legend loses the space
-          entirely instead of keeping a gap where one would have been. */}
-      {legend && legend.length > 0 && (
-        <ul className="flex list-none flex-wrap items-center justify-center gap-x-2.5 gap-y-1 pb-4 pt-2">
-          {legend.map((entry) => (
-            <li key={entry.label} className="flex items-center gap-1.5 pr-2">
-              {/* `aria-hidden`: the colour is a pointer BACK to the mark, not a
-                  fact of its own, and the label beside it already names the
-                  series. A screen reader announcing "green, Today" reads the
-                  swatch as data. */}
-              <span
-                aria-hidden
-                className="size-2 shrink-0 rounded-full"
-                style={{ backgroundColor: entry.color }}
-              />
-              <span className="text-xs text-muted-foreground">{entry.label}</span>
-            </li>
-          ))}
-        </ul>
-      )}
+      {/* THE LEGEND IS GONE, and the 16px it stood in belongs to the chart.
+          It was the Figma's own geometry — a dot and the period, centred on the
+          card's floor (nodes 58:6094, 58:6157, 35:7205) — and the owner asked
+          for it out on 11 Sep 2026: "remove the like Last 7 days and color
+          thing at the bottom and instead have the chart fill the card".
 
+          IT COST MORE THAN IT SAID. One entry reading "Last 7 days" repeats the
+          range control in the bar above it, and the swatch points at the only
+          series on the card. The second entry only ever appeared with a second
+          line, so it named nothing the chart did not already draw in a colour
+          beside it.
+
+          The 16px at the bottom is the enclosing `pb-4`, which the legend used
+          to sit inside — so the space did not have to be added, only released.
+          `tests/board-chart-marks.test.ts` pins its absence. */}
       {footer}
 
       {/* The qualifications — beside the number, never instead of it. */}

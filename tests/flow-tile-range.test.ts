@@ -132,11 +132,21 @@ describe("a range the stored tile has no entry for", () => {
     expect(html).toContain("2 hr ago");
   });
 
-  it("still shows the healthy marker once the range has an answer", () => {
-    // The suppression is scoped to the unanswered range, not to the tile.
+  it("shows NO marker once the range has an answer, healthy being silent now", () => {
+    /**
+     * IT ASSERTED "Up to date" HERE, and the suppression it was protecting has
+     * simply widened to every healthy tile: the owner asked the freshness mark
+     * out of the card's corner on 11 Sep 2026, so `fresh` draws nothing at all
+     * rather than nothing-when-the-range-is-unanswered.
+     *
+     * The fact underneath is untouched and is what this still checks: an
+     * ANSWERED range renders its own number and does not fall into the "no
+     * answer" path. That was always the point of the test; the marker was how
+     * it happened to be observed.
+     */
     const html = render(row({ unpublished: true }), "today");
 
-    expect(html).toContain("Up to date");
+    expect(html).not.toContain("Up to date");
     expect(html).not.toContain("Not computed yet");
   });
 });

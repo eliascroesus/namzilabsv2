@@ -48,6 +48,39 @@ describe("the cartesian marks", () => {
     expect(html).not.toContain("<text");
   });
 
+  it("draws a DURATION gutter in one whole unit, end to end", () => {
+    /**
+     * THE WIRING, NOT THE UNITS — `formatDurationAxis` and `durationTickSteps`
+     * are pinned above on their own, and both can be perfect while the chart
+     * calls neither. This renders the real mark with a real duration format and
+     * reads the labels out of the markup.
+     *
+     * The series tops out at 2000 seconds, which is the case the owner was
+     * looking at: on the decimal ladder it drew "0s / 16m 40s / 33m 20s" —
+     * three round numbers of the wrong unit, two prefixes, and arithmetic in
+     * two units to see the ticks are evenly spaced.
+     */
+    const html = renderToStaticMarkup(
+      createElement(LineChart, {
+        series: series(["2026-08-01", 300], ["2026-08-02", 2000]),
+        format: { format: "duration", unit: "seconds" },
+        accent: "#000",
+        unit: "day",
+      }),
+    );
+    const labels = [...html.matchAll(/tnum[^>]*>([^<]+)</g)].map((m) => m[1]);
+    const gutter = labels.filter((l) => /[smhd]$/.test(l));
+    expect(gutter, "the axis speaks minutes, in whole numbers").toEqual(["60m", "30m", "0m"]);
+    // ONE PREFIX DOWN THE WHOLE GUTTER is the ask; a second suffix anywhere in
+    // it is the failure, whatever the numbers say.
+    expect(new Set(gutter.map((l) => l.replace(/[\d.]/g, ""))).size).toBe(1);
+    // AND THE TOOLTIP KEEPS EVERY UNIT, which is the deliberate other half.
+    // A hovered point is an ANSWER and wants full precision; the gutter is a
+    // RULER and wants one unit. Banning the compound reading outright here
+    // would take the answer's precision with the ruler's noise.
+    expect(html, "the point tooltip still reads 33m 20s").toMatch(/data-tip="[^"]*33m 20s/);
+  });
+
   it("breaks the line into subpaths across a gap rather than diving to zero", () => {
     // Two runs → two `M` commands. One run with a dive would be the lie.
     const html = renderToStaticMarkup(
@@ -466,12 +499,54 @@ describe("the axis reads three lines, and the floor is dashed", () => {
     // Sabotage: drop AXIS_DIVISIONS from either call and the count returns to 5.
     expect(cartesian).toContain("const AXIS_DIVISIONS = 2;");
     // Non-greedy across the nested `Math.min(...)` / `Math.max(...)` parens.
-    const calls = cartesian.match(/niceTicks\([\s\S]*?, AXIS_DIVISIONS\)/g) ?? [];
+    // The call now carries a fourth argument — the duration step ladder — so
+    // this matches up to `AXIS_DIVISIONS` and no longer to the closing paren.
+    const calls = cartesian.match(/niceTicks\([\s\S]*?AXIS_DIVISIONS,/g) ?? [];
     expect(calls, "both the line and the bar mark pass it").toHaveLength(2);
 
-    const { niceTicks } = await import("@/lib/board/scale");
+    /**
+     * AND BOTH PASS THE TIME LADDER, which is the other half of the same axis.
+     * A duration axis on the decimal ladder picks 1000-second steps and the
+     * gutter reads "0s / 16m 40s / 33m 20s" — three round numbers of the wrong
+     * unit. Dropping this argument from either mark restores exactly that.
+     */
+    const ladders = cartesian.match(/durationTickSteps\(format\.unit \?\? "seconds"\)/g) ?? [];
+    expect(ladders, "both marks snap a duration axis to real time boundaries").toHaveLength(2);
+
+    const { niceTicks, durationTickSteps } = await import("@/lib/board/scale");
     // The Figma's own example: a percent series topping out at 100.
     expect(niceTicks(0, 100, 2).ticks).toEqual([0, 50, 100]);
+
+    /**
+     * THE AXIS THAT SENT THE OWNER LOOKING. A speed-to-lead series topping out
+     * at 2000 seconds: the decimal ladder steps by 1000 and the labels read
+     * "16m 40s" and "33m 20s". The time ladder steps by 900 — fifteen minutes
+     * — and they read 15m / 30m / 45m.
+     */
+    const secs = durationTickSteps("seconds")!;
+    expect(niceTicks(0, 2000, 2).ticks, "the decimal ladder is what was wrong").toEqual([0, 1000, 2000]);
+    expect(niceTicks(0, 2000, 2, secs).ticks).toEqual([0, 1800, 3600]);
+    // Stored in MINUTES, the same wall-clock boundaries.
+    const mins = durationTickSteps("minutes")!;
+    expect(niceTicks(0, 33.3, 2, mins).ticks).toEqual([0, 30, 60]);
+    // An unrecognised unit refuses to guess and falls back to the decimals.
+    expect(durationTickSteps("furlongs")).toBeUndefined();
+
+    /**
+     * AND THE LABELS ARE WHOLE, IN ONE UNIT. This is the half a tick array
+     * cannot show: 1800 seconds is a round step and "0.5h" is a round number,
+     * and neither is what the owner asked for. The unit is taken from the
+     * STEP, so a 30-minute step labels its top tick 60m rather than 1h.
+     */
+    const { formatDurationAxis, formatMetricValue } = await import("@/lib/format");
+    const step = 1800;
+    expect([0, 1800, 3600].map((t) => formatDurationAxis(t, "seconds", step))).toEqual(["0m", "30m", "60m"]);
+    // An hour-scale axis speaks hours, and only hours.
+    expect([0, 3600, 7200].map((t) => formatDurationAxis(t, "seconds", 3600))).toEqual(["0h", "1h", "2h"]);
+    // Under a minute it stays in seconds rather than printing "0.25m".
+    expect([0, 15, 30].map((t) => formatDurationAxis(t, "seconds", 15))).toEqual(["0s", "15s", "30s"]);
+    // The old spelling, for the record — this is what the board was drawing.
+    expect(formatMetricValue(2000, { format: "duration", unit: "seconds" })).toBe("33m 20s");
     // A real headline (28.2%) still gets round numbers that bracket it.
     const pickup = niceTicks(0, 28.2, 2);
     expect(pickup.ticks).toHaveLength(3);

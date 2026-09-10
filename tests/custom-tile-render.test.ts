@@ -303,9 +303,26 @@ describe("the five states, now that the boundary carries them", () => {
     expect(html).toContain("2 records carry no date");
   });
 
-  it("the timestamp explains itself on hover", () => {
-    const html = render("number", { kind: "flow", tile: base, status: "fresh", computedAt: "2026-08-26T12:00:00Z" });
-    expect(html).toMatch(/title="[^"]*2026/);
+  it("draws no freshness at all when the tile is healthy", () => {
+    /**
+     * IT WAS "the timestamp explains itself on hover", and there is no
+     * timestamp: the owner asked the whole freshness line out of the card's
+     * corner on 11 Sep 2026, and the `computedAt` prop went with it rather
+     * than being left accepted-and-ignored.
+     *
+     * The assertion inverts rather than being deleted, because the thing worth
+     * protecting is the same either way — that a healthy card says nothing and
+     * an unhealthy one says something. Both halves are checked here.
+     */
+    const healthy = render("number", { kind: "flow", tile: base, status: "fresh" });
+    expect(healthy, "a fine tile is silent").not.toMatch(/Up to date/);
+    expect(healthy).not.toMatch(/ago<|Updated/);
+
+    // AND THE STATES THAT MEAN SOMETHING SURVIVE. "Refreshing soon" is not a
+    // claim about how recently a number refreshed, it is a claim about whether
+    // it can be trusted — hiding it is the failure the vocabulary exists for.
+    const stale = render("number", { kind: "flow", tile: base, status: "stale" });
+    expect(stale, "a tile that needs you still says so").toMatch(/Refreshing soon/);
   });
 });
 

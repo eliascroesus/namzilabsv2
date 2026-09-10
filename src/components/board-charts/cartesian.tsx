@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
-import { formatMetricValue } from "@/lib/format";
-import { bucketLabel, niceTicks, padSeries, type BucketUnit } from "@/lib/board/scale";
+import { formatDurationAxis, formatMetricValue } from "@/lib/format";
+import { bucketLabel, durationTickSteps, niceTicks, padSeries, type BucketUnit } from "@/lib/board/scale";
 import type { ChartFormat, SeriesPoint } from "@/components/charts";
 
 /**
@@ -27,7 +27,16 @@ import type { ChartFormat, SeriesPoint } from "@/components/charts";
  * that disagrees with the headline above it is two claims about one number.
  */
 
-const AXIS_LABEL = "tnum whitespace-nowrap text-xs leading-none text-muted-foreground";
+/**
+ * `text-2xs` (12px) SINCE 11 SEP 2026, down from `text-xs` (13px).
+ *
+ * The owner asked for "2px smaller"; this is one, and the reason it stops at
+ * one is that 12 is what the frames draw — nodes 35:6145 / 35:6153 and every
+ * other axis label in the file set 12/16 — and 11 is not a rung the scale has.
+ * A one-off `text-[11px]` here would be the first arbitrary type size in the
+ * product and would make the axis the only text in the kit off the ladder.
+ */
+const AXIS_LABEL = "tnum whitespace-nowrap text-2xs leading-none text-muted-foreground";
 /**
  * THE X ROW NEEDS A TALLER LINE BOX THAN THE Y GUTTER, and the difference is
  * the reason this is a second constant rather than one shared string.
@@ -44,7 +53,7 @@ const AXIS_LABEL = "tnum whitespace-nowrap text-xs leading-none text-muted-foreg
  * the descender, and still short enough that the row does not steal height
  * from the plot.
  */
-const AXIS_LABEL_X = "tnum whitespace-nowrap text-xs leading-4 text-muted-foreground";
+const AXIS_LABEL_X = "tnum whitespace-nowrap text-2xs leading-4 text-muted-foreground";
 
 /**
  * TWO DIVISIONS, SO THREE LABELS: the floor, the middle and the ceiling.
@@ -58,6 +67,38 @@ const AXIS_LABEL_X = "tnum whitespace-nowrap text-xs leading-4 text-muted-foregr
  * 0 / 20 / 40 rather than 0 / 10 / 20 / 30.
  */
 const AXIS_DIVISIONS = 2;
+
+/**
+ * ONE LABEL ON THE Y GUTTER — and the only place the axis and the HEADLINE are
+ * allowed to speak differently.
+ *
+ * Everywhere else `formatMetricValue` is the single answer, and the file header
+ * above says so: "an axis that disagrees with the headline above it is two
+ * claims about one number". That still holds for what the labels MEAN. What
+ * changed on 11 Sep 2026 is how they are spelled: the headline is an answer and
+ * wants every unit that carries information ("0h 8m 39s"), the gutter is a
+ * ruler and wants one unit in whole numbers ("0m / 15m / 30m"). Same quantity,
+ * two jobs.
+ *
+ * The unit is decided by the axis's LARGEST tick and applied to all of them, so
+ * the three labels are directly comparable — which is the whole point of a
+ * ruler and was what "0s / 16m 40s / 33m 20s" destroyed.
+ *
+ * Non-duration axes are untouched: a count, a ratio and a currency all still go
+ * through `formatMetricValue`, and a currency axis keeps its symbol.
+ */
+function axisLabel(t: number, format: ChartFormat, ticks: number[]): string {
+  if (format.format !== "duration") return formatMetricValue(t, format);
+  const unit = format.unit ?? "seconds";
+  const per: Record<string, number> = { seconds: 1, minutes: 60, hours: 3_600, days: 86_400 };
+  const p = per[unit];
+  if (p == null) return formatMetricValue(t, format);
+  // THE STEP, not the ceiling — see `durationAxisUnit`. Two ticks is the
+  // minimum any axis draws; a degenerate single-tick axis falls back to the
+  // tick's own magnitude so the label still carries a unit.
+  const stepSeconds = (ticks.length > 1 ? Math.abs(ticks[1] - ticks[0]) : Math.abs(ticks[0] ?? 0)) * p;
+  return formatDurationAxis(t, unit, stepSeconds);
+}
 
 /** Where a value sits in the plot, as a percentage from the TOP. */
 const yPct = (v: number, lo: number, hi: number) => (hi === lo ? 100 : ((hi - v) / (hi - lo)) * 100);
@@ -80,7 +121,7 @@ function AxisFrame({
       <div className="flex flex-col justify-between pb-px text-right">
         {[...ticks].reverse().map((t) => (
           <span key={t} className={AXIS_LABEL}>
-            {formatMetricValue(t, format)}
+            {axisLabel(t, format, ticks)}
           </span>
         ))}
       </div>
@@ -198,7 +239,14 @@ export function LineChart({
   // The target bounds the axis in BOTH directions. Folded into the max alone,
   // a negative goal put the dashed line 250% below the viewBox — invisible,
   // with nothing to say the goal existed.
-  const { ticks, lo, hi } = niceTicks(Math.min(...values, target ?? Infinity), Math.max(...values, target ?? -Infinity), AXIS_DIVISIONS);
+  const { ticks, lo, hi } = niceTicks(
+    Math.min(...values, target ?? Infinity),
+    Math.max(...values, target ?? -Infinity),
+    AXIS_DIVISIONS,
+    // A TIME AXIS STEPS ON TIME. Without this the decimal ladder picks
+    // 1000-second steps and the gutter reads 16m 40s. See `durationTickSteps`.
+    format.format === "duration" ? durationTickSteps(format.unit ?? "seconds") : undefined,
+  );
   const x = (i: number) => (points.length === 1 ? 50 : (i / (points.length - 1)) * 100);
 
   /**
@@ -382,7 +430,14 @@ export function BarsVertical({
   // The target bounds the axis in BOTH directions. Folded into the max alone,
   // a negative goal put the dashed line 250% below the viewBox — invisible,
   // with nothing to say the goal existed.
-  const { ticks, lo, hi } = niceTicks(Math.min(...values, target ?? Infinity), Math.max(...values, target ?? -Infinity), AXIS_DIVISIONS);
+  const { ticks, lo, hi } = niceTicks(
+    Math.min(...values, target ?? Infinity),
+    Math.max(...values, target ?? -Infinity),
+    AXIS_DIVISIONS,
+    // A TIME AXIS STEPS ON TIME. Without this the decimal ladder picks
+    // 1000-second steps and the gutter reads 16m 40s. See `durationTickSteps`.
+    format.format === "duration" ? durationTickSteps(format.unit ?? "seconds") : undefined,
+  );
   const zero = yPct(Math.max(lo, Math.min(hi, 0)), lo, hi);
   const slot = 100 / points.length;
 
