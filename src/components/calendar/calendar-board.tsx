@@ -387,16 +387,20 @@ export function CalendarBoard({
               a green button, on a page whose entire palette is one green and a
               grey ramp. The template picker keeps its colour; a control in the
               chrome does not get to be the exception. */}
+          {/* THE BOARD'S OWN BUTTON GEOMETRY, DOWN TO THE ROLE. It wore
+              `bg-card` at `text-sm font-medium` (14/500) with a shadow, beside
+              a row of `bg-secondary` controls at 13/400 — the same mismatch the
+              calendar's month stepper had. `--secondary` is the role that means
+              "a button's face" in both themes, and `text-button` is the rung
+              the 10 September frames set every labelled control on.
+              AND THE GLYPH LOST ITS PLATE. It sat in a 20px `bg-accent` disc in
+              its own muted ink — a grey circle inside a grey button, which read
+              as a second object rather than as this control's mark, and the
+              owner asked it out. `text-current` so the icon takes the label's
+              own colour and the two read as one thing. */}
           <Select
-            triggerClassName="h-8 gap-2 rounded-control border-border bg-card px-3 text-sm font-medium shadow-xs"
-            leading={
-              <span
-                aria-hidden
-                className="flex size-5 shrink-0 items-center justify-center rounded-full bg-accent text-muted-foreground"
-              >
-                <CalendarDays className="size-3.5" />
-              </span>
-            }
+            triggerClassName="h-8 gap-2 rounded-control border-border bg-secondary px-3 text-button shadow-xs"
+            leading={<CalendarDays aria-hidden className="size-4 shrink-0 text-current" />}
             /* `metricId`, NOT `metric?.id` — they differ in exactly the case
                that matters. When the stored metric is gone `metric` is
                undefined, and reading the id off it would blank the control, so
@@ -488,32 +492,27 @@ export function CalendarBoard({
               variant="ghost"
               onClick={() => setMonthIdx(months.length - 1)}
               disabled={monthIdx === months.length - 1}
+              /* THE UTC FOOTNOTE RIDES THIS LABEL NOW — see the note below on
+                 the pill that used to carry it. The `title` is what actually
+                 explains it; the three letters are the reminder. */
+              title="Days are UTC — the same days your metrics are counted in"
               className={cn(PERIOD_PILL, "text-muted-foreground hover:bg-accent hover:text-foreground")}
             >
-              This month
+              This month - UTC
             </Button>
           </div>
-          {/* THE ONE FACT THE DELETED LEDE WAS CARRYING.
-              Every value on this sheet is filed under a UTC day, so a viewer
-              east of Greenwich reading these as local days is off by one for
-              part of every evening — the difference between "Tuesday was our
-              best day" and a number they cannot reproduce. Three letters on
-              the control that changes days says it where it applies, instead
-              of a sentence at the top of the page that says it once.
-              NOT A CIRCLE AFTER ALL — three letters and horizontal padding
-              make this an oval, not the true circle the "badge and count"
-              exception (the day-cell numeral, the legend swatch below) is
-              actually for, so it takes the same 8px the sheet's other chips
-              do rather than keeping a pill shape nothing else in the row
-              still wears. It stays neutral: a footnote that took a colour
-              from the accent set would be the third hue in a bar that
-              already has two. */}
-          <span
-            title="Days are UTC — the same days your metrics are counted in"
-            className="rounded-control border border-border px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
-          >
-            UTC
-          </span>
+          {/* THE UTC PILL IS GONE, AND ITS FACT MOVED ONTO THE LABEL BESIDE IT.
+              The fact is worth keeping and was never in doubt: every value on
+              this sheet is filed under a UTC day, so a viewer east of Greenwich
+              reading these as local days is off by one for part of every
+              evening — the difference between "Tuesday was our best day" and a
+              number they cannot reproduce.
+              What was wrong was the OBJECT. It was a bordered chip sitting
+              outside the groove, which made a footnote look like a second
+              control on a row that already had one; the owner asked for the
+              three letters on "This month" instead. Same words, same `title`,
+              in the place the reader is already looking when they change which
+              days they are looking at. */}
     </div>
   );
 

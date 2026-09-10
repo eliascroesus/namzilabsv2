@@ -1156,6 +1156,15 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                   actions zone's layout when it stays unfilled, rather than a
                   hollow gap where a button would otherwise sit. */}
               {activeKind === "custom" && <div id="canvas-add-chart" className="flex items-center empty:hidden" />}
+              {/* "NEW GROUP", BESIDE THE DATE RANGE. Same arrangement as the
+                  two slots around it and for the same reason: the button calls
+                  `addGroup`, which writes optimistically into the `groups`
+                  `board-layout.tsx` owns, so this async server component cannot
+                  instantiate it — it holds the POSITION and the client portals
+                  the control in. It stood on a row of its own between the
+                  header and the board, which was the last third band left in
+                  the product. */}
+              {activeKind === "groups" && <div id="board-new-group" className="flex items-center empty:hidden" />}
               {/* A CALENDAR PUTS ITS OWN TIME CONTROL HERE INSTEAD.
                   The period pills narrow WHICH NUMBERS a board shows; a
                   calendar answers two fixed months — the only two the
@@ -1224,17 +1233,29 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                   has recorded the two-series legend as unbuilt since before the
                   chrome rebuild — so it ships disabled with a title that says
                   so, rather than as a menu that opens onto nothing. */}
-              <Button
-                variant="white"
-               
-                disabled
-                title="Comparison periods are not built yet"
-                className="shrink-0"
-              >
-                <ChartLine />
-                Compare To
-                <ChevronDown />
-              </Button>
+              {/* AND IT STANDS DOWN ON A CALENDAR, where the metric picker
+                  takes its place. Two reasons, and the second is the real one:
+                  a comparison PERIOD is meaningless on a sheet that answers two
+                  fixed months, and the slot is the best position on the row for
+                  the one control a calendar genuinely has — the picker was
+                  living on a row of its own below the header, which is the
+                  third-bar mismatch this whole chrome pass has been removing.
+                  `#calendar-tools` is filled by `CalendarBoard`'s portal; an
+                  empty div collapses if it never is. */}
+              {activeKind === "calendar" ? (
+                <div id="calendar-tools" className="flex shrink-0 items-center gap-2 empty:hidden" />
+              ) : (
+                <Button
+                  variant="white"
+                  disabled
+                  title="Comparison periods are not built yet"
+                  className="shrink-0"
+                >
+                  <ChartLine />
+                  Compare To
+                  <ChevronDown />
+                </Button>
+              )}
               <form action={refreshAllFlowsAction} className="shrink-0">
                 <SubmitButton
                   /* WHITE, WITH "Today" BESIDE IT — node 49:5439. The two
@@ -1356,14 +1377,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
            * `mt-4`, which is this row's gap rather than the header's.
            */
           <div>
-            {/* THE METRIC PICKER'S OWN SLOT — the one thing left on this row
-                now that "+ Add" and Refresh all both moved into the page
-                header (see the note above). `justify-end` so the picker, once
-                `CalendarBoard` portals it in, sits at the row's right edge —
-                the same edge every other view's action row ends on.
-                `empty:hidden` so a view with no tools does not leave a
-                zero-height flex row taking up space above the calendar sheet. */}
-            <div id="calendar-tools" className="flex items-center justify-end gap-2 empty:hidden" />
+            {/* THE METRIC PICKER'S SLOT MOVED UP INTO THE HEADER, into the
+                position "Compare To" holds on every other view — see the note
+                there. There must be exactly ONE `#calendar-tools` in the
+                document: `getElementById` answers with the first, so a second
+                one here would be the portal's target and the picker would
+                render back down on a row of its own. */}
             {calendarRowsFailed ? (
               <p className="mt-6 rounded-card border border-danger-soft bg-danger-soft/50 p-3 text-md text-danger-ink">
                 This calendar couldn&rsquo;t be loaded. Nothing has been deleted and no number has changed — refresh to

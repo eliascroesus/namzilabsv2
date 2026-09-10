@@ -1,6 +1,28 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+
+/**
+ * THE SAME FOUR LINES `calendar-board.tsx`, `topbar-slots.tsx` and
+ * `FlowToolbar.tsx` each carry — a client control rendering into a position the
+ * server page owns.
+ *
+ * COPIED RATHER THAN SHARED, which is the convention here and worth one
+ * sentence: the pattern is four lines and no logic, and the three existing
+ * copies have never drifted because there is nothing in them TO drift. A shared
+ * module would buy deduplication of a `useEffect` and cost every one of these
+ * files an import of a component whose whole body is visible where it is used.
+ * If a fifth appears, extract it.
+ *
+ * `node` is null until the effect runs, so nothing renders on the server and
+ * there is no markup for hydration to disagree about.
+ */
+function Slot({ id, children }: { id: string; children: ReactNode }) {
+  const [node, setNode] = useState<HTMLElement | null>(null);
+  useEffect(() => setNode(document.getElementById(id)), [id]);
+  return node ? createPortal(children, node) : null;
+}
 import { Plus } from "lucide-react";
 import { useSettle } from "./board-settle";
 import { arrangeBoard, type BoardLane } from "@/lib/board/arrange";
@@ -312,20 +334,43 @@ export function BoardLayout({
           header, because every page in the product gets that same 16px from it.
           The board below keeps its own `mt-4` — that gap is this row's, not the
           header's. */}
+      {/* NEW GROUP PORTALS INTO THE HEADER NOW, beside the date range.
+          The note above explains why it could never be rendered BY the header:
+          it calls `addGroup`, which writes optimistically into the `groups`
+          this client component owns, so a server-rendered slot cannot
+          instantiate it. What a slot CAN do is hold the position — the
+          identical arrangement `#canvas-add-chart` and `#calendar-tools`
+          already use, and for the identical reason.
+
+          `variant="white"` rather than `secondary`, and no `size`: the header's
+          row is four white 32px controls at 13/400, and a grey `sm` button in
+          the middle of them was the drift. `<Plus />` without an explicit
+          `size` for the same reason — the variant's own `[&_svg]:size-4` is
+          what every other control in that row draws.
+
+          WITH THIS GONE THE GROUP VIEW HAS TWO BANDS like every other view,
+          rather than a third one carrying a single button. */}
       {canEdit && (
-        <div className="flex flex-wrap items-center justify-end gap-4">
-          <Button variant="secondary" size="sm" onClick={addGroup} disabled={busy} className="shrink-0">
-            <Plus size={15} />
+        <Slot id="board-new-group">
+          <Button variant="white" onClick={addGroup} disabled={busy} className="shrink-0">
+            <Plus />
             New group
           </Button>
-        </div>
+        </Slot>
       )}
 
       {board.mode === "grid" ? (
         /* Byte for byte the grid the dashboard rendered before groups existed.
            The class string is IMPORTED rather than spelled — page-width.test.ts
            fails the build if this literal appears anywhere but ui/page.tsx. */
-        <div className={`mt-4 items-start ${BOARD_GRID}`}>{board.tiles.map((t) => t.node)}</div>
+        /* NO `mt-4` — 24px ON EVERY SIDE, WHICH IS THE CONTAINER'S OWN INSET.
+           That margin was this row's gap from the action row above it, and the
+           action row is gone. Left in place it put the board 16px below a
+           header that already ends in `pb-4`, so the group view sat lower than
+           every other view and its top inset did not match its left, right or
+           bottom. The owner asked for the whole thing moved up to a uniform
+           24. */
+        <div className={`items-start ${BOARD_GRID}`}>{board.tiles.map((t) => t.node)}</div>
       ) : (
         <div className="mt-4">
           {/* THE METRICS WITH NOWHERE TO BE, on one line above the board.

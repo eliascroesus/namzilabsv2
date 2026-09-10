@@ -83,8 +83,21 @@ describe("the grid the dashboard had before groups", () => {
   });
 
   it("keeps the same wrapper classes the page used to emit", () => {
-    // The zero-group promise, as bytes rather than as an intention.
-    expect(layout).toMatch(/mt-4 items-start \$\{BOARD_GRID\}/);
+    /**
+     * The zero-group promise, as bytes rather than as an intention.
+     *
+     * `mt-4` LEFT ON 11 SEP 2026 and its absence is the assertion now. That
+     * margin was this board's gap from the "New group" action row above it;
+     * the row moved into the page header, so the margin was 16px of nothing
+     * sitting under a header that already ends in `pb-4` — the group view
+     * standing lower than every other view, with a top inset that did not
+     * match its own left, right or bottom. The container's 24px is the only
+     * padding now, on all four sides.
+     */
+    expect(layout).toMatch(/items-start \$\{BOARD_GRID\}/);
+    expect(layout, "the action row's gap must not come back with the row gone").not.toMatch(
+      /mt-4 items-start \$\{BOARD_GRID\}/,
+    );
   });
 });
 

@@ -1,9 +1,13 @@
 import { describe, it, expect, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { BOARD_GRID } from "@/components/ui/page";
 import type { BoardGroup, BoardTile, TilePlacement } from "@/lib/board/types";
 import { groupAccent, groupBadge, groupInk, groupWash } from "@/components/flow/node-accent";
+
+const root = join(__dirname, "..");
 
 /**
  * WHAT THE BOARD ACTUALLY EMITS.
@@ -84,10 +88,35 @@ describe("with no groups", () => {
     expect(html.indexOf("Revenue")).toBeLessThan(html.indexOf("Leads"));
   });
 
-  it("still offers the one door to a first group", () => {
-    // The button has to exist BEFORE there is a board, or there is no way to
-    // ever get one.
-    expect(render({ tiles: TILES, groups: [], placements: [], canEdit: true })).toContain("New group");
+  it("still offers the one door to a first group — now through the header", () => {
+    /**
+     * THE BUTTON HAS TO EXIST BEFORE THERE IS A BOARD, or there is no way to
+     * ever get one. That is unchanged; where it exists is not.
+     *
+     * It moved into the page header beside the date range on 11 Sep 2026, via
+     * the `#board-new-group` slot — so it renders through a PORTAL, and a
+     * portal renders nothing at all under `renderToStaticMarkup`: `node` is
+     * null until the effect runs, which is exactly what stops the server and
+     * the client disagreeing. A `toContain("New group")` here would now be
+     * asserting that a client-only control appears in server markup, which is
+     * both false and the wrong thing to want.
+     *
+     * SO THE CHAIN IS ASSERTED INSTEAD, both halves, because this codebase has
+     * shipped the other failure twice — a slot with no caller (`#topbar-title`,
+     * blank on every board route) and a caller with no slot are each invisible
+     * to a test that reads one file at a time.
+     */
+    const layout = readFileSync(join(root, "src/app/dashboard/board-layout.tsx"), "utf8");
+    expect(layout, "the control still exists, and still needs `canEdit`").toMatch(
+      /canEdit && \(\s*<Slot id="board-new-group">/,
+    );
+    expect(layout).toContain("New group");
+
+    const page = readFileSync(join(root, "src/app/dashboard/page.tsx"), "utf8");
+    expect(page, "and the header holds a place for it").toMatch(/id="board-new-group"/);
+    expect(page, "on the groups view, where groups exist").toMatch(
+      /activeKind === "groups" && <div id="board-new-group"/,
+    );
   });
 });
 
