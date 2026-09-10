@@ -24,7 +24,7 @@
  */
 
 /** The time units `bucketKey` in the engine can produce, spelled the same way. */
-export type BucketUnit = "day" | "week" | "month" | "quarter" | "year";
+export type BucketUnit = "hour" | "day" | "week" | "month" | "quarter" | "year";
 
 /**
  * Nice axis ticks covering `[min(0, lo), max(0, hi)]`.
@@ -79,6 +79,7 @@ export function bucketKeyOf(ms: number, unit: BucketUnit): string {
   const d = new Date(ms);
   const iso = d.toISOString();
   const y = d.getUTCFullYear();
+  if (unit === "hour") return iso.slice(0, 13);
   if (unit === "year") return String(y);
   if (unit === "month") return iso.slice(0, 7);
   if (unit === "quarter") return `${y}-Q${Math.floor(d.getUTCMonth() / 3) + 1}`;
@@ -138,7 +139,26 @@ export function padSeries(
 
   let lo = steps.length > 0 ? steps[0]! : null;
   let hi = steps.length > 0 ? steps[steps.length - 1]! : null;
-  if (opts?.period) {
+  /**
+   * THE PERIOD STRETCHES A DAY GRID, BUT NOT A SUB-DAY ONE.
+   *
+   * Stretching to the window's end is what makes "Last 7 days" draw seven marks
+   * when two of them saw nothing, and it is safe for a day grid because such a
+   * window's final bucket has always STARTED — 7d and 30d end on today's.
+   *
+   * An hour grid inside a whole-day window does not have that property: today
+   * runs to 23:59 while its series ends at the last hour that began, so
+   * stretching would fill the rest of the afternoon with `fill` — which is `0`
+   * for a count metric, i.e. a line falling to the floor for hours that have
+   * not happened. The materializer already refuses to MEASURE those; this is
+   * the same refusal at the render layer, and without it that one would be
+   * undone here.
+   *
+   * The series' own end is the authority, not the clock: this runs inside a
+   * client component that server-renders, and a `Date.now()` on that path
+   * disagrees with itself across an hour boundary.
+   */
+  if (opts?.period && unit !== "hour") {
     const wLo = bucketIndex(bucketKeyOf(opts.period.from, unit), unit);
     const wHi = bucketIndex(bucketKeyOf(opts.period.to, unit), unit);
     if (wLo != null && wHi != null && wHi - wLo <= 400) {
@@ -163,6 +183,10 @@ export function padSeries(
 /** A bucket key as a monotone integer index in its unit, or null if unparseable. */
 function bucketIndex(key: string, unit: BucketUnit): number | null {
   switch (unit) {
+    case "hour": {
+      const t = Date.parse(`${key}:00:00Z`);
+      return Number.isFinite(t) ? Math.round(t / 3_600_000) : null;
+    }
     case "day": {
       const t = Date.parse(`${key}T00:00:00Z`);
       return Number.isFinite(t) ? Math.round(t / 86_400_000) : null;
@@ -189,6 +213,8 @@ function bucketIndex(key: string, unit: BucketUnit): number | null {
 /** The inverse of `bucketIndex`, for minting the gap slots' own keys. */
 function bucketAt(index: number, unit: BucketUnit): string {
   switch (unit) {
+    case "hour":
+      return new Date(index * 3_600_000).toISOString().slice(0, 13);
     case "day":
       return new Date(index * 86_400_000).toISOString().slice(0, 10);
     case "week":
@@ -210,6 +236,15 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
  * key falls back to itself, which is at least true.
  */
 export function bucketLabel(bucket: string, unit?: BucketUnit): string {
+  /**
+   * `2026-09-10T14` -> `14:00`. The shape is tested as well as the unit, because
+   * a slot stored before the hour rung existed carries no `unit` at all and a
+   * raw ISO fragment on an axis is worse than reading the key.
+   */
+  if (unit === "hour" || (!unit && /^\d{4}-\d{2}-\d{2}T\d{2}$/.test(bucket))) {
+    const m = bucket.match(/^\d{4}-\d{2}-\d{2}T(\d{2})$/);
+    if (m) return `${m[1]}:00`;
+  }
   if (unit === "day" || (!unit && /^\d{4}-\d{2}-\d{2}$/.test(bucket))) {
     const m = bucket.match(/^\d{4}-(\d{2})-(\d{2})$/);
     if (m) return `${MONTHS[Number(m[1]) - 1]} ${Number(m[2])}`;

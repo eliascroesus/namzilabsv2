@@ -45,31 +45,63 @@ describe("the window decides, not the metric", () => {
   });
 
   it("widens the bucket as the window widens, so a tile stays legible", () => {
-    expect(bucketUnitForWindow(1 * DAY)).toBe("day");
+    // A ONE-DAY WINDOW USED TO ASSERT "day" HERE, and that was the bug rather
+    // than the contract: one day at a day bucket is ONE point, and the trend
+    // guard in `withTrends` refuses to draw fewer than two — which is why
+    // Today and Yesterday rendered no chart at all. See tests/hour-buckets.
+    expect(bucketUnitForWindow(1 * DAY)).toBe("hour");
     expect(bucketUnitForWindow(90 * DAY)).toBe("week");
     expect(bucketUnitForWindow(365 * DAY)).toBe("month");
     expect(bucketUnitForWindow(5 * 365 * DAY)).toBe("year");
   });
 });
 
+/**
+ * Written out rather than inlined as a ternary chain, because the chain both
+ * tests above used had no `hour` arm and quietly folded it into the 30-day
+ * case: today's 24 buckets rounded to ZERO points, and both assertions passed
+ * while measuring nothing. A total function over the unit cannot do that.
+ */
+function msPerBucket(unit: string): number {
+  switch (unit) {
+    case "hour":
+      return DAY / 24;
+    case "day":
+      return DAY;
+    case "week":
+      return 7 * DAY;
+    case "month":
+      return 30 * DAY;
+    case "quarter":
+      return 91 * DAY;
+    case "year":
+      return 365 * DAY;
+    default:
+      throw new Error(`no bucket length known for unit ${unit}`);
+  }
+}
+
 describe("every range the dashboard offers", () => {
   it("gives a trend more than one point wherever a trend is possible", () => {
     /**
      * The property that actually matters, asserted over the REAL windows
-     * `resolveRange` produces rather than over round numbers. Today and
-     * Yesterday are one day long, so one bucket is the honest answer for them —
-     * the tile says so in words. Every other range must be able to draw.
+     * `resolveRange` produces rather than over round numbers. EVERY range can
+     * draw now: Today and Yesterday used to be exempted here as one day long
+     * and therefore one bucket, which was the bug written down as a rule — an
+     * hour grid gives them 24. Nothing is exempt any more.
+     *
+     * This measures the GRID, which is a property of the window and so is the
+     * same at every hour of the day. Today's DRAWN series is shorter, because
+     * hours that have not started are not measured — tests/hour-buckets.test.ts
+     * covers that, and it is why this asserts three rather than the full 24.
      */
-    const SINGLE = new Set(["today", "yesterday"]);
     for (const key of MATERIALIZED_RANGES) {
       if (key === "all") continue; // unbounded; keeps the metric's own unit
       const { range } = resolveRange(key);
       const span = range.to.getTime() - range.from.getTime();
       const unit = bucketUnitForWindow(span);
-      const perBucket = unit === "day" ? DAY : unit === "week" ? 7 * DAY : 30 * DAY;
-      const points = Math.round(span / perBucket);
-      if (SINGLE.has(key)) expect(points, `${key}`).toBeLessThanOrEqual(1);
-      else expect(points, `${key} draws only ${points} point(s) as ${unit}`).toBeGreaterThanOrEqual(3);
+      const points = Math.round(span / msPerBucket(unit));
+      expect(points, `${key} draws only ${points} point(s) as ${unit}`).toBeGreaterThanOrEqual(3);
     }
   });
 
@@ -81,8 +113,7 @@ describe("every range the dashboard offers", () => {
       const { range } = resolveRange(key);
       const span = range.to.getTime() - range.from.getTime();
       const unit = bucketUnitForWindow(span);
-      const perBucket = unit === "day" ? DAY : unit === "week" ? 7 * DAY : 30 * DAY;
-      expect(Math.round(span / perBucket), `${key}`).toBeLessThanOrEqual(45);
+      expect(Math.round(span / msPerBucket(unit)), `${key}`).toBeLessThanOrEqual(45);
     }
   });
 });

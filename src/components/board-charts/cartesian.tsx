@@ -247,19 +247,33 @@ export function LineChart({
   flush();
 
   /**
-   * The previous window's path, on the CURRENT window's x positions — `xPrior`
-   * spaces it across its own count so a window with one bucket fewer still
-   * spans the frame rather than stopping short of the right edge.
+   * The previous window's path, on the CURRENT window's x positions — which is
+   * `x`, the very same function, not a rescaling of its own count.
+   *
+   * IT USED TO SPACE ITSELF ACROSS ITS OWN LENGTH, so that a window with one
+   * bucket fewer still reached the right edge instead of stopping short. That
+   * was invisible for as long as the two lengths were always equal: every
+   * day-grained window and its shifted twin have the same number of buckets,
+   * and `withTrends` refuses a comparison that is not exactly as long as the
+   * window it was measured over, so "one bucket fewer" could not actually
+   * arrive.
+   *
+   * An hour grid produces it for real. Today's series stops at the last hour
+   * that has begun — 17 marks at 16:00 — while yesterday's is a full 24, and
+   * stretching each to the full width lays 16:00 today against 23:00 yesterday.
+   * The comparison is the one mark on this chart whose entire meaning is which
+   * point it sits under, so a cosmetic reach for the right edge cannot be worth
+   * a wrong reading. Anything past the current window's last position is
+   * dropped rather than drawn off the frame.
    */
-  const xPrior = (i: number) => (prior.length === 1 ? 50 : (i / (prior.length - 1)) * 100);
   const priorRuns: string[] = [];
   let priorOpen = false;
-  prior.forEach((p, i) => {
+  prior.slice(0, points.length).forEach((p, i) => {
     if (p.value == null) {
       priorOpen = false;
       return;
     }
-    const at = `${xPrior(i)} ${yPct(p.value, lo, hi)}`;
+    const at = `${x(i)} ${yPct(p.value, lo, hi)}`;
     priorRuns.push(priorOpen ? `L ${at}` : `M ${at} L ${at}`);
     priorOpen = true;
   });

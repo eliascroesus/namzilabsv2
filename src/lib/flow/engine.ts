@@ -1497,7 +1497,13 @@ export type TilePresentation = {
   target: number | null;
   /** Optional dashboard time axis: a date field to bucket a dataset endpoint by. */
   timeField?: string;
-  timeUnit?: "day" | "week" | "month" | "quarter" | "year";
+  /**
+   * `"hour"` is chosen by `bucketUnitForWindow` for windows of two days or
+   * fewer; it is NOT in `TIME_UNITS`, so it is not a groupBy a flow author can
+   * pick. The distinction is deliberate — this is the grid a CHART is drawn on,
+   * which the window decides, not the aggregation a metric is defined by.
+   */
+  timeUnit?: "hour" | "day" | "week" | "month" | "quarter" | "year";
   /**
    * The config-derived half of the tile's facts (`seedMetricFacts`), attached
    * by `factCorrected` where the step config is in hand. `buildTile` adds the
@@ -1687,6 +1693,7 @@ function bucketFloorMs(ms: number, unit: NonNullable<TilePresentation["timeUnit"
   if (unit === "year") return Date.UTC(y, 0, 1);
   if (unit === "quarter") return Date.UTC(y, Math.floor(d.getUTCMonth() / 3) * 3, 1);
   if (unit === "month") return Date.UTC(y, d.getUTCMonth(), 1);
+  if (unit === "hour") return Date.UTC(y, d.getUTCMonth(), d.getUTCDate(), d.getUTCHours());
   const midnight = Date.UTC(y, d.getUTCMonth(), d.getUTCDate());
   // Back to Monday, the same weekday arithmetic `isoWeek` uses.
   if (unit === "week") return midnight - ((new Date(midnight).getUTCDay() + 6) % 7) * 86_400_000;
@@ -1696,6 +1703,7 @@ function bucketFloorMs(ms: number, unit: NonNullable<TilePresentation["timeUnit"
 /** One bucket forward, by the calendar rather than a fixed stride. */
 function bucketNextMs(ms: number, unit: NonNullable<TilePresentation["timeUnit"]>): number {
   const d = new Date(ms);
+  if (unit === "hour") return d.setUTCHours(d.getUTCHours() + 1);
   if (unit === "day") return d.setUTCDate(d.getUTCDate() + 1);
   if (unit === "week") return d.setUTCDate(d.getUTCDate() + 7);
   if (unit === "month") return d.setUTCMonth(d.getUTCMonth() + 1);
@@ -1747,6 +1755,26 @@ export function bucketWindowsFor(start: number, end: number): Array<{ key: strin
 export function bucketUnitForWindow(spanMs: number): NonNullable<TilePresentation["timeUnit"]> {
   const DAY = 86_400_000;
   const days = spanMs / DAY;
+  /**
+   * THE HOUR RUNG, AND WHY TWO DAYS IS THE BOUNDARY.
+   *
+   * A one-day window has ONE day bucket, and `withTrends` refuses a series of
+   * fewer than two points — which is why Today and Yesterday drew "Only one
+   * point in this period" on a board whose events carry `occurredAt` to the
+   * millisecond. The data was always there; this grid was too coarse to show it.
+   *
+   * The ladder is the standard shape rather than a number chosen here:
+   * `interval = range / maxDataPoints`, snapped to a nice unit — Grafana's
+   * `$__interval` is the widely-deployed version of it, landing 24h on 5m at
+   * ~300 points. These charts draw a couple of dozen marks and
+   * `bucketWindowsFor` caps at 64, so at ~24 points a 24h window lands on
+   * exactly one hour.
+   *
+   * Two days is where it stops, and that falls out of the cap: 48 hourly
+   * buckets clears 64 with room, a third day is 72 and `bucketWindowsFor`
+   * returns NOTHING rather than a long series — a coarser grid beats no chart.
+   */
+  if (days <= 2) return "hour";
   return days <= 45 ? "day" : days <= 180 ? "week" : days <= 1200 ? "month" : "year";
 }
 
@@ -2735,10 +2763,18 @@ function endOfDayMs(v: unknown): number | null {
   return typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v.trim()) ? parsed + 86_399_999 : parsed;
 }
 
-function bucketKey(iso: string, unit: "day" | "week" | "month" | "quarter" | "year"): string {
+function bucketKey(iso: string, unit: "hour" | "day" | "week" | "month" | "quarter" | "year"): string {
   const d = new Date(iso);
   const y = d.getUTCFullYear();
   switch (unit) {
+    /**
+     * `2026-09-10T14` — the ISO string cut at the hour. Every other key in this
+     * function sorts lexically in chronological order and this one has to as
+     * well: `byDay`, `byRange` and the series are plain objects, and the charts
+     * read them in key order.
+     */
+    case "hour":
+      return iso.slice(0, 13);
     case "year":
       return String(y);
     case "month":

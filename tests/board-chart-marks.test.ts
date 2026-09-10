@@ -495,3 +495,59 @@ describe("the axis reads three lines, and the floor is dashed", () => {
     expect(cartesian, "the hairline weight is gone from the series path").not.toContain('strokeWidth="1.5"');
   });
 });
+
+/**
+ * THE nTH BUCKET OF THE PREVIOUS WINDOW UNDER THE nTH OF THIS ONE.
+ *
+ * That is what `compare` promises in its own prop doc — "plotted by INDEX
+ * rather than by bucket, which is the whole trick" — and until hourly buckets
+ * arrived nothing tested it, because nothing could violate it: every
+ * day-grained window and its shifted twin have the SAME number of buckets, so
+ * spacing each across its own count gave the same answer.
+ *
+ * Today at an hour grid is the first case where they differ. Its series stops
+ * at the last hour that has begun (17 of them at 16:00) while yesterday's is a
+ * complete 24, and spacing each across its own count stretches both to the full
+ * width — putting 16:00 today against 23:00 yesterday and comparing this
+ * afternoon with last night. The comparison is the ONE mark on the chart whose
+ * entire meaning is which point it sits under.
+ */
+describe("the comparison line's x positions", () => {
+  const day = Date.UTC(2026, 8, 10);
+  const hourly = (n: number, from: number, v: (i: number) => number) =>
+    Array.from({ length: n }, (_, i) => ({
+      bucket: new Date(from + i * 3_600_000).toISOString().slice(0, 13),
+      value: v(i),
+    }));
+
+  const markup = renderToStaticMarkup(
+    createElement(LineChart, {
+      series: hourly(17, day, (i) => i + 1),
+      compare: hourly(24, day - 86_400_000, () => 5),
+      unit: "hour" as const,
+      pad: { fill: 0, period: { from: day, to: day + 86_399_999 } },
+      format: { format: "number" },
+      accent: "#B6FF56",
+    }),
+  );
+
+  /** The prior path is the one stroked in the comparison colour. */
+  const priorD = markup.match(/<path d="([^"]+)"[^>]*stroke="var\(--color-series-compare\)"/)?.[1];
+
+  it("is drawn at all", () => {
+    expect(priorD, "no comparison path in the markup").toBeTruthy();
+  });
+
+  it("ends under the current window's last point, not past it or short of it", () => {
+    const xs = [...priorD!.matchAll(/[ML] (-?[\d.]+) /g)].map((m) => Number(m[1]));
+    // 17 positions across the current grid: i/16*100, so the last is exactly
+    // 100. Spacing 24 points across their own count instead put this at 69.6.
+    expect(Math.max(...xs)).toBe(100);
+    expect(new Set(xs).size).toBe(17);
+  });
+
+  it("puts hour 8 of yesterday under hour 8 of today", () => {
+    const xs = [...priorD!.matchAll(/[ML] (-?[\d.]+) /g)].map((m) => Number(m[1]));
+    expect([...new Set(xs)].sort((a, b) => a - b)[8]).toBeCloseTo((8 / 16) * 100, 6);
+  });
+});

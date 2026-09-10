@@ -191,7 +191,11 @@ function withTrends(
       .filter((p): p is { bucket: string; value: number } => p.value != null && Number.isFinite(p.value));
     // ONE POINT IS NOT A TREND. The tile refuses to draw it and says so, so
     // storing one is bytes on every dashboard render for a chart that cannot
-    // exist. Today and Yesterday are one day long by definition.
+    // exist. This used to catch Today and Yesterday, which are one day long by
+    // definition and so had exactly one day bucket; `bucketUnitForWindow` now
+    // hands a window of two days or fewer an HOUR grid, so they arrive here
+    // with 24 points and draw. The guard stays for the windows that really do
+    // measure once — an `all` range, or a slot whose buckets went unmeasured.
     if (points.length < 2) continue;
     slot.series = points;
 
@@ -207,6 +211,13 @@ function withTrends(
      * day-bucketed window the buckets behind `r.start` were computed for the
      * calendar and are sitting in the same map. Nothing new is measured; this
      * reads what the run already produced.
+     *
+     * AN HOURLY WINDOW GETS ITS COMPARISON FROM A SIBLING RANGE, not from the
+     * calendar, whose buckets are days: Today's previous window is Yesterday's
+     * 24 hours, which `trendKeys` measured because Yesterday is a preset on the
+     * same board. A board that asks for Today ALONE finds those hours missing
+     * and draws no comparison, which is the all-or-nothing rule below doing
+     * exactly what it should rather than a case to special-case.
      *
      * ALL OR NOTHING. A window missing a bucket at its far end is a shorter
      * line drawn against a full one, which reads as a fall the data does not
@@ -452,7 +463,8 @@ export async function materializeFlow(
      * 144, and only for the flows whose base number actually moves with the
      * clock. Fixed between-dates windows never move and take no cap.
      */
-    const slidingCapMs = graphHasSlidingWindow(graph) ? asOf.getTime() + 60 * 60 * 1000 : Infinity;
+    const asOfMs = asOf.getTime();
+    const slidingCapMs = graphHasSlidingWindow(graph) ? asOfMs + 60 * 60 * 1000 : Infinity;
     const dayKeys = new Set(dayRanges.map((d) => d.key));
 
     /**
@@ -478,6 +490,22 @@ export async function materializeFlow(
       // for. A custom range can never be `all` (no calendar can draw the epoch).
       if ("all" in r && r.all) continue;
       for (const b of bucketWindowsFor(r.start, r.end)) {
+        /**
+         * A BUCKET THAT HAS NOT BEGUN IS NOT A MEASUREMENT OF ZERO.
+         *
+         * "Today" is a whole UTC day, so at 16:00 its hourly grid runs to 23:00
+         * and the last seven buckets have not happened. Measured, each is an
+         * honest count of no records; drawn, they are a line falling to the
+         * floor for the rest of the afternoon — a crash no reader should be
+         * shown. Skipping them here keeps them out of the series (the points
+         * filter drops a key `all` never got) AND saves measuring them.
+         *
+         * The day grid never needed this: 7d and 30d end on TODAY'S bucket,
+         * which has started. Only a grid finer than its window's end can hold
+         * one that has not. The current, partial hour is kept — it has started,
+         * and it is the same partial bucket 7d has always ended on.
+         */
+        if (b.start > asOfMs) continue;
         if (trendKeys.has(b.key)) continue;
         trendKeys.add(b.key);
         // `tracksCrossings: false` for the reason `calendarDayRanges` gives:

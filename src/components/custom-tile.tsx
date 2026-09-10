@@ -355,11 +355,16 @@ export function CustomTile({
     : (chart === "line" || chart === "area" || chart === "bar") && !hasSeries
       ? "No trend in this period."
       : /**
-         * ONE POINT IS NOT A TREND. "Today" over a daily bucket is a single
-         * reading, and a line through it drew a lone dot on an empty grid while
-         * a bar drew one full-height block — both of which read as a broken
-         * chart rather than as the honest "there is only one number here".
-         * The headline above already says what that number is.
+         * ONE POINT IS NOT A TREND: a line through it drew a lone dot on an
+         * empty grid while a bar drew one full-height block — both of which
+         * read as a broken chart rather than as the honest "there is only one
+         * number here". The headline above already says what that number is.
+         *
+         * "TODAY" USED TO BE THE STOCK EXAMPLE HERE and no longer reaches it:
+         * a window of two days or fewer is bucketed by HOUR, so Today and
+         * Yesterday arrive with a couple of dozen points. What still lands here
+         * is the genuinely single reading — an `all` window on a young
+         * workspace, or a row the engine has not recomputed yet.
          */
         (chart === "line" || chart === "area" || chart === "bar") && (w.series?.length ?? 0) < 2
         ? stale

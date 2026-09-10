@@ -978,7 +978,7 @@ export type TileSpec = {
        * so the size travels with the slice that used it. ABSENT means the
        * metric's own unit, which is what every row written before this says.
        */
-      unit?: "day" | "week" | "month" | "quarter" | "year";
+      unit?: "hour" | "day" | "week" | "month" | "quarter" | "year";
       /**
        * THIS SERIES WAS ASSEMBLED FOR THE CHARTS, NOT MEASURED BY THE METRIC.
        *
