@@ -854,7 +854,14 @@ export function ViewTab({
                      149 — so the board lands 6px low with every class correct.
                      `mr-0` for the same reason the gap is 4: the frame puts the
                      pill's own 4px between the label and this. */
-                  className="size-3.5 text-muted-foreground hover:bg-foreground/10 hover:text-foreground [&_svg]:size-3.5"
+                  /* NO HOVER FILL AND NO HOVER INK. `hover:bg-foreground/10`
+                     put a translucent plate behind three dots that are 14px
+                     across — a smudge rather than a state — and it was the only
+                     control in this row with a fill of its own. The owner asked
+                     it out. The button still has `active:bg-accent` from the
+                     ghost variant, so a PRESS still registers; what went is the
+                     colour change on mere hover. */
+                  className="size-3.5 text-muted-foreground hover:bg-transparent [&_svg]:size-3.5"
               onClick={() => setMenuOpen((o) => !o)}
               aria-label={`Options for ${name}`}
               aria-haspopup="menu"

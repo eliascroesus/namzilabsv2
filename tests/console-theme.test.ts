@@ -132,7 +132,11 @@ describe("the console's supplied constants", () => {
      */
     const track = page.match(/PERIOD_TRACK =\s*\n?\s*"([^"]+)"/)?.[1] ?? "";
     expect(track, "the groove lost its border").toMatch(/\bborder-border\b/);
-    expect(track, "the groove lost its fill").toMatch(/\bbg-control\b/);
+    // `bg-secondary` SINCE 11 SEP 2026 — the same face every other button
+    // wears. What this line protects is that the groove still HAS a fill at
+    // all; which role supplies it is the thing that was allowed to change.
+    expect(track, "the groove lost its fill").toMatch(/\bbg-secondary\b/);
+    expect(track, "and it is not back on the old recessed step").not.toMatch(/\bbg-control\b/);
     expect(track, "the groove lost its enclosure").toMatch(/\boverflow-hidden\b/);
     // And the part THIS pass changed: the groove is an 8px rectangle now, per
     // the 4 Sep 2026 Figma — not the capsule the previous pass drew.

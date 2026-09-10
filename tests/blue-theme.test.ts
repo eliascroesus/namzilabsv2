@@ -189,31 +189,36 @@ describe("one surface on dark, and a rail that is no longer constant", () => {
     expect(mixToken("topbar")).toBeNull();
   });
 
-  it("`.mix` overrides the CHROME and nothing else", () => {
+  it("`.mix` overrides the RAIL and nothing else", () => {
     /**
-     * IT WAS "the rail and nothing else", and that left the 8px gutter around
-     * the panel on the LIGHT page: a near-black column, a bright rim, and a
-     * light panel inside it. The owner's words — "the color behind the padding
-     * on the outer edges … is still bright".
+     * IT BRIEFLY OVERRODE `--background` TOO, and that is the correction worth
+     * recording rather than quietly reverting.
      *
-     * So `--background` joins the list, and the invariant widens by exactly
-     * one name rather than dissolving: on this mode the page is CHROME, not
-     * content. `--panel` deliberately does NOT follow it, which is what keeps
-     * the mode a mix at all — and it can only stay put because that token
-     * stopped being a pointer at `--background` when the gutter arrived.
+     * The 8px gutter around the panel was reading bright against a near-black
+     * column, so this block re-grounded the page. It fixed the rim and broke
+     * the CONTENT: `--background` is a role real pages paint with — an empty
+     * calendar square, a connection panel, a template thumbnail — and every
+     * one of them turned near-black inside a light panel.
      *
-     * A THIRD kind of name here means a content value has been forked
-     * per-mode, which is how a two-theme kit becomes a three-theme kit by
-     * accident.
+     * The gutter is not the page. It is the strip of shell the rail also sits
+     * on, so `app-frame.tsx` paints it `bg-rail` and this block is back to
+     * rail-only. THAT is the invariant: a mode whose whole cost is one
+     * material stays cheap, and the moment a second kind of name appears here
+     * a content value has been forked per-mode.
      */
     const declared = [...mixBlock().matchAll(/--([a-z0-9-]+):/g)].map((m) => m[1]);
     expect(declared.length).toBeGreaterThan(0);
-    expect(declared.filter((n) => !n.startsWith("rail") && n !== "background")).toEqual([]);
-    // The page moves WITH the rail, or the gutter is bright again.
-    expect(mixToken("background")).toBe("var(--color-neutral-950)");
-    // And the panel stays light, or it is not a mix.
+    expect(declared.filter((n) => !n.startsWith("rail"))).toEqual([]);
+    // The page is CONTENT here and stays light, or the calendar goes black.
+    expect(mixToken("background")).toBeNull();
     expect(mixToken("panel")).toBeNull();
     expect(lightToken("panel")).toBe("#fafafa");
+
+    // AND THE SHELL PAINTS THE RAIL'S MATERIAL, which is what makes the gutter
+    // dark here without `--background` moving. Both halves or neither.
+    const frame = readFileSync(join(root, "src/components/app-frame.tsx"), "utf8");
+    expect(frame).toMatch(/className="flex h-dvh bg-rail"/);
+    expect(frame, "the page's role must not paint the shell").not.toMatch(/h-dvh bg-background/);
   });
 
   it("every rail role is set in all three modes, so none can fall through", () => {

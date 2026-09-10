@@ -1030,7 +1030,22 @@ export function describeInputs(opts: { selectedId: string; nodes: FNode[]; edges
  * all come from here or the number in the corner stops meaning anything.
  * Pinned by tests/zoom-scale.test.ts.
  */
-export const BASE_ZOOM = 1.3;
+/**
+ * WHAT THE TOOLBAR CALLS 100%.
+ *
+ * React Flow's own zoom and the number a person reads are not the same scale:
+ * `zoomPercent` divides by this, so the builder opens at "100%" whenever the
+ * canvas is sitting at BASE_ZOOM. It was 1.3, and a fitted flow of ordinary
+ * size landed at 1.066 — which the toolbar reported as 82%. Opening at 82% is
+ * a readout that looks like something is wrong, and it made the two obvious
+ * moves (press 100%, or zoom in) both the wrong thing to do.
+ *
+ * 1.066 is 1.3 × 0.82 — that same fitted zoom, promoted to being the baseline
+ * rather than a fraction of one. Nothing about the canvas moves; the number
+ * over it stops lying about where it is. MIN and MAX follow automatically,
+ * because they are expressed against this rather than as their own literals.
+ */
+export const BASE_ZOOM = 1.066;
 export const MIN_ZOOM = BASE_ZOOM * 0.5;
 export const MAX_ZOOM = BASE_ZOOM * 2;
 

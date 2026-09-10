@@ -27,8 +27,10 @@ describe("the zoom scale", () => {
     expect(zoomPercent(MAX_ZOOM)).toBe(200);
     expect(zoomPercent(BASE_ZOOM * 0.75)).toBe(75);
     expect(zoomPercent(BASE_ZOOM * 1.5)).toBe(150);
-    // 1:1 is now a zoomed-OUT view, and says so.
-    expect(zoomPercent(1)).toBe(77);
+    // 1:1 IS STILL A ZOOMED-OUT VIEW, and still says so — just less
+    // dramatically, now that the baseline came down from 1.3 to 1.066 so a
+    // fitted flow opens at "100%" instead of at "82%".
+    expect(zoomPercent(1)).toBe(94);
   });
 
   it("bounds the canvas at half and double the resting size", () => {

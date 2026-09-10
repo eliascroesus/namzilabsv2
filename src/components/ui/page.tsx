@@ -178,12 +178,38 @@ export const BOARD_GRID = "grid gap-6 md:grid-cols-2 xl:grid-cols-3";
  * own surface that inverted separately. There is one surface; a control is
  * `--control`.
  */
+/**
+ * `bg-secondary`, NOT `bg-control` — THE SAME FACE AS EVERY OTHER BUTTON.
+ *
+ * `--control` is a step DOWN from the card on light (#F4F4F4) and a step UP on
+ * dark, which made the calendar's month stepper a grey well sitting in a row
+ * of white pills. `--secondary` is what "Refresh All" and its neighbours wear,
+ * and it is the role that already means "a button's face" in both themes. The
+ * height was already the kit's 32.
+ *
+ * THE COMMENT IS UP HERE AND NOT INSIDE THE DECLARATION on purpose:
+ * `console-theme.test.ts` reads this constant with `PERIOD_TRACK =\s*\n?\s*"`,
+ * so a comment between the `=` and the string makes every assertion about the
+ * groove match nothing and pass. That test exists BECAUSE this control was
+ * once silently stripped of its border, its fill and its enclosure during a
+ * radius change — exactly the failure a vacuous pass would hide.
+ */
 export const PERIOD_TRACK =
-  "inline-flex h-8 items-center overflow-hidden rounded-control border border-border bg-control";
+  "inline-flex h-8 items-center overflow-hidden rounded-control border border-border bg-secondary";
 
 /** One control inside that groove — a period link, a month arrow, "This month". */
+/**
+ * `text-button` (13/16/400) rather than `text-sm font-medium` (14/500).
+ *
+ * Every labelled control in the chrome stands on that rung — see
+ * `--text-button` in globals.css, which the 10 September frames set at 13/400
+ * across eight of them — and a month stepper reading 14/500 beside a 13/400
+ * "Refresh All" is the inconsistency the owner pointed at.
+ *
+ * Above the declaration, not inside it — see the note on `PERIOD_TRACK`.
+ */
 export const PERIOD_PILL =
-  "inline-flex h-full shrink-0 items-center rounded-control px-3 text-sm font-medium transition-colors duration-(--duration-fast)";
+  "inline-flex h-full shrink-0 items-center rounded-control px-3 text-button transition-colors duration-(--duration-fast)";
 
 /**
  * Title row: optional back link, one h1 recipe, optional lede, actions on

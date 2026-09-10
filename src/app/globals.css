@@ -1254,24 +1254,25 @@
  * cut for: roles enough that a band on its own ground can be re-grounded
  * without touching the content's vocabulary.
  *
- * `--background` IS PART OF THE CHROME HERE, AND THAT IS THE 11 SEP CORRECTION.
- * This block set the rail and nothing else, which left the 8px gutter around
- * the panel on the LIGHT page — a near-black column, a bright rim, and a light
- * panel inside it. The owner's words: "the color behind the padding on the
- * outer edges … is still bright". The page is not content: on this mode it is
- * the same material as the rail, and the panel is the only thing that stays
- * light. So it moves with the rail.
+ * THE GUTTER IS THE RAIL'S MATERIAL, AND THE SHELL PAINTS `bg-rail` FOR IT.
  *
- * `--panel` DOES NOT FOLLOW IT, and that is what keeps the mode a mix at all.
- * It is a literal `#FAFAFA` in `:root` rather than a pointer at
- * `--background`, so re-grounding the page here leaves the board's own surface
- * exactly where it was — which is the whole reason that token stopped being a
- * pointer when the gutter arrived.
+ * This block briefly overrode `--background` as well, to stop the 8px gutter
+ * around the panel reading bright against a near-black column. It fixed the
+ * rim and broke the CONTENT: `--background` is a role real pages paint with —
+ * an empty calendar square, a connection panel, a template thumbnail — and
+ * every one of them turned near-black inside a light panel. The calendar was
+ * unreadable.
+ *
+ * The gutter is not the page. It is the strip of shell the rail also sits on,
+ * and it is the rail's colour in all three modes — #F3F3F3 in `:root`, #121212
+ * here and in `.dark`. So `app-frame.tsx` paints it `bg-rail` and this block
+ * goes back to overriding NOTHING but the rail family.
  *
  * SO THE COST OF THE MODE IS THE LIST BELOW AND NOTHING ELSE. Every line is a
- * `--rail-*` or the page under it. A THIRD kind of name appearing here is the
- * signal that a content value has been forked per-mode, which is how a
- * two-theme kit becomes a three-theme one by accident.
+ * `--rail-*`. A second kind of name appearing here is the signal that a
+ * content value has been forked per-mode, which is how a two-theme kit becomes
+ * a three-theme one by accident — and, as this correction shows, how content
+ * that never asked to be chrome gets re-grounded underneath it.
  *
  * WHY IT IS WORTH HAVING AT ALL. This was the light theme for two days, and it
  * is the arrangement Linear, Height and Vercel's dashboard all ship: a dark
@@ -1295,11 +1296,6 @@
   /* THE BRIGHT step, as in `.dark` — this rail has the near-black ground that
      value was solved against, where `:root`'s light rail does not. */
   --rail-brand: var(--color-brand-400); /* 6.29:1 on #121212 */
-
-  /* THE PAGE, WHICH IS CHROME ON THIS MODE — see the note above. It carries
-     the 8px gutter around the panel and the strip under the rail's foot, and
-     both of those are the rail's material rather than the board's. */
-  --background: var(--color-neutral-950); /* #121212 — the same value as the rail */
 }
 
 /**

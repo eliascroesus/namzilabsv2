@@ -160,7 +160,15 @@ export function Popover({
       : undefined;
 
   return (
-    <div className="relative" ref={wrapRef}>
+    /* `flex`, SO THE ANCHOR IS NOT SITTING ON A TEXT BASELINE.
+       This was a bare block `relative`, which gives it a LINE BOX: a 14px
+       inline-flex trigger inside it measured 17px tall and sat at the top of
+       that box, so the view tabs' kebab rode 1.5px above the label beside it —
+       visibly off-centre on a row whose whole job is to be a row. As a flex
+       container the wrapper shrink-wraps its one in-flow child (the panel is
+       absolutely positioned and out of flow), and the parent's own
+       `items-center` finally has the right height to centre. */
+    <div className="relative flex" ref={wrapRef}>
       {anchor}
       {shown && (
         <div

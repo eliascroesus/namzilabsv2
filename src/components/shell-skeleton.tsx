@@ -31,7 +31,7 @@ export function ShellSkeleton({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex h-dvh bg-background">
+    <div className="flex h-dvh bg-rail">
       {/* THE RAIL'S GHOST — FIRST, AND FULL HEIGHT. Its width is pinned against
           `sidebar.tsx` by `tests/page-width.test.ts`; `--chrome` matches the
           real rail, and `--chrome-border` is the only thing marking where it

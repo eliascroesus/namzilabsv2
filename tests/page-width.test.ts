@@ -579,8 +579,19 @@ describe("the frame's new shape — a full-width bar over [rail | panel]", () =>
      * design starts it at zero.
      */
     const code = frame.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
-    expect(code, "a row, so `flex-col` must not come back").toMatch(/className="flex h-dvh bg-background"/);
-    expect(code).not.toMatch(/className="flex h-dvh flex-col bg-background"/);
+    /**
+     * `bg-rail`, NOT `bg-background`, SINCE 11 SEP 2026 — the shell's ground is
+     * the 8px gutter around the panel plus the strip under the rail's foot, and
+     * that is the COLUMN's material in all three modes. Painting it with the
+     * page's role forced `.mix` to choose between a bright rim and near-black
+     * calendar squares, because `--background` is a role real content paints
+     * with too.
+     *
+     * What this assertion has always been about is the ROW — that `flex-col`
+     * does not come back — and both halves are still checked.
+     */
+    expect(code, "a row, so `flex-col` must not come back").toMatch(/className="flex h-dvh bg-rail"/);
+    expect(code).not.toMatch(/className="flex h-dvh flex-col/);
     expect(code.indexOf("<Sidebar")).toBeGreaterThan(-1);
     expect(code.indexOf("<TopBar")).toBeGreaterThan(code.indexOf("<Sidebar"));
   });
@@ -868,8 +879,10 @@ describe("the skeleton mirrors the frame's new order", () => {
      * to prevent it.
      */
     const code = skeleton.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
-    expect(code).toMatch(/className="flex h-dvh bg-background"/);
-    expect(code).not.toMatch(/className="flex h-dvh flex-col bg-background"/);
+    // The mirror takes the same ground as the frame, or the gutter changes
+    // colour at hydration — see the note on the frame's own assertion.
+    expect(code).toMatch(/className="flex h-dvh bg-rail"/);
+    expect(code).not.toMatch(/className="flex h-dvh flex-col/);
     // The bar's ghost precedes the rail's ghost in the DOM now.
     // THE ORDER REVERSED WITH THE FRAME. The rail's ghost comes FIRST now —
     // it is a full-height column and the bar is inside the content column

@@ -132,7 +132,24 @@ export function CardHeader({ className, children, ...props }: React.ComponentPro
  * makes a board of ten cards read as ten pages.
  */
 export function CardTitle({ className, ...props }: React.ComponentProps<"h3">) {
-  return <h3 className={cn("truncate text-sm font-normal text-heading", className)} {...props} />;
+  /**
+   * 13/600, WHICH IS WHAT EVERY FRAME HAS DRAWN AND WHAT THIS HAD STOPPED
+   * SAYING.
+   *
+   * It was `text-sm font-normal` — 14px at 400 — from the pass that took the
+   * rule off the card's head and sent the title "muted/regular" with it. That
+   * went one step too far: a card title at body size and body weight is not a
+   * title, it is the first line of the card, and on the LIGHT theme (where the
+   * ink is #313131 rather than white) it read as washed-out prose sitting above
+   * a very loud number.
+   *
+   * Node 35:6131 sets it `font-weight: 600; font-size: 13px; line-height: 16px`
+   * — the same rung every labelled control in the chrome stands on, one weight
+   * up. So the title is now the SMALLEST text on the card and the heaviest,
+   * which is the pairing that makes a label read as a label beside a 28px
+   * numeral rather than competing with it.
+   */
+  return <h3 className={cn("truncate text-xs font-semibold text-heading", className)} {...props} />;
 }
 
 /** The line under it: 12px/400, one rung down the ink ramp at 6.78:1. */

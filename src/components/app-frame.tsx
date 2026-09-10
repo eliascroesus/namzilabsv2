@@ -172,7 +172,15 @@ export function AppFrame({
     // in the BAR. It lives in the rail's head block now, so the bar spans only
     // the content column and the objection has no subject.
     <div
-      className="flex h-dvh bg-background"
+      /* `bg-rail`, NOT `bg-background` — THE GUTTER IS THE RAIL'S MATERIAL.
+         This strip is the 8px around the panel plus whatever sits under the
+         rail's foot, and in all three modes it is the colour of the COLUMN:
+         #F3F3F3 on light, #121212 under `.mix` and `.dark`. Painting it with
+         the page's role made `.mix` choose between a bright rim and near-black
+         calendar squares, because `--background` is a role real content paints
+         with too. Naming the material directly costs nothing and lets `.mix`
+         override the rail family and nothing else. */
+      className="flex h-dvh bg-rail"
       style={{
         paddingLeft: "env(safe-area-inset-left)",
         paddingRight: "env(safe-area-inset-right)",
