@@ -891,21 +891,39 @@ export async function unpublishedFlowIds(db: DB, orgId: string): Promise<Set<str
 }
 
 /**
- * G.4 — the cheap freshness beacon the dashboard polls. One aggregate over the
- * org's flow_results (a handful of rows): any recompute, staleness flip, tile
- * add/remove or error changes the string. Clients poll this (visibility-gated,
- * 10–15s) and refetch tiles only when it moves — refresh cost scales with
- * data-change rate, not with viewers holding dashboards open.
+ * G.4 — the cheap freshness beacon the dashboard polls. ONE query covering two
+ * tables: any recompute, staleness flip, tile add/remove or error moves the
+ * string, and so does an import starting, finishing or deepening. Clients poll
+ * this (visibility-gated, 10–15s) and refetch tiles only when it moves — so
+ * refresh cost scales with the data-change rate, not with how many viewers are
+ * holding dashboards open.
  */
 export async function resultsVersion(db: DB, orgId: string): Promise<string> {
+  /**
+   * ONE ROUND TRIP, WHICH IS WHY THE TWO AGGREGATES SHARE A SELECT.
+   *
+   * They used to be two sequential `await`s over two tables, and the Neon HTTP
+   * driver has no pipelining — so this cost two round trips at roughly 110ms
+   * warm (the note on the dashboard's own reads measures it). That is paid on
+   * the highest-volume request in the product: every visible dashboard polls
+   * this every 12s, and every render computes it again as the key the cached
+   * tile read hangs off, putting the second trip on the render's critical path.
+   *
+   * They are independent scalar aggregates over different tables, so folding
+   * them into subqueries of one SELECT returns the identical six numbers with
+   * no staleness introduced anywhere. See tests/results-version-roundtrip.
+   */
+  const running = inArray(backfillJobs.status, ["queued", "running"]);
   const [row] = await db
     .select({
-      tiles: sql<number>`count(*)::int`,
-      nonFresh: sql<number>`count(*) filter (where ${flowResults.status} <> 'fresh')::int`,
-      maxComputedAt: sql<string | null>`max(${flowResults.computedAt})`,
+      tiles: sql<number>`(select count(*)::int from ${flowResults} where ${eq(flowResults.orgId, orgId)})`,
+      nonFresh: sql<number>`(select count(*) filter (where ${flowResults.status} <> 'fresh')::int from ${flowResults} where ${eq(flowResults.orgId, orgId)})`,
+      maxComputedAt: sql<string | null>`(select max(${flowResults.computedAt}) from ${flowResults} where ${eq(flowResults.orgId, orgId)})`,
+      running: sql<number>`(select count(*)::int from ${backfillJobs} where ${and(eq(backfillJobs.orgId, orgId), running)})`,
+      maxReached: sql<string | null>`(select max(${backfillJobs.reachedFloor}) from ${backfillJobs} where ${and(eq(backfillJobs.orgId, orgId), running)})`,
+      minReached: sql<string | null>`(select min(${backfillJobs.reachedFloor}) from ${backfillJobs} where ${and(eq(backfillJobs.orgId, orgId), running)})`,
     })
-    .from(flowResults)
-    .where(eq(flowResults.orgId, orgId));
+    .from(sql`(select 1) as one`);
   const maxMs = row?.maxComputedAt ? Date.parse(String(row.maxComputedAt)) : 0;
   /**
    * Import progress has to be part of this string, or the label it drives never
@@ -926,17 +944,9 @@ export async function resultsVersion(db: DB, orgId: string): Promise<string> {
    * This is a CHANGE DETECTOR, not a displayed depth: any component moving is
    * enough, and none of these numbers is shown to anyone.
    */
-  const [bf] = await db
-    .select({
-      running: sql<number>`count(*)::int`,
-      maxReached: sql<string | null>`max(${backfillJobs.reachedFloor})`,
-      minReached: sql<string | null>`min(${backfillJobs.reachedFloor})`,
-    })
-    .from(backfillJobs)
-    .where(and(eq(backfillJobs.orgId, orgId), inArray(backfillJobs.status, ["queued", "running"])));
-  const reachedMs = bf?.maxReached ? Date.parse(String(bf.maxReached)) : 0;
-  const deepestMs = bf?.minReached ? Date.parse(String(bf.minReached)) : 0;
-  return `${row?.tiles ?? 0}.${row?.nonFresh ?? 0}.${maxMs}.${bf?.running ?? 0}.${reachedMs}.${deepestMs}`;
+  const reachedMs = row?.maxReached ? Date.parse(String(row.maxReached)) : 0;
+  const deepestMs = row?.minReached ? Date.parse(String(row.minReached)) : 0;
+  return `${row?.tiles ?? 0}.${row?.nonFresh ?? 0}.${maxMs}.${row?.running ?? 0}.${reachedMs}.${deepestMs}`;
 }
 
 /**

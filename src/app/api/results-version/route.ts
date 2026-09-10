@@ -9,9 +9,14 @@ export const dynamic = "force-dynamic";
 
 /**
  * G.4 — the dashboard's freshness poll. Authenticated, org-scoped, one cheap
- * aggregate. Clients send If-None-Match with the last ETag; an unchanged
- * version costs a 304 with no body, so a fleet of open dashboards stays
- * near-free until data actually changes (then they refetch changed tiles).
+ * query. Clients send If-None-Match with the last ETag; an unchanged version
+ * costs a 304 with no body, so a fleet of open dashboards stays near-free until
+ * data actually changes (then they refetch changed tiles).
+ *
+ * THE HIGHEST-VOLUME REQUEST IN THE PRODUCT — a visible dashboard hits it every
+ * 12s — so what it costs per call is worth more than it looks. It is one round
+ * trip rather than two as of `resultsVersion`'s own note; anything added here
+ * is paid by every open tab, every twelve seconds.
  */
 export async function GET(req: Request) {
   const ctx = await getOrgContext();
