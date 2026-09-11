@@ -53,10 +53,10 @@ export function AiAssistantsSection({
     return (
       <section>
         <Card variant="surface" padding="none" className="overflow-hidden">
-          <header className="px-5 py-4">
+          <header className="px-4 py-4">
             <SectionHeading className="mb-0 text-foreground">AI assistants</SectionHeading>
           </header>
-          <div className="border-t border-border px-5 py-4 text-sm text-muted-foreground">
+          <div className="border-t border-border px-4 py-4 text-sm text-muted-foreground">
             AI assistants are not enabled on this deployment yet.
           </div>
         </Card>
@@ -78,14 +78,14 @@ export function AiAssistantsSection({
   return (
     <section>
       <Card variant="surface" padding="none" className="overflow-hidden">
-        <header className="px-5 py-4">
+        <header className="px-4 py-4">
           <SectionHeading className="mb-0 text-foreground">AI assistants</SectionHeading>
           <p className="mt-1.5 max-w-2xl text-sm text-muted-foreground">
             Connect Claude or ChatGPT to this workspace's dashboard. No tool writes workspace data.
           </p>
         </header>
 
-        <div className="border-t border-border px-5 py-4">
+        <div className="border-t border-border px-4 py-4">
           {error && <p className="mb-4 text-sm text-danger-ink">{error}</p>}
 
           <CopyField

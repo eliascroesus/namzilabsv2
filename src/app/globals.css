@@ -423,22 +423,30 @@
    * still two steps under the body, a card description is still one step under
    * its title, and the numeral is still the loudest thing on a tile.
    */
-  /* 12px, up from 11 — one step, with the rung above it. */
-  --text-2xs: 0.75rem; /* 11px — the caps badge, and nothing else */
+  /* 12px, up from 11 — one step, with the rung above it. The caps badge, and
+     nothing else. */
+  --text-2xs: 0.75rem; /* 12px */
   --text-2xs--line-height: 1rem;
-  /* 12px, DOWN FROM 13. The 8 September Figma sets every small string at 12 —
-     axis labels, the legend, the delta chip, "Main Menu", "1 hr ago" — and a
-     13px `xs` beside a 12px design is the near-miss a closed set exists to
-     stop. `2xs` keeps 11px for the caps badge, which is a different job. */
   /* 13px, UP FROM 12, AND THE SAME MOVE THE CONTROLS MADE.
      This rung was the smallest thing in the product and the most used — the
      freshness line, the axis and legend labels, the caps label, the invite
      card, every caption. At 12 it read as fine print beside a 14px row, which
      is most of what "everything looks small" was once the controls stopped
-     being 26px. The line box stays 16 so no row grows: only the glyphs do. */
-  --text-xs: 0.8125rem; /* 12px — labels, captions, dense controls */
+     being 26px. The line box stays 16 so no row grows: only the glyphs do.
+
+     A RETIRED BLOCK USED TO SIT ABOVE THIS ONE arguing the opposite ("12px,
+     DOWN FROM 13"), left behind when the decision was reversed. Two comments
+     stating contradictory sizes over one declaration is worse than neither, so
+     it is gone — and with it the claim that `2xs` keeps 11px, which it has not
+     since the same lift. */
+  --text-xs: 0.8125rem; /* 13px — labels, captions, dense controls */
   --text-xs--line-height: 1rem;
-  --text-xs--letter-spacing: -0.0065em; /* the Figma's -0.078px at 12 */
+  /* The Figma's -0.078px, which was -0.0065em when this rung was 12px and is
+     -0.0845px now that it is 13. Left as it is deliberately: correcting it to
+     -0.006em moves a twenty-character label by an eighth of a pixel, and the
+     value is measured from a reference set at 12. Recorded rather than silently
+     wrong — the tracking is the one part of this rung the lift did not follow. */
+  --text-xs--letter-spacing: -0.0065em;
   /**
    * 14px — A BUTTON'S LABEL, AND THE STEP THE KIT HAS BEEN CLAIMING IT HAD.
    *

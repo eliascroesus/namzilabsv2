@@ -43,7 +43,7 @@ type Org = { id: string; name: string };
 
 /** The row, shared by the current workspace and the ones you can move to, so
  *  the two cannot drift into different heights or insets. */
-const ROW = "flex h-9 w-full items-center gap-2.5 rounded-[var(--radius-control)] px-2 text-left text-sm";
+const ROW = "flex h-8 w-full items-center gap-2.5 rounded-[var(--radius-control)] px-2 text-left text-sm";
 
 export function OrgSwitcher({
   orgs,

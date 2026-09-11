@@ -9,6 +9,15 @@
  */
 import { chromium } from "playwright";
 
+/**
+ * SHOT_BASE OVERRIDES THE PORT, like every other browser check here. Four of
+ * the eleven hardcoded :3000 and the rest read the env var, so running two of
+ * them against a dev server on another port half-worked — the ones that read it
+ * passed and the ones that did not refused the connection. A check that cannot
+ * be pointed at the thing under test is a check that gets skipped.
+ */
+const BASE = process.env.SHOT_BASE ?? "http://localhost:3000";
+
 const SIZES = [
   { w: 390, h: 844, label: "phone", gutter: false },
   { w: 744, h: 1000, label: "just below md", gutter: false },
@@ -24,7 +33,7 @@ let bad = 0;
 for (const s of SIZES) {
   const ctx = await browser.newContext({ viewport: { width: s.w, height: s.h }, colorScheme: "light" });
   const page = await ctx.newPage();
-  await page.goto("http://localhost:3000/design/overview", { waitUntil: "networkidle" });
+  await page.goto(`${BASE}/design/overview`, { waitUntil: "networkidle" });
   await page.evaluate(() => document.fonts.ready);
 
   const m = await page.evaluate(() => {

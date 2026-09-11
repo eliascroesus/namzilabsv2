@@ -99,7 +99,7 @@ function SettingsSection({
           inside the card's 16px corners. Nothing here pops over an edge: the
           delete confirm is inline and the role picker is a native select. */}
       <Card variant="surface" padding="none" className="overflow-hidden">
-        <header className="px-5 py-4">
+        <header className="px-4 py-4">
           <div className="flex items-center gap-2">
             <SectionHeading className="mb-0 text-foreground">{label}</SectionHeading>
             {count !== undefined && <Badge className="tnum">{count}</Badge>}
@@ -261,7 +261,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
    * truncating email both fit on a phone.
    */
   const memberRow = cn(
-    "grid items-center gap-x-3.5 gap-y-2 px-5 py-3 transition-colors duration-(--duration-fast) hover:bg-foreground/5",
+    "grid items-center gap-x-3.5 gap-y-2 px-4 py-3 transition-colors duration-(--duration-fast) hover:bg-foreground/5",
     isAdmin ? "grid-cols-[2.25rem_minmax(0,1fr)] sm:grid-cols-[2.25rem_minmax(0,1fr)_11rem]" : "grid-cols-[2.25rem_minmax(0,1fr)]",
   );
 
@@ -403,7 +403,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                   sits under the header's hairline with the card's own padding,
                   so the invite row starts on the same left edge as every member
                   row above it. */}
-              <form action={inviteMemberAction} className="flex flex-wrap items-center gap-2.5 px-5 py-4">
+              <form action={inviteMemberAction} className="flex flex-wrap items-center gap-2.5 px-4 py-4">
                 <Input
                   type="email"
                   name="email"
@@ -452,7 +452,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                      than with a hand-typed indent. */
                   <div
                     key={inv.id}
-                    className="grid grid-cols-[2.25rem_minmax(0,1fr)_auto] items-center gap-x-3.5 gap-y-2 px-5 pb-1.5 pt-3.5"
+                    className="grid grid-cols-[2.25rem_minmax(0,1fr)_auto] items-center gap-x-3.5 gap-y-2 px-4 pb-1.5 pt-3.5"
                   >
                     {/* DASHED AND NEUTRAL — the one avatar on the page with no
                         colour in it. A pending invitee is not a member yet, and

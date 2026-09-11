@@ -1294,7 +1294,7 @@ export function TileArea({
         <span className="sr-only">Loading metrics…</span>
         {canvasCells(canvas).map(({ tile, vars }) => (
           <div key={tile.id} className="board-cell" style={vars as React.CSSProperties}>
-            <div className="h-full rounded-surface border border-border bg-card p-5 shadow-card">
+            <div className="h-full rounded-surface border border-border bg-card p-4 shadow-card">
               <Skeleton className="h-4 w-2/5" />
               <Skeleton className="mt-3 h-9 w-1/2" />
               <Skeleton className="mt-3 h-10 w-full" />
@@ -1358,7 +1358,7 @@ export function TileArea({
  */
 function TileSkeleton() {
   return (
-    <div className="rounded-surface border border-border bg-card p-5 shadow-card">
+    <div className="rounded-surface border border-border bg-card p-4 shadow-card">
       <Skeleton className="h-4 w-2/5" />
       <Skeleton className="mt-3 h-9 w-1/2" />
       <Skeleton className="mt-3 h-10 w-full" />

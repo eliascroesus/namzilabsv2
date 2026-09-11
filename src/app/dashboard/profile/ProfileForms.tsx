@@ -4,6 +4,7 @@ import { useRef, useState, useTransition } from "react";
 import { Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { FieldLabel } from "@/components/ui/field";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { removeAvatarAction, updateDisplayNameAction, uploadAvatarAction } from "./actions";
 
@@ -39,9 +40,9 @@ export function DisplayNameForm({ initial }: { initial: string | null }) {
     >
       <div className="flex flex-wrap items-end gap-3">
         <div className="min-w-0 flex-1">
-          <label htmlFor="displayName" className="mb-1.5 block text-sm font-medium text-foreground">
+          <FieldLabel htmlFor="displayName">
             Display name
-          </label>
+          </FieldLabel>
           <Input
             id="displayName"
             name="displayName"

@@ -329,7 +329,7 @@ export async function AppShell({
                 type="submit"
                 variant="ghost"
                 size="sm"
-                className="h-9 w-full justify-start gap-2.5 rounded-[var(--radius-control)] px-2 font-normal text-foreground [&_svg]:text-muted-foreground"
+                className="w-full justify-start gap-2.5 rounded-[var(--radius-control)] px-2 font-normal text-foreground [&_svg]:text-muted-foreground"
               >
                 <LogOut />
                 Sign out

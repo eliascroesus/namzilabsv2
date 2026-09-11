@@ -21,7 +21,7 @@ const OUT = process.argv[2] ?? ".";
 const PATH = process.argv[3] ?? "/design/overview";
 const WIDTH = Number(process.env.SHOT_WIDTH ?? 1600);
 const HEIGHT = Number(process.env.SHOT_HEIGHT ?? 1000);
-const base = "http://localhost:3000";
+const base = process.env.SHOT_BASE ?? "http://localhost:3000";
 
 const browser = await chromium.launch();
 for (const mode of ["light", "mix", "dark"]) {
