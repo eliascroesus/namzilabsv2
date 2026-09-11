@@ -145,6 +145,25 @@ const COMPOSED_CHARTS: Array<{ label: string; chart: ChartId; source: CustomTile
     h: 7,
   },
   {
+    /* LEFT TO RIGHT: names above their own section, conversions in the gaps.
+       The arrangement the DOWN flow cannot offer without cutting the body. */
+    label: "Pipeline, left to right",
+    chart: "pipeline",
+    source: composed(420, [part("Booked Leads", 252), part("On Calendar", 96), part("Showed", 41)]),
+    config: { ...keys(3), flow: "across" },
+    h: 6,
+  },
+  {
+    label: "The owner's tile, left to right",
+    chart: "pipeline",
+    source: composed(12, [part("Organic Leads", 39), part("Unclaimed Leads", 0), part("Ads Leads", 12)], {
+      name: "On Calendar",
+      timeField: "properties.start.dateTime",
+    }),
+    config: { ...keys(3), flow: "across" },
+    h: 6,
+  },
+  {
     /**
      * THE OWNER'S OWN TILE, 11 Sep 2026 — the screenshot that forced the
      * geometry change, kept as a specimen so it can never quietly come back.

@@ -98,8 +98,18 @@ const cards = await page.evaluate(() => {
         .trim()
         .split(/\s+/)
         .map((pair) => pair.split(",").map(Number));
-      const w = (a, b) => (pts[a] && pts[b] ? Math.round((pts[b][0] - pts[a][0]) * 10) / 10 : 0);
-      // 0,1 are the top edge; 4,3 are the band floor (left then right).
+      /**
+       * MEASURE WHICHEVER AXIS CARRIES THE COUNT. Running DOWN, a stage's edge
+       * is horizontal and the measure is x; running ACROSS the whole shape is
+       * transposed and it is y. Reading x unconditionally reported every
+       * across-flow stage as zero-width — which would have passed a collapsed
+       * mark off as an empty one, the exact failure this file exists to catch.
+       */
+      const w = (a, b) =>
+        pts[a] && pts[b]
+          ? Math.round(Math.max(Math.abs(pts[b][0] - pts[a][0]), Math.abs(pts[b][1] - pts[a][1])) * 10) / 10
+          : 0;
+      // 0,1 are the stage's own edge; 4,3 are the band's far edge.
       return { top: w(0, 1), floor: w(4, 3) };
     });
     const polys = polyGeom.map((g) => g.top);
@@ -152,6 +162,15 @@ const cards = await page.evaluate(() => {
      */
     const clipped = [...(card?.querySelectorAll("span,p") ?? [])]
       .filter((el) => !/sr-only/.test((el.className || "").toString()))
+      /**
+       * A STAGE NAME RUNNING ACROSS HAS NOWHERE ELSE TO GO — it shares the card
+       * with every sibling stage, so truncation is the arithmetic rather than a
+       * bug, and the full string is in `title`. The DOWN flow's name lane is not
+       * exempt: that is where "Booked Leads" rendered "Booke…" because a pill
+       * took room the name could have had, which is the case this rule exists
+       * for.
+       */
+      .filter((el) => !el.hasAttribute("data-stage-name"))
       .filter((el) => el.scrollWidth > el.clientWidth + 1)
       .map((el) => (el.textContent || "").slice(0, 24));
     const box = card?.getBoundingClientRect() ?? { width: 0, height: 0 };
@@ -334,12 +353,13 @@ if (zeroTail) {
   say(ok, `a zero stage is a dashed rule, not a segment (${zeroTail.polys.join(", ")} + ${zeroTail.zeroMarks} mark)`);
 }
 
-const owner = byTitle("owner's tile");
+const owner = byTitle("owner's tile —");
 if (owner) {
   /**
-   * THE OWNER'S OWN TILE. 12 -> 39 -> 0 used to draw two pixel-identical
-   * full-width slabs and a floating stub. Stage 1 must now be visibly narrow,
-   * step out to a wider stage 2, and the zero stage must be a dashed rule.
+   * THE OWNER'S OWN TILE, RUNNING DOWN. 12 -> 39 -> 0 used to draw two
+   * pixel-identical full-width slabs and a floating stub. Stage 1 must now be
+   * visibly narrow, step out to a wider stage 2, and the zero stage must be a
+   * dashed rule rather than a segment.
    */
   const [a, b] = owner.polys;
   const stepped = a != null && b != null && b > a * 2;
@@ -347,6 +367,20 @@ if (owner) {
   if (!stepped) problems.push(`the owner's tile does not step out (${owner.polys.join(", ")})`);
   if (!pinched) problems.push(`the owner's zero stage is not a dashed rule (${owner.polys.length} segments, ${owner.zeroMarks} marks)`);
   say(stepped && pinched, `the owner's tile steps out and pinches to nothing (${owner.polys.join(", ")} + ${owner.zeroMarks} mark)`);
+}
+
+const across = byTitle("left to right");
+if (across) {
+  /**
+   * THE SAME GEOMETRY, TRANSPOSED. Running across, HEIGHT carries the count, so
+   * the measured axis flips — and the stages must still step and pinch exactly
+   * as they do running down. If this reports zeroes the transpose has silently
+   * collapsed the shape.
+   */
+  const drew = across.polys.filter((w) => w > 0.5).length;
+  const ok = drew >= 2;
+  if (!ok) problems.push(`the across flow drew no measurable segments (${across.polys.join(", ")})`);
+  say(ok, `the across flow measures on its own axis (${across.polys.join(", ")})`);
 }
 
 console.log(

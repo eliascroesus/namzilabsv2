@@ -26,6 +26,7 @@ export function FunnelView({
   composed,
   accent = "var(--color-marker)",
   cols,
+  flow,
 }: {
   result: FunnelResult;
   /**
@@ -38,6 +39,8 @@ export function FunnelView({
   composed?: boolean;
   accent?: string;
   cols?: number;
+  /** Which way the stages run — the author's choice, from `config.flow`. */
+  flow?: "down" | "across";
 }) {
-  return <FunnelBody result={result} accent={accent} composed={composed} cols={cols} align="left" />;
+  return <FunnelBody result={result} accent={accent} composed={composed} cols={cols} align="left" flow={flow} />;
 }

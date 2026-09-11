@@ -363,7 +363,17 @@ export function CustomBoard({
    * on the very next gesture.
    */
   const minOf = useCallback(
-    (id: string) => minSize(asChartId(tiles.find((t) => t.id === id)?.chart)),
+    (id: string) => {
+      /**
+       * THE TILE'S CONFIG RIDES ALONG, because a scorecard's floor depends on
+       * what it was asked to draw rather than on being a scorecard. Bare, it is
+       * two rows; with a sparkline or a goal bar it needs four, and those are
+       * settings the author can toggle at any moment — so the floor is asked
+       * per gesture from the LIVE tile rather than baked into the chart id.
+       */
+      const t = tiles.find((x) => x.id === id);
+      return minSize(asChartId(t?.chart), t?.config);
+    },
     [tiles],
   );
   const { gesture, preview, onPointerDown, swallowClick } = useCanvasDrag(rootRef, boxes, applyLayout, minOf);

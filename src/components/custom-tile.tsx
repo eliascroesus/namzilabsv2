@@ -723,11 +723,11 @@ export function CustomTile({
              hover, and to a screen reader — without taking a single row from the
              chart. Joined with newlines because a native tooltip honours them. */
           <div className="min-h-0 flex-1 overflow-y-auto quiet-scroll" title={composeNotes.join("\n") || undefined}>
-            <FunnelView result={w.funnel!} composed={composed} />
+            <FunnelView result={w.funnel!} composed={composed} cols={cols} flow={config.flow} />
           </div>
         ) : chart === "pipeline" ? (
           <div className="flex min-h-0 flex-1 flex-col" title={composeNotes.join("\n") || undefined}>
-            <Pipeline result={w.funnel!} accent={accent} composed={composed} cols={cols} />
+            <Pipeline result={w.funnel!} accent={accent} composed={composed} cols={cols} flow={config.flow} />
           </div>
         ) : chart === "table" ? (
           <ChartTable head={[hasSeries ? "Period" : "Group", "Value"]} rows={tableRows} />

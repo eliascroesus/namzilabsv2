@@ -74,6 +74,21 @@ const KEYS = {
    */
   text: z.string().trim().min(1).max(2000),
   /**
+   * WHICH WAY A FUNNEL RUNS — and it is a real choice rather than a preference.
+   *
+   * "down" stacks the stages and lets WIDTH carry the count: the classic
+   * silhouette, which reads as a narrowing at a glance and holds eight stages
+   * in a tall tile.
+   *
+   * "across" runs them left to right and lets HEIGHT carry it. That is the
+   * arrangement with room for a stage's name ABOVE its own section and the
+   * conversion figure IN the gap between two sections, which is where a reader
+   * looking for a drop-off actually looks. It is the better shape for three or
+   * four stages on a wide tile and the worse one for eight on a narrow one,
+   * which is exactly why it is a setting and not a rule.
+   */
+  flow: z.enum(["down", "across"]),
+  /**
    * THE OTHER METRICS THIS TILE IS COMPOSED FROM — a funnel's stages 2..N, or
    * a pie's named slices. The tile's OWN `tile_key` column is the first member:
    * stage 1 of a funnel, the whole of a pie.
@@ -278,8 +293,8 @@ export const CONFIG_FIELDS = {
   category: [...EVERY_TILE, "color", "precision", "sort", "limit"],
   pie: [...EVERY_TILE, "precision", "limit", "donut", "legend", "parts"],
   progress: [...EVERY_TILE, "precision", "target"],
-  funnel: [...EVERY_TILE, "parts"],
-  pipeline: [...EVERY_TILE, "color", "parts"],
+  funnel: [...EVERY_TILE, "parts", "flow"],
+  pipeline: [...EVERY_TILE, "color", "parts", "flow"],
   table: [...EVERY_TILE, "precision"],
 
   /**

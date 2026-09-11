@@ -692,6 +692,28 @@ export function TileConfigPanel({
                 />
               )}
 
+              {offers.has("flow") && (
+                <Group label="Layout">
+                  <Row
+                    label="Direction"
+                    hint={
+                      config.flow === "across"
+                        ? "Names sit above each stage and the conversion sits in the gap between two."
+                        : "Stages stack downward and the width is the count. Best when there are many."
+                    }
+                  >
+                    <NativeSelect
+                      value={config.flow ?? "down"}
+                      aria-label="Direction"
+                      onChange={(e) => set("flow", (e.target.value || undefined) as TileConfig["flow"])}
+                    >
+                      <option value="down">Top to bottom</option>
+                      <option value="across">Left to right</option>
+                    </NativeSelect>
+                  </Row>
+                </Group>
+              )}
+
               {offers.has("rangeKey") && (
                 <Group label="Window">
                 <Row

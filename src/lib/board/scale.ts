@@ -470,18 +470,19 @@ export type FunnelBand = {
 
 export function funnelShape(
   counts: number[],
-  opts: { align?: "center" | "left"; shoulder?: number } = {},
+  opts: { align?: "center" | "left"; shoulder?: number; flow?: "down" | "across" } = {},
 ): FunnelBand[] {
-  const { align = "center", shoulder = 0.55 } = opts;
+  const { align = "center", shoulder = 0.55, flow = "down" } = opts;
   const widths = stageWidths(counts);
   const n = widths.length;
   if (n === 0) return [];
   const band = 100 / n;
 
   /**
-   * The x pair for a given width. Centred, a stage spreads either side of 50;
-   * left-anchored it starts at 0. Everything else about the polygon is the same,
-   * which is the point of computing it here rather than in two components.
+   * The measured pair for a given width. Centred, a stage spreads either side
+   * of the midline; anchored, it starts at the edge. Everything else about the
+   * polygon is the same, which is the point of computing it here rather than in
+   * two components.
    */
   const edges = (w: number): [number, number] =>
     align === "center" ? [round10(50 - w / 2), round10(50 + w / 2)] : [0, round10(w)];
@@ -495,27 +496,46 @@ export function funnelShape(
     /**
      * TAPER DOWN, STEP UP — and the asymmetry is the whole point.
      *
-     * A FALL is drawn in the space between the two stages: the sides slope
+     * A FALL is drawn in the space between the two stages: the sides close
      * inward and the slope IS the loss, which is what makes this a pipeline
      * rather than a stack of bars.
      *
      * A RISE must NOT slope outward, and the first version of this did. Sloping
-     * out gives stage i a bottom edge as wide as stage i+1, so a stage that is
+     * out gives stage i a far edge as wide as stage i+1, so a stage that is
      * genuinely 31% of the largest ends its band at 100% and reads as reaching
-     * full width — which is precisely the "two identical slabs" misreading this
-     * whole redesign exists to kill, rebuilt in the geometry after being removed
-     * from the arithmetic. Measured on the owner's own data: On Calendar is
-     * 30.8% wide and its polygon floor was 100%.
+     * full width — precisely the "two identical slabs" misreading this redesign
+     * exists to kill, rebuilt in the geometry after being removed from the
+     * arithmetic. Measured on the owner's own data: On Calendar is 30.8% wide
+     * and its polygon floor was 100%.
      *
-     * So a rising stage keeps its own width all the way down and the stage below
-     * simply STARTS wider. The step is visible, honest, and is what Looker
-     * Studio's own stepped bars do.
+     * So a rising stage keeps its own width to the end of its band and the
+     * stage after it simply STARTS wider. The step is visible and honest, and
+     * is what Looker Studio's stepped bars do.
      */
     const floor = rise ? w : next;
     const [l0, r0] = edges(w);
     const [l1, r1] = edges(floor);
+    /**
+     * ONE GEOMETRY, TWO FLOWS, and the difference is a transpose.
+     *
+     * `down` stacks the stages and lets WIDTH carry the count — the classic
+     * funnel silhouette. `across` runs them left to right and lets HEIGHT carry
+     * it, which is the arrangement that has room for a label above every stage
+     * and a conversion figure in each gap. Swapping the coordinates is the whole
+     * implementation: the measured axis and the sequence axis simply change
+     * places, so neither flow can drift from the other's arithmetic.
+     */
+    const pt = (measured: number, along: number) =>
+      flow === "down" ? `${measured},${along}` : `${along},${measured}`;
     return {
-      points: `${l0},${y0} ${r0},${y0} ${r0},${yk} ${r1},${y1} ${l1},${y1} ${l0},${yk}`,
+      points: [
+        pt(l0, y0),
+        pt(r0, y0),
+        pt(r0, yk),
+        pt(r1, y1),
+        pt(l1, y1),
+        pt(l0, yk),
+      ].join(" "),
       y0,
       y1,
       width: w,

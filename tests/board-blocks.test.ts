@@ -224,11 +224,33 @@ describe("how small a chart may be made", () => {
     }
   });
 
-  it("never lets a metric card shrink below a standard one", () => {
-    // 3x4 is what a tile on the groups board is, and nothing calling itself a
-    // metric card should be smaller than one.
-    for (const id of ["number", "progress"] as const) {
-      expect(minSize(id)).toEqual({ w: 3, h: 4 });
+  it("lets a bare scorecard be small, and grows it for what it is asked to draw", () => {
+    /**
+     * THIS USED TO PIN 3x4 FOR BOTH, on the reasoning that "3x4 is what a tile
+     * on the groups board is". Two of that rule's premises had expired: the
+     * freshness marker it budgeted for was removed from the card, and
+     * `ROW_UNIT_PX` went 48 -> 40, so the floor was calibrated against a taller
+     * row and a component that no longer renders.
+     *
+     * Re-measured in a browser: a bare scorecard is 72px of content (title 16 +
+     * figure 40 + delta 16) and fits a 2-row box. A sparkline needs 128px and a
+     * goal bar 124px — both four rows — so those RAISE the floor rather than
+     * being priced into every plain number that never switched them on.
+     */
+    expect(minSize("number")).toEqual({ w: 2, h: 2 });
+    expect(minSize("number", { showSpark: true })).toEqual({ w: 2, h: 4 });
+    expect(minSize("number", { showGoal: true })).toEqual({ w: 2, h: 4 });
+    // Progress ALWAYS draws its goal bar — it is the chart, not an extra — so
+    // its floor is unconditional.
+    expect(minSize("progress")).toEqual({ w: 3, h: 4 });
+    expect(minSize("progress", { showSpark: true })).toEqual({ w: 3, h: 4 });
+  });
+
+  it("keeps every cartesian chart at five rows, which did NOT move", () => {
+    // The same measuring pass set these, and unlike the scorecard's floor they
+    // still hold at ROW_UNIT_PX 40: four rows clips the x-labels.
+    for (const id of ["line", "area", "bar", "category", "table"] as const) {
+      expect(minSize(id).h, `${id}`).toBeGreaterThanOrEqual(5);
     }
   });
 

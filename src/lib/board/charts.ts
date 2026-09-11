@@ -40,14 +40,29 @@ export const CHARTS = [
     w: 3,
     h: 4,
     /**
-     * A CHART NEVER SHRINKS BELOW A STANDARD METRIC CARD. 3x4 is what a tile on
-     * the groups board is, and it is the smallest box in which a headline, its
-     * delta and a freshness marker all fit — below it the number wraps against
-     * the timestamp and a chart becomes a smear. The grid let this one go to
-     * 2x3, which is where the squashed cards came from.
+     * THE BARE FLOOR, AND IT IS MEASURED RATHER THAN INHERITED.
+     *
+     * This was 3x4, "the smallest box in which a headline, its delta and a
+     * FRESHNESS MARKER all fit". Two of the three premises have since expired:
+     * the freshness marker was removed from the card on 11 Sep 2026, and
+     * `ROW_UNIT_PX` went from 48 to 40 — so the number was calibrated against a
+     * taller row and a component that no longer renders, and nobody re-measured.
+     * A scorecard was being held to a chart's footprint for no reason left in
+     * the code.
+     *
+     * Measured in a browser at the current row unit: title 16px + figure 40px +
+     * delta 16px = 72px of content, which fits a 2-row box (80px) with room to
+     * spare. So the floor is 2x2 and a board can carry a strip of small
+     * numbers.
+     *
+     * WHAT IT DOES NOT COVER is the two things a scorecard can be ASKED to draw
+     * on top of that: a sparkline (128px) and a goal bar (124px), both of which
+     * need four rows. Those are configuration rather than identity, so they
+     * raise the floor in `minSize` instead of being priced in here — otherwise
+     * every plain number pays for an extra nobody switched on.
      */
-    minW: 3,
-    minH: 4,
+    minW: 2,
+    minH: 2,
   },
   {
     id: "line",
@@ -428,14 +443,34 @@ export function defaultSize(chart: ChartId): { w: number; h: number } {
  * where the axis frame gets zero height and `overflow-hidden` silently eats
  * the entire plot: the tile kept its border and its number and lost its chart.
  *
- * Measured rather than guessed. At `ROW_UNIT_PX` 48 and `p-4`, a cartesian
- * tile needs h=5 before five ticks and the x-labels both fit; a scorecard needs
- * 4, which is also what a tile on the groups board is, and nothing that calls
- * itself a metric card should be smaller than one.
+ * Measured rather than guessed, and RE-measured when the numbers moved. At
+ * `ROW_UNIT_PX` 48 a cartesian tile needed h=5 before five ticks and the
+ * x-labels both fit, and that still holds at 40. A scorecard was held to h=4 on
+ * the same pass — but its reasoning named a freshness marker the card no longer
+ * draws, so it was re-measured in a browser and is 2 bare, 4 once a sparkline
+ * or a goal bar is switched on. A floor that outlives the component it was
+ * measured against is just a number.
  */
-export function minSize(chart: ChartId): { w: number; h: number } {
+export function minSize(
+  chart: ChartId,
+  /**
+   * What the tile was asked to DRAW, which a chart id alone cannot say. Only the
+   * scorecard reads it, and only for the two extras that need their own rows.
+   * Omitted, every chart answers with its bare floor — which is what the stored
+   * -layout validator wants, since it only ever clamps a box upward.
+   */
+  config?: { showSpark?: boolean; showGoal?: boolean },
+): { w: number; h: number } {
   const c = CHARTS.find((k) => k.id === chart) ?? CHARTS[0];
-  return { w: c.minW, h: c.minH };
+  /**
+   * A SPARKLINE OR A GOAL BAR IS A SECOND MARK IN THE SAME BOX, and each needs
+   * roughly the height of the figure above it: measured at 128px and 124px of
+   * content against the bare card's 72px. Pricing them into the table would
+   * make every plain number tile carry two rows of air for something switched
+   * off; raising the floor only when the switch is on keeps both honest.
+   */
+  const extras = chart === "number" && (config?.showSpark || config?.showGoal) ? 2 : 0;
+  return { w: c.minW, h: c.minH + extras };
 }
 
 /**

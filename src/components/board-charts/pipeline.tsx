@@ -14,11 +14,14 @@ export function Pipeline({
   accent,
   composed,
   cols,
+  flow,
 }: {
   result: FunnelResult;
   accent: string;
   composed?: boolean;
   cols?: number;
+  /** Which way the stages run — the author's choice, from `config.flow`. */
+  flow?: "down" | "across";
 }) {
-  return <FunnelBody result={result} accent={accent} composed={composed} cols={cols} align="center" />;
+  return <FunnelBody result={result} accent={accent} composed={composed} cols={cols} align="center" flow={flow} />;
 }
