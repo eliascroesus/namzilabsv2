@@ -402,11 +402,19 @@ function PartsGroup({
               options={options}
               chart={chart}
               /**
-               * A STAGE HAS TO GIVE ONE NUMBER, which is what `"number"` asks
-               * for — `compose.ts` reads a single figure per member. The tile's
-               * own chart is the wrong question here: it is about the anchor.
+               * A STAGE MUST BE ELIGIBLE FOR THE CHART IT IS JOINING, which is
+               * a narrower question than "does it give one number".
+               *
+               * `"number"` was the obvious answer and the wrong one: every
+               * metric answers with a number, so the list offered durations and
+               * rates as stages and `compose.ts` refused them one press later.
+               * Asking for the composing chart routes the question through
+               * `tileOptions`, which has already subtracted the composed charts
+               * from any metric whose facts say it is not a tally — so the
+               * stage picker and the metric picker agree by construction rather
+               * than by two lists happening to be filtered the same way.
                */
-              slot="number"
+              slot={chart}
               exclude={[anchorKey, ...parts]}
               busy={busy}
               onPick={(key) => {

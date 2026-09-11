@@ -1566,10 +1566,33 @@ export function buildTile(spec: TilePresentation, shape: Shape, sample: FlowReco
    */
   const kind =
     spec.facts?.kind ?? (spec.format === "duration" ? "duration" : spec.format === "percent" ? "ratio" : "count");
+  /**
+   * `countable` AND `additive` RIDE THROUGH, and leaving them out was a dead
+   * feature rather than a missing nicety.
+   *
+   * This object is built key by key on purpose — a stamp that outlives its
+   * shape is a fact that lies — and when the two composition flags were added
+   * to `TileFacts` this list was not extended, so `seedMetricFacts` computed
+   * them correctly on every materialize and `buildTile` dropped them on the
+   * floor every time. Every composed funnel and pie therefore refused with
+   * "hasn't been recomputed since this became possible — press Refresh all",
+   * which is the worst shape a bug can take: advice that is impossible to
+   * follow, on a loop, with a button that dutifully does nothing.
+   *
+   * THE FALLBACK IS `kind === "count"`, matching the one `kind` itself takes
+   * two lines up. It only fires for a tile whose derivation is genuinely
+   * unknown — a legacy row, or a spec whose step node has since been deleted —
+   * and a metric that answers with a plain number and is not a duration or a
+   * ratio is a tally of records, which is exactly what both flags mean. When
+   * the step config DID say (an average, a distinct count), `seedMetricFacts`
+   * has already answered `false` and that answer wins.
+   */
   tile.facts = {
     kind,
     ...(kind === "duration" ? { unit: spec.facts?.unit ?? spec.unit } : {}),
     shape: shape.kind,
+    countable: spec.facts?.countable ?? kind === "count",
+    additive: spec.facts?.additive ?? kind === "count",
     ...(shape.kind === "grouped" && spec.facts?.ordered
       ? { ordered: true, fallbackLabel: spec.facts.fallbackLabel ?? "Other" }
       : {}),

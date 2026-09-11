@@ -22,7 +22,7 @@ import { BoardLayout } from "./board-layout";
 import { CustomBoard, type CanvasTile } from "./custom-board";
 import type { CustomTileSource } from "@/components/custom-tile";
 import { CHART_IDS, CHARTS, blockKindOf, chartsFor, shapeOfClassic, shapeOfTile } from "@/lib/board/charts";
-import { parseTileConfig } from "@/lib/board/tile-config";
+import { COMPOSED_CHARTS, parseTileConfig } from "@/lib/board/tile-config";
 import { listBoardGroups, listTilePlacements } from "@/lib/board/store";
 import { navViews } from "@/lib/board/nav-views";
 import { UNSET_TILE_KEY } from "@/lib/board/types";
@@ -901,11 +901,32 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
    */
   const tileOptions: CustomTileOption[] = [
     ...flowTiles.map((row) => {
-      const stored = (row.tile ?? {}) as { name?: string };
+      const stored = (row.tile ?? {}) as { name?: string; facts?: { countable?: boolean } };
+      /**
+       * A METRIC THAT IS NOT A TALLY IS NOT OFFERED AS A FUNNEL OR A PIE, and
+       * this is the half of the rule `charts.ts` deliberately cannot enforce.
+       *
+       * `chartsFor` decides legality from the SHAPE of the stored data and must
+       * keep doing so — a tile with no facts is still perfectly drawable, and
+       * `tile-facts.test.ts` pins that charts.ts never reads `.facts`. But
+       * "could this be a funnel stage" is a question about what the number IS,
+       * not what shape it has, and the answer is on the tile. So the picker
+       * asks it here, where facts may be read freely.
+       *
+       * The owner watched a Pipeline offer "Speed to Lead" and "Booked / Total
+       * Leads" under the sentence "Only metrics that can be drawn as a pipeline
+       * are listed", pick one, and get a refusal. A list that offers what it
+       * will then reject is worse than a shorter list.
+       *
+       * NEGATIVE, so absence still draws: only a positive `false` — an average,
+       * a duration, a rate — removes anything. A tile not yet restamped keeps
+       * every chart it had.
+       */
+      const composedOut: string[] = stored.facts?.countable === false ? COMPOSED_CHARTS : [];
       return {
         key: tileKeyOfFlow(row.flowId, row.outputNodeId),
         title: stored.name ?? `Output ${row.outputNodeId.slice(0, 8)}`,
-        charts: chartsFor(shapeOfTile(row.tile)) as string[],
+        charts: (chartsFor(shapeOfTile(row.tile)) as string[]).filter((c) => !composedOut.includes(c)),
       };
     }),
   ].filter((o) => o.charts.length > 0);

@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { createTestDb } from "./helpers/testdb";
 import { connections, events, flowResults, flows, flowVersions } from "@/db/schema";
 import { materializeFlow, publishedFlowTiles } from "@/lib/flow/materialize";
+import { buildTile } from "@/lib/flow/engine";
 import { seedMetricFacts, type TileFacts } from "@/lib/flow/types";
 import type { DB } from "@/db/types";
 
@@ -84,7 +85,7 @@ describe("the stamp, end to end through a real materialize", () => {
       { nodeId: "c", name: "Events" },
     );
     await materializeFlow(db, ORG, flowId);
-    expect(await factsOf(flowId)).toEqual({ kind: "count", shape: "scalar" });
+    expect(await factsOf(flowId)).toEqual({ kind: "count", shape: "scalar", countable: true, additive: true });
   });
 
   it("a percentage op is a RATIO — the pre-multiplied trap, recorded", async () => {
@@ -141,6 +142,8 @@ describe("the stamp, end to end through a real materialize", () => {
     expect(await factsOf(flowId)).toEqual({
       kind: "count",
       shape: "grouped",
+      countable: true,
+      additive: true,
       ordered: true,
       fallbackLabel: "Everything else",
     });
@@ -162,6 +165,80 @@ describe("the stamp, end to end through a real materialize", () => {
     expect(facts?.ordered).toBeUndefined();
   });
 
+  it("stamps a metric that ends in NO aggregation step at all — the commonest shape on a board", async () => {
+    /**
+     * THE BUG THAT SHIPPED, AS THE CASE THAT FINDS IT — and note where it
+     * lives. `seedMetricFacts` had a unit test for every op, all green, while
+     * `buildTile` built `tile.facts` key by key and never listed `countable` or
+     * `additive`. The flags were computed on every materialize and dropped on
+     * the floor every time, so no tile in production could ever carry them and
+     * every composed funnel refused with "press Refresh all" — a loop the user
+     * cannot exit by doing what it says.
+     *
+     * A unit test on the deriving function could not see that. Only the round
+     * trip can, which is why this assertion reads the STORED tile.
+     *
+     * The fixture is the ordinary case too: an endpoint straight on a Filter,
+     * counting the records that passed. No `op`, no `aggregation`, nothing to
+     * read — and unambiguously a count.
+     */
+    await seedEvents(4);
+    const flowId = await publish(
+      [
+        app("a"),
+        {
+          id: "f1",
+          type: "filter",
+          data: {
+            config: {
+              filters: { combinator: "and", rules: [{ field: "properties.plan", op: "equals", value: "pro" }] },
+            },
+          },
+        },
+      ],
+      [edge("a", "f1")],
+      { nodeId: "f1", name: "Pro leads" },
+    );
+    await materializeFlow(db, ORG, flowId);
+    const facts = await factsOf(flowId);
+    expect(facts?.countable, "a filtered record count must be composable").toBe(true);
+    expect(facts?.additive, "and its parts must be summable").toBe(true);
+  });
+
+  it("never lets the fallback stamp a duration or a ratio as countable", () => {
+    /**
+     * THE OTHER DIRECTION, AT THE UNIT THAT ACTUALLY DECIDES IT.
+     *
+     * `buildTile` stamps `countable` from `spec.facts` when the step config
+     * said, and falls back to `kind === "count"` when it did not — a legacy
+     * row, or a spec whose step node has since been deleted. That fallback is
+     * the risk: written as a bare `true` it would have offered a length of
+     * time as a funnel stage, printing minutes beside a count of people with a
+     * drop-off pill over the pair.
+     *
+     * Asserted here rather than through a published flow because the fallback
+     * fires precisely when a flow CANNOT supply the facts, which a healthy
+     * fixture never reproduces. The round trip above covers the path that has
+     * them.
+     */
+    const factsFor = (spec: Record<string, unknown>) =>
+      (buildTile(spec as never, { kind: "scalar", value: 42 } as never, undefined as never) as {
+        facts?: { kind?: string; countable?: boolean; additive?: boolean };
+      }).facts;
+
+    const duration = factsFor({ name: "Speed", format: "duration", unit: "minutes" });
+    expect(duration?.kind).toBe("duration");
+    expect(duration?.countable, "a duration must never be offered as a stage").toBe(false);
+
+    const ratio = factsFor({ name: "Booked / Total", format: "percent" });
+    expect(ratio?.kind).toBe("ratio");
+    expect(ratio?.additive, "a rate has no parts that add up").toBe(false);
+
+    // And the ordinary legacy row — a plain number with nothing else to go on —
+    // is a tally, which is what makes every existing board composable at once.
+    expect(factsFor({ name: "Leads", format: "number" })).toMatchObject({ countable: true, additive: true });
+  });
+
   it("survives the dashboard read, which subtracts rather than lists", async () => {
     await seedEvents();
     const flowId = await publish(
@@ -173,7 +250,7 @@ describe("the stamp, end to end through a real materialize", () => {
     const [row] = await publishedFlowTiles(db, ORG);
     // `tile - 'byDay'` drops one key; everything else — facts included — rides
     // through with no write-path schema to strip it.
-    expect((row.tile as { facts?: TileFacts }).facts).toEqual({ kind: "count", shape: "scalar" });
+    expect((row.tile as { facts?: TileFacts }).facts).toEqual({ kind: "count", shape: "scalar", countable: true, additive: true });
   });
 });
 

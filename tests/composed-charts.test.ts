@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { funnelFromCounts, widensAt } from "@/lib/metrics/funnel";
 import { composeFunnel, composePie, isRefusal, type ComposeMember } from "@/lib/board/compose";
 import { chartsFor, shapeOfClassic, shapeOfTile, NO_SHAPE, CHART_IDS, type MetricShape } from "@/lib/board/charts";
-import { PARTS_SLOT, composes, parseTileConfig, CONFIG_FIELDS, honoured } from "@/lib/board/tile-config";
+import { PARTS_SLOT, COMPOSED_CHARTS, composes, parseTileConfig, CONFIG_FIELDS, honoured } from "@/lib/board/tile-config";
 import { seedMetricFacts } from "@/lib/flow/types";
 
 /**
@@ -439,6 +439,18 @@ describe("the parts slot and the config key that feeds it", () => {
     }
   });
 
+  it("names exactly the charts that are built from several metrics", () => {
+    /**
+     * The list the picker subtracts from a metric whose facts say it is not a
+     * tally. Derived from `PARTS_SLOT` rather than written out a second time,
+     * so a future composing chart cannot be left behind in one of the two
+     * places — which is the shape of the bug that made `buildTile` drop
+     * `countable` while `seedMetricFacts` computed it.
+     */
+    expect([...COMPOSED_CHARTS].sort()).toEqual(["funnel", "pie", "pipeline"]);
+    for (const id of COMPOSED_CHARTS) expect(composes(id), id).toBe(true);
+  });
+
   it("stores only flow keys, and never the same metric twice", () => {
     expect(parseTileConfig({ parts: ["flow:f1:o1", "flow:f2:o2"] }).parts).toEqual(["flow:f1:o1", "flow:f2:o2"]);
     // A metric id would have put a database round trip behind every board write
@@ -491,11 +503,30 @@ describe("the facts a composition is judged on", () => {
     expect(seedMetricFacts({ aggregation: "count_distinct" })).toMatchObject({ countable: true, additive: false });
   });
 
-  it("leaves both flags ABSENT when it cannot tell, so the tile earns a refresh and not a verdict", () => {
-    // The distinction the renderer turns into two different sentences.
-    const unknown = seedMetricFacts({});
-    expect(unknown.countable).toBeUndefined();
-    expect(unknown.additive).toBeUndefined();
+  it("reads NO aggregation as a record count, because that is what it is", () => {
+    /**
+     * THE BUG THAT MADE THE WHOLE FEATURE DEAD ON ARRIVAL, as the case that
+     * used to fail.
+     *
+     * Most metrics on a real board do not end in a Summarize step. An endpoint
+     * on a Filter, a Get data, a Combine or a Split answers "how many records
+     * reached here", and those node configs carry no `op` and no `aggregation`
+     * because there is no arithmetic to name. Reading absence as "we cannot
+     * tell" left every one of them permanently unstamped — and the sentence
+     * they earned was "press Refresh all", which re-ran, re-derived nothing,
+     * and said it again.
+     */
+    for (const cfg of [{}, { combinator: "and", rules: [] }, { mode: "stack" }, { dateField: "occurredAt" }]) {
+      expect(seedMetricFacts(cfg), JSON.stringify(cfg)).toMatchObject({ countable: true, additive: true });
+    }
+  });
+
+  it("still says 'I don't know' for an operation this build has never heard of", () => {
+    // The one case where absence of a verdict is the honest answer: a config
+    // naming something a newer release added. Guessing either way is worse.
+    const future = seedMetricFacts({ op: "harmonic_mean" });
+    expect(future.countable).toBeUndefined();
+    expect(future.additive).toBeUndefined();
   });
 
   it("still answers everything it answered before", () => {

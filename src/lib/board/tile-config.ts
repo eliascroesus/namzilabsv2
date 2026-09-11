@@ -346,6 +346,18 @@ export function composes(chart: ChartId): boolean {
   return PARTS_SLOT[chart].max > 0;
 }
 
+/**
+ * The charts that can only be built out of several metrics — derived from the
+ * table above rather than listed a second time, so adding a composing chart
+ * cannot leave this behind.
+ *
+ * The picker subtracts these from a metric that is not a tally of things (see
+ * `tileOptions`), which is the one composition rule `chartsFor` cannot apply:
+ * it reads shape, never facts, and whether a number can be a funnel stage is a
+ * fact about the number.
+ */
+export const COMPOSED_CHARTS: ChartId[] = (Object.keys(PARTS_SLOT) as ChartId[]).filter(composes);
+
 /** What this chart offers, in the order the panel should show it. */
 export function fieldsFor(chart: ChartId): readonly (keyof TileConfig)[] {
   return CONFIG_FIELDS[chart] ?? EVERY_TILE;

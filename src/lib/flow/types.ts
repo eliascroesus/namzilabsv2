@@ -489,6 +489,12 @@ export type TileFacts = {
  */
 const COUNTABLE_OPS = new Set(["count", "count_distinct", "sum"]);
 const ADDITIVE_OPS = new Set(["count", "sum"]);
+/**
+ * Every operation this build can reason about. An op OUTSIDE this set is the
+ * one honest "we do not know": a config naming something a newer release
+ * added, where guessing either way would be worse than saying so.
+ */
+const KNOWN_OPS: ReadonlySet<string> = new Set<string>([...FORMULA_OPS, ...AGGREGATIONS]);
 
 /**
  * The config-derived half of a tile's facts — everything except `shape`, which
@@ -520,15 +526,32 @@ export function seedMetricFacts(cfg: Record<string, unknown>): Omit<TileFacts, "
    * Read from the same bag, in the same place, for the same reason the two
    * spellings below are tolerated: "Calculate" writes `op`, the metric step
    * writes `aggregation`, and a spec authored by either must stamp the same
-   * facts. An unrecognised or absent op leaves BOTH flags undefined rather
-   * than false — "we do not know" and "no" get different answers downstream,
-   * and only one of them is worth telling a user to press Refresh over.
+   * facts.
+   *
+   * NO AGGREGATION AT ALL MEANS A RECORD COUNT, and getting this wrong made
+   * the feature dead on arrival. Most metrics on a real board do not end in a
+   * Summarize step: an endpoint on a Filter, a Get data, a Combine or a Split
+   * answers "how many records reached here", and those node configs carry no
+   * `op` and no `aggregation` because there is no arithmetic to name. Reading
+   * absence as "we cannot tell" left every one of them permanently unstamped,
+   * refusing with a "press Refresh all" that could never come true — so
+   * absence now means the thing it actually is: a tally of records, which is
+   * both countable and additive.
+   *
+   * A STATED OPERATION ALWAYS WINS over that default, in both directions: an
+   * average or a median says `false` out loud, and a distinct count says
+   * countable-but-not-additive. The only case left undecided is a config that
+   * names an operation this build has never heard of, which is the one place
+   * "we do not know" is the honest answer.
    */
   const agg = cfg.op ?? cfg.aggregation;
-  if (typeof agg === "string" && COUNTABLE_OPS.has(agg)) {
+  if (typeof agg !== "string") {
+    facts.countable = true;
+    facts.additive = true;
+  } else if (COUNTABLE_OPS.has(agg)) {
     facts.countable = true;
     facts.additive = ADDITIVE_OPS.has(agg);
-  } else if (typeof agg === "string") {
+  } else if (KNOWN_OPS.has(agg)) {
     facts.countable = false;
     facts.additive = false;
   }
