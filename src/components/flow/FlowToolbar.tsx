@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { PortalSlot } from "@/components/portal-slot";
 import { createPortal } from "react-dom";
 import {
   Copy,
@@ -184,10 +185,15 @@ function TopBarPortal({ children }: { children: React.ReactNode }) {
  * and not among the acts. `#topbar-status` is its own slot for that reason;
  * routes with nothing to report leave it empty and it collapses.
  */
+/**
+ * The builder's own status line, into the bar's `#topbar-status`.
+ *
+ * `PortalSlot` since 11 Sep 2026 — this was a local copy that resolved the
+ * target once on mount, so a bar that remounted left the save state portalling
+ * into a detached div. See `portal-slot.tsx` for the whole failure.
+ */
 function TopBarStatusPortal({ children }: { children: React.ReactNode }) {
-  const [slot, setSlot] = useState<HTMLElement | null>(null);
-  useEffect(() => setSlot(document.getElementById("topbar-status")), []);
-  return slot ? createPortal(children, slot) : null;
+  return <PortalSlot id="topbar-status">{children}</PortalSlot>;
 }
 
 function Island({ className = "", children }: { className?: string; children: React.ReactNode }) {

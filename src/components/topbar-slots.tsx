@@ -1,7 +1,7 @@
 "use client";
 
-import { createPortal } from "react-dom";
 import { useEffect, useState, type ReactNode } from "react";
+import { PortalSlot } from "@/components/portal-slot";
 import { relativeTime } from "@/lib/format";
 
 /**
@@ -26,11 +26,15 @@ import { relativeTime } from "@/lib/format";
  * there is no server/client time to disagree about — the freshness string is
  * computed once, in the browser, from the timestamp the page hands it.
  */
-function Slot({ id, children }: { id: string; children: ReactNode }) {
-  const [node, setNode] = useState<HTMLElement | null>(null);
-  useEffect(() => setNode(document.getElementById(id)), [id]);
-  return node ? createPortal(children, node) : null;
-}
+/**
+ * `PortalSlot` NOW, AND THE LOCAL COPY IS GONE BECAUSE IT WAS WRONG.
+ *
+ * It resolved `#topbar-title` once on mount and kept the answer. When the bar
+ * remounted — a soft navigation between views, or `FreshnessPoller`'s
+ * refresh — the heading went on portalling into the detached div and the bar
+ * read blank, which is exactly what was reported. See `portal-slot.tsx`.
+ */
+const Slot = PortalSlot;
 
 /**
  * The page's name AND the window it is showing, in the bar's one band.

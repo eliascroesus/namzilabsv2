@@ -1,28 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { createPortal } from "react-dom";
+import { useCallback, useRef, useState } from "react";
+import { PortalSlot } from "@/components/portal-slot";
 
 /**
- * THE SAME FOUR LINES `calendar-board.tsx`, `topbar-slots.tsx` and
- * `FlowToolbar.tsx` each carry — a client control rendering into a position the
- * server page owns.
- *
- * COPIED RATHER THAN SHARED, which is the convention here and worth one
- * sentence: the pattern is four lines and no logic, and the three existing
- * copies have never drifted because there is nothing in them TO drift. A shared
- * module would buy deduplication of a `useEffect` and cost every one of these
- * files an import of a component whose whole body is visible where it is used.
- * If a fifth appears, extract it.
- *
- * `node` is null until the effect runs, so nothing renders on the server and
- * there is no markup for hydration to disagree about.
+ * Shared — see `portal-slot.tsx`. The local copy this file carried for an hour
+ * had the same resolve-once bug every other copy did, which is what turned
+ * "four lines, copy it" into "extract it".
  */
-function Slot({ id, children }: { id: string; children: ReactNode }) {
-  const [node, setNode] = useState<HTMLElement | null>(null);
-  useEffect(() => setNode(document.getElementById(id)), [id]);
-  return node ? createPortal(children, node) : null;
-}
+const Slot = PortalSlot;
 import { Plus } from "lucide-react";
 import { useSettle } from "./board-settle";
 import { arrangeBoard, type BoardLane } from "@/lib/board/arrange";

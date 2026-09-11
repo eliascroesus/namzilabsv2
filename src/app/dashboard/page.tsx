@@ -1102,8 +1102,17 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             already normalised by `resolveRange` — so a URL spelling a custom
             pair that happens to equal a preset prints that preset's days, and
             two spellings of one window cannot read differently. */}
+        {/* `||` AND A TRIM, NOT `??`. A view whose name is the empty string —
+            a rename saved blank, a row written before names were required —
+            is not "no name" to `??`, which only catches null and undefined, so
+            it passed straight through and the bar rendered an empty heading
+            that looked exactly like the portal bug beside it. Two different
+            causes for one symptom is how a fix gets declared and the report
+            comes back. */}
         <TopBarTitle range={windowLabel(range)}>
-          {viewTabs.find((v) => v.id === activeView)?.name ?? viewTabs[0]?.name ?? "Dashboard"}
+          {viewTabs.find((v) => v.id === activeView)?.name?.trim() ||
+            viewTabs[0]?.name?.trim() ||
+            "Dashboard"}
         </TopBarTitle>
         <TopBarFreshness at={newestComputedAt} />
 

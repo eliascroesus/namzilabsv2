@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition, type ReactNode } from "react";
-import { createPortal } from "react-dom";
+import { useMemo, useState, useTransition, type ReactNode } from "react";
 import Link from "next/link";
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import { Select } from "@/components/flow/controls";
+import { PortalSlot } from "@/components/portal-slot";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { StatusPill } from "@/components/ui/badge";
@@ -117,11 +117,8 @@ const HEAT_STOPS = [0.05, 0.3, 0.55, 0.8, 1] as const;
  * `useEffect` is the only hook that is allowed to touch the document. One frame
  * of an empty header slot, exactly as the builder's save chip has always had.
  */
-function Slot({ id, children }: { id: string; children: ReactNode }) {
-  const [node, setNode] = useState<HTMLElement | null>(null);
-  useEffect(() => setNode(document.getElementById(id)), [id]);
-  return node ? createPortal(children, node) : null;
-}
+/** Shared now — the local copy resolved its target once. See `portal-slot.tsx`. */
+const Slot = PortalSlot;
 
 /**
  * THE CALENDAR: one metric, one month, one square per day.
