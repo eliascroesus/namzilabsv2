@@ -136,9 +136,17 @@ const FIGMA = {
   // the whole chrome read smaller than the CRM the frame was drawn against.
   // The kit won, so bar three is 49 and the board starts at 179 rather than
   // 173. Everything else here is still the frame's.
-  // Node 35:6027: 16 of top padding, a 32px control row, 8 under it. No rule
-  // beneath it any more — that hairline belongs to the board's row below.
-  topbar: { x: 260 + DX, y: 0 + DY, w: 1660 - GUTTER - 2 * HAIRLINE, h: 56 },
+  // 64 = 16 above a 32px control row and 16 below it. Node 35:6027 measures
+  // 56 (16/32/8), and the 11 Sep 2026 adjustment made this band's own padding
+  // SYMMETRIC: the 16px between it and the board's row used to be split 8/8
+  // across the two, so each was lopsided inside its own box. The bar carries
+  // the whole gap now and the band starts flush.
+  //
+  // THE SUM IS THE INVARIANT, NOT EITHER NUMBER: 64 + 49 is the same 113 that
+  // 56 + 57 was, which is why every box below is unmoved. If one of these ever
+  // changes without the other, the board lands at the wrong y with every class
+  // still correct — the failure this file exists for.
+  topbar: { x: 260 + DX, y: 0 + DY, w: 1660 - GUTTER - 2 * HAIRLINE, h: 64 },
   chartCards: [
     // Node 0:5's own boxes. They are the board's too now: `GRID_GAP_PX` went
     // back to 24 and `ROW_UNIT_PX` to 48, so a ten-row card is 10*48-24 = 456
@@ -148,8 +156,10 @@ const FIGMA = {
     // the export was not. At a 16px gutter there is no discrepancy to explain:
     // 523.33 is both the arithmetic AND node 35:6126's own `width`, and the
     // 384 height matches too. The disagreement was the gutter all along.
-    // y = 8 gutter + 1 border + 56 (bar) + 57 (the board's row) + 24 (its own
-    // padding) = 146. w and h are node 35:6126's own, to the decimal.
+    // y = 8 gutter + 1 border + 64 (bar) + 49 (the board's row) + 24 (its own
+    // padding) = 146 — the same 146 it was at 56 + 57, because only the split
+    // between the two bands moved. w and h are node 35:6126's own, to the
+    // decimal.
     { x: 285, y: 146, w: 523.33, h: 384 },
     { x: 285 + 523.33 + 16, y: 146, w: 523.33, h: 384 },
     { x: 285 + 2 * (523.33 + 16), y: 146, w: 523.33, h: 384 },

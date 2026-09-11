@@ -61,13 +61,16 @@ export function ShellSkeleton({
               NO `border-b`: the real bar dropped its rule to the board's own
               row below it. Empty: a shimmering placeholder under controls that
               never move is noise. */}
-          <div className="h-14 shrink-0 bg-topbar" />
+          <div className="h-16 shrink-0 bg-topbar" />
           {/* THE BOARD'S BAND, which is chrome again as of 11 Sep 2026 — a
               real sibling of the bar rather than a sticky child of the panel.
               A mirror that misses it is 57px of content jumping down the
               moment the route lands, which is the whole failure this file
-              exists to prevent. 57 = 8 + a 32px control row + 16 + its rule. */}
-          <div className="h-[57px] shrink-0 border-b border-topbar-border bg-topbar" />
+              exists to prevent. 49 = a 32px control row + 16 below it + its
+              rule; the 8 that used to sit above it moved into the bar when
+              that band's padding was made symmetric, and 64 + 49 is the same
+              113 as the 56 + 57 it replaces. */}
+          <div className="h-[49px] shrink-0 border-b border-topbar-border bg-topbar" />
           <div className="min-h-0 flex-1 overflow-y-auto bg-panel">
             {/* Not <main>: PageContainer renders the page's one main landmark. */}
             <div className={`mx-auto w-full p-6 ${width === "narrow" ? "max-w-3xl" : "max-w-6xl"}`}>

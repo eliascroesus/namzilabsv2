@@ -148,12 +148,26 @@ describe("the shell's chrome classes all resolve", () => {
 describe("the bars the frame draws", () => {
   const topBar = readFileSync(join(__dirname, "..", "src/components/top-bar.tsx"), "utf8");
 
-  it("stands as ONE band of 56, because there is one band now", () => {
-    // It was two, 57 and 49. Node 35:6027 draws a single 56px strip — 16 of
-    // top padding, a 32px control row, 8 under it — and the band that carried
-    // the search and the account is gone entirely.
-    expect(topBar).toMatch(/h-14\b/);
-    expect(topBar, "the old pair must not survive").not.toMatch(/h-\[57px\]|h-\[49px\]/);
+  it("stands at 64 with SYMMETRIC padding, and the sum is what is fixed", () => {
+    /**
+     * Node 35:6027 measures 56 — 16 above a 32px control row and 8 below it —
+     * and the board's row beneath carried `pt-2` to make up the other 8. So
+     * the 16px between the two bands was split across them and each was
+     * lopsided inside its own box.
+     *
+     * The owner asked for it whole: this bar is `py-4` (16/16) and the band
+     * starts flush. 64 + 49 is the same 113 that 56 + 57 was, which is why
+     * nothing below the chrome moved a pixel — `pnpm geometry` measures that
+     * directly, and this pins the halves it is made of.
+     */
+    expect(topBar).toMatch(/h-16\b/);
+    expect(topBar, "symmetric, not 16-over-8").toMatch(/\bpy-4\b/);
+    // COMMENTS STRIPPED: the note above the tag explains what the padding USED
+    // to be, by name, and a bare match reads its own prose as the class.
+    const cls = topBar.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    expect(cls, "the split padding must not come back").not.toMatch(/pb-2 pt-4|pt-4 pb-2/);
+    expect(cls, "the old pairs must not survive").not.toMatch(/h-\[57px\]|h-\[49px\]|h-14\b/);
+    expect(64 + 49).toBe(113);
   });
 
   it("draws no rule under itself, because the board's row carries it", () => {
@@ -232,7 +246,10 @@ describe("the board's bar", () => {
      *
      * `pb-4 pt-2` is node 35:6044's `padding: 8px 24px 16px` and survives.
      */
-    expect(page).toMatch(/band \? "border-b border-topbar-border bg-topbar px-6 pb-4 pt-2"/);
+    // `pt-0`: the 16px between this band and the bar above it belongs wholly
+    // to the bar now, so each one's own padding is symmetric or zero rather
+    // than half of something shared. On screen it is identical.
+    expect(page).toMatch(/band \? "border-b border-topbar-border bg-topbar px-6 pb-4 pt-0"/);
     expect(page, "nothing left to escape").not.toMatch(/-m-6 mb-6 border-b border-topbar-border/);
     expect(page, "and nothing left to pin against").not.toMatch(/sticky top-0 z-20 -m-6/);
   });

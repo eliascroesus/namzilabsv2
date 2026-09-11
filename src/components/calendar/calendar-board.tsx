@@ -440,8 +440,17 @@ export function CalendarBoard({
               where the segments are a contiguous run and a gap between them
               would break the one-object reading those rely on. Here the
               segments are an arrow, a label, an arrow and a footnote — four
-              different KINDS of thing — and 8px between them is what the owner
-              asked for and what stops the month name touching its chevrons. */}
+              different KINDS of thing.
+
+              THE 8px HAS TO BE SPACE YOU CAN SEE, which `gap-2` alone was not
+              delivering. The chevron buttons are `size="icon"` — a 32px box
+              around an 18px glyph — so nine pixels of the gap either side of
+              the month name was the BUTTON's own empty margin, and the visible
+              distance read as ~17px. The buttons keep their 32px hit target
+              (shrinking that to tighten a gap would be trading a real
+              affordance for a cosmetic one) and give back the slack with a
+              negative inline margin, so the GLYPH sits 8px from the text and
+              the pressable area is untouched. */}
           <div className={cn(PERIOD_TRACK, "gap-2")}>
             {/* `size="icon"` (32px), NOT `iconSm` (28px). The track is `h-8` —
                 also 32px — and an `iconSm` arrow left a 2px inset on every
@@ -459,7 +468,7 @@ export function CalendarBoard({
             <Button
               variant="ghost"
               size="icon"
-              className="text-muted-foreground hover:bg-accent hover:text-foreground"
+              className="-mx-[7px] text-muted-foreground hover:bg-accent hover:text-foreground"
               onClick={() => setMonthIdx((i) => Math.max(0, i - 1))}
               disabled={monthIdx === 0}
               title={monthIdx === 0 ? "The calendar keeps two months" : `Go to ${monthLabel(months[monthIdx - 1])}`}
@@ -484,7 +493,7 @@ export function CalendarBoard({
             <Button
               variant="ghost"
               size="icon"
-              className="text-muted-foreground hover:bg-accent hover:text-foreground"
+              className="-mx-[7px] text-muted-foreground hover:bg-accent hover:text-foreground"
               onClick={() => setMonthIdx((i) => Math.min(months.length - 1, i + 1))}
               disabled={monthIdx === months.length - 1}
               title={monthIdx === months.length - 1 ? "This is the current month" : `Go to ${monthLabel(months[monthIdx + 1])}`}

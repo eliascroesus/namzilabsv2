@@ -70,4 +70,42 @@
  * module with no directive. Adding `"use client"` here re-breaks the skeleton
  * silently; tests/page-width.test.ts pins that it stays absent.
  */
-export const DAY_CELL_H = "h-[clamp(5.75rem,8.5vw,11rem)]";
+/**
+ * A DAY'S HEIGHT COMES OFF THE VIEWPORT'S HEIGHT, NOT ITS WIDTH.
+ *
+ * It was `clamp(5.75rem, 8.5vw, 11rem)` — 92px, then 8.5% of the WIDTH, up to
+ * 176. On a wide, short screen that is the worst possible pairing: a 1440x800
+ * display got 122px cells because it is wide, and then could not show the six
+ * rows AND the summary underneath without scrolling. The owner's report —
+ * "I can see the calendar thing but I can't see the Best day / Average day /
+ * Days with data things underneath, I have to scroll a tiny bit".
+ *
+ * A calendar is one object that should be taken in at a glance, so the axis
+ * that decides how tall it may be is the one that runs out: `dvh`, minus
+ * everything the month competes with for it.
+ *
+ *   27rem (432px) is that overhead, and it is the sum of fixed, known parts:
+ *     113  the two chrome bands (64 + 49)
+ *      16  the panel's 8px gutter, top and bottom
+ *       2  its hairline, top and bottom
+ *      48  PageContainer's own 24px, top and bottom
+ *      32  the sheet's p-4, top and bottom
+ *      32  the weekday row and its gap
+ *      40  five 8px gaps between six rows
+ *     ~150 the summary block below the sheet, and the gap above it
+ *
+ * Divided by six because six is the most rows a month can occupy.
+ *
+ * THE CLAMP IS NOT DECORATION. Below ~2.75rem a cell cannot hold a date and a
+ * figure, so on a very short window the page scrolls rather than rendering
+ * something unreadable — a floor is the honest failure. The 11rem ceiling is
+ * the old one: past it the squares start reading as panels rather than days.
+ *
+ * `dvh` rather than `vh`: on a phone the address bar's slide would otherwise
+ * resize every cell mid-scroll.
+ *
+ * `pnpm calendar` measures the real thing at four viewport heights rather than
+ * trusting this arithmetic, because the overhead above is a sum of numbers
+ * that live in six other files and any of them can move.
+ */
+export const DAY_CELL_H = "h-[clamp(2.75rem,calc((100dvh-27rem)/6),11rem)]";

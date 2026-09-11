@@ -24,6 +24,7 @@
     "portals": "node scripts/portal-check.mjs",
     "band": "node scripts/band-check.mjs",
     "shadows": "node scripts/shadow-check.mjs",
+    "calendar": "node scripts/calendar-check.mjs",
     "shot:modes": "node scripts/shot-modes.mjs"
   },
   "dependencies": {

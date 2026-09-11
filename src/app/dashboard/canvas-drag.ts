@@ -43,8 +43,23 @@ import { pageScrollerOf, scrollTopOf } from "./board-drag";
  * with no second opinion to drift from it.
  */
 
-/** Below this a press is a click — the same threshold the lane engine uses. */
-const CANVAS_START_PX = 4;
+/**
+ * Below this a press is a click — the same threshold the lane engine uses.
+ *
+ * 8px, UP FROM 4, AND THE INPUT DEVICE IS THE REASON. A mouse click is
+ * mechanically still; a TRACKPAD click is a finger pressing down on the
+ * surface it is also tracking, so the pointer routinely travels two to five
+ * pixels during the press itself. At 4 the gesture engine read that jitter as
+ * intent and picked the tile up — reported as "it thinks I want to move the
+ * page, the move thing triggers a bit too early".
+ *
+ * 8 is past the jitter and still well inside the distance a deliberate drag
+ * covers before anyone expects feedback: a real drag passes it in the first
+ * few milliseconds, so nothing feels slower. Raising it further would start to
+ * be felt as lag at the beginning of a genuine drag, which is the cost this
+ * number trades against.
+ */
+const CANVAS_START_PX = 8;
 /** How close to the viewport edge starts the page moving, and how fast. */
 const CANVAS_SCROLL_EDGE = 64;
 const CANVAS_SCROLL_MAX = 18;

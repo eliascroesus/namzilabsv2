@@ -432,7 +432,14 @@ export function ViewStrip({
             if (!d) return;
             // A threshold, so a click still navigates. Below it this is a press
             // on a link; above it the link is cancelled and this is a move.
-            if (!d.moved && Math.abs(e.clientX - d.startX) < 4) return;
+            //
+            // 8px, matching `CANVAS_START_PX` — and for the reason given in
+            // full there: a trackpad click moves the pointer two to five pixels
+            // during the press itself, so at 4 a plain click on a view tab
+            // sometimes started reordering the strip instead of navigating.
+            // The two numbers are one decision about one input device and are
+            // kept equal deliberately.
+            if (!d.moved && Math.abs(e.clientX - d.startX) < 8) return;
             if (!d.moved) {
               d.moved = true;
               setDragging(d.key);

@@ -405,7 +405,13 @@ export function PageHeader({ title, lede, actions, tabs, back, band, className }
             sibling of the top bar now (see `AppFrame`), so it sits in the
             chrome's own box and the 24px under it is `PageContainer`'s `pt-6`
             — one owner for that distance instead of two that had to agree. */
-        band ? "border-b border-topbar-border bg-topbar px-6 pb-4 pt-2" : "pb-4",
+        /* `pt-0`, NOT `pt-2`. The 16px between this row and the bar above it
+            used to be split 8/8 across the two, which left the bar lopsided
+            inside its own box (16 above its content, 8 below). The bar carries
+            the whole gap now and this starts flush, which looks identical and
+            makes each band's own padding symmetric or zero rather than half of
+            something shared. */
+        band ? "border-b border-topbar-border bg-topbar px-6 pb-4 pt-0" : "pb-4",
         className,
       )}
     >

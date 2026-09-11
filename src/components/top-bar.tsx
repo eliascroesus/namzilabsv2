@@ -62,12 +62,17 @@ export function TopBar({
   unread?: number;
 }) {
   return (
-    /* 56px = 16 of top padding, a 32px control row, and 8 under it — node
-       35:6027's own box, and the reason this is `pt-4 pb-2` rather than a
-       symmetric `py`. The prose sits ABOVE the tag deliberately:
-       tests/page-width.test.ts reads a bar's height by matching
-       `<header className="…"`, and a comment between the two breaks it. */
-    <header className="flex h-14 shrink-0 items-center gap-2 bg-topbar px-6 pb-2 pt-4">
+    /* 64px = 16 above a 32px control row and 16 below it — SYMMETRIC, which
+       is the 11 Sep 2026 adjustment. It was `pt-4 pb-2` (16/8) with the band
+       beneath carrying `pt-2` (8), so the 16px between the two rows was split
+       across them and this bar was lopsided inside its own box. The gap is
+       unchanged on screen: 16 under this row plus 0 above the band is the same
+       16 that 8-plus-8 was, and the two bands still sum to 113 — 64 + 49 where
+       it was 56 + 57 — so nothing below them moves.
+       The prose sits ABOVE the tag deliberately: tests/page-width.test.ts
+       reads a bar's height by matching `<header className="…"`, and a comment
+       between the two breaks it. */
+    <header className="flex h-16 shrink-0 items-center gap-2 bg-topbar px-6 py-4">
       {menu}
 
       {/* THE TITLE CLUSTER'S SLOT — a row, not an <h1>, because the page now

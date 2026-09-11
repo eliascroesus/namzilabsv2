@@ -287,8 +287,8 @@ describe("the page container and the skeleton that stands in for it", () => {
     // of the bar rather than a sticky child of the panel — so the skeleton
     // mirrors BOTH bands. It reserved only the bar for a day, which is 57px of
     // content jumping down the moment the route lands.
-    expect(code(skeleton)).toMatch(/h-14[^"]*bg-topbar/);
-    expect(code(skeleton)).toMatch(/h-\[57px\][^"]*border-b border-topbar-border bg-topbar/);
+    expect(code(skeleton)).toMatch(/h-16[^"]*bg-topbar/);
+    expect(code(skeleton)).toMatch(/h-\[49px\][^"]*border-b border-topbar-border bg-topbar/);
   });
 });
 
@@ -411,7 +411,20 @@ describe("the calendar's day square", () => {
      * is the opposite end — a phone's ~40px column would give a 20px cell
      * holding a date and a percentage.
      */
-    expect(cell).toMatch(/export const DAY_CELL_H = "h-\[clamp\(5\.75rem,8\.5vw,11rem\)\]";/);
+    /**
+     * OFF THE VIEWPORT'S HEIGHT SINCE 11 SEP 2026, not its width.
+     *
+     * It was `clamp(5.75rem, 8.5vw, 11rem)`. On a wide, short screen that is
+     * the worst pairing available: 1440x800 got 122px cells BECAUSE it is
+     * wide, and then could not show six rows and the summary without
+     * scrolling. The axis that decides how tall a month may be is the one that
+     * runs out.
+     *
+     * What this pin protects is unchanged and is the reason the constant
+     * exists at all: ONE measurement, spelled once, shared by the page and its
+     * skeleton — a skeleton that disagrees is a jump on arrival.
+     */
+    expect(cell).toMatch(/export const DAY_CELL_H = "h-\[clamp\(2\.75rem,calc\(\(100dvh-27rem\)\/6\),11rem\)\]";/);
     /**
      * NO `aspect-ratio`, AND THAT IS THE ASSERTION THAT MATTERS.
      *
@@ -912,9 +925,9 @@ describe("the skeleton mirrors the frame's new order", () => {
     // the old three-band chrome, then 56 alone while the board's row lived
     // inside the scroller, and it is 56 + 57 now that the row is chrome again.
     // Each wrong pairing is tens of pixels of content jumping at hydration.
-    expect(code).toMatch(/h-14[^"]*bg-topbar/);
-    expect(code).toMatch(/h-\[57px\][^"]*bg-topbar/);
-    expect(code, "the retired 49px band must not come back").not.toMatch(/h-\[49px\]/);
+    expect(code).toMatch(/h-16[^"]*bg-topbar/);
+    expect(code).toMatch(/h-\[49px\][^"]*bg-topbar/);
+    expect(code, "the retired 57px band must not come back").not.toMatch(/h-\[57px\]/);
     expect(code).toMatch(/w-65[^"]*bg-rail/);
   });
 });
