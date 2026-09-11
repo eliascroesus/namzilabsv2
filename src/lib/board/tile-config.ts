@@ -73,6 +73,42 @@ const KEYS = {
    * bound in a jsonb column read on every render.
    */
   text: z.string().trim().min(1).max(2000),
+  /**
+   * THE OTHER METRICS THIS TILE IS COMPOSED FROM — a funnel's stages 2..N, or
+   * a pie's named slices. The tile's OWN `tile_key` column is the first member:
+   * stage 1 of a funnel, the whole of a pie.
+   *
+   * Storing them here rather than materializing a grouped metric is the central
+   * bet of the feature, and it is a cost argument. The board already holds every
+   * published tile in memory (`flowByKey`), so resolving a stage is a `Map.get`
+   * — zero extra round trips, zero flow runs, zero widened selects. Publishing
+   * the same breakdown as a grouped metric would write a `groups` array into the
+   * tile AND into all six `byRange` slots of a jsonb column read on every render
+   * by every viewer, whether or not anyone ever draws it.
+   *
+   * `flow:` KEYS ONLY, and that regex is load-bearing twice over. Classic
+   * metrics are absent from `tileOptions` because they recompute live, so one
+   * could never be picked here anyway — and restricting the shape is what makes
+   * the permission check free: `tileKeysAllowed` answers a `flow:` key from
+   * `access.canSeeMetric` alone and issues its one query only for `metric:`
+   * keys. A config bag that could carry a metric id would have put a database
+   * round trip on every board write.
+   *
+   * DEDUPED IN THE SCHEMA, not in the panel. Every export of a `"use server"`
+   * module is a public endpoint, so the picker's `exclude` prop is a courtesy
+   * to the author and this is the actual rule. A metric appearing twice in one
+   * funnel is not a drawing anyone meant; in a pie it silently double-counts
+   * itself against the whole.
+   *
+   * The cap here is the widest any chart accepts (7, for an 8-stage funnel).
+   * Per-chart floors and ceilings live in `PARTS_SLOT` below, because a pie's
+   * limit is a fact about the pie rather than about the storage.
+   */
+  parts: z
+    .array(z.string().regex(/^flow:[^:]+:.+$/).max(200))
+    .min(1)
+    .max(7)
+    .refine((a) => new Set(a).size === a.length, "A metric can only appear once."),
 } as const;
 
 export type TileConfig = { [K in keyof typeof KEYS]?: z.infer<(typeof KEYS)[K]> };
@@ -221,9 +257,10 @@ export function sliceAccent(index: number, label?: string): string {
  *
  * A key is listed ONLY where the mark reads it — checked against the marks:
  * `PieChart` and `GoalBar` take no accent, so `pie` and `progress` offer no
- * colour; `FunnelView` takes nothing but its result, so `funnel` offers only
- * the two settings every tile has; `ChartTable` formats nothing itself, so it
- * takes `precision` (which reaches it through the format bag) but not `sort`
+ * colour; `FunnelView` takes its result and a `composed` flag DERIVED at render
+ * from whether a composition drew it — never a stored key — so `funnel` offers
+ * only the two settings every tile has plus `parts`; `ChartTable` formats
+ * nothing itself, so it takes `precision` (which reaches it through the format bag) but not `sort`
  * or `limit`, which it does not apply.
  *
  * `title` and `rangeKey` are on every chart because they are properties of the
@@ -239,10 +276,10 @@ export const CONFIG_FIELDS = {
   area: [...EVERY_TILE, "color", "precision", "showGoal", "target"],
   bar: [...EVERY_TILE, "color", "precision", "showGoal", "target", "showLabels"],
   category: [...EVERY_TILE, "color", "precision", "sort", "limit"],
-  pie: [...EVERY_TILE, "precision", "limit", "donut", "legend"],
+  pie: [...EVERY_TILE, "precision", "limit", "donut", "legend", "parts"],
   progress: [...EVERY_TILE, "precision", "target"],
-  funnel: [...EVERY_TILE],
-  pipeline: [...EVERY_TILE, "color"],
+  funnel: [...EVERY_TILE, "parts"],
+  pipeline: [...EVERY_TILE, "color", "parts"],
   table: [...EVERY_TILE, "precision"],
 
   /**
@@ -260,6 +297,54 @@ export const CONFIG_FIELDS = {
   text: ["title", "text"],
   divider: ["title"],
 } as const satisfies Record<ChartId, readonly (keyof TileConfig)[]>;
+
+/**
+ * HOW MANY PARTS EACH CHART TAKES — the slot, in Looker Studio's sense.
+ *
+ * `CONFIG_FIELDS` above says WHETHER a chart reads `parts`; this says how many
+ * it can hold, which is a different question with different answers per chart
+ * and is read in three places: the panel (to print the cap and disable Add),
+ * `compose.ts` (to refuse below the floor) and the renderer (to refuse above
+ * the ceiling — see below).
+ *
+ * `satisfies Record<ChartId, …>` so a chart added to the registry without a row
+ * here is a type error rather than a silent `undefined` that reads as zero.
+ *
+ * THE PIE'S 5 IS ARITHMETIC, NOT TASTE. Five named slices plus the residual is
+ * six arcs, which is exactly `pieSlices`' default cap — and that equality is
+ * what makes a double-"Other" impossible. Allow a sixth part and `pieSlices`
+ * would roll the overflow into its own slice named "Other" while composition
+ * has already added a residual by that name: two grey wedges, one label, and
+ * `sliceAccent` painting both with the roll-up's reserved grey.
+ *
+ * THE CEILING IS ENFORCED AT RENDER TOO, and that is not belt-and-braces. The
+ * panel caps what it will ADD, but changing a composed funnel to a pie changes
+ * the chart column and nothing else — `honoured()` keeps `parts` because the
+ * pie's row lists it, and the stored array's 7 entries sail past a cap that was
+ * only ever checked while adding.
+ */
+export const PARTS_SLOT = {
+  number: { min: 0, max: 0 },
+  line: { min: 0, max: 0 },
+  area: { min: 0, max: 0 },
+  bar: { min: 0, max: 0 },
+  category: { min: 0, max: 0 },
+  /** 5 named slices + the residual = 6 arcs, `pieSlices`' own cap. */
+  pie: { min: 2, max: 5 },
+  progress: { min: 0, max: 0 },
+  /** 7 parts + the anchor = 8 stages, which is what a funnel tile holds before it scrolls. */
+  funnel: { min: 1, max: 7 },
+  pipeline: { min: 1, max: 7 },
+  table: { min: 0, max: 0 },
+  heading: { min: 0, max: 0 },
+  text: { min: 0, max: 0 },
+  divider: { min: 0, max: 0 },
+} as const satisfies Record<ChartId, { min: number; max: number }>;
+
+/** True when this chart is drawn from `config.parts` rather than from its own data. */
+export function composes(chart: ChartId): boolean {
+  return PARTS_SLOT[chart].max > 0;
+}
 
 /** What this chart offers, in the order the panel should show it. */
 export function fieldsFor(chart: ChartId): readonly (keyof TileConfig)[] {

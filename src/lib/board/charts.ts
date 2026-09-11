@@ -233,9 +233,32 @@ export type MetricShape = {
   target: boolean;
   /** A classic funnel metric, which is its own thing and nothing else's. */
   funnel: boolean;
+  /**
+   * A STORED FLOW TILE, so this metric may be the ANCHOR of a composed chart —
+   * stage 1 of a funnel, or the whole of a pie — with sibling tiles named in
+   * `config.parts`. See `compose.ts`.
+   *
+   * ITS OWN FLAG RATHER THAN `scalar`, and that distinction is the whole point.
+   * Widening `scalar` would offer funnel and pie on CLASSIC metrics too, and a
+   * classic metric can never be composed: `tileOptions` deliberately holds no
+   * classic metrics (they recompute live), so the parts picker would open
+   * empty. The reader would get a legal chart, no way to configure it, and a
+   * sentence telling them to do the impossible.
+   *
+   * So it is set true by `shapeOfTile` and false by `shapeOfClassic` — the
+   * mirror of how `funnel` is already handled, one line lower.
+   */
+  composable: boolean;
 };
 
-export const NO_SHAPE: MetricShape = { scalar: false, series: false, groups: false, target: false, funnel: false };
+export const NO_SHAPE: MetricShape = {
+  scalar: false,
+  series: false,
+  groups: false,
+  target: false,
+  funnel: false,
+  composable: false,
+};
 
 /**
  * THE SHAPE OF A STORED FLOW TILE — ACROSS EVERY RANGE, NOT THE ACTIVE ONE.
@@ -265,12 +288,30 @@ export function shapeOfTile(tile: unknown): MetricShape {
     byRange?: Record<string, { value?: number; series?: unknown[]; groups?: unknown[] }>;
   };
   const slots = [t, ...Object.values(t.byRange ?? {})];
+  const scalar = slots.some((s) => typeof s.value === "number" && Number.isFinite(s.value));
   return {
-    scalar: slots.some((s) => typeof s.value === "number" && Number.isFinite(s.value)),
+    scalar,
     series: slots.some((s) => Array.isArray(s.series) && s.series.length > 0),
     groups: slots.some((s) => Array.isArray(s.groups) && s.groups.length > 0),
     target: typeof t.target === "number" && Number.isFinite(t.target),
     funnel: false,
+    /**
+     * A STORED TILE THAT CAN ANSWER WITH A NUMBER CAN ANCHOR A COMPOSITION.
+     * Whether it has been GIVEN parts yet is a configuration question the
+     * renderer answers, not a legality question — the same separation Looker
+     * Studio draws between "this chart accepts this field" and "this chart's
+     * slots are filled in". A funnel with no second stage is an unconfigured
+     * chart that says so; it is not an illegal one, and hiding it would leave
+     * no way to configure it.
+     *
+     * IT TRACKS `scalar` RATHER THAN BEING UNCONDITIONALLY TRUE, and that is a
+     * bug this caught rather than a refinement. A tile that has NEVER answered
+     * — no value in any slot, which is what an unpublished or freshly created
+     * metric looks like — would otherwise have started offering a funnel, a
+     * pipeline and a pie, and `chartsFor({})` would have stopped returning the
+     * empty list that says "there is nothing here to draw yet".
+     */
+    composable: scalar,
   };
 }
 
@@ -292,6 +333,13 @@ export function shapeOfClassic(
     groups: false,
     target: typeof target === "number" && Number.isFinite(target),
     funnel: false,
+    /**
+     * A CLASSIC METRIC CAN NEVER BE COMPOSED, and false here is what keeps the
+     * picker honest about it. `tileOptions` holds flow metrics only — classic
+     * ones recompute live, one serial query per render — so the parts picker
+     * has nothing to offer against a classic anchor. See `MetricShape.composable`.
+     */
+    composable: false,
   };
 }
 
@@ -320,20 +368,42 @@ export function chartsFor(shape: MetricShape): ChartId[] {
    * author's own labels.
    */
   if (shape.funnel) return ["funnel", "pipeline"];
-  const out: ChartId[] = [];
-  if (shape.scalar) out.push("number");
-  if (shape.series) out.push("line", "area", "bar");
-  if (shape.groups) out.push("category", "pie");
-  if (shape.target && shape.scalar) out.push("progress");
-  if (shape.series || shape.groups) out.push("table");
+  const set = new Set<ChartId>();
+  if (shape.scalar) set.add("number");
+  if (shape.series) for (const id of ["line", "area", "bar"] as const) set.add(id);
+  if (shape.groups) for (const id of ["category", "pie"] as const) set.add(id);
   /**
-   * NO BLOCK IS EVER REACHABLE FROM HERE, and the filter says so rather than
-   * relying on nobody adding one to a branch above. A block is furniture: it
-   * draws no metric, so "which charts can draw this metric" cannot have one as
-   * an answer. `tests/board-charts.test.ts` walks every one of the 32 possible
-   * shapes and asserts it.
+   * A STORED TILE MAY ANCHOR A COMPOSED CHART — stage 1 of a funnel, or the
+   * whole of a pie, with its sibling stages named in `config.parts`.
+   *
+   * OFFERED BEFORE IT IS CONFIGURED, on purpose. The alternative — hide the
+   * chart until parts exist — is unreachable by construction: parts are chosen
+   * in the tile's own settings panel, which only opens on a tile that already
+   * has a chart. So the picker offers it, and an unconfigured funnel says
+   * "Add at least one more stage in the tile's settings" where its mark would
+   * be. That is Looker Studio's slot model, and it is the reverse of this
+   * file's usual instinct to offer only what can be drawn RIGHT NOW; the
+   * difference is that every other rule here is about data the metric does not
+   * have, and this one is about a choice the author has not made yet.
+   *
+   * `pie` may arrive from here AND from `groups` above; the Set dedupes, which
+   * is the whole reason this function stopped pushing into an array.
    */
-  return out.filter((id) => !(BLOCK_IDS as readonly string[]).includes(id));
+  if (shape.composable) for (const id of ["funnel", "pipeline", "pie"] as const) set.add(id);
+  if (shape.target && shape.scalar) set.add("progress");
+  if (shape.series || shape.groups) set.add("table");
+  /**
+   * ONE CANONICAL ORDER, TAKEN FROM `CHARTS` ITSELF — so the picker cannot
+   * disagree with the registry about which chart comes first, and two rules
+   * offering the same id cannot make it appear twice.
+   *
+   * NO BLOCK IS EVER REACHABLE FROM HERE, and the filter says so rather than
+   * relying on nobody adding one to a rule above. A block is furniture: it
+   * draws no metric, so "which charts can draw this metric" cannot have one as
+   * an answer. `tests/board-charts.test.ts` walks every possible shape and
+   * asserts it.
+   */
+  return CHART_IDS.filter((id) => set.has(id) && !(BLOCK_IDS as readonly string[]).includes(id));
 }
 
 /**

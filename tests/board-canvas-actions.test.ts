@@ -466,6 +466,46 @@ describe("what a restricted rank may point a chart at", () => {
     expect((await tilesOf("va")).find((t) => t.id === a.tile.id)?.tileKey).toBe("flow:f1:o1");
   });
 
+  it("refuses a HIDDEN flow smuggled in through config.parts, not just through tileKey", async () => {
+    /**
+     * THE SECOND DOOR C20 DID NOT CLOSE, because it did not exist yet.
+     *
+     * `tileKeysAllowed` had only ever been asked about `patch.tileKey`. A
+     * composed funnel stores its other stages as tile keys INSIDE the config
+     * bag, so from the moment `parts` shipped, a config write became a write of
+     * tile keys — and every export of a "use server" module is a public
+     * endpoint reachable with a `config` of the caller's choosing, with no
+     * settings panel anywhere near it. Without the check, a rank scoped to
+     * `flow:f1` could compose a funnel out of `flow:f2` and read its numbers
+     * the moment a colleague with fuller access opened the board.
+     *
+     * Sabotage: delete the `tileKeysAllowed` call in `setCustomTileAction`'s
+     * config branch and this goes green while the hidden key lands in jsonb.
+     */
+    const a = await addCustomTileAction("va", "flow:f1:o1", "number");
+    if (!a.ok) throw new Error("setup failed");
+    await assignBuilderRank(["flow:f1"]);
+
+    const hidden = await setCustomTileAction(a.tile.id, { config: { parts: ["flow:f2:o1"] } });
+    expect(hidden).toEqual({ ok: false, error: "That isn't a metric we know." });
+    expect(seeded((await db.select().from(dashboardTiles).where(eq(dashboardTiles.id, a.tile.id)))[0].config)).toEqual(
+      {},
+    );
+
+    // One hidden key among visible ones still refuses the whole write — the
+    // array is one setting, and a partially applied funnel is not a funnel.
+    const mixed = await setCustomTileAction(a.tile.id, { config: { parts: ["flow:f1:o2", "flow:f2:o1"] } });
+    expect(mixed.ok).toBe(false);
+
+    // And the positive half, or the rule above would be satisfied by a check
+    // that simply refuses every parts write.
+    const visible = await setCustomTileAction(a.tile.id, { config: { parts: ["flow:f1:o2", "flow:f1:o3"] } });
+    expect(visible.ok).toBe(true);
+    expect(
+      (await db.select().from(dashboardTiles).where(eq(dashboardTiles.id, a.tile.id)))[0].config,
+    ).toMatchObject({ parts: ["flow:f1:o2", "flow:f1:o3"] });
+  });
+
   it("still lets a block sentinel and the unset sentinel through a restricted rank", async () => {
     // Neither joins to a metric at all — `visibilityKeyOf` reads both as
     // outside the permission system entirely, not as "hidden".

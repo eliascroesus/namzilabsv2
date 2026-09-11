@@ -30,15 +30,20 @@ const SEARCH_AT = 8;
 /**
  * THE LIST ITSELF, WITHOUT A MODAL AROUND IT.
  *
- * Two things ask "which metric?" — the repoint modal below, and the tile
- * config panel's Data tab, which asks it inline beside everything else about
- * the tile. They are one list: same eligibility rule, same search threshold,
- * same empty sentences. Extracting it was the alternative to a second copy
- * that would have answered the eligibility question its own way.
+ * THREE things ask "which metric?" — the repoint modal below; the tile config
+ * panel's Data tab, which asks it inline beside everything else about the tile;
+ * and that panel's stages/parts editor, which asks it once per member of a
+ * composed funnel or pie. They are one list: same eligibility rule, same search
+ * threshold, same empty sentences. Extracting it was the alternative to a
+ * second copy that would have answered the eligibility question its own way —
+ * and the third caller is the proof, because it asks for a DIFFERENT chart's
+ * eligibility (`slot`) and still gets this file's one answer rather than its own.
  */
 export function MetricList({
   options,
   chart,
+  slot,
+  exclude,
   busy,
   selected,
   onPick,
@@ -46,6 +51,32 @@ export function MetricList({
   options: CustomTileOption[];
   /** The tile's chart, which is staying — only the data under it moves. */
   chart: ChartId;
+  /**
+   * WHICH CHART THE PICKED METRIC HAS TO BE LEGAL FOR, when that is not the
+   * tile's own.
+   *
+   * A composed funnel or pie asks this list a different question from the
+   * repoint that built it. The tile's chart is `funnel`; what a STAGE has to be
+   * is "a metric that gives one number", because `compose.ts` reads a single
+   * figure per member and nothing else — so the parts picker passes `"number"`
+   * here. Filtering by the tile's own chart instead would ask the stages the
+   * question that belongs to the anchor, and offer only metrics that could
+   * themselves head a funnel.
+   *
+   * Defaults to `chart`, so every caller that predates composition keeps
+   * exactly the behaviour it had.
+   */
+  slot?: ChartId;
+  /**
+   * TILE KEYS ALREADY SPOKEN FOR — the anchor, and the parts already chosen.
+   *
+   * A metric cannot be its own stage twice: in a funnel that is a 100%
+   * conversion nobody measured, and in a pie it double-counts itself against
+   * the whole. The SCHEMA is what actually enforces it (`tile-config.ts`
+   * dedupes `parts`, because every export of a "use server" module is a public
+   * endpoint); this is the courtesy that stops the author picking a refusal.
+   */
+  exclude?: string[];
   busy: boolean;
   /** The tile's current metric, ticked so the list says where you already are. */
   selected?: string;
@@ -53,8 +84,25 @@ export function MetricList({
 }) {
   const [query, setQuery] = useState("");
 
-  const label = (CHARTS.find((c) => c.id === chart) ?? CHARTS[0]).label.toLowerCase();
-  const eligible = options.filter((o) => o.charts.includes(chart));
+  const need = slot ?? chart;
+  const label = (CHARTS.find((c) => c.id === need) ?? CHARTS[0]).label.toLowerCase();
+  /**
+   * DRAWABLE AND ELIGIBLE ARE TWO DIFFERENT LISTS, and only the first of them
+   * may choose the empty sentence.
+   *
+   * "Nothing here can be drawn as a single number yet" is a claim about the
+   * METRICS, and it is false the moment `exclude` is what emptied the list: a
+   * funnel on a board of three metrics can use all three while the cap is still
+   * seven, so the picker opens onto nothing and would tell the author their
+   * board holds nothing countable while pointing at three. Choosing the
+   * sentence from the pre-exclusion list keeps both readings true — a board
+   * with nothing countable still reads "Nothing here can be drawn…", and a
+   * board whose countable metrics are all in use reads "No metric matches
+   * that", which is exactly what has happened to the list.
+   */
+  const drawable = options.filter((o) => o.charts.includes(need));
+  const taken = new Set(exclude ?? []);
+  const eligible = taken.size > 0 ? drawable.filter((o) => !taken.has(o.key)) : drawable;
   const shown = query.trim()
     ? eligible.filter((o) => o.title.toLowerCase().includes(query.trim().toLowerCase()))
     : eligible;
@@ -75,7 +123,17 @@ export function MetricList({
       <div className="max-h-80 overflow-y-auto">
         {shown.length === 0 ? (
           <p className="px-1 py-6 text-center text-sm text-muted-foreground">
-            {eligible.length === 0 ? `Nothing here can be drawn as a ${label} yet.` : "No metric matches that."}
+            {/* THREE STATES, NOT TWO, because `exclude` invented a third.
+                "No metric matches that" asserts a search — and when exclusion
+                is what emptied the list (three metrics, all already stages, cap
+                still seven) the search box is not even rendered, so the reader
+                is told to fix a query they never typed and cannot see. The
+                first two sentences are the originals, verbatim. */}
+            {drawable.length === 0
+              ? `Nothing here can be drawn as a ${label} yet.`
+              : query.trim()
+                ? "No metric matches that."
+                : "Every metric here is already in this chart."}
           </p>
         ) : (
           shown.map((o) => (

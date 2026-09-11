@@ -1,6 +1,6 @@
 import { canvasCells, GRID_COLS, ROW_UNIT_PX, type GridBox } from "@/lib/board/grid";
 import { defaultSize, type ChartId } from "@/lib/board/charts";
-import { CustomTile, type CustomTileSource } from "@/components/custom-tile";
+import { CustomTile, type ComposedPart, type CustomTileSource } from "@/components/custom-tile";
 import { CanvasHarness, PanelSpecimen } from "./harness";
 import { BOARD_GRID, PageContainer, SectionHeading } from "@/components/ui/page";
 
@@ -77,6 +77,149 @@ const FUNNEL: CustomTileSource = {
     bottleneckIndex: 1,
   },
 };
+
+/**
+ * A COMPOSED TILE — a funnel or a pie assembled from OTHER published metrics.
+ *
+ * The anchor is this tile's own stored figure (stage 1, or the whole); the
+ * parts ride on the source, resolved server-side from tiles the board already
+ * holds. Both halves have to be set consistently or the specimen quietly
+ * misrepresents the thing: `config.parts` is what the panel stores and what the
+ * renderer counts, `source.parts` is what carries the numbers.
+ *
+ * These are the renderings this page exists for. A composed funnel cannot be
+ * reached by hand without publishing three flows and configuring a tile, and
+ * every refusal below needs a metric in a specific wrong state — which is
+ * exactly how the four states above this shipped unrendered once already.
+ */
+const part = (
+  label: string,
+  value: number | null,
+  over: Partial<ComposedPart> = {},
+): ComposedPart => ({
+  label,
+  timeField: "created_at",
+  format: { format: "number" },
+  countable: true,
+  additive: true,
+  hasPeriods: true,
+  byRange: { today: value },
+  ...over,
+});
+
+const composed = (
+  anchor: number,
+  parts: ComposedPart[],
+  over: Record<string, unknown> = {},
+): Extract<CustomTileSource, { kind: "flow" }> => ({
+  kind: "flow",
+  status: "fresh",
+  parts,
+  tile: {
+    name: "Total Leads",
+    format: "number",
+    precision: 0,
+    timeField: "created_at",
+    facts: { kind: "count", shape: "scalar", countable: true, additive: true },
+    byRange: { today: { value: anchor } },
+    ...over,
+  },
+});
+
+/** `config.parts` only has to be the right LENGTH — the numbers ride on the source. */
+const keys = (n: number) => ({ parts: Array.from({ length: n }, (_, i) => `flow:demo:p${i}`) });
+
+const COMPOSED_CHARTS: Array<{ label: string; chart: ChartId; source: CustomTileSource; config: Record<string, unknown>; h: number }> = [
+  {
+    label: "Composed funnel",
+    chart: "funnel",
+    source: composed(420, [part("Booked Leads", 252), part("On Calendar", 96), part("Showed", 41)]),
+    config: keys(3),
+    h: 7,
+  },
+  {
+    label: "Composed pipeline",
+    chart: "pipeline",
+    source: composed(420, [part("Booked Leads", 252), part("On Calendar", 96)]),
+    config: keys(2),
+    h: 7,
+  },
+  {
+    /* The stage that is BIGGER than the top — legal, disclosed, and its bar cut
+       rather than clipped flush. The failure the clamp exists for. */
+    label: "Composed funnel — a stage that widens",
+    chart: "funnel",
+    source: composed(100, [part("Booked Leads", 340), part("On Calendar", 60)]),
+    config: keys(2),
+    h: 7,
+  },
+  {
+    label: "Composed pie — parts and the residual",
+    chart: "pie",
+    source: composed(420, [part("Ads Leads", 180), part("Organic Leads", 200)]),
+    config: keys(2),
+    h: 6,
+  },
+  {
+    /* Parts that tile the whole exactly: no "Other" arc at all. */
+    label: "Composed pie — parts that tile exactly",
+    chart: "pie",
+    source: composed(400, [part("Ads Leads", 180), part("Organic Leads", 220)]),
+    config: keys(2),
+    h: 6,
+  },
+  {
+    label: "Unconfigured — the directive, not a dead end",
+    chart: "funnel",
+    source: composed(420, []),
+    config: {},
+    h: 6,
+  },
+  {
+    label: "Refused — a stage that is a duration",
+    chart: "funnel",
+    source: composed(420, [
+      part("Speed to Lead", 252, { countable: false, format: { format: "duration" } }),
+    ]),
+    config: keys(1),
+    h: 6,
+  },
+  {
+    label: "Refused — parts exceed the whole",
+    chart: "pie",
+    source: composed(100, [part("Ads Leads", 80), part("Organic Leads", 60)]),
+    config: keys(2),
+    h: 6,
+  },
+  {
+    label: "Refused — a part is an average",
+    chart: "pie",
+    source: composed(8400, [part("SMB", 2200, { additive: false }), part("Enterprise", 3000)]),
+    config: keys(2),
+    h: 6,
+  },
+  {
+    label: "Refused — a stage has no number",
+    chart: "funnel",
+    source: composed(420, [part("Booked Leads", null)]),
+    config: keys(1),
+    h: 6,
+  },
+  {
+    label: "Refused — not recomputed since this shipped",
+    chart: "funnel",
+    source: composed(420, [part("Booked Leads", 252, { countable: undefined, additive: undefined })]),
+    config: keys(1),
+    h: 6,
+  },
+  {
+    label: "Disclosed — stages dated differently",
+    chart: "funnel",
+    source: composed(420, [part("Booked Leads", 252, { timeField: "booked_at" })]),
+    config: keys(1),
+    h: 7,
+  },
+];
 
 const GALLERY_CHARTS = [
   { id: "number" as const, label: "Single number", source: rich(), config: { showDelta: true }, h: 4 },
@@ -236,6 +379,26 @@ export default function CanvasSpecimen() {
           ].map(({ chart, config }, i) => (
             <div key={`${chart}-${i}`} style={{ height: `${defaultSize(chart).h * ROW_UNIT_PX}px` }}>
               <CustomTile chart={chart} title={chart} rangeKey="today" source={null} config={config} cols={12} />
+            </div>
+          ))}
+        </div>
+
+        {/* ── COMPOSED CHARTS ─────────────────────────────────────────────
+            A funnel or a pie built from several published metrics rather than
+            from one metric's own shape. Half of these are REFUSALS, and they
+            are here for the same reason the states below are: each needs a
+            metric in a specific wrong condition — a duration stage, parts that
+            overrun their whole, a tile not yet restamped — and none of them can
+            be produced by clicking around. */}
+        <SectionHeading className="mt-12">Composed charts</SectionHeading>
+        <p className="mt-1 text-sm text-muted-foreground">
+          The tile&rsquo;s own metric is stage 1 of a funnel and the whole of a pie; the rest are other published
+          metrics. A composition that would mislead refuses and says which metric caused it.
+        </p>
+        <div className={`mt-4 ${BOARD_GRID}`} {...{ "data-composed": "" }}>
+          {COMPOSED_CHARTS.map(({ label, chart, source, config, h }) => (
+            <div key={label} style={{ height: `${h * ROW_UNIT_PX}px` }}>
+              <CustomTile chart={chart} title={label} rangeKey="today" source={source} config={config} cols={4} />
             </div>
           ))}
         </div>

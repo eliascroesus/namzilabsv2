@@ -445,7 +445,50 @@ export type TileFacts = {
   ordered?: boolean;
   /** Grouped + ordered only: the trailing catch-all bucket's name. */
   fallbackLabel?: string;
+  /**
+   * THE TWO FACTS `kind` CANNOT CARRY — and the reason composed charts need
+   * their own stamps rather than reusing it.
+   *
+   * `kind` is "count" for `sum`, `avg`, `median`, `min`, `max` AND
+   * `count_distinct` alike; `tileByRange`'s header says so in as many words,
+   * and it is why nothing is ever folded across buckets. That is fine for
+   * formatting, which is all `kind` was ever asked. It is useless for deciding
+   * whether a number may be a funnel stage or a slice of a pie:
+   *
+   *   COUNTABLE — "this is a tally of things", so it can be a funnel stage and
+   *   be printed by a renderer that hardcodes `{format:"number"}`. True for
+   *   `count`, `count_distinct` and `sum`. A duration or a ratio is not one: a
+   *   funnel of "Speed to Lead" would print 252 MINUTES beside 420 LEADS, with
+   *   a red drop-off pill over the pair.
+   *
+   *   ADDITIVE — "parts of this can be added up", so named slices may tile a
+   *   whole and the remainder is meaningful. True for `count` and `sum` ONLY.
+   *   `count_distinct` is countable but NOT additive: a subject appearing in
+   *   two slices is counted twice, so the parts overrun the whole by exactly
+   *   the overlap. And an average is neither — a pie whose whole is "Avg Deal
+   *   Size" ($8,400) and whose part is "Avg Deal Size, SMB" ($2,200) would
+   *   otherwise draw a confident 74% "Other" slice of an average.
+   *
+   * ABSENT MEANS "NOT YET RESTAMPED", NEVER "NO". Both are undefined on every
+   * tile written before this shipped, and composition refuses a member that
+   * carries neither rather than guessing — see `compose.ts`. They heal with no
+   * republish and no backfill, because `seedMetricFacts` runs at materialize
+   * for every metric every time.
+   */
+  countable?: boolean;
+  additive?: boolean;
 };
+
+/**
+ * The aggregations that tally THINGS, and the subset whose parts may be summed.
+ *
+ * Named here rather than inline at the one call site because `compose.ts`
+ * refuses on these two facts and its tests have to be able to enumerate what
+ * produced them. See `TileFacts.countable` for why the distinction is not
+ * pedantry.
+ */
+const COUNTABLE_OPS = new Set(["count", "count_distinct", "sum"]);
+const ADDITIVE_OPS = new Set(["count", "sum"]);
 
 /**
  * The config-derived half of a tile's facts — everything except `shape`, which
@@ -456,10 +499,39 @@ export type TileFacts = {
  */
 export function seedMetricFacts(cfg: Record<string, unknown>): Omit<TileFacts, "shape"> {
   if (cfg.resultKind === "duration") {
-    return { kind: "duration", unit: durationValueUnit(String(cfg.field ?? ""), String(cfg.durationUnit ?? "minutes")) };
+    /**
+     * A LENGTH OF TIME IS DEFINITIVELY NEITHER — so both flags are stamped
+     * `false` here rather than left absent. Absence means "not restamped yet"
+     * and earns a "press Refresh all" sentence; a duration has been asked and
+     * answered, and telling someone to refresh it would never make it true.
+     */
+    return {
+      kind: "duration",
+      unit: durationValueUnit(String(cfg.field ?? ""), String(cfg.durationUnit ?? "minutes")),
+      countable: false,
+      additive: false,
+    };
   }
   const facts: Omit<TileFacts, "shape"> =
     cfg.op === "percentage" || cfg.op === "percent_change" ? { kind: "ratio" } : { kind: "count" };
+  /**
+   * WHICH AGGREGATION PRODUCED THE NUMBER — the fact `kind` throws away.
+   *
+   * Read from the same bag, in the same place, for the same reason the two
+   * spellings below are tolerated: "Calculate" writes `op`, the metric step
+   * writes `aggregation`, and a spec authored by either must stamp the same
+   * facts. An unrecognised or absent op leaves BOTH flags undefined rather
+   * than false — "we do not know" and "no" get different answers downstream,
+   * and only one of them is worth telling a user to press Refresh over.
+   */
+  const agg = cfg.op ?? cfg.aggregation;
+  if (typeof agg === "string" && COUNTABLE_OPS.has(agg)) {
+    facts.countable = true;
+    facts.additive = ADDITIVE_OPS.has(agg);
+  } else if (typeof agg === "string") {
+    facts.countable = false;
+    facts.additive = false;
+  }
   // Calculate spells it `breakdownMode`; the standalone Group node spells it
   // `mode`. Only the categories path preserves the author's order.
   if ((cfg.breakdownMode ?? cfg.mode) === "categories") {

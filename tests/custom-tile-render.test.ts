@@ -168,12 +168,23 @@ describe("a chart it cannot draw says so, and never substitutes", () => {
     expect(html).not.toContain("change the chart");
   });
 
-  it("never draws a funnel from a flow metric", () => {
-    // `FunnelView` eats a classic FunnelResult and no flow shape produces one,
-    // so `shapeOfTile` never reports a funnel and the chart is simply illegal
-    // here — answered by the same sentence every other illegal chart gets,
-    // rather than by a dead branch of its own.
-    expect(render("funnel", flow(RICH))).toContain("change the chart");
+  it("never invents a funnel out of one flow metric, and now says how to build one", () => {
+    /**
+     * THIS SENTENCE CHANGED ON PURPOSE, and the behaviour underneath did not.
+     *
+     * A flow metric still cannot BE a funnel on its own — `FunnelView` eats a
+     * `FunnelResult` and one stored tile has no stages. What changed is that a
+     * funnel can now be COMPOSED from several published metrics, so the chart
+     * is no longer illegal here: it is unconfigured. "This metric can't be
+     * drawn this way — change the chart" was the wrong advice the moment the
+     * right move became "add a second stage", and the reader has no way to tell
+     * a dead end from an unfinished setup if both print the same refusal.
+     */
+    const html = render("funnel", flow(RICH));
+    expect(html).toMatch(/Add at least one more stage/);
+    expect(html, "an unconfigured funnel is not an illegal chart").not.toContain("change the chart");
+    // And nothing is drawn: no stage bars, no drop-off pill, no zeroes.
+    expect(html).not.toContain("from prev");
   });
 });
 

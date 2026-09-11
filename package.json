@@ -25,7 +25,8 @@
     "band": "node scripts/band-check.mjs",
     "shadows": "node scripts/shadow-check.mjs",
     "calendar": "node scripts/calendar-check.mjs",
-    "shot:modes": "node scripts/shot-modes.mjs"
+    "shot:modes": "node scripts/shot-modes.mjs",
+    "composed": "node scripts/composed-check.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.0.0",

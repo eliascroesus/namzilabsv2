@@ -182,6 +182,14 @@ describe("the config half, in isolation", () => {
     expect(seedMetricFacts({ resultKind: "duration", field: "properties.time_between.hours" })).toEqual({
       kind: "duration",
       unit: "hours",
+      /**
+       * A LENGTH OF TIME CAN BE NEITHER A FUNNEL STAGE NOR A PIE SLICE, and it
+       * is stamped `false` rather than left absent because absence means "not
+       * restamped yet" and earns the reader a "press Refresh all" they could
+       * follow forever without it becoming true. See `TileFacts.countable`.
+       */
+      countable: false,
+      additive: false,
     });
   });
 

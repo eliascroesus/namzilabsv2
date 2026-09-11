@@ -57,7 +57,7 @@ import {
   type AggregateResult,
   type FunnelResult,
 } from "@/lib/metrics/compute";
-import { resolveRange, windowLabel } from "@/lib/metrics/range";
+import { MATERIALIZED_RANGES, resolveRange, windowLabel } from "@/lib/metrics/range";
 import { withDerivedRange } from "@/lib/metrics/derive-range";
 import { CustomRangeCompute } from "./custom-range-compute";
 import { formatMetricValue } from "@/lib/format";
@@ -948,6 +948,64 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
      * jsonb rides intact: every `byRange` slice (a per-tile range override
      * reads whichever it asks for), the facts, and the presentation fields.
      */
+    /**
+     * THE SIBLING METRICS A COMPOSED FUNNEL OR PIE IS BUILT FROM.
+     *
+     * Resolved here because `flowByKey` is here — it was built a few lines up
+     * from `flowTiles`, which the page already loaded for every published
+     * metric whether or not anybody composed anything. So a stage costs a
+     * `Map.get` and no query at all, which is the entire reason composition was
+     * chosen over materializing a grouped metric into the tile's jsonb.
+     *
+     * THE PERMISSION GATE FALLS OUT FOR FREE, exactly as it does for
+     * `tileOptions`: `flowTiles` has already been filtered through
+     * `access.canSeeMetric`, so a part naming a metric this viewer's rank hides
+     * simply does not resolve and is dropped. `compose.ts` then refuses on the
+     * short array rather than drawing a funnel with a hole in the middle.
+     *
+     * EVERY MATERIALIZED RANGE, PLUS THE ACTIVE ONE. The six presets are what
+     * keep switching the board's period client-side; `rangeKey` is added beside
+     * them because a DRAWN calendar window is not one of the six — it is
+     * assembled by `withDerivedRange` under a key of its own, and a part
+     * carrying only the presets would answer `undefined` there and blank the
+     * whole tile while every neighbouring tile answered normally. `flowTiles`
+     * has already been through that derivation at this point, so reading the
+     * active key here gets the assembled slot rather than a miss.
+     */
+    const parts = (parseTileConfig(row.config).parts ?? []).flatMap((key) => {
+      const part = flowByKey.get(key);
+      if (!part) return [];
+      const t = (part.tile ?? {}) as {
+        name?: string;
+        timeField?: string | null;
+        byRange?: Record<string, unknown>;
+        facts?: { countable?: boolean; additive?: boolean };
+        format?: string;
+        currency?: string;
+        precision?: number;
+        unit?: string;
+        durationDisplay?: string;
+      };
+      const keys = [...new Set([...MATERIALIZED_RANGES, rangeKey])];
+      return [
+        {
+          label: t.name ?? "Untitled metric",
+          timeField: t.timeField ?? null,
+          format: {
+            format: t.format,
+            currency: t.currency,
+            precision: t.precision,
+            unit: t.unit,
+            durationDisplay: t.durationDisplay,
+          },
+          countable: t.facts?.countable,
+          additive: t.facts?.additive,
+          hasPeriods: t.byRange != null,
+          byRange: Object.fromEntries(keys.map((k) => [k, tileValueForRange(part.tile, k)])),
+        },
+      ];
+    });
+
     const source: CustomTileSource | null = flow
       ? {
           kind: "flow",
@@ -958,6 +1016,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           importing: flow.importing,
           error: flow.error,
           flowId: flow.flowId,
+          parts: parts.length > 0 ? parts : undefined,
         }
       : classic
         ? {

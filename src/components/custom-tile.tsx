@@ -25,7 +25,8 @@ import {
   type BlockId,
   type ChartId,
 } from "@/lib/board/charts";
-import { accentOf, honoured, type TileConfig } from "@/lib/board/tile-config";
+import { accentOf, composes, honoured, PARTS_SLOT, type TileConfig } from "@/lib/board/tile-config";
+import { composeFunnel, composePie, isRefusal, type ComposeMember, type MemberUnits } from "@/lib/board/compose";
 import { RANGE_OPTIONS, resolveRange } from "@/lib/metrics/range";
 import { bucketLabel, type BucketUnit } from "@/lib/board/scale";
 import type { AggregateResult, FunnelResult } from "@/lib/metrics/compute";
@@ -61,7 +62,9 @@ type StoredTile = {
   durationDisplay?: string;
   target?: number | null;
   timeUnit?: string;
-  facts?: { kind?: string; shape?: string };
+  /** Which date field windows this metric — disclosed when members disagree. */
+  timeField?: string | null;
+  facts?: { kind?: string; shape?: string; countable?: boolean; additive?: boolean };
   value?: number;
   series?: SeriesPoint[];
   groups?: GroupRow[];
@@ -79,6 +82,44 @@ type StoredTile = {
   >;
 };
 
+/**
+ * ONE SIBLING METRIC THIS TILE IS COMPOSED FROM — resolved on the server, where
+ * the board's map of every published tile already lives, and carried here as
+ * the few facts the rules actually ask about.
+ *
+ * DELIBERATELY NOT THE WHOLE TILE. A tile carries its series, its groups and
+ * (off this path) its byDay, and none of that is ever drawn for a part: a part
+ * contributes exactly one number. Six-or-seven numbers and a label is ~130B on
+ * the wire against a tile's several KB.
+ *
+ * ALL SIX MATERIALIZED RANGES, NOT THE ACTIVE ONE — because that is what keeps
+ * switching the board's period a client-side operation. Resolving a part to a
+ * single number on the server would have put a round trip behind every press of
+ * a range pill, on a board whose whole performance story is that it does not.
+ * The active key is added alongside them when it is a DRAWN window, which is
+ * not one of the six.
+ *
+ * ITS OWN FORMAT BAG, and that is the currency fix. The renderer builds one bag
+ * from the ANCHOR and hands it to the mark, so a pie whose whole is "Revenue"
+ * (USD) and whose part is "Deals Closed" would otherwise print that slice as
+ * $37 — in the legend, the tooltip and the screen-reader line alike.
+ */
+export type ComposedPart = {
+  label: string;
+  timeField?: string | null;
+  /**
+   * Loose on purpose — this is a stored jsonb's own fields, and nothing
+   * FORMATS a part. It exists only so `compose.ts` can refuse a composition
+   * whose members are measured in different things.
+   */
+  format: MemberUnits;
+  countable?: boolean;
+  additive?: boolean;
+  /** False for a row written before `byRange` existed — see `compose.ts`. */
+  hasPeriods: boolean;
+  byRange: Record<string, number | null>;
+};
+
 export type CustomTileSource =
   | {
       kind: "flow";
@@ -89,6 +130,14 @@ export type CustomTileSource =
       importing?: ImportCoverage;
       error?: string | null;
       flowId?: string;
+      /**
+       * The metrics named by `config.parts`, in the author's stored order —
+       * absent when this tile composes nothing. A key that no longer resolves
+       * (unpublished, deleted, or hidden by the viewer's rank) is simply not in
+       * this list, and `compose.ts` refuses on the resulting short array rather
+       * than drawing a funnel with a stage quietly missing from the middle.
+       */
+      parts?: ComposedPart[];
     }
   | { kind: "classic"; result: AggregateResult | FunnelResult | null; target: number | null };
 
@@ -237,6 +286,19 @@ export function CustomTile({
   let legal: boolean;
   let bag: ChartFormat;
   let target: number | null;
+  /**
+   * WHY A COMPOSED CHART WOULD BE A LIE IF IT DREW — one sentence, decided by
+   * pure functions in `compose.ts` rather than by a branch down in the ladder,
+   * so every rule is a return value a test can assert red before it is green.
+   */
+  let composeRefusal: string | undefined;
+  /**
+   * WHAT THE DRAWING CANNOT SAY FOR ITSELF. Composition has two failure modes
+   * that are undetectable from anything stored — a funnel's stages are not a
+   * cohort, and a pie's parts are assumed not to overlap — so they are never
+   * refused and never optional. They render under the mark, every time.
+   */
+  let composeNotes: string[] = [];
 
   if (source.kind === "flow") {
     const slot = stored.byRange?.[rangeKey];
@@ -268,6 +330,74 @@ export function CustomTile({
     legal = chartsFor(shapeOfTile(stored)).includes(chart);
     bag = { ...stored, precision: config.precision ?? stored.precision };
     target = config.target !== undefined ? config.target : (stored.target ?? null);
+
+    /**
+     * A FUNNEL OR A PIE ASSEMBLED FROM SIBLING METRICS — the anchor first.
+     *
+     * IT WRITES INTO `w`, WHICH IS THE WHOLE INTEGRATION. A funnel becomes
+     * `w.funnel` and a pie becomes `w.groups`, so `PieChart`, `pieFooter`,
+     * `BarsHorizontal`, `tableRows` and every existing empty-reason rung below
+     * keep working with no knowledge that anything was composed — and a
+     * composed pie can be drawn as a category bar or listed as a table for
+     * free. Handing the mark a parallel `composed` prop instead would have left
+     * the pie unreachable behind the `!hasGroups` rung that fires further down.
+     *
+     * The anchor's own value can be `undefined` when the slot is missing;
+     * `null` is what the rules read as "cannot answer", and an unavailable slot
+     * is exactly that rather than a zero.
+     */
+    /**
+     * WHEN COMPOSITION TAKES OVER THE DRAWING — and the two charts answer
+     * differently, because one of them has another way to exist.
+     *
+     * A FUNNEL OR PIPELINE ON A FLOW TILE IS ALWAYS COMPOSED. No stored flow
+     * shape produces a `FunnelResult`, so there is no second source for it to
+     * compete with — which means an UNCONFIGURED one must reach `composeFunnel`
+     * too, and come back with "Add at least one more stage in the tile's
+     * settings". Gated on parts being present, it would instead fall through to
+     * "Only a funnel metric can be drawn this way": a dead end printed over
+     * what is really an unfinished setup, and the exact sentence this feature
+     * exists to stop showing somebody who just chose this chart.
+     *
+     * A PIE HAS A SECOND DOOR — a tile carrying its own `groups` draws them
+     * directly — so composition only takes over when the author has actually
+     * named parts. That is the precedence rule stated once, here: `config.parts`
+     * is a deliberate act and wins over the metric's own shape; absent it, the
+     * grouped pie behaves exactly as it always has.
+     */
+    if (composes(chart) && ((config.parts?.length ?? 0) > 0 || chart === "funnel" || chart === "pipeline")) {
+      const anchor: ComposeMember = {
+        label: stored.name ?? title,
+        value: w.unavailable == null && typeof w.value === "number" ? w.value : null,
+        countable: stored.facts?.countable,
+        additive: stored.facts?.additive,
+        hasPeriods: stored.byRange != null,
+        timeField: stored.timeField,
+        format: bag,
+      };
+      const members: ComposeMember[] = [
+        anchor,
+        ...(source.parts ?? []).map((p) => ({
+          label: p.label,
+          value: p.byRange[rangeKey] ?? null,
+          countable: p.countable,
+          additive: p.additive,
+          hasPeriods: p.hasPeriods,
+          timeField: p.timeField,
+          format: p.format,
+        })),
+      ];
+      const slot = PARTS_SLOT[chart];
+      const out = chart === "pie" ? composePie(members, slot) : composeFunnel(members, slot);
+      if (isRefusal(out)) composeRefusal = out.refusal;
+      else if ("result" in out) {
+        w.funnel = out.result;
+        composeNotes = out.notes;
+      } else {
+        w.groups = out.groups;
+        composeNotes = out.notes;
+      }
+    }
   } else {
     const r = source.result;
     const funnel = r && "stages" in r ? r : undefined;
@@ -352,7 +482,24 @@ export function CustomTile({
    */
   const emptyReason = !legal
     ? "This metric can’t be drawn this way — change the chart."
-    : (chart === "line" || chart === "area" || chart === "bar") && !hasSeries
+    : /**
+       * THE COMPOSED CHART'S OWN REFUSAL OUTRANKS EVERY RUNG BELOW, and the
+       * order is load-bearing rather than tidy.
+       *
+       * A composed chart that refuses has NO `w.groups` and NO `w.funnel` — so
+       * left further down, it would be overtaken by "No breakdown in this
+       * period" (the pie's `!hasGroups` rung) or by "Only a funnel metric can
+       * be drawn this way", which is the exact sentence this whole feature
+       * exists to stop printing on a tile somebody has just finished
+       * configuring. Both would describe the metric when the truth is about the
+       * configuration.
+       *
+       * It sits BELOW `!legal` deliberately: whether this chart may draw this
+       * metric at all is a bigger fact than whether its parts are in order.
+       */
+      composeRefusal
+      ? composeRefusal
+      : (chart === "line" || chart === "area" || chart === "bar") && !hasSeries
       ? "No trend in this period."
       : /**
          * ONE POINT IS NOT A TREND: a line through it drew a lone dot on an
@@ -422,10 +569,34 @@ export function CustomTile({
     ? w.series!.map((p) => ({ label: bucketLabel(p.bucket, unit), value: fmt(p.value) }))
     : (w.groups ?? []).map((g) => ({ label: g.label, value: fmt(g.value) }));
 
+  /** This tile is drawing a composition, and it worked. */
+  const composed = composeNotes.length > 0;
+
+  /**
+   * A COMPOSED PIE ROLLS UP NOTHING, and `limit` is how that is enforced.
+   *
+   * `pieSlices` caps at `limit` and folds the overflow into a slice it names
+   * "Other" — which is exactly the label composition already used for its
+   * arithmetic residual. Two different remainders under one name, both painted
+   * the palette's reserved grey, is the one outcome the 5-part cap exists to
+   * make impossible; handing it the actual row count closes the other half.
+   *
+   * The panel additionally hides the `limit` control on a composed pie, because
+   * a setting whose value is overridden here would be a control that lies.
+   */
+  const pieLimit = composed ? (w.groups?.length ?? 6) : (config.limit ?? 6);
+
   const footer =
     chart === "category"
       ? groupsFooter(w.groups ?? [], config.limit)
-      : chart === "pie"
+      : /**
+         * A COMPOSED PIE SPEAKS THROUGH ITS NOTES INSTEAD. `pieFooter` reports
+         * a top-N roll-up and a count of non-positive rows; composition has no
+         * roll-up, refuses on a negative part, and already names a zero one.
+         * Printing both would say the same thing twice and contradict itself
+         * about "Other".
+         */
+        chart === "pie" && !composed
         ? pieFooter(w.groups ?? [], config.limit ?? 6)
         : null;
 
@@ -464,6 +635,18 @@ export function CustomTile({
       footer={
         <>
           {footer && <ChartFooter>{footer}</ChartFooter>}
+          {/* THE DISCLOSURES A COMPOSED CHART OWES ITS READER. Never behind a
+              setting and never summarised: each sentence names a specific thing
+              the drawing cannot express — that the stages are not a cohort,
+              that the parts are assumed not to overlap, that two metrics are
+              dated by different fields, that a stage is wider than the top and
+              its bar is capped. Muted rather than warn-coloured, because none
+              of them means the number is wrong. */}
+          {composeNotes.map((note) => (
+            <p key={note} className="mt-2 text-xs text-muted-foreground">
+              {note}
+            </p>
+          ))}
           {!w.unavailable && undated > 0 && (
             <p className="mt-2 text-xs text-warn-ink">
               {/* ONE STRING, NO JSX TEXT NODES AT ALL — and that is not
@@ -519,17 +702,17 @@ export function CustomTile({
             groups={w.groups!}
             format={bag}
             donut={config.donut}
-            limit={config.limit ?? 6}
+            limit={pieLimit}
             legend={config.legend ?? (cols >= 5 ? "right" : "bottom")}
           />
         ) : chart === "progress" ? (
           <GoalBar value={w.value ?? 0} target={target!} format={bag} />
         ) : chart === "funnel" ? (
           <div className="min-h-0 flex-1 overflow-y-auto quiet-scroll">
-            <FunnelView result={w.funnel!} />
+            <FunnelView result={w.funnel!} composed={composed} />
           </div>
         ) : chart === "pipeline" ? (
-          <Pipeline result={w.funnel!} accent={accent} />
+          <Pipeline result={w.funnel!} accent={accent} composed={composed} cols={cols} />
         ) : chart === "table" ? (
           <ChartTable head={[hasSeries ? "Period" : "Group", "Value"]} rows={tableRows} />
         ) : null}

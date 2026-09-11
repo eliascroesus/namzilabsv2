@@ -412,8 +412,37 @@ export function CustomBoard({
        * new metric's slices have to be fetched — so it refreshes. Chart and
        * title are presentation over data already in hand: they render now,
        * from the overlay, and never wait on a round trip.
+       *
+       * `parts` JOINED IT, AND IT IS NOT PRESENTATION EITHER. A composed funnel
+       * or pie names sibling tiles in `config.parts`, and the NUMBERS behind
+       * those names are resolved on the server, where `flowByKey` lives — the
+       * client holds the keys and nothing else. The overlay merges `config`
+       * alone, so an optimistic parts edit puts new labels on top of the old
+       * `source.parts`, and the two failures that follow are of different
+       * kinds:
+       *
+       *   ADDING a stage renders a member the server has not resolved yet, so
+       *   the tile refuses — "a stage has no number in this period" — for a
+       *   metric that has one. Wrong, but it says so.
+       *
+       *   REORDERING keeps every number and moves only the labels, so stage 2's
+       *   figure appears under stage 3's name with a drop-off pill computed
+       *   between them. That is a confident, wrong drawing, and this whole
+       *   feature exists to not produce one.
+       *
+       * So a patch that touches `parts` takes the same road as a repoint: write,
+       * refresh, and let the labels and the figures land together. The panel's
+       * own chips stay responsive through a local draft — see `PartsGroup`.
+       *
+       * THE OVERLAY COULD NOT CARRY IT ANYWAY, which is the second reason.
+       * Entries retire by comparing each key with `bag[k] === v`, and an array
+       * never equals the freshly parsed array the prop brings back — so a
+       * `parts` overlay would be immortal, masking every later edit from
+       * another tab for as long as the board stayed mounted.
        */
-      if (patch.tileKey !== undefined) {
+      const touchesParts =
+        patch.config?.parts !== undefined || (patch.clear ?? []).includes("parts");
+      if (patch.tileKey !== undefined || touchesParts) {
         settle(act.editTile(id, patch), () => {});
         router.refresh();
         return;

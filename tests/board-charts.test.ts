@@ -32,17 +32,37 @@ import { GRID_COLS } from "@/lib/board/grid";
 const tileWith = (over: Record<string, unknown>) => ({ format: "number", precision: 0, ...over });
 
 describe("what a stored flow tile can be drawn as", () => {
+  /**
+   * A STORED TILE ALSO OFFERS THE COMPOSED CHARTS, and every exact list in this
+   * describe carries them now.
+   *
+   * A funnel, a pipeline and a pie can be built from SEVERAL published metrics
+   * — this tile as stage 1 or as the whole, its siblings named in
+   * `config.parts` — so "can this metric be drawn as a funnel" stopped being a
+   * question about this metric's own shape. What the tile cannot do is DRAW one
+   * before its parts are chosen, and that is a render state with its own
+   * sentence ("Add at least one more stage in the tile's settings"), exactly as
+   * an empty period is. See `compose.ts`.
+   *
+   * The lists stay exact rather than relaxing to `toContain`: the whole point
+   * of this file is that the offered set is pinned, and a widening rule is
+   * precisely when a loosened assertion would stop noticing.
+   */
   it("offers a trend only when there is a trend", () => {
     const series = shapeOfTile(tileWith({ value: 12, series: [{ bucket: "2026-08", value: 12 }] }));
-    expect(chartsFor(series)).toEqual(["number", "line", "area", "bar", "table"]);
+    expect(chartsFor(series)).toEqual(["number", "line", "area", "bar", "pie", "funnel", "pipeline", "table"]);
     // Sabotage: return "bar" unconditionally and every scalar metric offers a
     // chart that renders an empty box under a real number.
-    expect(chartsFor(shapeOfTile(tileWith({ value: 12 })))).toEqual(["number"]);
+    expect(chartsFor(shapeOfTile(tileWith({ value: 12 })))).toEqual(["number", "pie", "funnel", "pipeline"]);
   });
 
   it("offers a breakdown only when there are groups", () => {
     const grouped = shapeOfTile(tileWith({ value: 9, groups: [{ label: "Afeef", value: 9 }] }));
-    expect(chartsFor(grouped)).toEqual(["number", "category", "pie", "table"]);
+    expect(chartsFor(grouped)).toEqual(["number", "category", "pie", "funnel", "pipeline", "table"]);
+    // Arriving through both doors must not offer it twice — the Set in
+    // `chartsFor` is what makes the composed rule safe to add beside the
+    // grouped one.
+    expect(chartsFor(grouped).filter((id) => id === "pie")).toHaveLength(1);
   });
 
   it("offers progress only when a target was set", () => {
@@ -54,10 +74,29 @@ describe("what a stored flow tile can be drawn as", () => {
 
   it("offers both when a metric has both a trend and a breakdown", () => {
     const both = shapeOfTile(tileWith({ value: 5, series: [{ bucket: "x", value: 5 }], groups: [{ label: "a", value: 5 }] }));
-    expect(chartsFor(both)).toEqual(["number", "line", "area", "bar", "category", "pie", "table"]);
+    expect(chartsFor(both)).toEqual([
+      "number",
+      "line",
+      "area",
+      "bar",
+      "category",
+      "pie",
+      "funnel",
+      "pipeline",
+      "table",
+    ]);
   });
 
   it("offers nothing at all for a tile that has never answered", () => {
+    /**
+     * THE RULE THAT KEPT `composable` HONEST. It was written as an
+     * unconditional `true` — every stored tile can anchor a composition — and
+     * this assertion is what caught it: a tile with no value in any slot is an
+     * unpublished or freshly created metric, and it would have started offering
+     * a funnel, a pipeline and a pie over nothing at all. `composable` tracks
+     * `scalar` because a metric that cannot answer with a number cannot be a
+     * stage or a whole either.
+     */
     expect(chartsFor(shapeOfTile({}))).toEqual([]);
     expect(chartsFor(NO_SHAPE)).toEqual([]);
   });

@@ -1198,6 +1198,46 @@ export async function addCustomTileAction(
      */
     config = { ...config, color: randomTileColour() };
 
+    /**
+     * THE SAME GATE, ON THE BAG THIS FUNCTION ASSEMBLED RATHER THAN ON ONE A
+     * CALLER SENT.
+     *
+     * `parts` holds sibling tile keys, so a config is now a place tile keys
+     * live, and every write of one owes the visibility question
+     * `tileKeysAllowed` has asked of the `tile_key` column since C20. Nothing a
+     * caller sends can reach this bag today — the arguments are a view, a key
+     * and a chart, and everything in `config` was assembled above out of the
+     * flow's own published spec and `randomTileColour`. The check is here
+     * regardless, because where it belongs is the WRITE and not the assembler:
+     * widening that seed, or giving this action the `config` argument its
+     * sibling already takes, must not be able to quietly reopen the hole
+     * `setCustomTileAction` closes further down. An array with nothing in it
+     * costs a loop that does not run.
+     *
+     * FREE ON BOTH COUNTS, the same two as at that site. `arranger` already
+     * handed back the `access` handle, so no rank is resolved a second time;
+     * and `tileKeysAllowed` answers a `flow:` key from `access.canSeeMetric`
+     * alone, issuing its one query only for `metric:` keys — the `parts`
+     * schema admits `flow:` keys exclusively, which is precisely why it is
+     * written that way, so this never touches the database.
+     *
+     * `parseTileConfig` rather than a cast: the bag is typed
+     * `Record<string, unknown>` here because that is what a `BoardTileRow`
+     * carries, and reading `parts` back out through the one parser is the same
+     * idiom the board's own read path uses on a stored bag.
+     *
+     * IT IS A TRIPWIRE, NOT A GATE — say so plainly, because this repo's
+     * standing lesson is that a check nobody can make fail reads exactly like
+     * one that works. TODAY it is a no-op: no path puts `parts` into this bag,
+     * so the array is always empty and `tileKeysAllowed` returns before its
+     * loop runs. The live gate is in `setCustomTileAction`, which takes a
+     * caller's `config` directly. This one exists so that widening the seed
+     * above, or giving this action the `config` argument its sibling already
+     * has, cannot reopen the hole in silence.
+     */
+    const partsError = await tileKeysAllowed(db, ctx.orgId, access, parseTileConfig(config).parts ?? []);
+    if (partsError) return fail(partsError);
+
     const row: BoardTileRow = {
       id: crypto.randomUUID(),
       tileKey: key.data,
@@ -1256,7 +1296,15 @@ export async function deleteCustomTileAction(id: string): Promise<Result> {
  */
 export async function duplicateCustomTileAction(id: string): Promise<Result<{ tile: BoardTileRow }>> {
   const ctx = await requireOrg();
-  if (await blocked(ctx)) return fail(RANK_BLOCKS);
+  /**
+   * THE HANDLE RATHER THAN THE BOOLEAN, because this action now answers a
+   * second, narrower question at its other end: a duplicated composition can
+   * name flows this caller may not see, and the response must not echo them
+   * back. See the return statement. `arranger` resolves the rank once and both
+   * questions read it.
+   */
+  const access = await arranger(ctx);
+  if (!access) return fail(RANK_BLOCKS);
   if (!idSchema.safeParse(id).success) return fail("Unknown chart.");
 
   try {
@@ -1342,7 +1390,42 @@ export async function duplicateCustomTileAction(id: string): Promise<Result<{ ti
       `);
     }
 
-    return { ok: true, tile: { ...copy, x: placed.x, y: placed.y, w: placed.w, h: placed.h } };
+    /**
+     * THE COPY IS STORED WHOLE; WHAT COMES BACK IS NOT.
+     *
+     * Duplicating is a layout act — the author's composition has to survive it
+     * intact, so every stored `parts` key is copied verbatim above. But this
+     * return value crosses the wire to whoever pressed the button, and a
+     * composed tile can legitimately name a metric THIS caller's rank hides:
+     * `page.tsx` decides whether a row renders from its `tileKey` alone, and
+     * the parts resolver silently drops any key that does not resolve for the
+     * viewer. So an admin's funnel renders for a member with its hidden stage
+     * simply missing — correct — and then duplicating it would have handed that
+     * member the hidden flow's key in the response payload.
+     *
+     * `tileKeysAllowed` is the wrong tool here: it REFUSES, and refusing would
+     * break a legitimate duplicate over a stage the duplicator was never meant
+     * to see in the first place. The right answer is the one the render path
+     * already gives — show what you may see, say nothing about the rest — so
+     * the keys are filtered out of the ECHO while staying in the row.
+     */
+    /* Through the parser rather than off the row: `BoardTileRow.config` is a
+       bare `Record<string, unknown>` bag, and `parts` has to arrive typed to be
+       filtered. Same idiom as the guards above. */
+    const visibleParts = parseTileConfig(copy.config).parts?.filter((k) =>
+      access.canSeeMetric(visibilityKeyOf(k) ?? k),
+    );
+    return {
+      ok: true,
+      tile: {
+        ...copy,
+        config: { ...copy.config, parts: visibleParts?.length ? visibleParts : undefined },
+        x: placed.x,
+        y: placed.y,
+        w: placed.w,
+        h: placed.h,
+      },
+    };
   } catch (e) {
     return oops(e);
   }
@@ -1456,11 +1539,55 @@ export async function setCustomTileAction(
      */
     const raw = patch.config;
     if (typeof raw !== "object" || raw == null || Array.isArray(raw)) return fail("That setting won't work.");
-    const parsed = parseTileConfig(raw) as Record<string, unknown>;
+    const parsed = parseTileConfig(raw);
     const sent = Object.keys(raw as Record<string, unknown>);
     const kept = new Set(Object.keys(parsed));
     const rejected = sent.filter((k) => !kept.has(k));
     if (rejected.length) return fail(`That setting won't work: ${rejected.join(", ")}.`);
+
+    /**
+     * THE KEYS HIDING INSIDE THE BAG GET THE GATE THE TILE KEY ALREADY HAD.
+     *
+     * `parts` stores sibling tile keys — a funnel's stages 2..N, a pie's named
+     * slices — so from this commit a config write IS a write of tile keys, and
+     * `tileKeysAllowed` had only ever been asked about `patch.tileKey`. Landing
+     * `parts` without this call would reopen inside `config` the exact hole C20
+     * closed on the column: a rank scoped to a handful of metrics composing a
+     * funnel out of flows it is not allowed to see, readable the moment a
+     * teammate with fuller access opened the same board. That the settings
+     * panel only offers visible metrics is not a control — every export of a
+     * "use server" module is a public endpoint, and this one is reachable with
+     * a `config` of the caller's choosing and no panel anywhere near it.
+     *
+     * IT COSTS NOTHING, AND BOTH HALVES OF THAT ARE ON PURPOSE. `access` is
+     * already in hand: `arranger` hands back the resolved handle rather than a
+     * boolean precisely so a write that NAMES a key can ask this second,
+     * narrower question without resolving the rank twice. And `tileKeysAllowed`
+     * returns on `access.canSeeMetric` alone for a `flow:` key, issuing its one
+     * database query only for `metric:` keys — the `parts` schema admits
+     * `flow:` keys and nothing else, so this check never reaches the database
+     * at all. That restriction is not a taste in the schema, it is what keeps a
+     * permission check off the write path: a bag that could carry a metric id
+     * would have put a round trip on every board write.
+     *
+     * PARSED, NOT RAW — what is checked is what is about to be stored. The
+     * shrinkage refusal above has already rejected anything the parser would
+     * have dropped, so there is no third state in which a key reaches the
+     * update without passing here. `parseTileConfig`'s result is no longer
+     * widened to `Record<string, unknown>` for exactly that reason: `parts` has
+     * to arrive typed to be checked.
+     *
+     * WRAPPED LIKE THE `tileKey` SITE ABOVE, for the reason the `clear` shape
+     * check below states out loud: a throw escaping here would REJECT the
+     * action rather than return a refusal the client knows how to show.
+     */
+    try {
+      const partsError = await tileKeysAllowed(db, ctx.orgId, access, parsed.parts ?? []);
+      if (partsError) return fail(partsError);
+    } catch (e) {
+      return oops(e);
+    }
+
     Object.assign(set, parsed);
   }
 

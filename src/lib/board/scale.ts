@@ -369,11 +369,81 @@ export function pieSlices(
 }
 
 /**
- * Funnel stage widths as a share of the FIRST stage, floored at 4% so a
- * decimated stage stays visible enough to hover. The first stage is 100% by
- * definition; an empty first stage makes every width the floor.
+ * Funnel stage widths as a share of the FIRST stage — floored at 4% so a
+ * decimated stage stays visible enough to hover, and capped at 100% so an
+ * oversized one cannot be drawn as though it fitted.
+ *
+ * THE CEILING IS THE HALF THAT WAS LYING. A funnel LOOKS like a claim that each
+ * stage is a subset of the one above it, and neither funnel on this board can
+ * enforce that. `computeFunnel` issues one independent `count(distinct
+ * subject)` per stage with no sequencing between them, and `composeFunnel`
+ * assembles its stages out of separately published metrics counted over the
+ * same window. So "Booked Leads" genuinely can exceed "Total Leads" — a booking
+ * this week against a lead created last month is not a data error, it is the
+ * arithmetic being honest about what it measured.
+ *
+ * Uncapped, such a stage asked for a width of 340% inside a track that clips,
+ * and drew a bar reaching exactly the right-hand edge: pixel-identical to a
+ * stage sitting at 100%. That is the worst class of chart bug — the reader is
+ * told "the same size as stage 1", which is false, and nothing about the
+ * drawing looks wrong. A bar allowed to overflow would at least have announced
+ * itself.
+ *
+ * Clamping only stops the geometry lying; it cannot make it tell the truth,
+ * because no width above the track's own means anything. So `widensAt` names
+ * the stages the clamp touched, both renderers cut those bars' edges visibly,
+ * and the tile prints a sentence naming them.
+ *
+ * The first stage is 100% by definition; an empty first stage makes every width
+ * the floor.
  */
 export function stageWidths(counts: number[]): number[] {
   const first = counts[0] ?? 0;
-  return counts.map((c) => (first > 0 ? Math.max(4, round10((c / first) * 100)) : 4));
+  return counts.map((c) => (first > 0 ? Math.min(100, Math.max(4, round10((c / first) * 100))) : 4));
+}
+
+/**
+ * A RATIO ABOVE ONE SPELLED AS A MULTIPLE — `3.4` becomes "3.4x" — and `null`
+ * for anything at or below one, which really is a share and belongs in the
+ * caller's own percentage.
+ *
+ * Only a COMPOSED funnel reaches this. Its stages are independent metrics over
+ * one window rather than a cohort walking down a sequence, so
+ * `conversionFromPrev` is not a conversion at all: when stage 3 is bigger than
+ * stage 2 the honest reading is "three and a bit times as many", and the slot
+ * printed "340% from prev" — a number that is not a share, inside a phrase that
+ * promises one. Percentages past 100 read as a typo even where they are right.
+ *
+ * PRECISION IS PICKED SO THE FIGURE CANNOT READ AS "LEVEL". One decimal covers
+ * the range anybody actually sees, and whole numbers past ten because the tenth
+ * of a 14x is noise. But a stage two per cent larger rounds to "1.0x", which
+ * says the two stages are equal — the very confusion the capped bar already
+ * risks — so a ratio that close to one keeps a second decimal instead.
+ *
+ * It lives here rather than in either renderer because BOTH print it, and the
+ * rule this module exists to enforce is that each number has exactly one
+ * answer: two copies of this drift the first time one of them is adjusted.
+ */
+export function multipleLabel(ratio: number): string | null {
+  if (!Number.isFinite(ratio) || ratio <= 1) return null;
+  if (ratio >= 10) return `${Math.round(ratio)}x`;
+  const tenths = Math.round(ratio * 10) / 10;
+  if (tenths !== 1) return `${tenths}x`;
+  /**
+   * ROUNDED AWAY FROM ONE, NEVER TO NEAREST — the whole reason this branch
+   * exists, and it did not work as first written.
+   *
+   * A second decimal taken to NEAREST still lands on 1 for everything below
+   * 1.005, so 1000 -> 1003 printed "1x": the figure spelling "no change" on a
+   * stage that is genuinely larger, beside a bar carrying the capped cut edge
+   * and under a footer naming that stage as wider. Three parts of one tile
+   * contradicting each other, and the only one a reader tends to believe is
+   * the number.
+   *
+   * Ceiling to the hundredth overstates by at most 0.01x and cannot spell
+   * equality, which is the correct trade: this figure's whole job is to say
+   * "bigger than the one above", and an exact-looking "1x" fails at that job
+   * in the one direction that matters.
+   */
+  return `${Math.ceil(ratio * 100) / 100}x`;
 }

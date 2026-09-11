@@ -10,6 +10,7 @@ import {
   chartsFor,
   defaultSize,
   minSize,
+  NO_SHAPE,
   type MetricShape,
 } from "@/lib/board/charts";
 import { fieldsFor, parseTileConfig } from "@/lib/board/tile-config";
@@ -37,15 +38,22 @@ const { CustomTile } = await import("@/components/custom-tile");
  *     board reads as a deleted metric.
  */
 
+/**
+ * EVERY SHAPE, DERIVED FROM THE TYPE RATHER THAN COUNTED BY HAND.
+ *
+ * This was a literal `32` over five hardcoded flags, and that is exactly the
+ * shape of check this repo keeps getting bitten by: adding a sixth capability
+ * to `MetricShape` doubles the space to 64, and a loop over 32 would have gone
+ * on passing while covering half of it — silently, with no failure to
+ * investigate. `NO_SHAPE` is the one value that must name every key, so the
+ * flag list and the bound both come from it.
+ */
+const SHAPE_KEYS = Object.keys(NO_SHAPE) as Array<keyof MetricShape>;
 const EVERY_SHAPE: MetricShape[] = [];
-for (let i = 0; i < 32; i++) {
-  EVERY_SHAPE.push({
-    scalar: !!(i & 1),
-    series: !!(i & 2),
-    groups: !!(i & 4),
-    target: !!(i & 8),
-    funnel: !!(i & 16),
-  });
+for (let i = 0; i < 1 << SHAPE_KEYS.length; i++) {
+  EVERY_SHAPE.push(
+    Object.fromEntries(SHAPE_KEYS.map((k, bit) => [k, !!(i & (1 << bit))])) as unknown as MetricShape,
+  );
 }
 
 describe("a block is not a way of drawing a metric", () => {

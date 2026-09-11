@@ -20,6 +20,7 @@ import { and, eq, ne, or, desc, sql, type SQL } from "drizzle-orm";
 import { connections, events } from "@/db/schema";
 import type { DB } from "@/db/types";
 import type { AggregateDefinition, FunnelDefinition, Filters, Filter } from "./types";
+import { funnelFromCounts, type FunnelResult } from "./funnel";
 
 export type DateRange = { from: Date; to: Date };
 
@@ -27,11 +28,14 @@ export type AggregateResult =
   | { kind: "scalar"; value: number }
   | { kind: "series"; series: Array<{ bucket: string; value: number }> };
 
-export type FunnelResult = {
-  stages: Array<{ label: string; count: number; conversionFromFirst: number; conversionFromPrev: number }>;
-  /** Stage index with the largest absolute drop from the previous stage. */
-  bottleneckIndex: number | null;
-};
+/**
+ * Re-exported from `./funnel`, where the shape now lives beside the arithmetic
+ * that builds it. Kept here so the six `import type { FunnelResult } from
+ * "@/lib/metrics/compute"` sites — three of them client components — do not all
+ * have to move at once, and so no client component gains a reason to import
+ * this server-only module for anything but a type.
+ */
+export type { FunnelResult };
 
 /** Map a filter field name to its SQL expression over the events table. */
 function fieldExpr(field: string): SQL {
@@ -183,28 +187,14 @@ export async function computeFunnel(
     }),
   );
 
-  const first = counts[0] ?? 0;
-  let bottleneckIndex: number | null = null;
-  let worstDrop = -1;
-
-  const stages = def.stages.map((s, i) => {
-    const prev = i === 0 ? counts[i] : counts[i - 1];
-    if (i > 0) {
-      const drop = (counts[i - 1] ?? 0) - counts[i];
-      if (drop > worstDrop) {
-        worstDrop = drop;
-        bottleneckIndex = i;
-      }
-    }
-    return {
-      label: s.label,
-      count: counts[i],
-      conversionFromFirst: first > 0 ? counts[i] / first : 0,
-      conversionFromPrev: prev > 0 ? counts[i] / prev : 0,
-    };
-  });
-
-  return { stages, bottleneckIndex };
+  /**
+   * The arithmetic moved to `./funnel`, unchanged except for the zero-drop bug
+   * fixed there — a bug fix and a SHRINK, which is what the freeze at the top
+   * of this file allows. A composed funnel on the board runs the same function
+   * over counts read from published tiles, and two copies of a conversion rule
+   * is how the two quietly stop agreeing.
+   */
+  return funnelFromCounts(def.stages.map((s, i) => ({ label: s.label, count: counts[i] })));
 }
 
 /** Latest matching events — powers the builder's live sample and metric drill-down. */
