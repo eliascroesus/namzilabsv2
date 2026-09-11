@@ -47,9 +47,22 @@ const cards = await page.evaluate(() => {
     const arcs = [...(card?.querySelectorAll("path, circle") ?? [])].filter(
       (el) => el.getBoundingClientRect().width > 0,
     );
-    const cut = [...(card?.querySelectorAll("[title]") ?? [])]
-      .map((el) => el.getAttribute("title"))
-      .filter((t) => t && /cut off/.test(t));
+    const titles = [...(card?.querySelectorAll("[title]") ?? [])].map((el) => el.getAttribute("title") ?? "");
+    const cut = titles.filter((t) => /cut off/.test(t));
+    /**
+     * THE DISCLOSURES LIVE IN `title` NOW, NOT ON THE CARD FACE — the owner's
+     * call, after a screenshot in which three stacked sentences took more of a
+     * four-column tile than the pipeline they were qualifying and pushed the
+     * last stage's bar under the fold.
+     *
+     * So this stops asserting they are VISIBLE and starts asserting they are
+     * REACHABLE, which is the property that actually has to hold: every word is
+     * still on the mark for a hover and for a screen reader, and none of it
+     * costs a row. Asserting the old way would have quietly passed on a build
+     * that dropped them altogether, because the sentences also appear in
+     * refusals.
+     */
+    const notes = titles.join("\n");
     /**
      * TEXT THE BOX CUT OFF — the check that found the real bug here.
      *
@@ -78,6 +91,7 @@ const cards = await page.evaluate(() => {
       bars: bars.length,
       arcs: arcs.length,
       cut: cut.length,
+      notes,
       overflow,
       clipped,
       text,
@@ -171,6 +185,23 @@ for (const c of cards) {
     say(drew, `${c.title} — draws (${c.bars} bars, ${c.arcs} arcs)`);
   }
 
+  /**
+   * NO PROSE ON A CARD THAT DRAWS — the owner's rule, 11 Sep 2026, and the one
+   * that needs a check of its own because it is the easiest to undo by accident.
+   * Every future caveat will arrive as "just one short line"; three of them is
+   * what the pipeline screenshot already was.
+   *
+   * A REFUSAL IS NOT PROSE. When a composition cannot honestly draw, the
+   * sentence IS the content — it replaces the mark rather than sitting under it —
+   * so this only judges cards that painted something.
+   */
+  if (drew) {
+    const sentences = (c.text.match(/[^.]{25,}?\./g) ?? []).filter(
+      (s) => !/^\s*\d/.test(s) && / (is|are|not|assumed|counted|dated) /.test(s),
+    );
+    for (const s of sentences) problems.push(`"${c.title}" prints prose on a drawing card: "${s.trim().slice(0, 60)}…"`);
+  }
+
   if (c.overflow) problems.push(`"${c.title}" paints outside its card`);
   if (c.w === 0 || c.h === 0) problems.push(`"${c.title}" has a zero-sized card`);
   for (const t of c.clipped) problems.push(`"${c.title}" cuts off the text "${t}…"`);
@@ -184,21 +215,21 @@ if (widens) {
   const ok = widens.cut > 0;
   if (!ok) problems.push("the widening funnel drew no cut edge — an over-long bar is clipping flush again");
   say(ok, `a stage wider than the first carries a cut edge (${widens.cut})`);
-  const named = /larger than the first stage/.test(widens.text);
+  const named = /larger than the first stage/.test(widens.notes);
   if (!named) problems.push("the widening funnel never names the stage in prose");
   say(named, "…and the tile names it in words");
 }
 
 const funnel = byTitle("Composed funnel —") ?? byTitle("Composed funnel");
 if (funnel) {
-  const ok = /not followed as a cohort/.test(funnel.text);
+  const ok = /not followed as a cohort/.test(funnel.notes);
   if (!ok) problems.push("the cohort caveat is missing from a composed funnel");
   say(ok, "a composed funnel always discloses it is not a cohort");
 }
 
 const pie = byTitle("residual");
 if (pie) {
-  const ok = /assumed not to overlap/.test(pie.text);
+  const ok = /assumed not to overlap/.test(pie.notes);
   if (!ok) problems.push("the pie never says its parts are assumed disjoint");
   say(ok, "a composed pie always discloses the MECE assumption");
   /**
@@ -230,7 +261,7 @@ if (duration) {
 
 console.log(
   problems.length === 0
-    ? `\n✓ ${cards.length} composed specimens: every refusal replaces its mark, every disclosure is on the card`
+    ? `\n✓ ${cards.length} composed specimens: no prose on a drawing card, every refusal replaces its mark, every disclosure reachable`
     : `\n✗ ${problems.length} problem(s):\n  ` + problems.join("\n  "),
 );
 process.exit(problems.length === 0 ? 0 : 1);

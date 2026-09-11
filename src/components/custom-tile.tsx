@@ -635,18 +635,26 @@ export function CustomTile({
       footer={
         <>
           {footer && <ChartFooter>{footer}</ChartFooter>}
-          {/* THE DISCLOSURES A COMPOSED CHART OWES ITS READER. Never behind a
-              setting and never summarised: each sentence names a specific thing
-              the drawing cannot express — that the stages are not a cohort,
-              that the parts are assumed not to overlap, that two metrics are
-              dated by different fields, that a stage is wider than the top and
-              its bar is capped. Muted rather than warn-coloured, because none
-              of them means the number is wrong. */}
-          {composeNotes.map((note) => (
-            <p key={note} className="mt-2 text-xs text-muted-foreground">
-              {note}
-            </p>
-          ))}
+          {/* THE COMPOSED DISCLOSURES DO NOT RENDER HERE ANY MORE — the owner's
+              call on 11 Sep 2026, and the screenshot that prompted it makes the
+              case better than an argument would: three stacked sentences under a
+              three-stage pipeline on a four-column card, taking more of the tile
+              than the mark and pushing the last stage's bar under the fold.
+              Prose that crowds out the chart it is qualifying has stopped
+              qualifying anything.
+
+              THE SENTENCES ARE NOT DELETED, they moved to where they cost no
+              pixels: `title` on the mark itself (hover, and read out by screen
+              readers), and the settings panel, which is where a composition is
+              built and therefore where "these stages are not a cohort" is
+              actually actionable.
+
+              WHAT STILL CANNOT BE TURNED OFF is the REFUSAL. A composition that
+              would mislead does not draw at all — `compose.ts` returns a
+              sentence instead of a chart, and that sentence replaces the mark
+              rather than sitting under it. The disclosures were only ever for
+              charts honest enough to draw; the guarantee lives in the refusal,
+              not in the footnote. */}
           {!w.unavailable && undated > 0 && (
             <p className="mt-2 text-xs text-warn-ink">
               {/* ONE STRING, NO JSX TEXT NODES AT ALL — and that is not
@@ -698,21 +706,29 @@ export function CustomTile({
         ) : chart === "category" ? (
           <BarsHorizontal groups={w.groups!} format={bag} accent={accent} sort={config.sort} limit={config.limit} />
         ) : chart === "pie" ? (
-          <PieChart
-            groups={w.groups!}
-            format={bag}
-            donut={config.donut}
-            limit={pieLimit}
-            legend={config.legend ?? (cols >= 5 ? "right" : "bottom")}
-          />
+          <div className="flex min-h-0 flex-1 flex-col" title={composeNotes.join("\n") || undefined}>
+            <PieChart
+              groups={w.groups!}
+              format={bag}
+              donut={config.donut}
+              limit={pieLimit}
+              legend={config.legend ?? (cols >= 5 ? "right" : "bottom")}
+            />
+          </div>
         ) : chart === "progress" ? (
           <GoalBar value={w.value ?? 0} target={target!} format={bag} />
         ) : chart === "funnel" ? (
-          <div className="min-h-0 flex-1 overflow-y-auto quiet-scroll">
+          /* THE DISCLOSURES, COSTING NO PIXELS. They used to be three stacked
+             paragraphs under the mark; `title` keeps every word reachable — on
+             hover, and to a screen reader — without taking a single row from the
+             chart. Joined with newlines because a native tooltip honours them. */
+          <div className="min-h-0 flex-1 overflow-y-auto quiet-scroll" title={composeNotes.join("\n") || undefined}>
             <FunnelView result={w.funnel!} composed={composed} />
           </div>
         ) : chart === "pipeline" ? (
-          <Pipeline result={w.funnel!} accent={accent} composed={composed} cols={cols} />
+          <div className="flex min-h-0 flex-1 flex-col" title={composeNotes.join("\n") || undefined}>
+            <Pipeline result={w.funnel!} accent={accent} composed={composed} cols={cols} />
+          </div>
         ) : chart === "table" ? (
           <ChartTable head={[hasSeries ? "Period" : "Group", "Value"]} rows={tableRows} />
         ) : null}
