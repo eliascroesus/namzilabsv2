@@ -310,12 +310,30 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
        */
       placements = await listTilePlacements(db, orgId, activeView);
     } else {
-      groups = await listBoardGroups(db, orgId, activeView);
-      // THE THIRD BOARD READ, AND THE WHOLE COST ARGUMENT FOR IT. A view with no
-      // groups renders the plain grid, so its placements are not merely unused —
-      // they cannot exist. Sequential rather than in the Promise.all above
-      // because it has to know the answer to the first one.
-      if (groups.length > 0) placements = await listTilePlacements(db, orgId, activeView);
+      /**
+       * BOTH AT ONCE, AND THE COST ARGUMENT FLIPPED WHEN IT WAS MEASURED.
+       *
+       * This was sequential on the reasoning that a view with no groups renders
+       * the plain grid, so its placements cannot exist and the second read is
+       * pure waste. That is true about ROWS and wrong about TIME: every Neon
+       * round trip on this page measures 110–190ms, so waiting to find out
+       * whether to ask costs a full round trip on every board that DOES have
+       * groups — which is the common case and the one the owner is waiting on.
+       *
+       * The wasted query, when it happens, is a narrow indexed read of a view
+       * with no placements returning zero rows. That is the cheapest thing this
+       * page does, and it is paid only by boards that render the plain grid.
+       *
+       * Trading a certain 110ms for an occasional empty query is the right way
+       * round; the old comment had the ledger but not the clock.
+       */
+      [groups, placements] = await Promise.all([
+        listBoardGroups(db, orgId, activeView),
+        listTilePlacements(db, orgId, activeView),
+      ]);
+      // A plain grid has no lanes to place into, so anything read above is not
+      // merely unused — it cannot be meaningful. Dropped rather than rendered.
+      if (groups.length === 0) placements = [];
     }
   } catch (err) {
     // THE EXCEPTION GOES TO THE LOG, NOT TO THE PAGE. This used to set

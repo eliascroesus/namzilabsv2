@@ -1044,7 +1044,23 @@
      same mirror `:root` has always had: one surface, arrived at from the other
      side. Kept as a role because every `bg-panel` call site spells it and the
      two themes must share a vocabulary. */
-  --panel: var(--background); /* #121214 */
+  /* #191919 — THE GROUND BEHIND THE CHARTS AND THE METRICS, supplied.
+   *
+   * It pointed at `--background` for as long as dark was one surface: page,
+   * bar, rail and board all #121214, with the card the only step. The owner
+   * named this one directly, and it does something the dark theme has not had
+   * since the 8 September re-theme — it makes the 8px GUTTER draw. The page is
+   * #121212 and the panel inside it is #191919, so the frame's inset and its
+   * corner are finally visible on dark rather than being a hairline's worth of
+   * implication.
+   *
+   * IT ALSO PUTS THE CARD ON ITS OWN GROUND. `--card` is #191919 too, so a
+   * card and the board under it are the same value and the hairline is doing
+   * ALL of the separating — which is exactly the argument DESIGN.md makes for
+   * this product ("a card without its border is not a flatter card, it is an
+   * invisible one"), now true literally rather than at 1.06:1. If the cards
+   * need to lift off it, the step to move is `--card`, not this. */
+  --panel: var(--color-neutral-900); /* #191919 */
 
   /* THE CONTROL SURFACE, AND THE DEPTH RULE STATED HONESTLY.
      A field on this theme's cards (#191919) is a step UP: #202020 (1.08:1),

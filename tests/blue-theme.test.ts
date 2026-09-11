@@ -168,13 +168,24 @@ describe("one surface on dark, and a rail that is no longer constant", () => {
     expect(token("color-neutral-900")).toBe("#191919");
     expect(darkToken("background")).toBe("var(--color-neutral-950)");
     expect(darkToken("topbar")).toBe("var(--color-neutral-925)");
-    expect(darkToken("panel")).toBe("var(--background)");
+    // `--panel` LEFT THE PAGE'S VALUE ON 11 SEP 2026 — #191919, supplied, for
+    // the ground behind the charts and the metrics. It is the first time the
+    // dark theme has had a visible step between the page and the board, which
+    // is what finally makes the frame's 8px gutter draw on dark.
+    expect(darkToken("panel")).toBe("var(--color-neutral-900)");
+    expect(darkToken("panel")).not.toBe("var(--background)");
 
-    // AND THE ORDER IS THE ASSERTION, not just the values: page darkest, card
-    // lightest. A ramp that inverts reads as a card cut INTO the page.
+    // AND THE ORDER IS THE ASSERTION, not just the values: page darkest, board
+    // and card lightest. A ramp that inverts reads as a card cut INTO the page.
     const lum = (h: string) => parseInt(h.slice(1, 3), 16);
     expect(lum("#121212")).toBeLessThan(lum("#151515"));
     expect(lum("#151515")).toBeLessThan(lum("#191919"));
+
+    // THE BOARD AND THE CARD SHARE #191919, deliberately — so the hairline is
+    // doing ALL of the separating rather than 1.06:1 of fill plus a rule. If a
+    // step is ever wanted back between them, `--card` is the one to move:
+    // `--panel` is the value the owner supplied.
+    expect(darkToken("card")).toBe("var(--color-neutral-900)");
   });
 
   it("THE RAIL FLIPS NOW, and that is the whole of `.mix`", () => {

@@ -109,7 +109,19 @@ describe("what the board costs on every freshness poll", () => {
      * every workspace is that workspace — so the second query is conditional
      * and the common case stays at one.
      */
-    expect(page).toMatch(/if \(groups\.length > 0\) placements = await listTilePlacements\(db, orgId, activeView\)/);
+    // PARALLEL SINCE 11 SEP 2026, and the reasoning inverted with a
+    // measurement rather than an argument: every Neon round trip on this page
+    // is 110-190ms, so waiting to learn whether to ask cost a full trip on
+    // every board that HAS groups — the common case. The wasted query, when it
+    // happens, is a narrow indexed read returning zero rows.
+    // What the old assertion really protected is that a plain grid renders no
+    // placements, and that is still true — it is now a filter rather than a
+    // skipped read.
+    expect(page).toMatch(/\[groups, placements\] = await Promise\.all\(/);
+    expect(page).toMatch(/if \(groups\.length === 0\) placements = \[\]/);
+    expect(page, "the serial pair must not come back").not.toMatch(
+      /if \(groups\.length > 0\) placements = await listTilePlacements/,
+    );
   });
 
   it("never counts, joins or queries per tile", () => {
