@@ -398,7 +398,14 @@ export function PageHeader({ title, lede, actions, tabs, back, band, className }
             `bg-topbar` was already there and is now load-bearing rather than
             decorative: a translucent band would show the board through itself
             the moment anything scrolled under it. */
-        band ? "sticky top-0 z-20 -m-6 mb-6 border-b border-topbar-border bg-topbar px-6 pb-4 pt-2" : "pb-4",
+        /* NO `-m-6`, NO `mb-6`, NO `sticky`. All three existed to survive
+            being inside `PageContainer`: the negative margin escaped the
+            page's 24px, the bottom margin put it back, and `sticky` pinned it
+            against the scroller it should never have been in. The band is a
+            sibling of the top bar now (see `AppFrame`), so it sits in the
+            chrome's own box and the 24px under it is `PageContainer`'s `pt-6`
+            — one owner for that distance instead of two that had to agree. */
+        band ? "border-b border-topbar-border bg-topbar px-6 pb-4 pt-2" : "pb-4",
         className,
       )}
     >

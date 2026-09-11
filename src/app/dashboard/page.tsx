@@ -1019,8 +1019,239 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   // racing every read above since before the `Promise.all`.
   const initialResultsVersion = await resultsVersionP;
 
+  /**
+   * THE BOARD'S BAND, HANDED TO THE SHELL RATHER THAN RENDERED IN THE PAGE.
+   *
+   * It used to sit inside `PageContainer`, escaping the page's own 24px with
+   * `-m-6` and pinned with `sticky top-0`. Sticky worked and was the wrong
+   * shape, for two reasons the owner found by using it:
+   *
+   *   IT BOUNCED. A sticky element is repainted by the scroller it lives in,
+   *   so on a fast flick or a momentum scroll it lags the frame the rest of
+   *   the chrome is drawn on. The top bar — a real sibling, outside the
+   *   scroller — never moved. Two halves of one object, one of them shivering.
+   *
+   *   THE SCROLLBAR SHIFTED IT. A vertical scrollbar appears INSIDE the scroll
+   *   container, so it narrows everything in there — including the band —
+   *   while the top bar above keeps its full width. The band slid left by the
+   *   scrollbar's width and the bar did not, which is visible on the group
+   *   view every time the board grows past a screen.
+   *
+   * Neither is fixable from inside the scroller: they are both consequences OF
+   * being in it. So the band is a sibling of the top bar now, passed up as a
+   * prop — which this page can do because it renders `AppShell` itself.
+   *
+   * A PROP RATHER THAN A PORTAL, deliberately. `PortalSlot` would have worked
+   * and renders nothing on the server, so the band would arrive a frame after
+   * first paint on every load. A prop is server-rendered with everything else.
+   */
+  const boardBand = (
+    <PageHeader
+      /* `band` — THE FRAME'S THIRD BAR, and its absence here is why the
+         board's controls sat on the page instead of on a white band while
+         /design/overview looked correct. The harness got this prop and the
+         page a customer opens did not. */
+      band
+      /* TABS AND ACTIONS, AND NO THIRD ZONE ANY MORE.
+         The 4 September Figma drew one row as tabs left, the view's name
+         CENTRED, the actions right — so `PageHeader` grew a `tabs` slot
+         and a three-zone grid to hold it. Node 49:5399 draws two zones:
+         the tab strip and the three buttons. The name appears exactly
+         once, on its own tab, with the "Options for Overview" menu beside
+         it (node 49:5406).
+
+         That menu is `ViewTab`'s, and it already owns Rename, Duplicate
+         and Delete — so the centred `ViewTitle` was a second copy of a
+         string the tab was already showing, with a second route to the
+         same rename. Dropping it costs nothing and removes the only place
+         in the product where one name was drawn twice on one row. */
+      tabs={viewStrip}
+      actions={
+        /* THE THREE HEADER ACTIONS, CO-LOCATED — fixed in the first
+           review round, which found the Figma's own three ("+ Add",
+           "Today", "Refresh All") spread across two places: "+ Add" was
+           still inline in `custom-board.tsx`'s own row and Refresh all
+           was still in the retired `boardActions`. The ruling puts all
+           three here, in this order, because the header is the one slot
+           every view shares — a groups board, a canvas and a calendar all
+           render this same fragment, and only the middle third differs
+           between them. */
+        <>
+          {/* "+ ADD", AND ONLY ON A CANVAS. `AddChartMenu` is `custom-
+              board.tsx`'s own popover — it owns the metric-add state
+              (`picking`, `busy`, the optimistic `addTile`), which lives
+              inside that CLIENT component, not in this async server one.
+              This page cannot instantiate it directly, so it leaves an
+              empty placeholder in the slot the Figma draws "+ Add" in,
+              and `CustomBoard` portals its own button and popover into it
+              — the identical trick the calendar uses for `#calendar-tools`
+              and `#calendar-period` below, and for the same reason: the
+              state belongs to the client, the position belongs to the
+              server-rendered header, and neither can hand the other what
+              it has. `CustomBoard` gates the portal on `canEdit` itself,
+              so a viewer without `create_flows` sees an empty div here,
+              same as the groups board and the calendar always have.
+              `empty:hidden` is what makes that div cost nothing in the
+              actions zone's layout when it stays unfilled, rather than a
+              hollow gap where a button would otherwise sit. */}
+          {activeKind === "custom" && <div id="canvas-add-chart" className="flex items-center empty:hidden" />}
+          {/* "NEW GROUP", BESIDE THE DATE RANGE. Same arrangement as the
+              two slots around it and for the same reason: the button calls
+              `addGroup`, which writes optimistically into the `groups`
+              `board-layout.tsx` owns, so this async server component cannot
+              instantiate it — it holds the POSITION and the client portals
+              the control in. It stood on a row of its own between the
+              header and the board, which was the last third band left in
+              the product. */}
+          {activeKind === "groups" && <div id="board-new-group" className="flex items-center empty:hidden" />}
+          {/* A CALENDAR PUTS ITS OWN TIME CONTROL HERE INSTEAD.
+              The period pills narrow WHICH NUMBERS a board shows; a
+              calendar answers two fixed months — the only two the
+              materializer stores — so six live pills would be the
+              interface offering something it cannot do. But the SLOT is
+              right: this is where every view says what span it is
+              reading, and a calendar reads in months. The board fills
+              this from the client (it owns which month is on screen); an
+              empty div collapses to nothing if it never does. */}
+          {activeKind === "calendar" ? (
+            <div id="calendar-period" className="flex items-center gap-1.5" />
+          ) : (
+            /* ── THE PERIOD CONTROL ──────────────────────────────────
+               ONE DROPDOWN, SIX ANSWERS, AND THE SAME URL UNDERNEATH.
+               The six-pill track that stood here is gone; what replaces
+               it says the current range on its face and opens the other
+               five. `RANGE_OPTIONS` is still the list, and each `href` is
+               still `qs()`'s, so nothing about which numbers a link opens
+               on has changed.
+
+               The scroller went with the track, and that is the point
+               rather than a side effect: a ~520px control in this slot
+               could only survive a 390px viewport by scrolling inside
+               itself, and the header's right column had to stop being
+               `shrink-0` to let it. A 24px dropdown needs neither. */
+            <RangeMenu
+              activeRange={rangeKey}
+              /* The board's own URL, so a picked window keeps the view and
+                 the source rather than throwing you back to the default
+                 board. `qs({})` is that URL with the current range in it. */
+              href={qs({})}
+              /* Today, from the SERVER's clock. The picker renders on both
+                 sides of the hydration boundary and must not compute the
+                 current UTC day twice — see its own header. */
+              now={new Date()}
+            />
+          )}
+          {/* REFRESH ALL, LAST, AND ON EVERY VIEW — the groups board, a
+              canvas and the calendar all recompute the same published
+              metrics, so it belongs to the page rather than to any one
+              board's own row. It used to sit inside `boardActions` (see
+              the retirement note above) and inside the calendar branch's
+              own row before that; both threaded it down as server markup
+              for no reason once the header could hold it directly.
+              NOT THE FILL, AS OF THE 4 SEP 2026 BLUE RETHEME. This used
+              to argue for spending the brand's one filled control here —
+              first as scarcity ("the single act the page exists for"),
+              then as a fill/stroke rule keyed to which control CHANGES
+              something rather than narrows what is shown. The Figma
+              settles it a third way, by naming names: blue is reserved
+              for "+ Add" and "New flow"; every other header action —
+              Refresh all included — is `secondary`, the kit's ordinary
+              grey button (see `ui/button.tsx`). Acting is no longer the
+              test; being one of exactly two adds-something verbs is.
+              `xs`, WITH A 16px ICON — the header's smallest rung, and the
+              same override as "+ Add" and "Today" beside it: `xs` ships
+              `[&_svg]:size-3.5` (14px), which is not what this row draws,
+              so the 16 is spelled on the button rather than the icon,
+              because the size variant's own descendant rule would win
+              over a class on the svg no matter which order they were
+              written in. */}
+          {/* COMPARE TO — DRAWN, AND NOT WIRED, and it belongs on the REAL
+              board rather than only on the design harness. Node 0:5 puts it
+              between the period and the refresh. What it would open is a
+              comparison SERIES this product does not compute — DESIGN.md
+              has recorded the two-series legend as unbuilt since before the
+              chrome rebuild — so it ships disabled with a title that says
+              so, rather than as a menu that opens onto nothing. */}
+          {/* AND IT STANDS DOWN ON A CALENDAR, where the metric picker
+              takes its place. Two reasons, and the second is the real one:
+              a comparison PERIOD is meaningless on a sheet that answers two
+              fixed months, and the slot is the best position on the row for
+              the one control a calendar genuinely has — the picker was
+              living on a row of its own below the header, which is the
+              third-bar mismatch this whole chrome pass has been removing.
+              `#calendar-tools` is filled by `CalendarBoard`'s portal; an
+              empty div collapses if it never is. */}
+          {activeKind === "calendar" ? (
+            <div id="calendar-tools" className="flex shrink-0 items-center gap-2 empty:hidden" />
+          ) : (
+            <Button
+              variant="white"
+              disabled
+              title="Comparison periods are not built yet"
+              className="shrink-0"
+            >
+              <ChartLine />
+              Compare To
+              <ChevronDown />
+            </Button>
+          )}
+          <form action={refreshAllFlowsAction} className="shrink-0">
+            <SubmitButton
+              /* WHITE, WITH "Today" BESIDE IT — node 49:5439. The two
+                 non-brand controls in this row are the loudest things on
+                 the screen after the brand, which reads against the kit's
+                 own "quiet chrome" thesis and is drawn that way anyway,
+                 twice, on two adjacent controls. Followed rather than
+                 corrected; DESIGN.md owns the tension out loud. */
+              variant="white"
+             
+              pendingLabel="Refreshing…"
+              title="Recompute every published metric now"
+            >
+              <RefreshCw />
+              Refresh All
+            </SubmitButton>
+          </form>
+        </>
+      }
+    />
+  );
+
   return (
-    <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email}>
+    /**
+     * THE PROVIDER WRAPS THE SHELL, because the band left the page body.
+     *
+     * `BoardControls` is one piece of state — `pending` and `picked` — shared
+     * by the view TABS and the TILE AREA: pressing a tab lights it
+     * optimistically and dims the board beneath it, in one transition. The
+     * tabs are in the band and the tiles are in the page, and as of 11 Sep
+     * 2026 the band is chrome rather than page content, so it renders inside
+     * `AppFrame` rather than inside `PageContainer`.
+     *
+     * Two providers would type-check and be wrong in the way that matters:
+     * two independent states, so the tab would light and the board would
+     * never dim. And leaving the provider where it was is worse than wrong —
+     * `useBoard` THROWS outside it, on purpose ("a stray one outside the
+     * provider would render as an ordinary link that never shows a pending
+     * state"), so the band's tabs would have crashed the dashboard at render.
+     *
+     * Wrapping an async server component in a client provider is legal and is
+     * what makes this cheap: `AppShell` resolves on the server and arrives as
+     * `children`.
+     */
+    <BoardControls>
+    {/* THE BAND IS THE BOARD'S, SO AN EMPTY WORKSPACE MUST NOT GET ONE.
+        It was lifted out of the `emptyWorkspace` ternary's else branch, and
+        an unconditional `band` would put the view tabs and Refresh All above
+        a Get-started card — the exact regression `dashboard-empty.test.ts`
+        describes as "the title and the period pills come back". The condition
+        is the ternary's own, spelled once more rather than inferred. */}
+    <AppShell
+      userId={userId}
+      orgId={orgId}
+      userEmail={auth.user.email}
+      band={emptyWorkspace && !loadError ? undefined : boardBand}
+    >
       {/* G.4: refresh the server-rendered tiles when the org's results move.
           C16: seeded so a change before the first poll is never missed. */}
       <FreshnessPoller initialVersion={initialResultsVersion} />
@@ -1073,7 +1304,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         {pendingCustomFlows.length > 0 && (
           <CustomRangeCompute rangeKey={rangeKey} flowIds={pendingCustomFlows} />
         )}
-        <BoardControls>
         {/* ── THE PAGE HEADER ───────────────────────────────────────────────
             THE TITLE IS BACK, and the argument that removed it is what returns
             it. That argument was: "Dashboard" as an h1 sat directly beside a
@@ -1134,175 +1364,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         </TopBarTitle>
         <TopBarFreshness at={newestComputedAt} />
 
-        <PageHeader
-          /* `band` — THE FRAME'S THIRD BAR, and its absence here is why the
-             board's controls sat on the page instead of on a white band while
-             /design/overview looked correct. The harness got this prop and the
-             page a customer opens did not. */
-          band
-          /* TABS AND ACTIONS, AND NO THIRD ZONE ANY MORE.
-             The 4 September Figma drew one row as tabs left, the view's name
-             CENTRED, the actions right — so `PageHeader` grew a `tabs` slot
-             and a three-zone grid to hold it. Node 49:5399 draws two zones:
-             the tab strip and the three buttons. The name appears exactly
-             once, on its own tab, with the "Options for Overview" menu beside
-             it (node 49:5406).
-
-             That menu is `ViewTab`'s, and it already owns Rename, Duplicate
-             and Delete — so the centred `ViewTitle` was a second copy of a
-             string the tab was already showing, with a second route to the
-             same rename. Dropping it costs nothing and removes the only place
-             in the product where one name was drawn twice on one row. */
-          tabs={viewStrip}
-          actions={
-            /* THE THREE HEADER ACTIONS, CO-LOCATED — fixed in the first
-               review round, which found the Figma's own three ("+ Add",
-               "Today", "Refresh All") spread across two places: "+ Add" was
-               still inline in `custom-board.tsx`'s own row and Refresh all
-               was still in the retired `boardActions`. The ruling puts all
-               three here, in this order, because the header is the one slot
-               every view shares — a groups board, a canvas and a calendar all
-               render this same fragment, and only the middle third differs
-               between them. */
-            <>
-              {/* "+ ADD", AND ONLY ON A CANVAS. `AddChartMenu` is `custom-
-                  board.tsx`'s own popover — it owns the metric-add state
-                  (`picking`, `busy`, the optimistic `addTile`), which lives
-                  inside that CLIENT component, not in this async server one.
-                  This page cannot instantiate it directly, so it leaves an
-                  empty placeholder in the slot the Figma draws "+ Add" in,
-                  and `CustomBoard` portals its own button and popover into it
-                  — the identical trick the calendar uses for `#calendar-tools`
-                  and `#calendar-period` below, and for the same reason: the
-                  state belongs to the client, the position belongs to the
-                  server-rendered header, and neither can hand the other what
-                  it has. `CustomBoard` gates the portal on `canEdit` itself,
-                  so a viewer without `create_flows` sees an empty div here,
-                  same as the groups board and the calendar always have.
-                  `empty:hidden` is what makes that div cost nothing in the
-                  actions zone's layout when it stays unfilled, rather than a
-                  hollow gap where a button would otherwise sit. */}
-              {activeKind === "custom" && <div id="canvas-add-chart" className="flex items-center empty:hidden" />}
-              {/* "NEW GROUP", BESIDE THE DATE RANGE. Same arrangement as the
-                  two slots around it and for the same reason: the button calls
-                  `addGroup`, which writes optimistically into the `groups`
-                  `board-layout.tsx` owns, so this async server component cannot
-                  instantiate it — it holds the POSITION and the client portals
-                  the control in. It stood on a row of its own between the
-                  header and the board, which was the last third band left in
-                  the product. */}
-              {activeKind === "groups" && <div id="board-new-group" className="flex items-center empty:hidden" />}
-              {/* A CALENDAR PUTS ITS OWN TIME CONTROL HERE INSTEAD.
-                  The period pills narrow WHICH NUMBERS a board shows; a
-                  calendar answers two fixed months — the only two the
-                  materializer stores — so six live pills would be the
-                  interface offering something it cannot do. But the SLOT is
-                  right: this is where every view says what span it is
-                  reading, and a calendar reads in months. The board fills
-                  this from the client (it owns which month is on screen); an
-                  empty div collapses to nothing if it never does. */}
-              {activeKind === "calendar" ? (
-                <div id="calendar-period" className="flex items-center gap-1.5" />
-              ) : (
-                /* ── THE PERIOD CONTROL ──────────────────────────────────
-                   ONE DROPDOWN, SIX ANSWERS, AND THE SAME URL UNDERNEATH.
-                   The six-pill track that stood here is gone; what replaces
-                   it says the current range on its face and opens the other
-                   five. `RANGE_OPTIONS` is still the list, and each `href` is
-                   still `qs()`'s, so nothing about which numbers a link opens
-                   on has changed.
-
-                   The scroller went with the track, and that is the point
-                   rather than a side effect: a ~520px control in this slot
-                   could only survive a 390px viewport by scrolling inside
-                   itself, and the header's right column had to stop being
-                   `shrink-0` to let it. A 24px dropdown needs neither. */
-                <RangeMenu
-                  activeRange={rangeKey}
-                  /* The board's own URL, so a picked window keeps the view and
-                     the source rather than throwing you back to the default
-                     board. `qs({})` is that URL with the current range in it. */
-                  href={qs({})}
-                  /* Today, from the SERVER's clock. The picker renders on both
-                     sides of the hydration boundary and must not compute the
-                     current UTC day twice — see its own header. */
-                  now={new Date()}
-                />
-              )}
-              {/* REFRESH ALL, LAST, AND ON EVERY VIEW — the groups board, a
-                  canvas and the calendar all recompute the same published
-                  metrics, so it belongs to the page rather than to any one
-                  board's own row. It used to sit inside `boardActions` (see
-                  the retirement note above) and inside the calendar branch's
-                  own row before that; both threaded it down as server markup
-                  for no reason once the header could hold it directly.
-                  NOT THE FILL, AS OF THE 4 SEP 2026 BLUE RETHEME. This used
-                  to argue for spending the brand's one filled control here —
-                  first as scarcity ("the single act the page exists for"),
-                  then as a fill/stroke rule keyed to which control CHANGES
-                  something rather than narrows what is shown. The Figma
-                  settles it a third way, by naming names: blue is reserved
-                  for "+ Add" and "New flow"; every other header action —
-                  Refresh all included — is `secondary`, the kit's ordinary
-                  grey button (see `ui/button.tsx`). Acting is no longer the
-                  test; being one of exactly two adds-something verbs is.
-                  `xs`, WITH A 16px ICON — the header's smallest rung, and the
-                  same override as "+ Add" and "Today" beside it: `xs` ships
-                  `[&_svg]:size-3.5` (14px), which is not what this row draws,
-                  so the 16 is spelled on the button rather than the icon,
-                  because the size variant's own descendant rule would win
-                  over a class on the svg no matter which order they were
-                  written in. */}
-              {/* COMPARE TO — DRAWN, AND NOT WIRED, and it belongs on the REAL
-                  board rather than only on the design harness. Node 0:5 puts it
-                  between the period and the refresh. What it would open is a
-                  comparison SERIES this product does not compute — DESIGN.md
-                  has recorded the two-series legend as unbuilt since before the
-                  chrome rebuild — so it ships disabled with a title that says
-                  so, rather than as a menu that opens onto nothing. */}
-              {/* AND IT STANDS DOWN ON A CALENDAR, where the metric picker
-                  takes its place. Two reasons, and the second is the real one:
-                  a comparison PERIOD is meaningless on a sheet that answers two
-                  fixed months, and the slot is the best position on the row for
-                  the one control a calendar genuinely has — the picker was
-                  living on a row of its own below the header, which is the
-                  third-bar mismatch this whole chrome pass has been removing.
-                  `#calendar-tools` is filled by `CalendarBoard`'s portal; an
-                  empty div collapses if it never is. */}
-              {activeKind === "calendar" ? (
-                <div id="calendar-tools" className="flex shrink-0 items-center gap-2 empty:hidden" />
-              ) : (
-                <Button
-                  variant="white"
-                  disabled
-                  title="Comparison periods are not built yet"
-                  className="shrink-0"
-                >
-                  <ChartLine />
-                  Compare To
-                  <ChevronDown />
-                </Button>
-              )}
-              <form action={refreshAllFlowsAction} className="shrink-0">
-                <SubmitButton
-                  /* WHITE, WITH "Today" BESIDE IT — node 49:5439. The two
-                     non-brand controls in this row are the loudest things on
-                     the screen after the brand, which reads against the kit's
-                     own "quiet chrome" thesis and is drawn that way anyway,
-                     twice, on two adjacent controls. Followed rather than
-                     corrected; DESIGN.md owns the tension out loud. */
-                  variant="white"
-                 
-                  pendingLabel="Refreshing…"
-                  title="Recompute every published metric now"
-                >
-                  <RefreshCw />
-                  Refresh All
-                </SubmitButton>
-              </form>
-            </>
-          }
-        />
 
         {/* WHAT `addViewAction` SAID WHEN IT REFUSED.
             It redirects to `?error=rank` or `?error=view_limit` and this page
@@ -1502,11 +1563,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         {!hasTiles && !loadError && activeKind !== "calendar" && (
           <OnboardingChecklist hasConnection={connCount > 0} hasFlow={flowCount > 0} hasPublished={flowTiles.length > 0} />
         )}
-        </BoardControls>
         </>
         )}
       </PageContainer>
     </AppShell>
+    </BoardControls>
   );
 }
 

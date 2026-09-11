@@ -280,15 +280,15 @@ describe("the page container and the skeleton that stands in for it", () => {
     // `md` as well as its 260px above it, or the skeleton reserves a column
     // the real chrome will not draw.
     expect(code(skeleton)).toMatch(/hidden w-65[^"]*bg-rail/);
-    // AND THE BAR'S BOTTOM EDGE IS GONE TOO, on both sides. Node 35:6027
-    // draws no rule; the one hairline in the chrome belongs to the board's own
-    // row beneath it (node 35:6044). A ghost that keeps it draws a line for
-    // one frame and then removes it.
+    // THE TOP BAR STILL DRAWS NO RULE — node 35:6027 has none, and the one
+    // hairline in the chrome belongs to the board's row beneath it.
     expect(code(read("src/components/top-bar.tsx"))).not.toMatch(/<header className="[^"]*border-b border-topbar-border/);
-    expect(code(skeleton)).not.toMatch(/border-b border-topbar-border/);
-    // What the two must still agree on is the BAND, which the height check
-    // above compares — this is the pair that says neither grew a rule back.
+    // AND THE BOARD'S ROW IS CHROME AGAIN as of 11 Sep 2026 — a real sibling
+    // of the bar rather than a sticky child of the panel — so the skeleton
+    // mirrors BOTH bands. It reserved only the bar for a day, which is 57px of
+    // content jumping down the moment the route lands.
     expect(code(skeleton)).toMatch(/h-14[^"]*bg-topbar/);
+    expect(code(skeleton)).toMatch(/h-\[57px\][^"]*border-b border-topbar-border bg-topbar/);
   });
 });
 
@@ -908,11 +908,13 @@ describe("the skeleton mirrors the frame's new order", () => {
 
   it("puts each ghost on the surface it mirrors — the rail's and the bar's", () => {
     const code = skeleton.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
-    // ONE band of 56, where it was two of 57 and 49. Mirroring the old pair
-    // under the new chrome is 50px of content jumping the moment the route
-    // lands — the whole failure this mirror exists to prevent.
+    // TWO BANDS: the bar at 56 and the board's row at 57. It was 57 + 49 under
+    // the old three-band chrome, then 56 alone while the board's row lived
+    // inside the scroller, and it is 56 + 57 now that the row is chrome again.
+    // Each wrong pairing is tens of pixels of content jumping at hydration.
     expect(code).toMatch(/h-14[^"]*bg-topbar/);
-    expect(code, "the old pair must not survive here either").not.toMatch(/h-\[57px\]|h-\[49px\]/);
+    expect(code).toMatch(/h-\[57px\][^"]*bg-topbar/);
+    expect(code, "the retired 49px band must not come back").not.toMatch(/h-\[49px\]/);
     expect(code).toMatch(/w-65[^"]*bg-rail/);
   });
 });

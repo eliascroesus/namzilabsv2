@@ -233,7 +233,72 @@ export default async function OverviewLab({
   );
 
   return (
+    /* THE PROVIDER WRAPS THE FRAME, exactly as the real board's does — the
+       band is chrome now, so the tabs inside it render within `AppFrame` and
+       need the context from above it. See `dashboard/page.tsx`. */
+    <BoardControls>
     <AppFrame
+      /* THE BAND IS CHROME, SO THE HARNESS HANDS IT OVER TOO.
+         It was rendered inside `PageContainer` here, which matched the real
+         board while the band escaped the page's padding with `-m-6`. The band
+         moved out of the scroll region on 11 Sep 2026 — it was bouncing on
+         fast scrolls and being narrowed by the scrollbar while the bar above
+         it was not — so a harness still drawing it in the page would be
+         pixel-correct against a frame the real dashboard no longer matches,
+         which is the one failure this page exists to prevent. */
+      band={
+        <PageHeader
+          band
+          /* NO `title`: the name is on its own tab with the options menu
+             beside it, which is the one place node 49:5399 draws it. */
+          tabs={viewStrip}
+          actions={
+            <>
+              {/* WHITE, NOT LIME, AND THAT REVERSES `cd621bf`.
+                  That commit filled the two adds-something verbs with the
+                  brand, on the 8 September frame's own reading. Node 0:5
+                  draws all four of these controls identically — white, with
+                  an #E1E1E1 rim — so "Add" loses its fill along with the
+                  argument for it. The Figma is explicit and the owner asked
+                  for 1:1. */}
+              <Button variant="white">
+                <Plus />
+                Add
+              </Button>
+              <RangeMenu
+                activeRange={activeRange}
+                /* THIS ROUTE'S OWN PATH, not "#". `new URL("#", base)` has an
+                   empty pathname, so applying a window would push the harness
+                   to the site root and there would be nothing left to
+                   screenshot. */
+                href="/design/overview"
+                now={HOUR_AGO}
+              />
+              {/* WHITE, WHICH IS THE LOUDEST THING IN THIS ROW AFTER THE
+                  LIME — and it is drawn that way (node 49:5439). It reads
+                  against "quiet chrome", and it is followed rather than
+                  corrected: the Figma is explicit, twice, on two adjacent
+                  controls. See DESIGN.md, which owns the tension. */}
+              {/* COMPARE TO — DRAWN, AND NOT WIRED.
+                  The frame draws it between the period and the refresh, and
+                  the control is chrome, so it is built here at the frame's
+                  geometry. What it would open is a comparison SERIES the
+                  product does not compute — DESIGN.md records the two-series
+                  legend as unbuilt — so it ships disabled with a title that
+                  says so rather than as a menu that opens onto nothing. */}
+              <Button variant="white" disabled title="Comparison periods are not built yet">
+                <ChartLine />
+                Compare To
+                <ChevronDown />
+              </Button>
+              <Button variant="white">
+                <RefreshCw />
+                Refresh All
+              </Button>
+            </>
+          }
+        />
+      }
       views={[
         { id: null, name: "Overview", pos: "a", kind: "groups", isDefault: true },
         { id: "v2", name: "Group", pos: "b", kind: "groups" },
@@ -255,66 +320,6 @@ export default async function OverviewLab({
             now" is the string node 0:5 draws. */}
         <TopBarTitle range="Sat, 1 Sep - Sat, 1 Sep">Overview</TopBarTitle>
         <TopBarFreshness at={new Date()} />
-        <BoardControls>
-          {/* THE FOUR HEADER ACTIONS THE FRAME DRAWS, in its order: "+ Add",
-              the period dropdown reading "Today", "Compare To", then
-              "Refresh All". The
-              dashboard builds these from real state — `AddChartMenu` portals
-              into a slot, `RefreshCw` submits a server action — so this page
-              draws the same three controls at the same rungs rather than
-              importing machinery that needs a board behind it. */}
-          <PageHeader
-            band
-            /* NO `title`: the name is on its own tab with the options menu
-               beside it, which is the one place node 49:5399 draws it. */
-            tabs={viewStrip}
-            actions={
-              <>
-                {/* WHITE, NOT LIME, AND THAT REVERSES `cd621bf`.
-                    That commit filled the two adds-something verbs with the
-                    brand, on the 8 September frame's own reading. Node 0:5
-                    draws all four of these controls identically — white, with
-                    an #E1E1E1 rim — so "Add" loses its fill along with the
-                    argument for it. The Figma is explicit and the owner asked
-                    for 1:1. */}
-                <Button variant="white">
-                  <Plus />
-                  Add
-                </Button>
-                <RangeMenu
-                  activeRange={activeRange}
-                  /* THIS ROUTE'S OWN PATH, not "#". `new URL("#", base)` has an
-                     empty pathname, so applying a window would push the harness
-                     to the site root and there would be nothing left to
-                     screenshot. */
-                  href="/design/overview"
-                  now={HOUR_AGO}
-                />
-                {/* WHITE, WHICH IS THE LOUDEST THING IN THIS ROW AFTER THE
-                    LIME — and it is drawn that way (node 49:5439). It reads
-                    against "quiet chrome", and it is followed rather than
-                    corrected: the Figma is explicit, twice, on two adjacent
-                    controls. See DESIGN.md, which owns the tension. */}
-                {/* COMPARE TO — DRAWN, AND NOT WIRED.
-                    The frame draws it between the period and the refresh, and
-                    the control is chrome, so it is built here at the frame's
-                    geometry. What it would open is a comparison SERIES the
-                    product does not compute — DESIGN.md records the two-series
-                    legend as unbuilt — so it ships disabled with a title that
-                    says so rather than as a menu that opens onto nothing. */}
-                <Button variant="white" disabled title="Comparison periods are not built yet">
-                  <ChartLine />
-                  Compare To
-                  <ChevronDown />
-                </Button>
-                <Button variant="white">
-                  <RefreshCw />
-                  Refresh All
-                </Button>
-              </>
-            }
-          />
-        </BoardControls>
 
         {/* THE GRID, SPELLED THE WAY THE BOARD SPELLS IT — twelve columns and
             a 24px gutter, with `grid-auto-rows` at the row half of the pitch
@@ -379,5 +384,6 @@ export default async function OverviewLab({
         </div>
       </PageContainer>
     </AppFrame>
+    </BoardControls>
   );
 }

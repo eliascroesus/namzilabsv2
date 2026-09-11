@@ -67,14 +67,24 @@ describe("deciding a workspace is empty", () => {
   });
 
   it("renders the card instead of the page's chrome, not beside it", () => {
-    // The header is the only chrome that survived the old `!hasTiles` path —
-    // the strip, the `+` and the action row already live inside TileArea. So
-    // the empty branch has to sit ABOVE `BoardControls`, or the title and the
-    // period pills come back.
-    const branch = page.indexOf("{emptyWorkspace && !loadError ? (");
-    const controls = page.indexOf("<BoardControls>");
-    expect(branch).toBeGreaterThan(-1);
-    expect(branch).toBeLessThan(controls);
+    /**
+     * THE CLAIM IS UNCHANGED AND THE EVIDENCE HAD TO MOVE.
+     *
+     * It used to be source ORDER — the empty branch above `<BoardControls>`,
+     * because the provider wrapped the header and everything under it. The
+     * band left the page body on 11 Sep 2026 (it was bouncing inside the
+     * scroller and being narrowed by the scrollbar), so the provider now wraps
+     * the whole shell and that ordering says nothing.
+     *
+     * What it protects is the same thing: a workspace with no views gets the
+     * Get-started card and NOT the board's chrome — no view tabs, no Refresh
+     * All above an invitation to start. The band is handed to `AppShell` as a
+     * prop, so the question is whether that prop is withheld, and the
+     * condition must be the ternary's own.
+     */
+    expect(page).toMatch(/band=\{emptyWorkspace && !loadError \? undefined : boardBand\}/);
+    // And the branch still exists to be withheld FOR.
+    expect(page.indexOf("{emptyWorkspace && !loadError ? (")).toBeGreaterThan(-1);
   });
 });
 

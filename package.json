@@ -22,6 +22,7 @@
     "geometry": "node scripts/geometry-check.mjs",
     "frame": "node scripts/frame-check.mjs",
     "portals": "node scripts/portal-check.mjs",
+    "band": "node scripts/band-check.mjs",
     "shot:modes": "node scripts/shot-modes.mjs"
   },
   "dependencies": {

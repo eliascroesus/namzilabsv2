@@ -54,6 +54,22 @@ export function AppFrame({
   account,
   workspace,
   views,
+  /**
+   * THE SECOND CHROME BAND — the board's tabs and its controls.
+   *
+   * It belongs HERE, beside the top bar and outside the scroll region, and it
+   * spent a day inside the panel pinned with `sticky top-0` instead. That
+   * worked and shivered: a sticky element is repainted by its scroller, so it
+   * lagged the bar on any fast scroll, and a vertical scrollbar narrowed it
+   * while leaving the bar alone — so the two halves of one object moved
+   * independently. Both are consequences of being inside the scroller, so the
+   * fix is to not be.
+   *
+   * A NODE, NOT A SLOT ID. The board's own page renders `AppShell`, so it can
+   * simply hand this up — which means it is server-rendered with the rest of
+   * the page rather than arriving a frame late the way a portal would.
+   */
+  band,
   surface,
   hide,
   ownsMain = false,
@@ -71,6 +87,7 @@ export function AppFrame({
    * file.
    */
   views?: BoardView[];
+  band?: ReactNode;
   surface: string;
   /** Rail items (by label) this viewer shouldn't see; AppShell decides. */
   hide?: string[];
@@ -236,6 +253,10 @@ export function AppFrame({
               is drawn. The drawer stays a prop because it is built HERE, where
               the navigation data already is — the bar holds none of it. */}
           <TopBar menu={<MobileDrawer hide={hide} views={views} workspace={workspace} account={account} />} />
+          {/* THE SECOND BAND, IF THE PAGE HAS ONE. `shrink-0` so it keeps its
+              own height when the panel is short — without it a flex column
+              hands the scroll region the space and this collapses. */}
+          {band && <div className="shrink-0">{band}</div>}
           {/* `min-h-0` is the vertical twin of the `min-w-0` above: without it a
               flex column with a scrolling child never shrinks past its content's
               natural height, and the panel's `overflow-y-auto` never gets

@@ -63,11 +63,21 @@ export async function AppShell({
   userId,
   orgId,
   userEmail,
+  band,
   children,
 }: {
   userId: string;
   orgId: string;
   userEmail?: string | null;
+  /**
+   * A second chrome band, under the top bar and OUTSIDE the scroll region.
+   *
+   * Only the board passes one. It is a pass-through rather than something this
+   * shell builds, for the reason the file already gives about page data: the
+   * shell renders on ten routes and cannot know what any of them put there.
+   * What it owns is the POSITION — see `AppFrame`.
+   */
+  band?: React.ReactNode;
   children: React.ReactNode;
 }) {
   /**
@@ -168,6 +178,7 @@ export async function AppShell({
     // read `bg-canvas-bg`, which made the shell that fetches memberships also
     // the file that decided what colour the dashboard is.
     <AppFrame
+      band={band}
       surface="overflow-y-auto"
       hide={hide}
       /* THE RAIL'S PREFERENCE IS GONE, AND SO IS THE COOKIE THAT CARRIED IT.

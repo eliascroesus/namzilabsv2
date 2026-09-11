@@ -218,12 +218,23 @@ describe("the board's bar", () => {
   const controls = readFileSync(join(__dirname, "..", "src/app/dashboard/board-controls.tsx"), "utf8");
   const page = readFileSync(join(__dirname, "..", "src/components/ui/page.tsx"), "utf8");
 
-  it("is a full-bleed band that escapes the container's gutter", () => {
-    // `PageContainer` is `p-6`; without the negative margin the band sits
-    // inside a 24px inset with the page's ground showing around it.
-    // `pb-4 pt-2` — node 35:6044's own `padding: 8px 24px 16px`, where this
-    // was a symmetric `py-2`. The band is the only rule in the chrome now.
-    expect(page).toMatch(/-m-6 mb-6 border-b border-topbar-border bg-topbar px-6 pb-4 pt-2/);
+  it("is a band in the CHROME, with no container left to escape", () => {
+    /**
+     * IT WAS `-m-6 mb-6 … sticky top-0`, and all three classes existed to
+     * survive being inside `PageContainer`: the negative margin escaped the
+     * page's 24px, the bottom margin put it back, and `sticky` pinned it
+     * against a scroller it should never have been in.
+     *
+     * It is a sibling of the top bar now (`AppFrame`'s `band` prop), so it
+     * sits in the chrome's own box: no margin to cancel, no scroller to pin
+     * against, and the 24px beneath it is `PageContainer`'s own `pt-6` — one
+     * owner for that distance rather than two that had to agree.
+     *
+     * `pb-4 pt-2` is node 35:6044's `padding: 8px 24px 16px` and survives.
+     */
+    expect(page).toMatch(/band \? "border-b border-topbar-border bg-topbar px-6 pb-4 pt-2"/);
+    expect(page, "nothing left to escape").not.toMatch(/-m-6 mb-6 border-b border-topbar-border/);
+    expect(page, "and nothing left to pin against").not.toMatch(/sticky top-0 z-20 -m-6/);
   });
 
   it("draws the tabs as pills with the frame's own padding and gaps", () => {
