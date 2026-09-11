@@ -80,14 +80,31 @@ const cards = await page.evaluate(() => {
      * owns its band and it answers a hover — and measures 0, which is the whole
      * reason the 4% floor had to die.
      */
-    const polys = [...(card?.querySelectorAll("polygon") ?? [])].map((el) => {
-      const xs = (el.getAttribute("points") ?? "")
+    /**
+     * A SEGMENT'S OWN WIDTH IS ITS TOP EDGE, not its bounding box — and getting
+     * that wrong reported the owner's flaring tile as two equal 100s. Each
+     * polygon runs from this stage's width toward the next one's, so a stage
+     * whose neighbour is wider has a bbox as wide as that neighbour: exactly the
+     * "two identical slabs" reading this redesign exists to kill, resurrected
+     * inside the check meant to catch it.
+     *
+     * The FLOOR is captured beside it, because the fix for that misreading lives
+     * there: a falling stage tapers (floor < top), a RISING one steps (floor ===
+     * top) and the stage below simply starts wider. A floor wider than its own
+     * top is the flare coming back.
+     */
+    const polyGeom = [...(card?.querySelectorAll("polygon") ?? [])].map((el) => {
+      const pts = (el.getAttribute("points") ?? "")
         .trim()
         .split(/\s+/)
-        .slice(0, 2)
-        .map((pair) => Number(pair.split(",")[0]));
-      return xs.length === 2 && xs.every(Number.isFinite) ? Math.round((xs[1] - xs[0]) * 10) / 10 : 0;
+        .map((pair) => pair.split(",").map(Number));
+      const w = (a, b) => (pts[a] && pts[b] ? Math.round((pts[b][0] - pts[a][0]) * 10) / 10 : 0);
+      // 0,1 are the top edge; 4,3 are the band floor (left then right).
+      return { top: w(0, 1), floor: w(4, 3) };
     });
+    const polys = polyGeom.map((g) => g.top);
+    /** A zero stage draws no polygon at all — it is a dashed rule on the band's axis. */
+    const zeroMarks = (card?.querySelectorAll("line[stroke-dasharray]") ?? []).length;
     const bars = filledDivs;
     const arcs = [...(card?.querySelectorAll("path, circle") ?? [])].filter(
       (el) => el.getBoundingClientRect().width > 0,
@@ -150,6 +167,8 @@ const cards = await page.evaluate(() => {
       polyCount: polys.length,
       barPx,
       polys,
+      polyGeom,
+      zeroMarks,
       notches,
       notes,
       overflow,
@@ -273,22 +292,25 @@ const byTitle = (s) => cards.find((c) => c.title.includes(s));
 const widens = byTitle("widens");
 if (widens) {
   /**
-   * THE RISING STAGE IS THE LONGEST BAR — the assertion that replaces "it
-   * carries a cut edge".
+   * A RISING STAGE STEPS, IT DOES NOT FLARE — the assertion that replaces "it
+   * carries a cut edge", and then replaces the first version of its own
+   * replacement.
    *
-   * The old mark measured against the FIRST stage and clamped at 100, so a
-   * stage at 340% drew exactly as long as one at 100% and the only thing
-   * telling the reader otherwise was a dashed border plus a sentence. Under
-   * share-of-max there is nothing to clip: the risen stage simply IS the
-   * longest, and a hairline notch marks where the stage above it ended.
+   * Capping was the original lie: a stage at 340% drew exactly as long as one at
+   * 100%. Share-of-max removed it. Then the connected body reintroduced it
+   * geometrically — an unconditional taper gave a narrow stage a bottom edge as
+   * wide as the wide stage under it, so a 31%-wide stage ended its band at 100%.
+   * A stage's floor may never exceed its own top.
    */
-  const widest = Math.max(...widens.barPx);
-  const ok = widens.barPx.indexOf(widest) > 0;
-  if (!ok) problems.push(`the widening funnel's longest bar is not the risen stage (${widens.barPx.join(", ")}px)`);
-  say(ok, `a stage bigger than the first draws the longest bar (${widens.barPx.join(", ")}px)`);
-  const notched = widens.notches > 0;
-  if (!notched) problems.push("the widening funnel drew no crossing mark where the stage above ended");
-  say(notched, "…and a hairline marks where the stage above ended");
+  const flares = widens.polyGeom.filter((g) => g.floor > g.top + 0.5);
+  if (flares.length) problems.push(`a rising stage flares outward again (${JSON.stringify(flares)})`);
+  say(!flares.length, "a rising stage steps rather than flaring outward");
+
+  const widest = Math.max(...widens.polys);
+  const ok = widens.polys.indexOf(widest) > 0;
+  if (!ok) problems.push(`the widening funnel's widest segment is not the risen stage (${widens.polys.join(", ")})`);
+  say(ok, `a stage bigger than the first is the widest segment (${widens.polys.join(", ")})`);
+
   const apology = /capped|cut off|larger than the first/.test(widens.notes);
   if (apology) problems.push("the cap apology outlived the cap");
   say(!apology, "…and nothing apologises for a clip that no longer happens");
@@ -297,33 +319,34 @@ if (widens) {
 const zeroTail = byTitle("last stage is zero");
 if (zeroTail) {
   /**
-   * A ZERO STAGE IS THE POINT THE BODY COMES TO. It still has a polygon — it
-   * owns its band and answers a hover — but that polygon has no width, which is
-   * the whole reason the 4% floor had to die: the floor manufactured ink for an
-   * empty set, and on the centred mark that read as a bullet, not a bar.
+   * A ZERO STAGE IS NOT A POLYGON AT ALL any more. Its shape was degenerate —
+   * the point the body comes to — so the band rendered blank, and when that
+   * stage is also the bottleneck there was nothing for the danger colour to
+   * fill. It is a dashed rule on the band's own axis now: present, empty, and
+   * without the manufactured width the 4% floor used to invent.
    */
-  const wide = zeroTail.polys.filter((w) => w > 0.5).length;
-  const ok = zeroTail.polys.length === 4 && wide === 3;
+  const ok = zeroTail.polys.length === 3 && zeroTail.zeroMarks === 1;
   if (!ok) {
     problems.push(
-      `a zero-tailed funnel drew ${zeroTail.polys.length} segments of which ${wide} have width; expected 4 and 3`,
+      `a zero-tailed funnel drew ${zeroTail.polys.length} segments and ${zeroTail.zeroMarks} zero marks; expected 3 and 1`,
     );
   }
-  say(ok, `a zero stage is a segment with no width (${zeroTail.polys.map((w) => Math.round(w)).join(", ")})`);
+  say(ok, `a zero stage is a dashed rule, not a segment (${zeroTail.polys.join(", ")} + ${zeroTail.zeroMarks} mark)`);
 }
 
 const owner = byTitle("owner's tile");
 if (owner) {
   /**
-   * THE OWNER'S OWN TILE, as the regression it caused. 12 -> 39 -> 0 used to draw
-   * two pixel-identical full-width slabs and a stub. The body must now visibly
-   * FLARE into stage 2 and pinch to nothing at stage 3 — an hourglass, which is
-   * the honest shape of a composition that does not narrow.
+   * THE OWNER'S OWN TILE. 12 -> 39 -> 0 used to draw two pixel-identical
+   * full-width slabs and a floating stub. Stage 1 must now be visibly narrow,
+   * step out to a wider stage 2, and the zero stage must be a dashed rule.
    */
-  const [a, b, c] = owner.polys;
-  const ok = a != null && b != null && b > a * 2 && (c ?? 0) < 0.5;
-  if (!ok) problems.push(`the owner's tile does not flare then pinch (${owner.polys.map((w) => Math.round(w)).join(", ")})`);
-  say(ok, `the owner's tile flares and pinches (${owner.polys.map((w) => Math.round(w)).join(", ")})`);
+  const [a, b] = owner.polys;
+  const stepped = a != null && b != null && b > a * 2;
+  const pinched = owner.polys.length === 2 && owner.zeroMarks === 1;
+  if (!stepped) problems.push(`the owner's tile does not step out (${owner.polys.join(", ")})`);
+  if (!pinched) problems.push(`the owner's zero stage is not a dashed rule (${owner.polys.length} segments, ${owner.zeroMarks} marks)`);
+  say(stepped && pinched, `the owner's tile steps out and pinches to nothing (${owner.polys.join(", ")} + ${owner.zeroMarks} mark)`);
 }
 
 console.log(

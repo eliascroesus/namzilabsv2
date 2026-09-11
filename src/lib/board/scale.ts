@@ -451,13 +451,21 @@ export function stageWidths(counts: number[]): number[] {
  * stretch preserves every ratio exactly.
  */
 export type FunnelBand = {
-  /** The stage's own polygon, as an SVG `points` list in a 0..100 box. */
+  /**
+   * The stage's own polygon, as an SVG `points` list in a 0..100 box. The first
+   * TWO points are its top edge, which is the stage's OWN width — everything
+   * below them belongs to the transition into the next stage.
+   */
   points: string;
   /** Band top and bottom, so a caller can place a hit target or a label. */
   y0: number;
   y1: number;
   /** This stage's width as a share of the largest, 0..100. */
   width: number;
+  /** The band's own axis: 50 centred, 0 left-anchored. A zero stage's mark rides it. */
+  cx: number;
+  /** The next stage is WIDER, so this band's floor is a step rather than a slope. */
+  rise: boolean;
 };
 
 export function funnelShape(
@@ -482,15 +490,37 @@ export function funnelShape(
     const y0 = round10(i * band);
     const y1 = round10((i + 1) * band);
     const yk = round10(y0 + band * shoulder);
+    const next = i === n - 1 ? w : widths[i + 1];
+    const rise = next > w;
+    /**
+     * TAPER DOWN, STEP UP — and the asymmetry is the whole point.
+     *
+     * A FALL is drawn in the space between the two stages: the sides slope
+     * inward and the slope IS the loss, which is what makes this a pipeline
+     * rather than a stack of bars.
+     *
+     * A RISE must NOT slope outward, and the first version of this did. Sloping
+     * out gives stage i a bottom edge as wide as stage i+1, so a stage that is
+     * genuinely 31% of the largest ends its band at 100% and reads as reaching
+     * full width — which is precisely the "two identical slabs" misreading this
+     * whole redesign exists to kill, rebuilt in the geometry after being removed
+     * from the arithmetic. Measured on the owner's own data: On Calendar is
+     * 30.8% wide and its polygon floor was 100%.
+     *
+     * So a rising stage keeps its own width all the way down and the stage below
+     * simply STARTS wider. The step is visible, honest, and is what Looker
+     * Studio's own stepped bars do.
+     */
+    const floor = rise ? w : next;
     const [l0, r0] = edges(w);
-    // The last stage does not taper into anything, so its neck stays its own
-    // width and the body ends square.
-    const [l1, r1] = edges(i === n - 1 ? w : widths[i + 1]);
+    const [l1, r1] = edges(floor);
     return {
       points: `${l0},${y0} ${r0},${y0} ${r0},${yk} ${r1},${y1} ${l1},${y1} ${l0},${yk}`,
       y0,
       y1,
       width: w,
+      cx: align === "center" ? 50 : 0,
+      rise,
     };
   });
 }
