@@ -414,6 +414,88 @@ export function stageWidths(counts: number[]): number[] {
 }
 
 /**
+ * THE FUNNEL AS ONE CONNECTED BODY — a polygon per stage, sides sloping from
+ * this stage's width to the next one's, so the TAPER between two stages is the
+ * drop rather than a gap between two bars.
+ *
+ * The mark used to be detached horizontal bars with a label line over each, and
+ * the owner's verdict on that was blunt: it reads as a table, not as a funnel.
+ * A pipeline is supposed to look like a pipeline. This is the shape every
+ * funnel implementation surveyed actually draws — ECharts, nivo, Recharts,
+ * chartjs-chart-funnel — and the reason they all draw it is that the SLOPE
+ * carries the loss for free, in the space between the stages, where a bar chart
+ * has nothing at all.
+ *
+ * THE SHOULDER IS WHY A STAGE STILL HAS A WIDTH YOU CAN READ. Each stage owns a
+ * band; the first `shoulder` of that band is a straight-sided rectangle at the
+ * stage's own width, and only the remainder slopes toward the next stage. Drop
+ * the shoulder and the whole thing becomes a cone in which no single stage has a
+ * definite width, so the numbers stop having a mark to belong to — this is
+ * nivo's `shapeBlending` and chartjs-chart-funnel's clamped `shrinkFraction`,
+ * and 0.55 sits where both of them default.
+ *
+ * TWO ALIGNMENTS, ONE GEOMETRY. `center` gives the symmetric silhouette a
+ * "Pipeline" wants; `left` anchors every stage at x=0, which is what a "Funnel"
+ * wants and is also the only form in which two stages can be compared by length
+ * against a shared origin. They differ by one line, which is what stops the two
+ * marks drifting apart the way they had already drifted over a 2%-vs-4% floor.
+ *
+ * THE LAST STAGE HAS A FLAT BOTTOM, at its own width. Recharts defaults to a
+ * triangle and ECharts tapers to `minSize`; both manufacture a final drop that
+ * is not in the data, which is a lie told by a default.
+ *
+ * Coordinates are a 0..100 box per axis with `preserveAspectRatio="none"` — the
+ * `cartesian.tsx` idiom rather than the pie's aspect lock, and the distinction
+ * matters: a pie locks aspect because ANGLE is its encoding and a squeezed
+ * circle lies. Here the encoding is horizontal width only, so a non-uniform
+ * stretch preserves every ratio exactly.
+ */
+export type FunnelBand = {
+  /** The stage's own polygon, as an SVG `points` list in a 0..100 box. */
+  points: string;
+  /** Band top and bottom, so a caller can place a hit target or a label. */
+  y0: number;
+  y1: number;
+  /** This stage's width as a share of the largest, 0..100. */
+  width: number;
+};
+
+export function funnelShape(
+  counts: number[],
+  opts: { align?: "center" | "left"; shoulder?: number } = {},
+): FunnelBand[] {
+  const { align = "center", shoulder = 0.55 } = opts;
+  const widths = stageWidths(counts);
+  const n = widths.length;
+  if (n === 0) return [];
+  const band = 100 / n;
+
+  /**
+   * The x pair for a given width. Centred, a stage spreads either side of 50;
+   * left-anchored it starts at 0. Everything else about the polygon is the same,
+   * which is the point of computing it here rather than in two components.
+   */
+  const edges = (w: number): [number, number] =>
+    align === "center" ? [round10(50 - w / 2), round10(50 + w / 2)] : [0, round10(w)];
+
+  return widths.map((w, i) => {
+    const y0 = round10(i * band);
+    const y1 = round10((i + 1) * band);
+    const yk = round10(y0 + band * shoulder);
+    const [l0, r0] = edges(w);
+    // The last stage does not taper into anything, so its neck stays its own
+    // width and the body ends square.
+    const [l1, r1] = edges(i === n - 1 ? w : widths[i + 1]);
+    return {
+      points: `${l0},${y0} ${r0},${y0} ${r0},${yk} ${r1},${y1} ${l1},${y1} ${l0},${yk}`,
+      y0,
+      y1,
+      width: w,
+    };
+  });
+}
+
+/**
  * A RATIO ABOVE ONE SPELLED AS A MULTIPLE — `3.4` becomes "3.4x" — and `null`
  * for anything at or below one, which really is a share and belongs in the
  * caller's own percentage.

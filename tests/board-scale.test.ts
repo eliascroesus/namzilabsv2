@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { arcPath, bucketLabel, niceTicks, bucketKeyOf,
-  padSeries, pieSlices, stageWidths } from "@/lib/board/scale";
+  padSeries, pieSlices, stageWidths, funnelShape } from "@/lib/board/scale";
 
 /**
  * THE CHART KIT'S ARITHMETIC, ASSERTED RATHER THAN EYEBALLED.
@@ -237,6 +237,65 @@ describe("stageWidths — a length channel with no cap and no floor", () => {
   it("does not divide by an empty funnel", () => {
     expect(stageWidths([0, 0]).every((w) => Number.isFinite(w))).toBe(true);
     expect(stageWidths([])).toEqual([]);
+  });
+});
+
+describe("funnelShape — one connected body, not a row of bars", () => {
+  it("tapers each stage into the next, so the slope is the drop", () => {
+    /**
+     * Six points per stage: this stage's top edge, its shoulder, then the NEXT
+     * stage's width at the band floor. The shoulder is what keeps a stage's own
+     * width readable — without it the body melts into a cone and no single stage
+     * has a width the number can belong to.
+     */
+    const [first, second] = funnelShape([100, 50], { align: "left" });
+    expect(first.points.startsWith("0,0 100,0"), "the top edge is this stage's width").toBe(true);
+    expect(first.points.endsWith("50,50 0,50 0,27.5"), "the band floor is the NEXT stage's width").toBe(true);
+    /**
+     * THE LAST STAGE HAS A FLAT BOTTOM at its own width. Recharts defaults to a
+     * triangle and ECharts tapers to a minimum size; both manufacture a final
+     * drop that is not in the data, which is a lie told by a default.
+     */
+    expect(second.points).toContain("50,100 0,100");
+  });
+
+  it("centres or left-anchors from one geometry, so the two marks cannot drift", () => {
+    // The pair had already drifted once, over a 2%-vs-4% floor that nothing
+    // could see because no page ever drew both marks side by side.
+    expect(funnelShape([100, 100], { align: "center" })[0].points.startsWith("0,0 100,0")).toBe(true);
+    /**
+     * Shares are of the MAX, so two equal stages are both 100% — the centreline
+     * only shows on a stage genuinely narrower than the widest one. Asserting it
+     * on [50, 50] tested my arithmetic rather than the code's.
+     */
+    expect(
+      funnelShape([100, 50], { align: "center" })[1].points.startsWith("25,50 75,50"),
+      "a half-width stage straddles the centreline",
+    ).toBe(true);
+  });
+
+  it("gives a zero stage a real band that simply has no width", () => {
+    /**
+     * It is the point the body comes to, and it keeps its polygon: the band is
+     * still there, still owns its share of the height, still answers a hover.
+     * That is what let the 4% floor die — the floor existed to keep a decimated
+     * stage hoverable, which was a geometry lie told to solve an interaction
+     * problem.
+     */
+    const bands = funnelShape([10, 0], { align: "center" });
+    expect(bands).toHaveLength(2);
+    expect(bands[1].width).toBe(0);
+    expect(bands[1].y1 - bands[1].y0).toBe(50);
+  });
+
+  it("lets a rising stage flare instead of clamping it", () => {
+    const [a, b] = funnelShape([10, 40], { align: "left" });
+    expect(a.width).toBe(25);
+    expect(b.width).toBe(100);
+  });
+
+  it("answers an empty funnel with no bands at all", () => {
+    expect(funnelShape([])).toEqual([]);
   });
 });
 

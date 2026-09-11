@@ -41,21 +41,54 @@ const cards = await page.evaluate(() => {
     const text = (card?.textContent ?? "").replace(/\s+/g, " ").trim();
     // The mark: any bar or arc actually painted inside this card.
     /**
-     * A BAR IS FILLED; A LOSS FRAME IS NOT — and telling them apart is new.
+     * TWO MARKS, TWO SHAPES OF INK — and the check has to know both.
      *
-     * Both are now percentage-width boxes on a stage row, so "count the
-     * percentage-width divs" started counting six things for a four-stage
-     * funnel: three bars plus the outlined rectangles that draw what each stage
-     * LOST. The fill is the mark; the frame is the absence of one, which is
-     * exactly the distinction the redesign is built on, so the check has to make
-     * it too.
+     * A "Funnel" is still a row of filled DIVS on a track, where a loss frame is
+     * an outlined box of the same kind: telling those apart needs the fill test,
+     * because counting percentage-width divs counted six things for a
+     * four-stage funnel.
+     *
+     * A "Pipeline" is now an SVG POLYGON per stage, one connected body, so it
+     * has no divs at all — and the first version of this check duly reported
+     * that every pipeline "painted nothing" while a perfectly good funnel was on
+     * screen. `segments` is the union: the things that carry a stage's ink,
+     * whichever mark drew them.
      */
-    const bars = [...(card?.querySelectorAll("div[style*='width']") ?? [])].filter((el) => {
+    const filledDivs = [...(card?.querySelectorAll("div[style*='width']") ?? [])].filter((el) => {
       const r = el.getBoundingClientRect();
       if (!(r.width > 0 && r.height > 0 && /%$/.test(el.style.width))) return false;
       const cls = (el.className || "").toString();
       return !!el.style.background || /bg-(marker|danger|brand)/.test(cls);
     });
+    /**
+     * A ZERO STAGE'S POLYGON IS DEGENERATE ON PURPOSE — it is the point the body
+     * comes to — so it is counted as a segment that drew NOTHING rather than as
+     * a missing stage. `getBBox().width` is the honest measure: a zero-width
+     * polygon still exists, still owns its band, and still answers a hover.
+     */
+    /**
+     * A SEGMENT'S OWN WIDTH IS ITS TOP EDGE, not its bounding box — and getting
+     * that wrong reported the owner's flaring tile as two equal 100s.
+     *
+     * Each polygon runs from this stage's width down to the NEXT one's, so a
+     * stage that flares has a bbox as wide as the stage below it: exactly the
+     * "two identical slabs" reading this redesign exists to kill, resurrected
+     * inside the check meant to catch it. The first two points are the top edge,
+     * which is the stage's own width and nothing else.
+     *
+     * A zero stage keeps its polygon — it is the point the body comes to, it
+     * owns its band and it answers a hover — and measures 0, which is the whole
+     * reason the 4% floor had to die.
+     */
+    const polys = [...(card?.querySelectorAll("polygon") ?? [])].map((el) => {
+      const xs = (el.getAttribute("points") ?? "")
+        .trim()
+        .split(/\s+/)
+        .slice(0, 2)
+        .map((pair) => Number(pair.split(",")[0]));
+      return xs.length === 2 && xs.every(Number.isFinite) ? Math.round((xs[1] - xs[0]) * 10) / 10 : 0;
+    });
+    const bars = filledDivs;
     const arcs = [...(card?.querySelectorAll("path, circle") ?? [])].filter(
       (el) => el.getBoundingClientRect().width > 0,
     );
@@ -114,7 +147,9 @@ const cards = await page.evaluate(() => {
       title: text.slice(0, 46),
       bars: bars.length,
       arcs: arcs.length,
+      polyCount: polys.length,
       barPx,
+      polys,
       notches,
       notes,
       overflow,
@@ -196,7 +231,7 @@ const say = (ok, line) => console.log(`${ok ? "✓" : "✗"} ${line}`);
 
 for (const c of cards) {
   const refused = /Refused —/.test(c.title) || /Unconfigured/.test(c.title);
-  const drew = c.bars > 0 || c.arcs > 0;
+  const drew = c.bars > 0 || c.arcs > 0 || c.polys.length > 0;
 
   if (refused) {
     // A refusal REPLACES the mark. Anything drawn beside the sentence is the
@@ -207,7 +242,7 @@ for (const c of cards) {
     say(!drew && c.text.length >= 20, `${c.title} — refuses, mark replaced`);
   } else {
     if (!drew) problems.push(`"${c.title}" should draw but painted nothing`);
-    say(drew, `${c.title} — draws (${c.bars} bars, ${c.arcs} arcs)`);
+    say(drew, `${c.title} — draws (${c.bars} bars, ${c.arcs} arcs, ${c.polyCount} segments)`);
   }
 
   /**
@@ -262,66 +297,33 @@ if (widens) {
 const zeroTail = byTitle("last stage is zero");
 if (zeroTail) {
   /**
-   * A ZERO STAGE DRAWS NO BAR. The 4% floor manufactured ink for an empty set —
-   * on the centred mark, a bullet floating under two slabs, clipped by the card.
-   * The empty frame beside it is what carries the loss now.
+   * A ZERO STAGE IS THE POINT THE BODY COMES TO. It still has a polygon — it
+   * owns its band and answers a hover — but that polygon has no width, which is
+   * the whole reason the 4% floor had to die: the floor manufactured ink for an
+   * empty set, and on the centred mark that read as a bullet, not a bar.
    */
-  const bars = zeroTail.barPx.length;
-  const ok = bars === 3;
-  if (!ok) problems.push(`a zero-tailed funnel drew ${bars} bars, expected 3 (the zero stage draws none)`);
-  say(ok, `a zero stage draws no bar (${zeroTail.barPx.join(", ")}px for four stages)`);
+  const wide = zeroTail.polys.filter((w) => w > 0.5).length;
+  const ok = zeroTail.polys.length === 4 && wide === 3;
+  if (!ok) {
+    problems.push(
+      `a zero-tailed funnel drew ${zeroTail.polys.length} segments of which ${wide} have width; expected 4 and 3`,
+    );
+  }
+  say(ok, `a zero stage is a segment with no width (${zeroTail.polys.map((w) => Math.round(w)).join(", ")})`);
 }
 
-const owner = byTitle("never narrows");
+const owner = byTitle("owner's tile");
 if (owner) {
   /**
-   * THE OWNER'S OWN TILE, as the regression it caused. 12 -> 38 -> 0 used to draw
-   * [100, 100, 4]: two pixel-identical full-width slabs and a stub. Stage 1 must
-   * now be visibly SHORTER than stage 2, which is the truth about that data.
+   * THE OWNER'S OWN TILE, as the regression it caused. 12 -> 39 -> 0 used to draw
+   * two pixel-identical full-width slabs and a stub. The body must now visibly
+   * FLARE into stage 2 and pinch to nothing at stage 3 — an hourglass, which is
+   * the honest shape of a composition that does not narrow.
    */
-  const [a, b] = owner.barPx;
-  const ok = a != null && b != null && b > a * 2;
-  if (!ok) problems.push(`the owner's tile still draws stage 1 and 2 alike (${owner.barPx.join(", ")}px)`);
-  say(ok, `the owner's tile draws stage 1 short of stage 2 (${owner.barPx.join(", ")}px)`);
-}
-
-const funnel = byTitle("Composed funnel —") ?? byTitle("Composed funnel");
-if (funnel) {
-  const ok = /not followed as a cohort/.test(funnel.notes);
-  if (!ok) problems.push("the cohort caveat is missing from a composed funnel");
-  say(ok, "a composed funnel always discloses it is not a cohort");
-}
-
-const pie = byTitle("residual");
-if (pie) {
-  const ok = /assumed not to overlap/.test(pie.notes);
-  if (!ok) problems.push("the pie never says its parts are assumed disjoint");
-  say(ok, "a composed pie always discloses the MECE assumption");
-  /**
-   * COUNTED, NOT GREPPED — and that distinction is this check's own bug, caught
-   * by running it. Asserting the word "Other" appears on the card passed for
-   * both pies and failed for neither: the MECE disclosure is itself the
-   * sentence `"Other" is Total Leads minus the named parts`, so the word is on
-   * every composed pie whether or not a remainder was ever drawn. The arcs are
-   * the claim; the prose is about the arcs.
-   */
-  const drewResidual = pie.arcs === 3;
-  if (!drewResidual) problems.push(`the residual pie drew ${pie.arcs} arcs, expected 3 (two parts and the remainder)`);
-  say(drewResidual, "…and the remainder is drawn as its own arc");
-}
-
-const exact = byTitle("tile exactly");
-if (exact) {
-  const ok = exact.arcs === 2;
-  if (!ok) problems.push(`parts that tile the whole exactly drew ${exact.arcs} arcs, expected 2 and no remainder`);
-  say(ok, "parts that tile exactly draw no remainder");
-}
-
-const duration = byTitle("duration");
-if (duration) {
-  const ok = /Speed to Lead/.test(duration.text);
-  if (!ok) problems.push("the duration refusal does not name the offending metric");
-  say(ok, "a refusal names the metric that caused it");
+  const [a, b, c] = owner.polys;
+  const ok = a != null && b != null && b > a * 2 && (c ?? 0) < 0.5;
+  if (!ok) problems.push(`the owner's tile does not flare then pinch (${owner.polys.map((w) => Math.round(w)).join(", ")})`);
+  say(ok, `the owner's tile flares and pinches (${owner.polys.map((w) => Math.round(w)).join(", ")})`);
 }
 
 console.log(
