@@ -186,3 +186,65 @@ export function PanelSpecimen({ options }: { options: CustomTileOption[] }) {
     </div>
   );
 }
+
+/**
+ * THE COMPOSED DATA TAB, WHICH NOTHING IN THIS REPO HAD EVER RENDERED.
+ *
+ * `PanelSpecimen` above mounts a BAR chart with no parts, so the stages editor
+ * — the counter heading, the anchor chip, the part chips and their reorder
+ * controls, the Add button at its cap, the below-the-floor hint — existed only
+ * in source. Every claim anyone makes about this panel's HEIGHT, and every
+ * claim about what sits above the fold, is a claim no grep and no unit test in
+ * this repo can see. That is the documented way a layout bug ships green here.
+ *
+ * TWO SPECIMENS, because the tidy case is not the one that goes wrong:
+ *
+ *   A SETTLED PIPELINE, with one part key deliberately absent from `options`
+ *   so the "This metric isn't published any more" chip is photographed too —
+ *   it is the state a reader reaches by unpublishing a flow, and it is the one
+ *   chip whose only job is to stay removable.
+ *
+ *   A PIE OVER ITS CAP, holding six parts against a ceiling of five. It is
+ *   reachable in one press — changing a composed funnel to a pie carries the
+ *   parts across — and the heading reading "Parts (6 of 5)" beside a disabled
+ *   Add button is the only thing on screen that explains the tile's refusal.
+ */
+export function ComposedPanelSpecimen({ options }: { options: CustomTileOption[] }) {
+  const CASES = [
+    {
+      label: "A pipeline, one stage unpublished",
+      chart: "pipeline" as const,
+      parts: ["flow:demo:t2", "flow:demo:gone", "flow:demo:t3"],
+    },
+    {
+      label: "A pie carried past its cap by a chart switch",
+      chart: "pie" as const,
+      parts: ["flow:demo:t2", "flow:demo:t3", "flow:demo:t4", "flow:demo:t5", "flow:demo:t6", "flow:demo:t7"],
+    },
+  ];
+  return (
+    <div className="grid gap-4 lg:grid-cols-2" data-composed-panel>
+      {CASES.map((c) => (
+        <div key={c.label} className="relative h-[600px] overflow-hidden rounded-surface [transform:translateZ(0)]">
+          <TileConfigPanel
+            chart={c.chart}
+            charts={["number", "pie", "funnel", "pipeline"]}
+            config={{ parts: c.parts }}
+            metricName="Total Leads"
+            tileKey="flow:demo:t1"
+            metricTarget={null}
+            isFlow
+            boardRange="7d"
+            options={options}
+            busy={false}
+            initialTab="data"
+            onClose={() => {}}
+            onChart={() => {}}
+            onMetric={() => {}}
+            onConfig={() => {}}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}

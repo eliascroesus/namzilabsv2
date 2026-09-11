@@ -56,12 +56,18 @@ export function MetricList({
    * tile's own.
    *
    * A composed funnel or pie asks this list a different question from the
-   * repoint that built it. The tile's chart is `funnel`; what a STAGE has to be
-   * is "a metric that gives one number", because `compose.ts` reads a single
-   * figure per member and nothing else — so the parts picker passes `"number"`
-   * here. Filtering by the tile's own chart instead would ask the stages the
-   * question that belongs to the anchor, and offer only metrics that could
-   * themselves head a funnel.
+   * repoint that built it, and the ANSWER changed once — so this says the
+   * current one rather than the first one.
+   *
+   * "A metric that gives one number" was the obvious reading, and the parts
+   * picker passed `"number"` for a day. Every metric gives one number, so the
+   * stage list offered durations and rates and `compose.ts` refused them a
+   * press later, under a hint promising only eligible metrics were listed. The
+   * parts picker now passes the COMPOSING CHART (`slot={chart}`), which routes
+   * the question through `tileOptions` — where a metric whose facts say it is
+   * not a tally has already had the composed charts subtracted. The anchor list
+   * and the stage list then agree by construction rather than by being filtered
+   * the same way in two places.
    *
    * Defaults to `chart`, so every caller that predates composition keeps
    * exactly the behaviour it had.

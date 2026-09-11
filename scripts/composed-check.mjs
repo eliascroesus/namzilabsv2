@@ -87,7 +87,65 @@ const cards = await page.evaluate(() => {
   });
 });
 
+/**
+ * THE SETTINGS PANEL'S RESTING HEIGHT, which is the other half of this feature
+ * and the half nothing could see.
+ *
+ * The owner's complaint was not that the panel was wrong but that it "feels
+ * complex", and the measurable version of that is: how tall is the Data tab at
+ * rest, and is the control you came for on the screen? Both are geometry. The
+ * repo's own checks read source, so a panel that scrolls past the fold on every
+ * composed tile ships green — and the panel is `w-[min(384px,…)]`, narrower
+ * than anyone estimating from a screenshot assumes.
+ *
+ * `scrolls` is the claim that matters: the Data tab is inside a
+ * `max-h-[calc(100dvh-2rem)]` shell, so "too tall" shows up as a scrollable
+ * body rather than as overflow.
+ */
+const panels = await page.evaluate(() => {
+  const host = document.querySelector("[data-composed-panel]");
+  if (!host) return null;
+  return [...host.querySelectorAll("[data-tile-panel]")].map((p) => {
+    const body = p.querySelector(".overflow-y-auto");
+    const stages = [...p.querySelectorAll("p,span")].find((el) => /^(Stages|Parts) \(/.test(el.textContent ?? ""));
+    const add = [...p.querySelectorAll("button")].find((b) => /^Add (stage|part)$/.test(b.textContent ?? ""));
+    const pr = p.getBoundingClientRect();
+    return {
+      width: Math.round(pr.width),
+      panelH: Math.round(pr.height),
+      contentH: body ? body.scrollHeight : 0,
+      viewportH: body ? body.clientHeight : 0,
+      scrolls: body ? body.scrollHeight > body.clientHeight + 1 : false,
+      heading: stages?.textContent?.trim() ?? null,
+      // Where the control the panel exists for sits, measured from the panel's top.
+      addFromTop: add ? Math.round(add.getBoundingClientRect().top - pr.top) : null,
+      addBelowFold: add ? add.getBoundingClientRect().top > pr.bottom : null,
+      addDisabled: add ? add.disabled : null,
+      missingChip: /isn’t published any more/.test(p.textContent ?? ""),
+    };
+  });
+});
+
 await browser.close();
+
+if (panels && panels.length > 0) {
+  console.log("\nthe settings panel, composing:");
+  for (const p of panels) {
+    console.log(
+      `  ${p.width}px wide · body ${p.contentH}px in ${p.viewportH}px${p.scrolls ? " (SCROLLS)" : ""} · "${p.heading}" · Add at +${p.addFromTop}px${p.addDisabled ? " (disabled)" : ""}`,
+    );
+  }
+  const overCap = panels.find((p) => /\((\d+) of (\d+)\)/.test(p.heading ?? "") && (() => {
+    const [, n, m] = p.heading.match(/\((\d+) of (\d+)\)/);
+    return Number(n) > Number(m);
+  })());
+  if (overCap && !overCap.addDisabled) {
+    console.log("✗ a panel over its cap still offers Add");
+  }
+  if (!panels.some((p) => p.missingChip)) {
+    console.log("✗ the unpublished-part chip did not render — the specimen no longer covers it");
+  }
+}
 
 if (!cards) {
   console.log("✗ no [data-composed] gallery on the page — did the specimen move?");

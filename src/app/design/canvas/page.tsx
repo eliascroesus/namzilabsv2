@@ -1,7 +1,7 @@
 import { canvasCells, GRID_COLS, ROW_UNIT_PX, type GridBox } from "@/lib/board/grid";
 import { defaultSize, type ChartId } from "@/lib/board/charts";
 import { CustomTile, type ComposedPart, type CustomTileSource } from "@/components/custom-tile";
-import { CanvasHarness, PanelSpecimen } from "./harness";
+import { CanvasHarness, ComposedPanelSpecimen, PanelSpecimen } from "./harness";
 import { BOARD_GRID, PageContainer, SectionHeading } from "@/components/ui/page";
 
 /**
@@ -450,6 +450,31 @@ export default function CanvasSpecimen() {
         <div className="mt-4">
           <PanelSpecimen
             options={TILES.map((t) => ({ key: `flow:demo:${t.id}`, title: t.title, charts: ["number", "bar", "category"] }))}
+          />
+        </div>
+
+        {/* THE COMPOSED DATA TAB, which the specimen above cannot show: it
+            mounts a bar chart, and the stages editor only exists on a chart
+            that composes. Every claim about this panel's resting HEIGHT — and
+            the complaint that started the redesign, that the metric list pushes
+            the stages below the fold — is a claim only a rendered panel can
+            settle. `pnpm composed` measures this block. */}
+        <SectionHeading className="mt-12">The settings panel, composing</SectionHeading>
+        <p className="mt-1 text-sm text-muted-foreground">
+          A pipeline whose middle stage was unpublished, and a pie carried past its cap of five by a chart switch. Both
+          are states the tile routes an author here to fix.
+        </p>
+        <div className="mt-4">
+          <ComposedPanelSpecimen
+            options={[
+              { key: "flow:demo:t1", title: "Total Leads", charts: ["number", "pie", "funnel", "pipeline"] },
+              { key: "flow:demo:t2", title: "Booked Leads", charts: ["number", "pie", "funnel", "pipeline"] },
+              { key: "flow:demo:t3", title: "On Calendar", charts: ["number", "pie", "funnel", "pipeline"] },
+              { key: "flow:demo:t4", title: "Ads Leads", charts: ["number", "pie", "funnel", "pipeline"] },
+              { key: "flow:demo:t5", title: "Organic Leads", charts: ["number", "pie", "funnel", "pipeline"] },
+              { key: "flow:demo:t6", title: "Unclaimed Leads", charts: ["number", "pie", "funnel", "pipeline"] },
+              { key: "flow:demo:t7", title: "Showed", charts: ["number", "pie", "funnel", "pipeline"] },
+            ]}
           />
         </div>
 

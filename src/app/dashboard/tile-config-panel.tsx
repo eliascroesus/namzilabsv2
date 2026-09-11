@@ -474,10 +474,20 @@ export function TileConfigPanel({
   options: CustomTileOption[];
   busy: boolean;
   /**
-   * WHICH TAB OPENS. Data, because adding a chart binds it to the first metric
-   * that can be drawn that way — deliberately, so the add lands in one press —
-   * which makes "is this the right metric?" the one question a new tile always
-   * has. Style is one click away and is where a settled tile lives.
+   * WHICH TAB OPENS. Data, because every question a half-built tile has lives
+   * there — which metric, over what period, built from which stages.
+   *
+   * THE REASON THIS COMMENT USED TO GIVE IS NO LONGER TRUE, and it was load
+   * bearing, so it is corrected rather than trimmed. It said adding a chart
+   * binds it to the first metric that can be drawn that way, making "is this
+   * the right metric?" the one question a new tile always has. Adding a chart
+   * now lands `UNSET_TILE_KEY` (custom-board.tsx:982), which draws `EmptyTile`
+   * and opens the metric PICKER MODAL on click — so the anchor is chosen
+   * before this panel is ever seen, and this panel's metric list only ever
+   * serves a REPOINT of a tile that already has one.
+   *
+   * That distinction decides how much room the list deserves: a repoint is
+   * rare, and a control used rarely should not be the tallest thing on the tab.
    */
   initialTab?: Tab;
   onClose: () => void;
@@ -510,15 +520,6 @@ export function TileConfigPanel({
    * Nothing is ranked and nothing is rolled up, so a limit control there would
    * be a setting that lies about what it does — and one the renderer would
    * never read anyway, since the parts are the author's five, not a top five.
-   *
-   * Keyed on `config.parts` rather than on the chart, because a pie drawn from
-   * a GROUPED metric is still an ordinary top-N pie and still wants the
-   * control. The stored bag is what says which pie this is.
-   */
-  /**
-   * "Show at most" is hidden only where the CURRENT chart actually composes —
-   * a composed pie's "Other" is an exact residual, not a roll-up, so a limit
-   * there would be a control that lies about what it does.
    *
    * KEYED ON THE CHART, NOT ON THE STORED BAG. `config` here is the raw parsed
    * row, not `honoured(chart, …)` — honouring happens at render — so a tile
