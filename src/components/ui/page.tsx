@@ -375,7 +375,30 @@ export function PageHeader({ title, lede, actions, tabs, back, band, className }
          * padding and the 1px rule is 43, and 57 + 49 + 43 is the 149 the frame
          * starts its content container at.
          */
-        band ? "-m-6 mb-6 border-b border-topbar-border bg-topbar px-6 pb-4 pt-2" : "pb-4",
+        /* `sticky top-0` — THE SECOND BAND IS CHROME, SO IT BEHAVES LIKE IT.
+            It is rendered inside the scroll region (it has to be: the tabs and
+            the board controls are the PAGE's, and the frame cannot know what
+            view you are on) and it was therefore scrolling away under the bar
+            above it — which reads as the chrome coming apart, because the two
+            halves look like one object and only one of them was pinned.
+
+            Sticky rather than moved: the nearest scrolling ancestor is the
+            panel's own `overflow-y-auto`, so the band pins to the top of that
+            box, which is exactly the underside of the top bar. Nothing has to
+            be portalled and no height has to be reserved.
+
+            `-mt-6` IS WHAT PUTS IT AT ZERO. `PageContainer` is `p-6`, so
+            without the negative margin the band would stick 24px down the
+            panel with a strip of board sliding through the gap above it.
+
+            `z-20` clears the board and its tiles and sits under the rail
+            (`z-20` on `<aside>` is a different stacking context entirely) and
+            under every portalled menu, which render to `<body>`.
+
+            `bg-topbar` was already there and is now load-bearing rather than
+            decorative: a translucent band would show the board through itself
+            the moment anything scrolled under it. */
+        band ? "sticky top-0 z-20 -m-6 mb-6 border-b border-topbar-border bg-topbar px-6 pb-4 pt-2" : "pb-4",
         className,
       )}
     >

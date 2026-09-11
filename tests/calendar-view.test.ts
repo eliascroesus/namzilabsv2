@@ -175,7 +175,13 @@ describe("the board still has its furniture", () => {
     // as one — while the range control it used to line up with became the
     // Figma's "Today" dropdown. The drift this guards is unchanged in kind:
     // neither may re-spell what the other imports.
-    expect(board).toMatch(/className=\{PERIOD_TRACK\}/);
+    // `cn(PERIOD_TRACK, "gap-2")` SINCE 11 SEP 2026 — the groove is still
+    // IMPORTED, which is the whole claim, and the calendar adds 8px between
+    // its four segments because they are four different KINDS of thing (an
+    // arrow, a readout, an arrow, a footnote) rather than the contiguous run
+    // the range picker and the theme control rely on. The pin is the import,
+    // not the exact spelling: what it forbids is re-drawing the groove.
+    expect(board).toMatch(/cn\(PERIOD_TRACK[,)]/);
     // Anchored past the component name — `<RangeMenu` alone also matches a
     // typo like `<RangeMenuXXX`, which a sabotage pass on this exact pin
     // found does not fail it.

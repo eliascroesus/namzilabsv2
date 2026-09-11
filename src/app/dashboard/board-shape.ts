@@ -40,7 +40,25 @@ export const LANE_GAP = "gap-4";
  * A bare `overflow-x-auto` CLIPS THE FOCUS RING of its first and last child, so
  * a keyboard user loses the outline at exactly the two ends they arrive at. The
  * negative margin lets the ring breathe out into the page gutter while the
- * matching padding keeps the content where it was. Lifted verbatim in shape
- * from the dashboard's own range track, which explains it at the point of use.
+ * matching padding keeps the content where it was.
+ *
+ * ── IT MUST EQUAL `PageContainer`'s OWN INSET, AND FOR A WHILE IT DID NOT ──
+ *
+ * This stepped — 16 / 24 / 32 — because the container used to step with it.
+ * The container stopped: it is a FLAT `p-6` at every width now, deliberately,
+ * so the page's content and the top bar's content stand on one vertical line
+ * (see its own note). This constant did not follow, and the mismatch is not
+ * cosmetic — it is arithmetic:
+ *
+ *     bleed 32, inset 24  ->  the scroller is 2x8 = 16px WIDER than the box
+ *                             it sits in, at every `lg` width and above
+ *
+ * which is every desktop. The result was a horizontal scrollbar on the group
+ * view with nothing in it wide enough to need one — reported as "it's suppose
+ * to just be fill just like the other view pages", which is exactly right.
+ *
+ * Flat 24 now. A bleed SMALLER than the inset would merely fail to reach the
+ * gutter; a bleed larger overflows the page. They have to be one number, and
+ * the number belongs to the container.
  */
-export const SCROLLER_BLEED = "-mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8";
+export const SCROLLER_BLEED = "-mx-6 px-6";

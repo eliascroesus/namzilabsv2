@@ -181,11 +181,21 @@ describe("one surface on dark, and a rail that is no longer constant", () => {
     expect(lum("#121212")).toBeLessThan(lum("#151515"));
     expect(lum("#151515")).toBeLessThan(lum("#191919"));
 
-    // THE BOARD AND THE CARD SHARE #191919, deliberately — so the hairline is
-    // doing ALL of the separating rather than 1.06:1 of fill plus a rule. If a
-    // step is ever wanted back between them, `--card` is the one to move:
-    // `--panel` is the value the owner supplied.
-    expect(darkToken("card")).toBe("var(--color-neutral-900)");
+    /**
+     * AND THE CARD IS RECESSED INTO THE BOARD, NOT LIFTED OFF IT.
+     *
+     * `--card` shared #191919 with `--panel` for an hour, which left a card and
+     * its ground the same value with only the hairline between them. It is
+     * #151515 now — the same material as the top bar, three counts BELOW the
+     * board it sits on.
+     *
+     * That inverts the usual convention, so it is asserted rather than assumed:
+     * a later "fix" that lifts the card back above its ground would look like
+     * tidying and would be a change of design.
+     */
+    expect(darkToken("card")).toBe("var(--color-neutral-925)");
+    expect(darkToken("card"), "the card shares the bar's material").toBe(darkToken("topbar"));
+    expect(darkToken("card"), "and is NOT the board it sits on").not.toBe(darkToken("panel"));
   });
 
   it("THE RAIL FLIPS NOW, and that is the whole of `.mix`", () => {

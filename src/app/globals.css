@@ -1032,7 +1032,28 @@
   /* THE CARD NO LONGER SHARES THE CHROME. It is the one surface that steps
      away — #191919, at 1.06:1 on the page — which is the entire reason the
      hairline is still load-bearing. */
-  --card: var(--color-neutral-900); /* #191919 */
+  /* #151515 — THE CARD, AND IT IS RECESSED INTO ITS GROUND, NOT LIFTED OFF IT.
+   *
+   * Supplied, and it completes a ladder that reads the opposite way round to
+   * the usual one:
+   *
+   *     #121212  the page, the rail, the 8px gutter
+   *     #151515  the top bar, every filled button, AND the card
+   *     #191919  the board the cards sit ON
+   *
+   * So a metric card is DARKER than the surface under it. That is not the
+   * convention — a card normally lifts — and it is the right answer here for
+   * the same reason the top bar is this value: the card and the bar are the
+   * product's two content-bearing surfaces, and giving them one material says
+   * they are the same KIND of thing. The board is the thing they are arranged
+   * on, which is why it is the one that steps away.
+   *
+   * IT ALSO ENDS A PROBLEM THE PREVIOUS PASS CREATED. `--panel` took #191919
+   * an hour ago and `--card` was already #191919, so a card and its ground
+   * were the same value and only the hairline separated them. They are three
+   * counts apart now and the border is reinforcement again rather than the
+   * entire structure. */
+  --card: var(--color-neutral-925); /* #151515 */
   --card-foreground: var(--color-neutral-200);
   /* A MENU IS A CARD THAT FLOATS. Pointed at `--card` rather than at
      `--chrome` directly, in both themes, so the two can never drift apart by

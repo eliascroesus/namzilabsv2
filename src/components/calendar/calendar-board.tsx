@@ -435,7 +435,14 @@ export function CalendarBoard({
               arrows and a label loose on the bar read as three unrelated things;
               sunk into the track they read as a single control that moves the
               month, which is what they are. */}
-          <div className={PERIOD_TRACK}>
+          {/* `gap-2` ON THIS TRACK ONLY, not on `PERIOD_TRACK` itself. The
+              groove is shared with the range picker and the theme control,
+              where the segments are a contiguous run and a gap between them
+              would break the one-object reading those rely on. Here the
+              segments are an arrow, a label, an arrow and a footnote — four
+              different KINDS of thing — and 8px between them is what the owner
+              asked for and what stops the month name touching its chevrons. */}
+          <div className={cn(PERIOD_TRACK, "gap-2")}>
             {/* `size="icon"` (32px), NOT `iconSm` (28px). The track is `h-8` —
                 also 32px — and an `iconSm` arrow left a 2px inset on every
                 side, the last place in this groove a control did not reach
@@ -467,7 +474,11 @@ export function CalendarBoard({
                 page's own ink is white on the dark group and near-black on the
                 light one, where `--foreground` would be wrong in exactly one
                 theme. Same reasoning the range pills' hover already carries. */}
-            <span className="w-40 whitespace-nowrap text-center text-sm font-semibold text-foreground">
+            {/* REGULAR, NOT SEMIBOLD. It was the heaviest thing in the header
+                and it is a READOUT — the arrows either side are what you act
+                on, and the label says which month they have landed on. Weight
+                there was announcing a control that is not one. */}
+            <span className="w-40 whitespace-nowrap text-center text-sm font-normal text-foreground">
               {monthLabel(month)}
             </span>
             <Button
@@ -481,21 +492,27 @@ export function CalendarBoard({
             >
               <ChevronRight />
             </Button>
-            {/* "This month" LIVES IN THE GROOVE TOO, as one of the track's 8px
-                segments — it is one of the spans this control can select,
-                exactly as "Today" is on the range track. Outside it, it was a
-                fourth loose object on a row that already had three. */}
+            {/* "- UTC", AND IT IS STILL THE WAY BACK TO THIS MONTH.
+                It read "This month - UTC" for a day: the label named the act
+                and carried the footnote. The owner asked the act's name off,
+                which leaves a control whose label is a fact rather than a verb
+                — unusual, and defensible here because the act is a RETURN,
+                not a destination: the arrows are how you move, and this is how
+                you stop having moved. It is disabled the moment you are back,
+                which is the strongest signal a control can give about what it
+                does.
+                THE `title` IS DOING REAL WORK NOW rather than elaborating —
+                it is the only place the three letters are explained and the
+                only place the press is named, so it says both. */}
             <Button
               variant="ghost"
               onClick={() => setMonthIdx(months.length - 1)}
               disabled={monthIdx === months.length - 1}
-              /* THE UTC FOOTNOTE RIDES THIS LABEL NOW — see the note below on
-                 the pill that used to carry it. The `title` is what actually
-                 explains it; the three letters are the reminder. */
-              title="Days are UTC — the same days your metrics are counted in"
+              title="Days are UTC — the same days your metrics are counted in. Press to return to this month."
+              aria-label="Return to this month — days are UTC"
               className={cn(PERIOD_PILL, "text-muted-foreground hover:bg-accent hover:text-foreground")}
             >
-              This month - UTC
+              - UTC
             </Button>
           </div>
           {/* THE UTC PILL IS GONE, AND ITS FACT MOVED ONTO THE LABEL BESIDE IT.
