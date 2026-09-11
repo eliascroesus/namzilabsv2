@@ -109,3 +109,46 @@
  * that live in six other files and any of them can move.
  */
 export const DAY_CELL_H = "h-[clamp(2.75rem,calc((100dvh-27rem)/6),11rem)]";
+
+/**
+ * DID THIS DAY HAVE ANYTHING TO MEASURE?
+ *
+ * `dayValues` already drops a day the metric could not ANSWER — a rate whose
+ * denominator emptied has no value at all and is simply absent from `byDay`.
+ * What it keeps, and must keep, is a day that answered ZERO: for a count,
+ * "nothing happened" is a real result and the calendar has always drawn it as
+ * a numeral on purpose.
+ *
+ * THE CALENDAR ASKS A NARROWER QUESTION THAN THE TILES DO, and that is the
+ * whole of this function. A month grid is sixty squares seen at once; a
+ * fortnight of "0" before a workspace connected its first source reads as a
+ * failure rather than as absence, which is what was reported — "instead of
+ * having it say 0 and shit since there is no data". A tile shows one window
+ * and has no such problem, so nothing outside this view changes.
+ *
+ * `records` IS THE SIGNAL, and it is a reliable one rather than a guess.
+ * Measured against production before writing this: across six stored tiles,
+ * 61/9/61/61/61/61 days each, EVERY zero-valued day carried no `records` key
+ * and every day that carried one had a non-zero value. `dayValues` stores
+ * `records` only when it is greater than zero, so its presence means records
+ * were counted on that day.
+ *
+ * So the two facts stay distinguishable in the direction that matters:
+ *
+ *   value 0, records 6  -> data existed and the answer was zero. Shows "0".
+ *   value 0, no records -> nothing to count. Draws an empty square.
+ *   value 7             -> data. Shows "7", records or not.
+ *
+ * A metric that reported no record counts at all would blank its zeros, which
+ * is the one ambiguous case and the one the owner asked for by name.
+ */
+type DayEntry = { value: number; records?: number };
+
+/* A TYPE PREDICATE, not a boolean, so the narrowing survives. `has` used to be
+   `value != null`, which TypeScript follows through an aliased condition — a
+   plain boolean would leave every `entry.value` below possibly-undefined and
+   force non-null assertions at the two places that read it. */
+export function dayHasData(entry?: DayEntry): entry is DayEntry {
+  if (entry == null) return false;
+  return entry.records != null || entry.value !== 0;
+}

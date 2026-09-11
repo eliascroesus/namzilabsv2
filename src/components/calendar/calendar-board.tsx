@@ -13,6 +13,7 @@ import { SubmitButton } from "@/components/ui/submit-button";
 import { refreshFlowAction } from "@/app/dashboard/flows/actions";
 import { formatMetricValue, relativeTime } from "@/lib/format";
 import { monthGrid, monthLabel, WEEKDAYS, type MonthKey } from "@/lib/metrics/calendar";
+import { dayHasData } from "./day-cell";
 import { PERIOD_PILL, PERIOD_TRACK } from "@/components/ui/page";
 // Its own directive-free module, so the server-rendered skeleton can read it
 // as a string rather than as a client reference. See day-cell.ts.
@@ -270,7 +271,12 @@ export function CalendarBoard({
    * the days shown are true for every metric by construction.
    */
   const stats = useMemo(() => {
-    const inMonth = Object.entries(metric?.days ?? {}).filter(([k]) => k.startsWith(month));
+    // THE SAME PREDICATE THE SQUARES USE, or the strip contradicts the grid it
+    // summarises — "Days with data 30" over five filled squares. One function,
+    // both readings.
+    const inMonth = Object.entries(metric?.days ?? {}).filter(
+      ([k, d]) => k.startsWith(month) && dayHasData(d),
+    );
     if (inMonth.length === 0) return null;
     const best = inMonth.reduce((a, b) => (b[1].value > a[1].value ? b : a));
     const sum = inMonth.reduce((n, [, d]) => n + d.value, 0);
@@ -476,9 +482,15 @@ export function CalendarBoard({
             >
               <ChevronLeft />
             </Button>
-            {/* Fixed width so stepping between months does not shuffle the
-                buttons either side of the label — sized for the longest month
-                name there is ("September 2026"), not for the one on screen.
+            {/* HUGS ITS TEXT. It was `w-40` — fixed, sized for the longest
+                month name there is — so that stepping between months could not
+                shuffle the arrows either side of it. The owner asked for the
+                hug, and the cost is real and small: "May 2026" is narrower
+                than "September 2026", so the two chevrons and the "- UTC"
+                after them shift by a few pixels as you step. That is the
+                trade, taken deliberately; `w-40` is the one line to restore if
+                the shuffle turns out to matter more than the fit.
+                ("- UTC" already hugs: `PERIOD_PILL` is padding and no width.)
                 `text-foreground` because this track sits on the GROUND: the
                 page's own ink is white on the dark group and near-black on the
                 light one, where `--foreground` would be wrong in exactly one
@@ -487,7 +499,7 @@ export function CalendarBoard({
                 and it is a READOUT — the arrows either side are what you act
                 on, and the label says which month they have landed on. Weight
                 there was announcing a control that is not one. */}
-            <span className="w-40 whitespace-nowrap text-center text-sm font-normal text-foreground">
+            <span className="whitespace-nowrap px-1 text-center text-sm font-normal text-foreground">
               {monthLabel(month)}
             </span>
             <Button
@@ -810,12 +822,18 @@ function DayCell({
   best: boolean;
   format: CalendarMetric["format"];
 }) {
-  const value = entry?.value;
-  const has = value != null;
+  // NOT `entry?.value != null` — see `dayHasData`. A stored 0 with no record
+  // count is "nothing to count", and on a grid of sixty squares that has to
+  // read as absence rather than as a wall of zeros.
+  //
+  // A TYPE PREDICATE, so `entry` is narrowed everywhere `has` gates it and the
+  // separate `value` alias this used to carry is no longer needed — that alias
+  // was `number | undefined` and would have needed an assertion at every read.
+  const has = dayHasData(entry);
   // A zero is a real answer and gets no fill: "none happened" should not look
   // like a faint version of "some happened".
-  const share = has && peak > 0 ? Math.min(1, Math.abs(value) / peak) : 0;
-  const negative = has && value < 0;
+  const share = has && peak > 0 ? Math.min(1, Math.abs(entry.value) / peak) : 0;
+  const negative = has && entry.value < 0;
   const tint = share > 0 ? heatFill(share, negative) : undefined;
 
   return (
@@ -889,8 +907,8 @@ function DayCell({
               One ink for every value: the minus sign says a number is negative
               and the orange wash says it in colour, so a third statement in red
               text would only be the judgement this cell does not make. */}
-          <span className="stat-numeral block truncate text-lg leading-tight text-foreground" title={formatMetricValue(value, format)}>
-            {formatMetricValue(value, format)}
+          <span className="stat-numeral block truncate text-lg leading-tight text-foreground" title={formatMetricValue(entry.value, format)}>
+            {formatMetricValue(entry.value, format)}
           </span>
           {entry?.records != null && (
             // The kit's micro voice, and set in the page ink at 80% rather than

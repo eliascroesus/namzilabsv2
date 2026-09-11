@@ -320,6 +320,11 @@ export function ViewStrip({
   /** The "+" that adds a view — it rides the same row but is not reorderable. */
   children?: ReactNode;
 }) {
+  /* `go` FOR THE WHOLE-TAB CLICK — see `onPointerUp` below. `ViewTab`
+     already reaches for this context; the strip needs it too now that a press
+     landing in the container's own padding has to navigate rather than fall
+     through to nothing. */
+  const { go } = useBoard();
   const router = useRouter();
   const [order, setOrder] = useState(views);
 
@@ -461,11 +466,33 @@ export function ViewStrip({
               return next;
             });
           }}
-          onPointerUp={() => {
+          onPointerUp={(e) => {
             const d = drag.current;
             // The key is read BEFORE the gesture is torn down. Reading it after
             // is what made every commit a no-op.
             if (d?.moved) commit(d.key);
+            else if (d) {
+              /**
+               * THE WHOLE TAB IS THE CLICK TARGET, NOT JUST ITS ANCHOR.
+               *
+               * The <a> carries the navigation and does not fill this box: the
+               * container has `gap-1`, and `pr-0.5` when a kebab is present.
+               * A press landing in that margin therefore hit only the drag
+               * handlers — so it started a gesture, moved nothing, and on
+               * release did NOTHING AT ALL. The tab looked dead in a band a few
+               * pixels wide around its own label, and because the gesture HAD
+               * begun it read as "the move thing triggered": the owner's first
+               * report blamed the threshold, and raising that (4px -> 8px) was
+               * a real fix for a real trackpad problem but not for this one.
+               *
+               * A press that did not move is a click, wherever in the tab it
+               * landed. `closest` skips the anchor and the kebab, which own
+               * their own presses — without it, clicking the label would
+               * navigate twice and clicking the kebab would navigate at all.
+               */
+              const el = e.target as HTMLElement;
+              if (!el.closest("a, button, input")) go(v.href, { dim: "view", key: v.key });
+            }
             drag.current = null;
             setDragging(null);
           }}
