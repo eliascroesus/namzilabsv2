@@ -184,18 +184,59 @@ describe("arcPath", () => {
   });
 });
 
-describe("stageWidths", () => {
-  it("measures every stage against the first", () => {
-    expect(stageWidths([100, 50, 25])).toEqual([100, 50, 25]);
+describe("stageWidths — a length channel with no cap and no floor", () => {
+  it("draws a rising stage as the longest bar instead of clamping it flat", () => {
+    /**
+     * THE SCREENSHOT THAT KILLED THE OLD RULE, as arithmetic. Widths measured
+     * against the FIRST stage and clamped at 100, so the owner's 12 -> 38 -> 0
+     * drew [100, 100, 4]: two pixel-identical full-width slabs and a stub.
+     * Against the LARGEST stage stage 1 becomes the SHORT bar, which is the
+     * truth about that data.
+     */
+    const [a, b, c] = stageWidths([12, 38, 0]);
+    expect(a).toBeCloseTo(31.6, 1);
+    expect(b).toBe(100);
+    expect(c).toBe(0);
   });
 
-  it("floors a decimated stage so it stays hoverable", () => {
-    const [, , last] = stageWidths([1000, 500, 1]);
-    expect(last).toBe(4);
+  it("leaves a funnel that actually narrows byte-identical, which is why the rule could change", () => {
+    /**
+     * THE ARGUMENT FOR THE SWAP, asserted against the OLD rule rather than
+     * against numbers typed by hand — typed numbers would only prove I can
+     * multiply. When the counts descend the first stage IS the max, so
+     * share-of-max and share-of-first are the same expression, and the cap and
+     * the floor never fire.
+     */
+    const round10 = (v: number) => Math.round(v * 1e10) / 1e10;
+    const oldRule = (counts: number[]) => {
+      const first = counts[0] ?? 0;
+      return counts.map((x) => (first > 0 ? Math.min(100, Math.max(4, round10((x / first) * 100))) : 4));
+    };
+    for (const counts of [[420, 252, 96, 41], [100, 50, 25], [1000, 999, 500]]) {
+      expect(stageWidths(counts), JSON.stringify(counts)).toEqual(oldRule(counts));
+    }
   });
 
-  it("does not divide by an empty first stage", () => {
+  it("gives a zero stage no bar, rather than a floor of manufactured ink", () => {
+    // The 4% floor drew a mark for an empty set — on the centred variant, a
+    // bullet floating under two slabs. The row is the hit target now, so the
+    // floor bought nothing and cost the truth.
+    expect(stageWidths([1000, 500, 0])[2]).toBe(0);
+    expect(stageWidths([0, 0, 0])).toEqual([0, 0, 0]);
+  });
+
+  it("never exceeds the track, so nothing has to be clipped", () => {
+    for (const counts of [[12, 38, 0], [1, 9999], [5, 5, 5], [0, 3]]) {
+      for (const w of stageWidths(counts)) {
+        expect(w, JSON.stringify(counts)).toBeLessThanOrEqual(100);
+        expect(w).toBeGreaterThanOrEqual(0);
+      }
+    }
+  });
+
+  it("does not divide by an empty funnel", () => {
     expect(stageWidths([0, 0]).every((w) => Number.isFinite(w))).toBe(true);
+    expect(stageWidths([])).toEqual([]);
   });
 });
 

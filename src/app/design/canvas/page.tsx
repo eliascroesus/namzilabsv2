@@ -145,6 +145,47 @@ const COMPOSED_CHARTS: Array<{ label: string; chart: ChartId; source: CustomTile
     h: 7,
   },
   {
+    /**
+     * THE OWNER'S OWN TILE, 11 Sep 2026 — the screenshot that forced the
+     * geometry change, kept as a specimen so it can never quietly come back.
+     *
+     * 12 -> 38 -> 0 drew [100, 100, 4] under share-of-first: two pixel-identical
+     * full-width slabs and a 4% stub floating in the middle of its row, clipped
+     * by the bottom of the card. Under share-of-max it is [31.6, 100, 0] — stage
+     * 1 is visibly the SHORT one, which is the truth, and the zero stage is an
+     * empty frame the width of the stage it lost.
+     */
+    label: "The owner's tile — a composition that never narrows",
+    chart: "pipeline",
+    source: composed(12, [part("Organic Leads", 38), part("Unclaimed Leads", 0)], {
+      name: "On Calendar",
+      timeField: "properties.start.dateTime",
+    }),
+    config: keys(2),
+    h: 7,
+  },
+  {
+    /* The same data as a Funnel rather than a Pipeline — the two marks must not
+       disagree about a width, which they did until both read `stageWidths`. */
+    label: "The same data, drawn as a funnel",
+    chart: "funnel",
+    source: composed(12, [part("Organic Leads", 38), part("Unclaimed Leads", 0)], {
+      name: "On Calendar",
+      timeField: "properties.start.dateTime",
+    }),
+    config: keys(2),
+    h: 7,
+  },
+  {
+    /* A zero TAIL on an otherwise honest funnel: the last row draws no bar at
+       all, and the empty frame running to stage 3's width is the drop. */
+    label: "A funnel whose last stage is zero",
+    chart: "pipeline",
+    source: composed(420, [part("Booked Leads", 252), part("On Calendar", 96), part("Showed", 0)]),
+    config: keys(3),
+    h: 7,
+  },
+  {
     /* The stage that is BIGGER than the top — legal, disclosed, and its bar cut
        rather than clipped flush. The failure the clamp exists for. */
     label: "Composed funnel — a stage that widens",

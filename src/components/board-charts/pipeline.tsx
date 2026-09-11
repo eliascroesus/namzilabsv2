@@ -1,28 +1,41 @@
 import { formatMetricValue } from "@/lib/format";
 import { multipleLabel, stageWidths } from "@/lib/board/scale";
-import { widensAt } from "@/lib/metrics/funnel";
 import { StatusPill } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { FunnelResult } from "@/lib/metrics/compute";
 
 /**
- * THE SAME STAGES AS A FUNNEL, DRAWN AS A NARROWING SHAPE.
+ * THE STAGES ON ONE BASELINE — length is the count, and the drop is the gap.
  *
- * `FunnelView` reads the stages as a list of bars; this reads them as the
- * pipeline itself — centred, each stage as wide as its share of the first, so
- * the taper IS the drop-off. Same data, same conversions, same bottleneck.
+ * IT USED TO BE A CENTRED SILHOUETTE, each bar as wide as its share of the
+ * FIRST stage, so the taper was meant to read as the funnel itself. That mark
+ * is gone, and the screenshot that killed it is worth recording: an owner's
+ * pipeline of 12 -> 38 -> 0 drew two IDENTICAL full-width slabs — stage 2 was
+ * 316% of stage 1 and got clamped to the same 100% — followed by a 4%-wide stub
+ * floating in the centre of the row, clipped by the bottom of the card, under
+ * three paragraphs apologising for the drawing.
  *
- * STEPPED BARS RATHER THAN A TRUE TRAPEZOID, deliberately. A trapezoid's
- * sloping edges encode nothing — the WIDTH is the count, and the slope is just
- * the space between two widths — so drawing them costs a clip path per segment
- * to say something the rectangle already said. The same honesty-per-pixel call
- * `FunnelView` made when it chose bars over a cone.
+ * Every part of that came from the geometry rather than from the data:
  *
- * `composed` says the stages were assembled by `composeFunnel` out of separate
- * published metrics rather than computed as one sequenced run. It buys exactly
- * one thing — the ratio stops calling itself a conversion — and `FunnelView`
- * spends it the same way, because the two marks must not disagree about what a
- * number means.
+ *   THE CENTRING is what makes a stub read as a bullet rather than as a short
+ *   bar. Bars that do not share a left edge cannot be compared by length at all
+ *   — the eye has no origin to measure from — so the centred form needs the
+ *   taper to mean anything, and the taper needs the counts to descend, which
+ *   neither funnel on this board can promise.
+ *
+ *   THE CAP AND THE FLOOR were the geometry lying to stay inside the track. Both
+ *   are gone from `stageWidths`, which now measures against the LARGEST stage
+ *   and is therefore self-clamping.
+ *
+ * So the bars start at a shared origin and the mark stops pretending to be a
+ * shape. A stage bigger than the one above it is simply longer — no clip, no
+ * dashed edge, no sentence. A stage of zero draws no bar at all, and the 1px
+ * frame running to where the previous stage ended IS the drop-off, drawn as
+ * length: "38 came in, none came out" is an empty rectangle the width of 38.
+ *
+ * A GENUINE FUNNEL IS UNCHANGED TO THE PIXEL in its widths — when the counts
+ * descend, share-of-max and share-of-first are the same number — so this is a
+ * fix aimed squarely at the case that was broken.
  */
 export function Pipeline({
   result,
@@ -32,23 +45,36 @@ export function Pipeline({
 }: {
   result: FunnelResult;
   accent: string;
+  /**
+   * The stages were assembled by `composeFunnel` out of separate published
+   * metrics rather than computed as one sequenced run. It buys two things: the
+   * ratio stops calling itself a conversion, and no drop-off may be CLAIMED —
+   * see `bottleneck` below. `FunnelView` spends it identically, because the two
+   * marks must not disagree about what a number means.
+   */
   composed?: boolean;
   /** The tile's width in grid columns — only the drop-off pill reads it. */
   cols?: number;
 }) {
-  const widths = stageWidths(result.stages.map((s) => s.count));
-  /**
-   * The stages `stageWidths` had to clamp. Same source as `FunnelView`'s and as
-   * the tile's own caveat, so all three name the same stages rather than three
-   * roundings of the same comparison.
-   */
-  const capped = new Set(widensAt(result.stages));
+  const counts = result.stages.map((s) => s.count);
+  const widths = stageWidths(counts);
   const fmt = { format: "number" as const };
 
   return (
     <div className="min-h-0 flex-1 space-y-2 overflow-y-auto quiet-scroll">
       {result.stages.map((stage, i) => {
-        const bottleneck = result.bottleneckIndex === i;
+        /**
+         * A DROP-OFF IS A CLAIM, AND A COMPOSITION CANNOT MAKE IT.
+         *
+         * `funnelFromCounts` picks the largest fall between adjacent stages,
+         * which is meaningful for a cohort walking a sequence and meaningless
+         * for independent metrics counted over one window — nobody walked from
+         * one to the other. The owner's card put a red BIGGEST DROP-OFF pill on
+         * a stage whose "drop" was 38 -> 0 between two metrics dated by
+         * different fields entirely. The number is still computed; what is
+         * withheld is the assertion about WHY it fell.
+         */
+        const bottleneck = !composed && result.bottleneckIndex === i;
         /**
          * A COMPOSED STAGE'S RATIO IS NOT A CONVERSION, and above 1 it is not
          * even a share: printing 3.4 as "340% from prev" puts a number that
@@ -61,36 +87,47 @@ export function Pipeline({
           ? `${multipleLabel(stage.conversionFromPrev) ?? share} vs prev`
           : `${share} from prev`;
         /**
+         * WHERE THE STAGE ABOVE ENDED — the reference the drop is measured
+         * against, and the only thing that makes a shorter bar legible AS a
+         * loss rather than merely as a shorter bar.
+         *
+         * Below it, the span between the two is drawn as a 1px frame: the
+         * rectangle is the part that did not carry through. Above it, the bar
+         * simply runs past and a hairline notch marks the crossing, so a rise
+         * is visible at exactly the point it happened instead of being clipped
+         * flat.
+         */
+        const prev = i > 0 ? widths[i - 1] : null;
+        const lost = prev != null && prev > widths[i];
+        const gained = prev != null && widths[i] > prev;
+        /**
          * KEYED BY INDEX, NOT BY LABEL — and this was reachable with no bug
          * anywhere upstream. A classic funnel's stage labels are free text the
          * author typed into the definition and nothing dedupes them, so two
          * stages called "Booked" mint the same React key; `composeFunnel`
          * refuses same-named members, but this renderer serves both callers and
          * must not lean on the stricter one. React then reconciles by that key
-         * and carries a row's subtree — the drop-off pill included — onto the
-         * wrong stage when the list changes under a range switch. The stages
-         * are a fixed ordered list; their position IS their identity, which is
-         * why `funnel-view.tsx` has always keyed this way.
+         * and carries a row's subtree onto the wrong stage when the list
+         * changes under a range switch. The stages are a fixed ordered list;
+         * their position IS their identity, which is why `funnel-view.tsx` has
+         * always keyed this way.
          */
         return (
           <div key={i} data-tip={`${stage.label} · ${formatMetricValue(stage.count, fmt)}`}>
             {/* The bottleneck pill rides IN the label row, not on a line of
-                its own. A row per stage plus a row for the pill is five rows
+                its own — a row per stage plus a row for the pill is five rows
                 for four stages, which overflowed the chart's own default
-                height — and `FunnelView` already spells it inline, so this is
-                the one vocabulary rather than a second.
+                height.
 
                 AND IT STANDS DOWN BEFORE THE NAME DOES, which is this board's
                 existing rule applied where it had not been. Four things share
                 this row — the stage's name, the pill, the ratio and the count —
                 and at the tile's own `minW` of 4 columns the pill won: "Booked
-                Leads" rendered as "Booke…". That is the wrong loser. The name
-                is the only part a reader cannot reconstruct from the rest of
-                the card, while the bottleneck is ALSO carried by the bar
-                underneath, which is drawn in `danger` red at every width. So
-                below five columns the colour says it alone. `custom-tile.tsx`
-                makes the same call one level up for the chart-name qualifier,
-                in the same words. */}
+                Leads" rendered as "Booke…". The name is the only part a reader
+                cannot reconstruct from the rest of the card, while the
+                bottleneck is ALSO carried by the bar underneath, drawn in
+                `danger` at every width. `custom-tile.tsx` makes the same call
+                one level up for the chart-name qualifier. */}
             <div className="flex items-baseline justify-between gap-2">
               <span className="flex min-w-0 items-baseline gap-1.5">
                 <span className="truncate text-xs text-muted-foreground" title={stage.label}>
@@ -100,36 +137,52 @@ export function Pipeline({
               </span>
               <span className="flex shrink-0 items-baseline gap-2">
                 {i > 0 && <span className="tnum text-xs text-muted-foreground">{fromPrev}</span>}
-                <span className="tnum text-xs font-semibold text-foreground">
+                <span
+                  className={cn(
+                    "tnum text-xs font-semibold",
+                    stage.count === 0 ? "text-muted-foreground" : "text-foreground",
+                  )}
+                >
                   {formatMetricValue(stage.count, fmt)}
                 </span>
               </span>
             </div>
-            {/* THE SAME CUT `FunnelView` MAKES, ON BOTH EDGES. `stageWidths`
-                now caps a stage bigger than the first at the width of the
-                first, which stops the drawing overrunning its tile — but a
-                capped bar and a genuine 100% bar are then the same rectangle,
-                and this mark's whole argument is that the width is the count.
-                The bar is centred here, so a capped stage overruns at the left
-                as well as the right and both edges get the perforation. Drawn
-                in the card's own colour because, unlike the funnel's bar, this
-                one has no track behind it to show through.
-
-                UNGATED AND SELF-EXPLAINING, for the reason `FunnelView` states
-                at the same place: a classic funnel can widen too, and the
-                footer that names a capped stage is printed by the composed tile
-                alone. The cue must not depend on prose that may not be on the
-                page. */}
-            <div
-              className={cn(
-                "mx-auto mt-1 h-5 rounded-control",
-                capped.has(i) && "border-x-2 border-dashed border-card",
+            {/* THE TRACK, and every bar in it starts at the same left edge.
+                `relative` so the loss frame and the crossing notch can be
+                positioned against the same origin the bar is. */}
+            <div className="relative mt-1 h-5">
+              {/* THE PART THAT DID NOT CARRY THROUGH — a 1px frame from this
+                  stage's end to where the one above it ended. It is the only
+                  thing on the row that makes a zero stage legible: no bar, but
+                  a rectangle the width of everything that was there a moment
+                  ago. Border-only, because this product draws losses as an
+                  absence of fill rather than as a second colour. */}
+              {lost && (
+                <div
+                  className="absolute inset-y-0 rounded-control border border-border"
+                  style={{ left: `${widths[i]}%`, width: `${prev - widths[i]}%` }}
+                  aria-hidden
+                />
               )}
-              title={
-                capped.has(i) ? `${stage.label} is larger than the first stage, so this bar is cut off.` : undefined
-              }
-              style={{ width: `${widths[i]}%`, background: bottleneck ? "var(--color-danger)" : accent }}
-            />
+              {widths[i] > 0 && (
+                <div
+                  className="absolute inset-y-0 left-0 rounded-control"
+                  style={{ width: `${widths[i]}%`, background: bottleneck ? "var(--color-danger)" : accent }}
+                />
+              )}
+              {/* WHERE THE STAGE ABOVE ENDED, when this one ran past it. A 1px
+                  card-coloured rule through the fill, which is the same trick
+                  `pie.tsx` uses to separate two adjacent arcs. The surplus is
+                  the part you can SEE rather than the part that was clipped —
+                  the exact inversion of the cap this mark used to carry. */}
+              {gained && (
+                <div
+                  className="absolute inset-y-0 w-px bg-card"
+                  style={{ left: `${prev}%` }}
+                  aria-hidden
+                />
+              )}
+            </div>
           </div>
         );
       })}

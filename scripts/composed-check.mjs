@@ -40,15 +40,39 @@ const cards = await page.evaluate(() => {
     const card = cell.querySelector("[data-tile-card]") ?? cell.firstElementChild;
     const text = (card?.textContent ?? "").replace(/\s+/g, " ").trim();
     // The mark: any bar or arc actually painted inside this card.
+    /**
+     * A BAR IS FILLED; A LOSS FRAME IS NOT — and telling them apart is new.
+     *
+     * Both are now percentage-width boxes on a stage row, so "count the
+     * percentage-width divs" started counting six things for a four-stage
+     * funnel: three bars plus the outlined rectangles that draw what each stage
+     * LOST. The fill is the mark; the frame is the absence of one, which is
+     * exactly the distinction the redesign is built on, so the check has to make
+     * it too.
+     */
     const bars = [...(card?.querySelectorAll("div[style*='width']") ?? [])].filter((el) => {
       const r = el.getBoundingClientRect();
-      return r.width > 0 && r.height > 0 && /%$/.test(el.style.width);
+      if (!(r.width > 0 && r.height > 0 && /%$/.test(el.style.width))) return false;
+      const cls = (el.className || "").toString();
+      return !!el.style.background || /bg-(marker|danger|brand)/.test(cls);
     });
     const arcs = [...(card?.querySelectorAll("path, circle") ?? [])].filter(
       (el) => el.getBoundingClientRect().width > 0,
     );
     const titles = [...(card?.querySelectorAll("[title]") ?? [])].map((el) => el.getAttribute("title") ?? "");
-    const cut = titles.filter((t) => /cut off/.test(t));
+    /**
+     * THE BAR LENGTHS THEMSELVES, in the order they are drawn. Counting bars was
+     * enough while every width was a share of the FIRST stage and clamped — the
+     * lengths could not be wrong in an interesting way. Under share-of-max the
+     * LENGTH is the whole claim, so it has to be read: a rising stage must be the
+     * longest bar on the card, and a zero stage must have no bar at all.
+     */
+    const barPx = bars.map((el) => Math.round(el.getBoundingClientRect().width));
+    // The 1px rule marking where the stage above ended, drawn only on a bar that ran past it.
+    const notches = [...(card?.querySelectorAll("div") ?? [])].filter((el) => {
+      const cls = (el.className || "").toString();
+      return /\bw-px\b/.test(cls) && /bg-card/.test(cls);
+    }).length;
     /**
      * THE DISCLOSURES LIVE IN `title` NOW, NOT ON THE CARD FACE — the owner's
      * call, after a screenshot in which three stacked sentences took more of a
@@ -90,7 +114,8 @@ const cards = await page.evaluate(() => {
       title: text.slice(0, 46),
       bars: bars.length,
       arcs: arcs.length,
-      cut: cut.length,
+      barPx,
+      notches,
       notes,
       overflow,
       clipped,
@@ -212,12 +237,52 @@ const byTitle = (s) => cards.find((c) => c.title.includes(s));
 
 const widens = byTitle("widens");
 if (widens) {
-  const ok = widens.cut > 0;
-  if (!ok) problems.push("the widening funnel drew no cut edge — an over-long bar is clipping flush again");
-  say(ok, `a stage wider than the first carries a cut edge (${widens.cut})`);
-  const named = /larger than the first stage/.test(widens.notes);
-  if (!named) problems.push("the widening funnel never names the stage in prose");
-  say(named, "…and the tile names it in words");
+  /**
+   * THE RISING STAGE IS THE LONGEST BAR — the assertion that replaces "it
+   * carries a cut edge".
+   *
+   * The old mark measured against the FIRST stage and clamped at 100, so a
+   * stage at 340% drew exactly as long as one at 100% and the only thing
+   * telling the reader otherwise was a dashed border plus a sentence. Under
+   * share-of-max there is nothing to clip: the risen stage simply IS the
+   * longest, and a hairline notch marks where the stage above it ended.
+   */
+  const widest = Math.max(...widens.barPx);
+  const ok = widens.barPx.indexOf(widest) > 0;
+  if (!ok) problems.push(`the widening funnel's longest bar is not the risen stage (${widens.barPx.join(", ")}px)`);
+  say(ok, `a stage bigger than the first draws the longest bar (${widens.barPx.join(", ")}px)`);
+  const notched = widens.notches > 0;
+  if (!notched) problems.push("the widening funnel drew no crossing mark where the stage above ended");
+  say(notched, "…and a hairline marks where the stage above ended");
+  const apology = /capped|cut off|larger than the first/.test(widens.notes);
+  if (apology) problems.push("the cap apology outlived the cap");
+  say(!apology, "…and nothing apologises for a clip that no longer happens");
+}
+
+const zeroTail = byTitle("last stage is zero");
+if (zeroTail) {
+  /**
+   * A ZERO STAGE DRAWS NO BAR. The 4% floor manufactured ink for an empty set —
+   * on the centred mark, a bullet floating under two slabs, clipped by the card.
+   * The empty frame beside it is what carries the loss now.
+   */
+  const bars = zeroTail.barPx.length;
+  const ok = bars === 3;
+  if (!ok) problems.push(`a zero-tailed funnel drew ${bars} bars, expected 3 (the zero stage draws none)`);
+  say(ok, `a zero stage draws no bar (${zeroTail.barPx.join(", ")}px for four stages)`);
+}
+
+const owner = byTitle("never narrows");
+if (owner) {
+  /**
+   * THE OWNER'S OWN TILE, as the regression it caused. 12 -> 38 -> 0 used to draw
+   * [100, 100, 4]: two pixel-identical full-width slabs and a stub. Stage 1 must
+   * now be visibly SHORTER than stage 2, which is the truth about that data.
+   */
+  const [a, b] = owner.barPx;
+  const ok = a != null && b != null && b > a * 2;
+  if (!ok) problems.push(`the owner's tile still draws stage 1 and 2 alike (${owner.barPx.join(", ")}px)`);
+  say(ok, `the owner's tile draws stage 1 short of stage 2 (${owner.barPx.join(", ")}px)`);
 }
 
 const funnel = byTitle("Composed funnel —") ?? byTitle("Composed funnel");

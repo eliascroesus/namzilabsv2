@@ -369,37 +369,48 @@ export function pieSlices(
 }
 
 /**
- * Funnel stage widths as a share of the FIRST stage — floored at 4% so a
- * decimated stage stays visible enough to hover, and capped at 100% so an
- * oversized one cannot be drawn as though it fitted.
+ * FUNNEL STAGE WIDTHS — a share of the LARGEST stage, with no cap and no floor.
  *
- * THE CEILING IS THE HALF THAT WAS LYING. A funnel LOOKS like a claim that each
- * stage is a subset of the one above it, and neither funnel on this board can
- * enforce that. `computeFunnel` issues one independent `count(distinct
- * subject)` per stage with no sequencing between them, and `composeFunnel`
- * assembles its stages out of separately published metrics counted over the
- * same window. So "Booked Leads" genuinely can exceed "Total Leads" — a booking
- * this week against a lead created last month is not a data error, it is the
- * arithmetic being honest about what it measured.
+ * It measured against the FIRST stage, clamped at 100 and floored at 4, and all
+ * three of those were ways of lying about a length.
  *
- * Uncapped, such a stage asked for a width of 340% inside a track that clips,
- * and drew a bar reaching exactly the right-hand edge: pixel-identical to a
- * stage sitting at 100%. That is the worst class of chart bug — the reader is
- * told "the same size as stage 1", which is false, and nothing about the
- * drawing looks wrong. A bar allowed to overflow would at least have announced
- * itself.
+ * THE CAP. A stage bigger than stage 1 asked for more than 100% and got exactly
+ * 100% — pixel-identical to a stage that really is 100%. The owner's own board
+ * drew 12 -> 38 -> 0 as TWO IDENTICAL FULL-WIDTH SLABS and a stub, under a
+ * sentence apologising for the clip. A clamp on a length channel is a broken
+ * axis wearing a different hat, and the fix was never a better apology.
  *
- * Clamping only stops the geometry lying; it cannot make it tell the truth,
- * because no width above the track's own means anything. So `widensAt` names
- * the stages the clamp touched, both renderers cut those bars' edges visibly,
- * and the tile prints a sentence naming them.
+ * THE FLOOR. A zero stage got 4% of the track — manufactured ink for an empty
+ * set, which on the centred variant read as a bullet floating under two slabs.
+ * It existed so a decimated stage stayed hoverable; the ROW is the hit target,
+ * so it bought nothing and cost the truth.
  *
- * The first stage is 100% by definition; an empty first stage makes every width
- * the floor.
+ * SHARE OF FIRST. Of the funnel implementations surveyed — ECharts, nivo,
+ * Recharts, Plotly, chartjs-chart-funnel, Metabase — every one normalises to the
+ * MAXIMUM. Only PostHog normalises to the first, and it can afford to because
+ * its query guarantees the counts descend. Ours does not: `computeFunnel` issues
+ * one independent `count(distinct subject)` per stage with no sequencing, and
+ * `composeFunnel` assembles separately published metrics counted over one
+ * window. Any of them may be the biggest, and that is not a data error — a
+ * booking this week against a lead created last month is the arithmetic being
+ * honest.
+ *
+ * SHARE OF MAX IS SELF-CLAMPING, which is why one edit retires all three: no
+ * value can exceed the track, so there is nothing to clip and nothing to
+ * apologise for, and a zero is simply zero.
+ *
+ * A GENUINE FUNNEL IS UNCHANGED TO THE PIXEL, and that is the argument for the
+ * swap rather than a happy accident: when the counts descend the first stage IS
+ * the max, so both rules return the same numbers — [420, 252, 96, 41] draws
+ * 100 / 60 / 22.9 / 9.8 either way. The new rule differs only where the old one
+ * was lying.
+ *
+ * All zeroes return all zeroes rather than a row of phantom stubs; the caller
+ * draws its empty state instead of a table of nothing.
  */
 export function stageWidths(counts: number[]): number[] {
-  const first = counts[0] ?? 0;
-  return counts.map((c) => (first > 0 ? Math.min(100, Math.max(4, round10((c / first) * 100))) : 4));
+  const max = counts.reduce((m, c) => (c > m ? c : m), 0);
+  return counts.map((c) => (max > 0 ? Math.max(0, round10((c / max) * 100)) : 0));
 }
 
 /**

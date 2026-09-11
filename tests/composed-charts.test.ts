@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { funnelFromCounts, widensAt } from "@/lib/metrics/funnel";
+import { funnelFromCounts } from "@/lib/metrics/funnel";
+import { stageWidths } from "@/lib/board/scale";
 import { composeFunnel, composePie, isRefusal, type ComposeMember } from "@/lib/board/compose";
 import { chartsFor, shapeOfClassic, shapeOfTile, NO_SHAPE, CHART_IDS, type MetricShape } from "@/lib/board/charts";
 import { PARTS_SLOT, COMPOSED_CHARTS, composes, parseTileConfig, CONFIG_FIELDS, honoured } from "@/lib/board/tile-config";
@@ -73,17 +74,58 @@ describe("the funnel arithmetic, shared with the classic engine", () => {
     }
   });
 
-  it("names every stage wider than the FIRST, not merely wider than its neighbour", () => {
+  it("draws a rising stage as the longest bar instead of clamping it flat", () => {
     /**
-     * 100 -> 400 -> 250. Comparing adjacent stages names stage 1 and stays
-     * silent about stage 2, which is 250% of the top and clipped just as flat
-     * by an `overflow-hidden` track. The reader would see two identical
-     * full-width bars and one sentence explaining only one of them.
+     * THE SCREENSHOT THAT KILLED THE OLD RULE, as arithmetic. Widths measured
+     * against the FIRST stage and clamped at 100, so the owner's 12 -> 38 -> 0
+     * drew [100, 100, 4]: two pixel-identical full-width slabs and a stub.
+     * Against the LARGEST stage stage 1 becomes the SHORT bar, which is the
+     * truth about that data.
      */
-    expect(widensAt([{ count: 100 }, { count: 400 }, { count: 250 }])).toEqual([1, 2]);
-    expect(widensAt([{ count: 100 }, { count: 90 }, { count: 80 }])).toEqual([]);
-    // A zero first stage has no "wider than" to be measured against.
-    expect(widensAt([{ count: 0 }, { count: 5 }])).toEqual([]);
+    const [a, b, c] = stageWidths([12, 38, 0]);
+    expect(a).toBeCloseTo(31.6, 1);
+    expect(b).toBe(100);
+    expect(c).toBe(0);
+  });
+
+  it("leaves a funnel that actually narrows byte-identical, which is why the rule could change", () => {
+    /**
+     * THE ARGUMENT FOR THE SWAP, asserted against the OLD rule rather than
+     * against numbers typed by hand — typed numbers would only prove I can
+     * multiply. When the counts descend the first stage IS the max, so
+     * share-of-max and share-of-first are the same expression, and the cap and
+     * the floor never fire.
+     */
+    const round10 = (v: number) => Math.round(v * 1e10) / 1e10;
+    const oldRule = (counts: number[]) => {
+      const first = counts[0] ?? 0;
+      return counts.map((x) => (first > 0 ? Math.min(100, Math.max(4, round10((x / first) * 100))) : 4));
+    };
+    for (const counts of [[420, 252, 96, 41], [100, 50, 25], [1000, 999, 500]]) {
+      expect(stageWidths(counts), JSON.stringify(counts)).toEqual(oldRule(counts));
+    }
+  });
+
+  it("gives a zero stage no bar, rather than a floor of manufactured ink", () => {
+    // The 4% floor drew a mark for an empty set — on the centred variant, a
+    // bullet floating under two slabs. The row is the hit target now, so the
+    // floor bought nothing and cost the truth.
+    expect(stageWidths([1000, 500, 0])[2]).toBe(0);
+    expect(stageWidths([0, 0, 0])).toEqual([0, 0, 0]);
+  });
+
+  it("never exceeds the track, so nothing has to be clipped", () => {
+    for (const counts of [[12, 38, 0], [1, 9999], [5, 5, 5], [0, 3]]) {
+      for (const w of stageWidths(counts)) {
+        expect(w, JSON.stringify(counts)).toBeLessThanOrEqual(100);
+        expect(w).toBeGreaterThanOrEqual(0);
+      }
+    }
+  });
+
+  it("does not divide by an empty funnel", () => {
+    expect(stageWidths([0, 0]).every((w) => Number.isFinite(w))).toBe(true);
+    expect(stageWidths([])).toEqual([]);
   });
 });
 
@@ -191,10 +233,20 @@ describe("what a composed funnel discloses when it does draw", () => {
     expect(ok.notes.some((n) => /not followed as a cohort/.test(n))).toBe(true);
   });
 
-  it("names a widening stage rather than letting its bar clip silently", () => {
+  it("draws a widening composition rather than disclosing it, now that nothing is capped", () => {
+    /**
+     * THE NOTE THIS REPLACES said "…is larger than the first stage, so its bar
+     * is capped", and it existed only because the geometry was clamping. Under
+     * share-of-max a risen stage is simply the longest bar, so the sentence has
+     * no referent — a caveat that retracts the encoding was always a bug report
+     * about the mark.
+     *
+     * Rising is still LEGAL and still not refused; it is now carried by length.
+     */
     const wide = composeFunnel([member({ value: 100 }), member({ label: "Booked", value: 340 })], FUNNEL_SLOT);
-    if (isRefusal(wide)) throw new Error("a widening funnel is legal — it is disclosed, not refused");
-    expect(wide.notes.some((n) => n.includes("Booked") && /larger than the first stage/.test(n))).toBe(true);
+    if (isRefusal(wide)) throw new Error("a widening funnel is legal — it is drawn, not refused");
+    expect(wide.notes.some((n) => /capped/.test(n)), "the cap apology outlived the cap").toBe(false);
+    expect(stageWidths([100, 340])).toEqual([29.4117647059, 100]);
   });
 
   it("says when the stages are dated by different fields", () => {

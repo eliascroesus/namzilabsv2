@@ -35,7 +35,7 @@
  * Neither can be refused, so neither is left to a caveat somebody might hide:
  * both come back in `notes`, which the tile renders every time.
  */
-import { funnelFromCounts, widensAt, type FunnelResult } from "@/lib/metrics/funnel";
+import { funnelFromCounts, type FunnelResult } from "@/lib/metrics/funnel";
 
 /**
  * WHAT A MEMBER IS MEASURED IN — deliberately looser than the renderer's
@@ -249,12 +249,18 @@ export function composeFunnel(members: ComposeMember[], slot: { min: number; max
    * gone.
    */
   const notes = ["Stages are counted separately over this period, not followed as a cohort.", ...sharedNotes(members)];
-  const wide = widensAt(result.stages);
-  if (wide.length > 0) {
-    notes.push(
-      `${nameList(wide.map((i) => result.stages[i].label))} ${wide.length === 1 ? "is" : "are"} larger than the first stage, so ${wide.length === 1 ? "its bar is" : "their bars are"} capped.`,
-    );
-  }
+  /**
+   * THE "…IS LARGER THAN THE FIRST STAGE, SO ITS BAR IS CAPPED" NOTE IS GONE,
+   * because the thing it apologised for is gone.
+   *
+   * Stage widths were a share of the FIRST stage, clamped at 100, so a bigger
+   * stage drew pixel-identical to one at exactly 100% and the sentence was the
+   * only thing telling the reader otherwise. `stageWidths` now measures against
+   * the LARGEST stage, which is self-clamping: a stage that rose is simply the
+   * longest bar, with a hairline marking where the stage above it ended. A
+   * caveat that retracts the encoding was always a bug report about the mark,
+   * and the mark has been fixed.
+   */
   return { result, notes };
 }
 

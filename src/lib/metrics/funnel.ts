@@ -74,26 +74,21 @@ export function funnelFromCounts(members: Array<{ label: string; count: number }
 }
 
 /**
- * WHICH STAGES ARE BIGGER THAN THE TOP OF THE FUNNEL — by index, never
- * including 0.
+ * `widensAt` LIVED HERE AND HAS BEEN DELETED — recorded because the argument it
+ * carried is worth more than the function was, and because a cap is the kind of
+ * thing that gets reinvented.
  *
- * A funnel is a claim that each stage is a subset of the one above it. A
- * COMPOSED funnel cannot enforce that: its stages are independent metrics
- * counted over the same window, so "Booked Leads" may legitimately exceed
- * "Total Leads" when a booking came from a lead created last month. The
- * drawing has no way to express that — both renderers size a bar as a share of
- * stage 1 inside an `overflow-hidden` track, so anything over 100% CLIPS and
- * reads as "exactly the same as stage 1", which is worse than wrong because it
- * looks correct.
+ * It named the stages that were bigger than stage 1, so the renderers could cut
+ * their bars visibly and the tile could print "…is larger than the first stage,
+ * so its bar is capped". All of that existed to survive a width rule that
+ * measured against the FIRST stage and clamped at 100%: a stage at 340% drew
+ * exactly as long as one at 100%, which is the worst class of chart bug — the
+ * reader is told two stages are equal, and nothing about the drawing looks
+ * wrong.
  *
- * So the caller clamps the geometry and says this out loud instead.
- *
- * COMPARED AGAINST THE FIRST STAGE, NOT THE PREVIOUS ONE. Adjacent comparison
- * misses the case that actually clips: 100 -> 400 -> 250 names stage 2 and stays
- * silent about stage 3, which is 250% of the top and clipped just as flat.
+ * THE LESSON THAT OUTLIVES IT: a clamp on a length channel is a broken axis
+ * wearing a different hat, and no amount of annotation repairs it. `stageWidths`
+ * measures against the LARGEST stage instead, which cannot overflow, so there is
+ * nothing to cut, nothing to name and nothing to apologise for. If anyone is
+ * ever tempted to reintroduce share-of-first, this is what it costs.
  */
-export function widensAt(stages: Array<{ count: number }>): number[] {
-  const first = stages[0]?.count ?? 0;
-  if (first <= 0) return [];
-  return stages.map((s, i) => (i > 0 && s.count > first ? i : -1)).filter((i) => i >= 0);
-}
