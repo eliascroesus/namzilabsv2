@@ -615,7 +615,15 @@ export function CalendarBoard({
           the sheet simply stops growing with the page's own cap, so a month
           looks the same on every screen. */}
       {!missing && (
-      <Card variant="surface" padding="none" className="mt-4 overflow-hidden">
+      /* NO `mt-4` — it was this sheet's gap from the metric picker's row, and
+         that row moved into the header on 11 Sep 2026 (it takes "Compare To"'s
+         slot). Left behind, it started the calendar 16px lower than its own
+         left, right and bottom insets. 24px on all four sides now, all of it
+         `PageContainer`'s.
+         A JS comment rather than a JSX one, because this sits inside
+         `{!missing && ( ... )}` where a braced JSX comment followed by an
+         element is two expressions and does not parse. */
+      <Card variant="surface" padding="none" className="overflow-hidden">
         <div className="overflow-x-auto p-3 sm:p-4">
           <div className="min-w-[640px]">
             <div className="grid grid-cols-7 gap-2 pb-2">

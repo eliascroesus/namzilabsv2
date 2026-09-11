@@ -187,9 +187,28 @@ describe("the theme-color meta matches the app background", () => {
 });
 
 describe("the blue re-theme's supplied shape and type constants", () => {
-  it("draws the Figma's own card shadow", () => {
-    const m = css.match(/--shadow-card:\s*([^;]+);/);
-    expect(m?.[1].replace(/\s+/g, " ").trim()).toBe("0 1px 2px rgb(0 0 0 / 0.2), 0 0 3px rgb(0 0 0 / 0.1)");
+  it("draws NO card shadow, because the ladder is retired", () => {
+    /**
+     * IT PINNED THE FIGMA'S OWN CARD SHADOW, and the owner asked every drop
+     * shadow out on 11 Sep 2026: "remove all drop shadow and instead just add
+     * a border stroke of 1px".
+     *
+     * The product already drew that border — this file's own neighbour note
+     * said "the shadow is not what separates a card from the page. THE BORDER
+     * IS" — so the ladder is `none` at every rung and the ~127 `shadow-*`
+     * spellings across the app compile and draw nothing.
+     *
+     * Pinned as `none` rather than deleted, because the failure this guards
+     * against is a rung being quietly re-pointed to a real value: `pnpm
+     * shadows` catches it in a browser, and this catches it in the stylesheet.
+     */
+    // `token()` above reads HEX literals only — it exists for swatches — so a
+    // shadow rung is read directly rather than through it.
+    for (const rung of ["card", "card-hover", "surface", "panel", "island", "xs", "sm", "md", "lg"]) {
+      const m = css.match(new RegExp(`--shadow-${rung}:\\s*([^;]+);`));
+      expect(m, `--shadow-${rung} is not declared`).toBeTruthy();
+      expect(m![1].trim(), `--shadow-${rung} is not none`).toBe("none");
+    }
   });
 
   it("shrinks the tile numeral to 28px/40px, set in Inter", () => {

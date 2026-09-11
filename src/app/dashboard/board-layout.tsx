@@ -358,8 +358,17 @@ export function BoardLayout({
            24. */
         <div className={`items-start ${BOARD_GRID}`}>{board.tiles.map((t) => t.node)}</div>
       ) : (
-        <div className="mt-4">
-          {/* THE METRICS WITH NOWHERE TO BE, on one line above the board.
+        /* NO `mt-4` — the same correction the grid branch above already
+           carries. It was this row's gap from the "New group" action row,
+           which moved into the header on 11 Sep 2026; left behind it is 16px
+           of nothing under a header that already ends its own band, so the
+           columns view started lower than the grid one and its top inset did
+           not match its own sides. 24px on all four, from `PageContainer`. */
+        <div>
+          {/* `mb-6` HERE rather than `mt-6` on the columns below: the gap
+              belongs to THIS row, which is conditional, so it disappears with
+              the row instead of being a permanent inset the board pays for.
+              THE METRICS WITH NOWHERE TO BE, on one line above the board.
               Rendered only when it holds something: an empty scroller is a rule
               that does nothing, and "everything is filed" is worth seeing as an
               absence rather than as an empty box. */}
@@ -388,7 +397,7 @@ export function BoardLayout({
                   </span>
                 </span>
               </div>
-              <div {...{ [SCROLLER_ATTR]: "row" }} className={`${SCROLLER_BLEED} quiet-scroll overflow-x-auto pb-3`}>
+              <div {...{ [SCROLLER_ATTR]: "row" }} className={`${SCROLLER_BLEED} quiet-scroll mb-6 overflow-x-auto pb-3`}>
                 <div {...{ [LANE_ATTR]: UNGROUPED, [AXIS_ATTR]: "x", [ACCEPTS_ATTR]: "tile" }} className={`flex items-start ${LANE_GAP}`}>
                   {withGap(board.ungrouped.tiles, gapAt(null), drag?.tileKey ?? null).map((slot) =>
                     slot === null ? (
@@ -420,7 +429,11 @@ export function BoardLayout({
             </>
           )}
 
-          <div {...{ [SCROLLER_ATTR]: "columns" }} className={`${SCROLLER_BLEED} quiet-scroll mt-6 overflow-x-auto pb-3`}>
+          {/* NO `mt-6` EITHER. It separated the columns from the unfiled-metrics
+              row above them — which renders only when it HOLDS something, so on
+              the common board this was 24px of nothing at the top of the page.
+              The row brings its own bottom gap when it is there. */}
+          <div {...{ [SCROLLER_ATTR]: "columns" }} className={`${SCROLLER_BLEED} quiet-scroll overflow-x-auto pb-3`}>
             {/* The row of columns is a lane too, whose items are the columns —
                 see COLUMNS_LANE.
 

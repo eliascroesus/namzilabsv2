@@ -5,7 +5,7 @@ import { getFlow, publishedGraphFingerprint } from "@/lib/flow/store";
 import { listConnections } from "@/lib/connections";
 import { parseGraph } from "@/lib/flow/types";
 import { FlowCanvas, type ConnMeta } from "@/components/flow/flow-canvas";
-import { AppFrame } from "@/components/app-frame";
+import { AppShell } from "@/components/app-shell";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +23,7 @@ export const maxDuration = 60;
 
 export default async function FlowEditorPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { orgId, userId, role } = await requireOrg();
+  const { orgId, userId, role, auth } = await requireOrg();
 
   const flow = await getFlow(getDb(), orgId, id);
   if (!flow) notFound();
@@ -72,13 +72,34 @@ export default async function FlowEditorPage({ params }: { params: Promise<{ id:
     // FLOW floats on the canvas (FlowToolbar); the chrome that belongs to the
     // APP is the rail — hiding it here left the editor with a bare left edge
     // and navigation buried in a ⋮ menu.
-    // The builder does not scroll: the canvas pans itself, so this surface
-    // clips rather than scrolls, and sits on the canvas grey rather than white.
-    // No account panel: it would cost a WorkOS membership fetch per editor
-    // load for a control the dashboard is one click away from.
-    // `ownsMain`: the builder is the one screen with no PageContainer, so the
-    // frame carries the page's single <main> landmark here.
-    <AppFrame ownsMain surface="overflow-hidden bg-canvas-bg">
+    /**
+     * `AppShell`, NOT `AppFrame` — THE BUILDER HAD ITS OWN, EMPTIER RAIL.
+     *
+     * It reached past the shell to the frame directly, to set one thing: the
+     * surface. The canvas pans itself, so the builder clips rather than
+     * scrolls. Everything else the shell supplies went with that shortcut —
+     * `workspace`, `views` and `account` are all undefined through `AppFrame`,
+     * so the column rendered with no workspace switcher at its head, no
+     * dashboard view list under it, and no profile at its foot. The owner's
+     * words: "it is like we have loaded in a new left navbar on the flow
+     * builder and not using the one we use everywhere else". That is exactly
+     * what it was.
+     *
+     * The old note here justified it: "No account panel: it would cost a
+     * WorkOS membership fetch per editor load for a control the dashboard is
+     * one click away from." The saving is real and it is not worth a second
+     * navigation column — the rail is the one thing on screen that must not
+     * change when you move between pages, because it is how you move between
+     * pages. `surface` and `ownsMain` are props on the shell now, so this
+     * route gets its clipping canvas AND the product's own rail.
+     */
+    <AppShell
+      userId={userId}
+      orgId={orgId}
+      userEmail={auth.user.email}
+      ownsMain
+      surface="overflow-hidden bg-canvas-bg"
+    >
       <FlowCanvas
         flowId={flow.id}
         name={flow.name}
@@ -88,6 +109,6 @@ export default async function FlowEditorPage({ params }: { params: Promise<{ id:
         initialGraph={parseGraph(flow.draftGraph)}
         connections={connections}
       />
-    </AppFrame>
+    </AppShell>
   );
 }

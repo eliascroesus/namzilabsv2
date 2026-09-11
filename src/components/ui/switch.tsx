@@ -86,7 +86,12 @@ export function Switch({ className, checked, size = "default", disabled, ...prop
       <span
         aria-hidden
         className={cn(
-          "absolute left-0.5 top-0.5 rounded-full bg-white shadow-card transition-transform duration-(--duration-base) ease-(--ease-spring)",
+          /* A BORDER RATHER THAN THE SHADOW IT USED TO HAVE. This knob is the
+             one shape in the product measured to be relying on a drop shadow
+             for its edge: white on a light track, where without something it
+             is a white square on a white-ish field. Every other shadowed shape
+             either already had a border or is a filled control. */
+          "absolute left-0.5 top-0.5 rounded-full border border-border bg-white transition-transform duration-(--duration-base) ease-(--ease-spring)",
           knob,
           checked && "translate-x-4",
         )}

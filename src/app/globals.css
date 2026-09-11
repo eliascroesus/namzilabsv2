@@ -637,26 +637,54 @@
    * because on a dark surface a hairline of light is the only thing that reads
    * as height at all.
    */
-  --shadow-xs: 0 1px 2px -1px rgb(0 0 0 / 0.1);
-  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.2), 0 2px 4px -2px rgb(0 0 0 / 0.2);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.3), 0 4px 6px -4px rgb(0 0 0 / 0.3);
-  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.4), 0 8px 10px -6px rgb(0 0 0 / 0.4);
-  --shadow-2xl: 0 25px 50px -12px rgb(0 0 0 / 0.6);
-  --shadow-3xl: 0 32px 64px -12px rgb(0 0 0 / 0.7);
-
-  /* The ringed twins — the same heights with a light hairline on top. */
-  --shadow-raised: 0 0 0 1px rgb(255 255 255 / 0.04), 0 1px 2px rgb(0 0 0 / 0.3);
-  --shadow-lifted: 0 0 0 1px rgb(255 255 255 / 0.05), 0 4px 8px -2px rgb(0 0 0 / 0.4);
-  --shadow-float: 0 0 0 1px rgb(255 255 255 / 0.06), 0 10px 15px -3px rgb(0 0 0 / 0.45);
-  --shadow-pop: 0 0 0 1px rgb(255 255 255 / 0.07), 0 25px 50px -12px rgb(0 0 0 / 0.6);
-
-  /* The two the kit actually chooses, by name. */
-  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.2), 0 0 3px rgb(0 0 0 / 0.1); /* the Figma's card shadow, both themes — no longer an alias of `--shadow-sm` */
-  --shadow-card-hover: var(--shadow-md);
-  --shadow-island: var(--shadow-lg);
-  --shadow-panel: var(--shadow-pop);
-  --shadow-surface: var(--shadow-float);
+  /* ── THE LADDER IS RETIRED: EVERY RUNG IS `none` ──────────────────────
+   *
+   * The owner's instruction, 11 Sep 2026: "please remove all drop shadow and
+   * instead just add a border stroke of 1px of #E1E1E1 on light theme and
+   * whatever stroke color we use on dark theme."
+   *
+   * THE PRODUCT ALREADY DREW THAT BORDER, and the note this replaces said so
+   * in its own words: "the shadow is not what separates a card from the page.
+   * THE BORDER IS." Every card, panel, popover and menu in the kit carries
+   * `border border-border` and then spent a shadow on top of it. Measured
+   * across four routes in both themes, exactly TEN shapes drew a shadow and
+   * six of them already had that border; of the remaining four, three are
+   * FILLED controls (the brand skip-link, `accent`, `destructive`) which need
+   * no edge at all, and one — the switch's knob — has been given a border.
+   *
+   * SET TO `none` RATHER THAN DELETED, and that is a deliberate trade with a
+   * cost worth naming. The names stay legal, so the ~127 `shadow-*` spellings
+   * across the app keep compiling and draw nothing — and so do the vendored
+   * shadcn components, which spell `shadow-sm` and `shadow-lg` and cannot be
+   * edited without forking them. The cost is the one this file's own migration
+   * table warns about: a class surviving under a new value is "plausible and
+   * wrong" to whoever reads it next. `pnpm shadows` closes that gap from the
+   * other side: it renders real pages in both themes and fails if ANY element
+   * paints a visible shadow — so a hardcoded `box-shadow`, an arbitrary
+   * `shadow-[...]` or a re-pointed rung is caught by outcome rather than by
+   * spelling, and the dead class names are a sweep waiting to happen rather
+   * than a trap that can spread.
+   *
+   * THE RING IS NOT A SHADOW HERE. Tailwind draws focus rings through
+   * `--tw-ring-shadow`, a different variable entirely, so the keyboard focus
+   * outline is untouched by every line below.
+   */
+  --shadow-xs: none;
+  --shadow-sm: none;
+  --shadow-md: none;
+  --shadow-lg: none;
+  --shadow-xl: none;
+  --shadow-2xl: none;
+  --shadow-3xl: none;
+  --shadow-raised: none;
+  --shadow-lifted: none;
+  --shadow-float: none;
+  --shadow-pop: none;
+  --shadow-card: none;
+  --shadow-card-hover: none;
+  --shadow-island: none;
+  --shadow-panel: none;
+  --shadow-surface: none;
 }
 
 /**

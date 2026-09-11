@@ -64,6 +64,8 @@ export async function AppShell({
   orgId,
   userEmail,
   band,
+  surface = "overflow-y-auto",
+  ownsMain = false,
   children,
 }: {
   userId: string;
@@ -78,6 +80,20 @@ export async function AppShell({
    * What it owns is the POSITION — see `AppFrame`.
    */
   band?: React.ReactNode;
+  /**
+   * WHAT THE PANEL DOES WITH OVERFLOW — the one thing the pages genuinely
+   * disagree about. Defaulted, because nine of the ten routes scroll; the flow
+   * builder clips instead, because its canvas pans itself.
+   *
+   * It is a prop HERE and not only on `AppFrame` because the builder used to
+   * reach past this shell to `AppFrame` directly in order to set it, and lost
+   * the entire rail in the process — no workspace switcher, no view list, no
+   * profile. Making the one thing it needed overridable is what lets every
+   * route share one shell.
+   */
+  surface?: string;
+  /** The builder has no `PageContainer`, so the frame carries its `<main>`. */
+  ownsMain?: boolean;
   children: React.ReactNode;
 }) {
   /**
@@ -179,7 +195,8 @@ export async function AppShell({
     // the file that decided what colour the dashboard is.
     <AppFrame
       band={band}
-      surface="overflow-y-auto"
+      surface={surface}
+      ownsMain={ownsMain}
       hide={hide}
       /* THE RAIL'S PREFERENCE IS GONE, AND SO IS THE COOKIE THAT CARRIED IT.
          A cookie rather than localStorage, because a pinned rail was 260px of

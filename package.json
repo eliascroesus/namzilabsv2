@@ -23,6 +23,7 @@
     "frame": "node scripts/frame-check.mjs",
     "portals": "node scripts/portal-check.mjs",
     "band": "node scripts/band-check.mjs",
+    "shadows": "node scripts/shadow-check.mjs",
     "shot:modes": "node scripts/shot-modes.mjs"
   },
   "dependencies": {
