@@ -666,10 +666,25 @@ export function CustomTile({
          metric, so a card titled "Total Leads" over a header row whose first
          cell reads "Total Leads" was printing it twice. The title is still
          passed: it is what the menu renames and what the panel's header reads. */
-      hideTitle={chart === "funnel" || chart === "pipeline"}
-      /* A funnel, a pipeline and a table have no single figure to head. */
+      hideTitle={chart === "funnel" || chart === "pipeline" || (chart === "pie" && composed)}
+      /**
+       * A funnel, a pipeline and a table have no single figure to head — and
+       * since 12 Sep 2026 neither does a COMPOSED pie: "there shouldn't be a big
+       * number thing". Its first slice IS this tile's own metric, so the card
+       * was printing the name and the total of something the circle names again
+       * two lines below, and the labels around the mark carry every figure.
+       *
+       * A GROUPED PIE KEEPS BOTH, and the difference is real rather than
+       * cautious. There the tile's metric is the whole ("Claimed by rep") and
+       * the slices are its groups (Afeef, Armaan) — the name appears nowhere in
+       * the circle, and the total is a number no label on the card states.
+       */
       headline={
-        chart === "funnel" || chart === "pipeline" || chart === "table" ? undefined : w.unavailable ? null : fmt(w.value)
+        chart === "funnel" || chart === "pipeline" || chart === "table" || (chart === "pie" && composed)
+          ? undefined
+          : w.unavailable
+            ? null
+            : fmt(w.value)
       }
       delta={delta ? <Delta current={delta.current} previous={delta.previous} format={bag} since={delta.since} /> : null}
       status={source.kind === "flow" ? source.status : undefined}
@@ -759,7 +774,18 @@ export function CustomTile({
               format={bag}
               donut={config.donut}
               limit={pieLimit}
-              legend={config.legend ?? (cols >= 5 ? "right" : "bottom")}
+              /* UNSET REACHES THE MARK NOW, and that is the point. This used to
+                 resolve the default here — `right` on a wide tile, `bottom` on a
+                 narrow one — so `PieChart` never saw "the author didn't choose"
+                 and could not offer anything else. It draws labels AROUND the
+                 circle when nothing was chosen, falling back to the stacked list
+                 on a box too narrow to hold them; an author who picked a legend
+                 still gets exactly what they picked. */
+              legend={config.legend}
+              /* How much room the mark has, since it may not measure its own box
+                 — see the kit's server-safety rule. The same `cols >= 5` this
+                 line used to resolve the legend default with. */
+              cols={cols}
             />
           </div>
         ) : chart === "progress" ? (
