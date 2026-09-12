@@ -39,8 +39,25 @@ export function PieChart({
 
   return (
     <div className={`flex min-h-0 flex-1 gap-3 ${legend === "bottom" ? "flex-col" : "items-center"}`}>
+      {/**
+       * `flex-1`, NOT `h-full`, WHEN THE LEGEND IS BENEATH — and this was eating
+       * the legend whole.
+       *
+       * `h-full` inside a flex COLUMN means 100% of the container, so the circle
+       * claimed the entire card and the legend — a `flex-1` sibling — was left
+       * with nothing. Measured on a six-row tile: svg 126px, legend 0px, its own
+       * `overflow-y-auto` quietly scrolling three rows of text nobody could see.
+       * Every share on the card was in the DOM and none of it was on screen,
+       * which is why no source check and no screenshot review caught it.
+       *
+       * `min-h-0 flex-1` makes the two share instead: the circle takes what is
+       * left after the legend has asked for its rows, and `xMidYMid meet` keeps
+       * it round in whatever that turns out to be. Beside the legend (`right`)
+       * `h-full` is still correct — there the two are in a ROW and the height is
+       * not being divided.
+       */}
       <svg
-        className={legend === "bottom" ? "h-full min-h-0 w-full" : "h-full w-auto shrink-0"}
+        className={legend === "bottom" ? "min-h-0 w-full flex-1" : "h-full w-auto shrink-0"}
         viewBox="-52 -52 104 104"
         preserveAspectRatio="xMidYMid meet"
         aria-hidden
@@ -70,8 +87,21 @@ export function PieChart({
        * one.
        */}
 
+      {/* BENEATH the circle the legend asks for its own rows and the circle takes
+          what is left (`shrink-0`, capped so a nine-slice legend cannot swallow
+          the mark it describes); BESIDE it, the two are in a row and `flex-1` is
+          what makes a long label truncate rather than push the circle off the
+          card.
+
+          THIS NOTE SITS ABOVE THE BRANCH because a branch is a single EXPRESSION
+          and a JSX comment is a CHILD — one inside `&&` is a syntax error, not a
+          comment. `custom-board.tsx` has the same note over its own ternary. */}
       {legend !== "none" && (
-        <div className="min-h-0 min-w-0 flex-1 space-y-1 overflow-y-auto quiet-scroll">
+        <div
+          className={`min-w-0 space-y-1 overflow-y-auto quiet-scroll ${
+            legend === "bottom" ? "max-h-[55%] shrink-0" : "min-h-0 flex-1"
+          }`}
+        >
           {slices.map((s, i) => (
             <div key={s.label} className="flex items-center gap-1.5">
               <span

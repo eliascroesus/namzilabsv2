@@ -426,8 +426,19 @@ export const PARTS_SLOT = {
   area: { min: 0, max: 0 },
   bar: { min: 0, max: 0 },
   category: { min: 0, max: 0 },
-  /** 5 named slices + the residual = 6 arcs, `pieSlices`' own cap. */
-  pie: { min: 2, max: 5 },
+  /**
+   * 5 parts + the anchor = 6 arcs, `pieSlices`' own cap — and the arithmetic
+   * changed under it on 12 Sep 2026 without the number moving. The sixth arc
+   * used to be the RESIDUAL ("Other", the whole minus the parts); the anchor is
+   * a slice now and there is no residual, so the same 6 is five named parts plus
+   * the tile's own metric.
+   *
+   * THE FLOOR DROPPED TO ONE for the same reason. Two parts were needed when the
+   * anchor was the whole and was not drawn — one part would have been a circle
+   * split into "it" and "everything else". With the anchor in the circle, one
+   * part already makes two slices, which is a pie.
+   */
+  pie: { min: 1, max: 5 },
   progress: { min: 0, max: 0 },
   /** 7 parts + the anchor = 8 stages, which is what a funnel tile holds before it scrolls. */
   funnel: { min: 1, max: 7 },

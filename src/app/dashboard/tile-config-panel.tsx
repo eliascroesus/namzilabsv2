@@ -424,7 +424,12 @@ function PartsGroup({
       ? `Add ${missing === 1 ? "one" : missing} more ${noun}${missing === 1 ? "" : "s"} before this can be drawn.`
       : stages
         ? "Stage 1 is this tile’s own metric. Each stage is counted on its own over the period."
-        : "The whole is this tile’s own metric. Whatever the parts don’t account for is drawn as “Other”.";
+        : /* The circle is the parts ADDED UP since 12 Sep 2026 — the tile's own
+             metric is a slice like any other, not the whole they are shares of,
+             so there is no remainder to explain any more. What the author now
+             needs telling is the thing they can no longer see: a metric left out
+             is not drawn as a gap, it simply inflates everything else. */
+          "This tile’s own metric is the first slice. The circle is every slice added together, so anything you leave out isn’t shown.";
 
   /** A chip is one row: what it is, what it is called, and what can be done to it. */
   const CHIP = "flex items-center gap-1 rounded-control border border-border bg-control px-2 py-1";
@@ -448,7 +453,11 @@ function PartsGroup({
         <div className="flex flex-col gap-1">
           <div className={CHIP}>
             <span className="min-w-0 flex-1 truncate py-0.5 text-sm text-foreground">
-              <span className={ROLE}>{stages ? "Stage 1" : "Whole"} · </span>
+              {/* "Slice 1", not "Whole" — the anchor stopped being the total the
+                  parts are shares OF on 12 Sep 2026 and became one of them. A
+                  chip still reading "Whole" would be the one place left in the
+                  product teaching the old model. */}
+              <span className={ROLE}>{stages ? "Stage 1" : "Slice 1"} · </span>
               {anchorName}
             </span>
           </div>

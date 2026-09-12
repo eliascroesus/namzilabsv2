@@ -425,6 +425,18 @@ export function CustomTile({
       } else {
         w.groups = out.groups;
         composeNotes = out.notes;
+        /**
+         * THE HEADLINE STATES THE CIRCLE, NOT THE ANCHOR — since 12 Sep 2026,
+         * when a composed pie's whole became the sum of its slices.
+         *
+         * `w.value` is the tile's own stored figure and it heads the card. That
+         * was exactly right while the anchor WAS the whole; now it is one slice
+         * of several, and leaving it would print "420" over a circle that adds
+         * up to 800. Two totals on one card is the precise failure the residual
+         * arithmetic used to exist to prevent, and it would have arrived as a
+         * side effect of removing that arithmetic.
+         */
+        w.value = out.whole;
       }
     }
   } else {

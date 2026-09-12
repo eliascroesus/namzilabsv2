@@ -82,7 +82,20 @@ export type ComposeMember = {
 
 export type Refusal = { refusal: string };
 export type ComposedFunnel = { result: FunnelResult; notes: string[] };
-export type ComposedPie = { groups: Array<{ label: string; value: number }>; notes: string[] };
+export type ComposedPie = {
+  groups: Array<{ label: string; value: number }>;
+  notes: string[];
+  /**
+   * THE CIRCLE'S OWN TOTAL, AND THE CARD'S HEADLINE MUST BE IT.
+   *
+   * Reported since 12 Sep 2026, when the whole stopped being the anchor and
+   * became the sum of the slices. Without it the tile headlined its own metric —
+   * 420 — above a circle that adds up to 800, which is the "two different totals
+   * on one card" the residual arithmetic used to exist to prevent. The old model
+   * got this for free: the anchor WAS the whole.
+   */
+  whole: number;
+};
 
 const isRefusal = (v: unknown): v is Refusal => typeof v === "object" && v != null && "refusal" in v;
 export { isRefusal };
@@ -281,7 +294,14 @@ export function composePie(
 ): Refusal | ComposedPie {
   const parts = members.length - 1;
   if (parts < slot.min) {
-    return { refusal: `A pie needs at least ${slot.min} parts — add them in the tile’s settings.` };
+    /* Pluralised, because the floor dropped to 1 on 12 Sep 2026 and "at least 1
+       parts" is the kind of copy that makes a product look unfinished. */
+    return {
+      refusal:
+        slot.min === 1
+          ? "A pie needs at least one other metric to divide the circle with — add one in the tile’s settings."
+          : `A pie needs at least ${slot.min} parts — add them in the tile’s settings.`,
+    };
   }
   if (parts > slot.max) {
     return { refusal: `A pie shows at most ${slot.max} parts — remove some in the tile’s settings.` };
@@ -310,33 +330,52 @@ export function composePie(
     return { refusal: `${nameList(blank.map((m) => m.label))} has no number in this period.` };
   }
 
-  const whole = members[0].value as number;
-  const slices = members.slice(1).map((m) => ({ label: m.label, value: m.value as number }));
-
-  if (whole <= 0) return { refusal: "The whole is zero in this period — there are no shares of it." };
+  /**
+   * THE WHOLE IS THE SUM OF WHAT IS DRAWN — the owner's ruling of 12 Sep 2026:
+   * "it should just calculate all the steps together as the whole and then just
+   * divide evenly".
+   *
+   * IT USED TO BE THE ANCHOR. The tile's own metric was "the whole" and the
+   * parts were shares OF it, with the leftover appended as a grey "Other" and a
+   * refusal when the parts overran. That is a legitimate pie and it is not the
+   * one people were building: it needs a metric that genuinely contains the
+   * others, and every time it was handed three sibling counts instead — "Total
+   * Leads", "Booked Leads", "Organic Leads" — it either drew a fictional
+   * remainder or refused outright. Asking for a breakdown and being told the
+   * parts add up to more than the whole is the tool arguing with a question it
+   * was not asked.
+   *
+   * SO EVERY MEMBER IS A SLICE, the anchor included, and the circle is their
+   * total. There is no remainder to invent and no overrun to refuse, because a
+   * sum cannot exceed itself.
+   *
+   * WHAT THIS GIVES UP, SAID PLAINLY. A share is now a share of the parts NAMED,
+   * not of any independently-known total — so leaving one out silently inflates
+   * every other slice, where the old shape would have shown the gap as "Other".
+   * The disclosure below replaces that guarantee with a sentence, which is the
+   * honest trade rather than a free one.
+   */
+  const slices = members.map((m) => ({ label: m.label, value: m.value as number }));
 
   const negative = slices.filter((s) => s.value < 0);
   if (negative.length > 0) {
-    return { refusal: `${nameList(negative.map((s) => s.label))} is below zero, which isn’t a share of the whole.` };
+    return { refusal: `${nameList(negative.map((s) => s.label))} is below zero, which isn’t a share of anything.` };
   }
+
+  const whole = slices.reduce((a, s) => a + s.value, 0);
+  if (whole <= 0) return { refusal: "Everything here is zero in this period, so there are no shares to draw." };
 
   /**
-   * ROUNDING IS FORGIVEN; A REAL OVERRUN IS NOT. Half a percent of the whole,
-   * floored at half a unit, absorbs the ordinary case where stored figures were
-   * each rounded independently. Past that the parts genuinely do not fit inside
-   * the whole, which means they are not a partition of it — and renormalising
-   * (which is what `pieSlices` would silently do, dividing by the sum of what it
-   * is handed) would draw a perfectly closed circle over the contradiction.
+   * Short for the same reason the funnel's is — see its note.
+   *
+   * THE SENTENCE CHANGED WITH THE ARITHMETIC. It used to explain what "Other"
+   * was; there is no "Other" now, and the thing a reader can no longer verify
+   * for themselves is that these slices are the WHOLE story and do not double
+   * count. Both halves matter: a metric left out is invisible (every drawn share
+   * is inflated to fill the circle), and two slices counting the same subject
+   * inflate the total the same way. The old shape could at least show a gap.
    */
-  const sum = slices.reduce((a, s) => a + s.value, 0);
-  const eps = Math.max(whole * 0.005, 0.5);
-  const residual = whole - sum;
-  if (residual < -eps) {
-    return { refusal: "These parts add up to more than the whole, so they aren’t shares of it." };
-  }
-
-  /** Short for the same reason the funnel's is — see its note. */
-  const notes = [`“Other” is ${members[0].label} minus the parts, which are assumed not to overlap.`, ...sharedNotes(members)];
+  const notes = [`Shares are of these ${slices.length} metrics added together, which are assumed not to overlap.`, ...sharedNotes(members)];
 
   /**
    * A PART THAT IS LEGITIMATELY ZERO VANISHES FROM THE DRAWING — `pieSlices`
@@ -351,16 +390,11 @@ export function composePie(
   }
 
   /**
-   * THE RESIDUAL IS APPENDED WHENEVER IT IS POSITIVE — never suppressed for
-   * being small. `pieSlices` computes every share against the sum of what it
-   * was handed, so dropping a residual silently reports each slice as a share
-   * of the PARTS while the tile's headline still states the WHOLE: two
-   * different totals on one card. A visible 0.3% "Other" is the honest version.
-   *
-   * `sliceAccent` already paints a slice labelled "Other" in the palette's
-   * reserved grey, so the residual reads as a remainder rather than competing
-   * with a named part for attention.
+   * NO RESIDUAL TO APPEND. `pieSlices` computes every share against the sum of
+   * what it is handed, and that sum is now exactly the whole this function
+   * reported — so the circle closes at 100% by construction rather than by a
+   * remainder made to fit. The "Other"/"Unaccounted" slice and the arithmetic
+   * that produced it are gone with the anchor-as-whole rule above.
    */
-  const label = slices.some((s) => s.label === "Other") ? "Unaccounted" : "Other";
-  return { groups: residual > 0 ? [...slices, { label, value: residual }] : slices, notes };
+  return { groups: slices, notes, whole };
 }

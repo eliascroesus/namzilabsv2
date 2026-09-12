@@ -276,17 +276,26 @@ const COMPOSED_CHARTS: Array<{
     h: 7,
   },
   {
-    label: "Composed pie — parts and the residual",
+    /* THE 12 SEP MODEL: every member is a slice and the circle is their sum, so
+       this draws THREE arcs — the tile's own metric among them — where it used
+       to draw two parts and a grey "Other" remainder. */
+    /* A SHORT LABEL, DELIBERATELY. A pie still draws its own title (only funnels
+       and pipelines hide theirs), so a specimen label written as a sentence lands
+       on the card and `composed-check`'s "no prose on a drawing card" rule counts
+       it — correctly. The explanation belongs in the caption above the card. */
+    label: "Composed pie — anchor as a slice",
     chart: "pie",
     source: composed(420, [part("Ads Leads", 180), part("Organic Leads", 200)]),
     config: keys(2),
     h: 6,
   },
   {
-    /* Parts that tile the whole exactly: no "Other" arc at all. */
-    label: "Composed pie — parts that tile exactly",
+    /* The shape that used to be a REFUSAL — "these parts add up to more than the
+       whole" — and is the ordinary case people were actually building: sibling
+       counts that do not fit inside any one of them. It is just a circle of 240. */
+    label: "Composed pie — siblings, once a refusal",
     chart: "pie",
-    source: composed(400, [part("Ads Leads", 180), part("Organic Leads", 220)]),
+    source: composed(100, [part("Ads Leads", 80), part("Organic Leads", 60)]),
     config: keys(2),
     h: 6,
   },
@@ -307,9 +316,13 @@ const COMPOSED_CHARTS: Array<{
     h: 6,
   },
   {
-    label: "Refused — parts exceed the whole",
+    /* WAS "Refused — parts exceed the whole". That refusal is gone: with the
+       circle defined as the sum of its slices, nothing can exceed it. What still
+       refuses is a slice BELOW zero, which is not a share of anything and is the
+       one case `pieSlices` would silently drop from the drawing. */
+    label: "Refused — a slice below zero",
     chart: "pie",
-    source: composed(100, [part("Ads Leads", 80), part("Organic Leads", 60)]),
+    source: composed(100, [part("Refunds", -20), part("Organic Leads", 60)]),
     config: keys(2),
     h: 6,
   },

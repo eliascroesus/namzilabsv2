@@ -282,10 +282,25 @@ describe("what a composed pie refuses to draw", () => {
     expect(refusalOf(out)).toMatch(/add up/);
   });
 
-  it("refuses a zero whole", () => {
+  it("refuses a circle in which everything is zero", () => {
+    /**
+     * The whole is the SUM of the slices since 12 Sep 2026, so "the whole is
+     * zero" is no longer a fact about the anchor — it is the statement that
+     * every member is zero. `pieSlices` would divide by that sum.
+     */
     expect(refusalOf(composePie([whole(0), member({ label: "a", value: 0 }), member({ label: "b", value: 0 })], PIE_SLOT))).toMatch(
-      /whole is zero/,
+      /Everything here is zero/,
     );
+  });
+
+  it("draws a pie whose anchor is zero, because the anchor is only a slice now", () => {
+    /**
+     * THE OLD RULE REFUSED THIS OUTRIGHT, and it was right to under its own
+     * model: a whole of zero has no shares. As a slice, a zero anchor is just a
+     * category that did not happen — the other two still partition the circle.
+     */
+    const out = composePie([whole(0), member({ label: "a", value: 60 }), member({ label: "b", value: 40 })], PIE_SLOT);
+    expect(isRefusal(out)).toBe(false);
   });
 
   it("refuses a negative part rather than quietly dropping it", () => {
@@ -293,25 +308,31 @@ describe("what a composed pie refuses to draw", () => {
     expect(refusalOf(out)).toContain("Refunds");
   });
 
-  it("refuses parts that overrun the whole, instead of renormalising past it", () => {
+  it("cannot overrun its own whole any more, because the whole IS the parts", () => {
     /**
-     * `pieSlices` divides by the sum of whatever it is handed, so the circle
-     * always closes at 100% however wrong the partition is. Refusing is the
-     * only way the reader ever learns.
+     * THE REFUSAL THIS REPLACES was "these parts add up to more than the whole",
+     * and it was the single most common thing the feature said to somebody
+     * building an ordinary breakdown: three sibling counts do not fit inside any
+     * one of them. With the whole defined as the sum, the contradiction is
+     * arithmetically impossible rather than caught — 80 + 60 is simply a circle
+     * of 140.
      */
     const out = composePie([whole(100), member({ label: "a", value: 80 }), member({ label: "b", value: 60 })], PIE_SLOT);
-    expect(refusalOf(out)).toMatch(/more than the whole/);
+    if (isRefusal(out)) throw new Error(out.refusal);
+    expect(out.groups.reduce((a, g) => a + g.value, 0)).toBe(240);
   });
 
-  it("forgives rounding but not a real overrun", () => {
-    // Independently rounded figures legitimately total 100.4 against a whole of
-    // 100; 140 is not rounding.
-    const rounded = composePie([whole(100), member({ label: "a", value: 60.2 }), member({ label: "b", value: 40.2 })], PIE_SLOT);
-    expect(isRefusal(rounded), "half a percent is rounding, not a contradiction").toBe(false);
-  });
-
-  it("needs at least two parts", () => {
-    expect(refusalOf(composePie([whole(100), member({ label: "a", value: 10 })], PIE_SLOT))).toMatch(/at least 2 parts/);
+  it("needs one part, because the anchor is already a slice", () => {
+    /**
+     * Two were needed when the anchor was the whole and was NOT drawn — one part
+     * would have been a circle split between it and an invisible remainder. The
+     * anchor is in the circle now, so one part makes two slices.
+     */
+    const one = composePie([whole(100), member({ label: "a", value: 10 })], PIE_SLOT);
+    expect(isRefusal(one), "anchor + one part is two slices, which is a pie").toBe(false);
+    // And the copy says it in words — "at least 1 parts" is how a floor of one
+    // reads if the sentence is left as a template.
+    expect(refusalOf(composePie([whole(100)], PIE_SLOT))).toMatch(/at least one other metric/);
   });
 
   it("refuses more parts than the cap, which a chart switch can smuggle in", () => {
@@ -328,70 +349,70 @@ describe("what a composed pie refuses to draw", () => {
 });
 
 describe("what a composed pie draws", () => {
-  it("appends the residual as the last slice, and it is exact", () => {
+  it("draws every member as a slice, the anchor included, in the author's order", () => {
+    /**
+     * THE 12 SEP MODEL, and the whole of it in one assertion. The tile's own
+     * metric is slice 1 rather than the total its parts are shares OF, so the
+     * circle is 420 + 180 + 200 and there is no remainder to append.
+     */
     const out = composePie(
       [member({ label: "Total Leads", value: 420 }), member({ label: "Ads", value: 180 }), member({ label: "Organic", value: 200 })],
       PIE_SLOT,
     );
     if (isRefusal(out)) throw new Error(out.refusal);
     expect(out.groups).toEqual([
+      { label: "Total Leads", value: 420 },
       { label: "Ads", value: 180 },
       { label: "Organic", value: 200 },
-      { label: "Other", value: 40 },
     ]);
   });
 
-  it("appends a SMALL residual rather than hiding it", () => {
+  it("invents no remainder, however much the old model would have had left over", () => {
     /**
-     * Suppressing a sub-epsilon residual would leave `pieSlices` computing every
-     * share against the sum of the PARTS while the tile's headline still states
-     * the WHOLE — two different totals on one card. A visible 0.4% "Other" is
-     * the honest version.
+     * 1000 against 600 + 398 used to append a 2-unit "Other" — a real number
+     * under the old rule and a fabrication under this one, where nothing is
+     * outside the circle by definition. A slice labelled "Other" appearing here
+     * again would mean the residual arithmetic came back.
      */
     const out = composePie(
       [member({ label: "W", value: 1000 }), member({ label: "a", value: 600 }), member({ label: "b", value: 398 })],
       PIE_SLOT,
     );
     if (isRefusal(out)) throw new Error(out.refusal);
-    expect(out.groups.at(-1)).toEqual({ label: "Other", value: 2 });
+    expect(out.groups.map((g) => g.label)).toEqual(["W", "a", "b"]);
+    expect(out.groups.reduce((a, g) => a + g.value, 0)).toBe(1998);
   });
 
-  it("adds no residual row when the parts tile the whole exactly", () => {
-    const out = composePie(
-      [member({ label: "W", value: 100 }), member({ label: "a", value: 60 }), member({ label: "b", value: 40 })],
-      PIE_SLOT,
-    );
-    if (isRefusal(out)) throw new Error(out.refusal);
-    expect(out.groups.map((g) => g.label)).toEqual(["a", "b"]);
-  });
-
-  it("renames the residual when a real metric is already called Other", () => {
+  it("leaves a metric genuinely called Other alone, having no remainder to confuse it with", () => {
     /**
-     * `sliceAccent` paints ANY slice labelled "Other" in the palette's reserved
-     * grey, so a genuine metric of that name would be indistinguishable from
-     * the remainder — and both would share a React key.
+     * The rename to "Unaccounted" existed because `sliceAccent` paints ANY slice
+     * labelled "Other" in the reserved grey, so a real metric of that name was
+     * indistinguishable from the remainder — and the two shared a React key.
+     * With no remainder, the author's own label survives untouched.
      */
     const out = composePie(
       [member({ label: "W", value: 100 }), member({ label: "Other", value: 30 }), member({ label: "b", value: 20 })],
       PIE_SLOT,
     );
     if (isRefusal(out)) throw new Error(out.refusal);
-    expect(out.groups.at(-1)!.label).toBe("Unaccounted");
+    expect(out.groups.map((g) => g.label)).toEqual(["W", "Other", "b"]);
+    expect(out.groups.some((g) => g.label === "Unaccounted")).toBe(false);
   });
 
-  it("always says Other is the remainder and the parts are assumed disjoint", () => {
+  it("always discloses that the slices are assumed not to overlap", () => {
     /**
-     * UNPREVENTABLE, THEREFORE MANDATORY. "Total Leads" with parts "Ads Leads"
-     * and "Booked Leads" is arithmetically indistinguishable from a real
-     * partition — both sum to less than the whole — and only the author knows
-     * which they built.
+     * UNPREVENTABLE, THEREFORE MANDATORY — and it got MORE important with the
+     * model change, not less. Under the old rule, parts that double-counted
+     * showed up as a shrunken or negative remainder; now they simply inflate the
+     * total, and the circle closes at 100% either way. The sentence is the only
+     * thing left that says so.
      */
     const out = composePie(
       [member({ label: "Total Leads", value: 420 }), member({ label: "Ads", value: 180 }), member({ label: "Organic", value: 200 })],
       PIE_SLOT,
     );
     if (isRefusal(out)) throw new Error(out.refusal);
-    expect(out.notes.some((n) => n.includes("Total Leads") && /assumed not to overlap/.test(n))).toBe(true);
+    expect(out.notes.some((n) => /added together/.test(n) && /assumed not to overlap/.test(n))).toBe(true);
   });
 
   it("says when a named part is zero, because the drawing drops it", () => {
