@@ -1,10 +1,31 @@
 import { formatMetricValue } from "@/lib/format";
 import { funnelShape, multipleLabel } from "@/lib/board/scale";
-import { StatusPill } from "@/components/ui/badge";
+import { stageFill } from "@/lib/board/tile-config";
 import type { FunnelResult } from "@/lib/metrics/compute";
 
 /**
- * THE FUNNEL BODY — one connected shape, drawn once and arranged four ways.
+ * ONE METRIC THAT LEFT THE FUNNEL SIDEWAYS — an outcome, not a stage.
+ *
+ * "Unqualified", "No show", "Refunded": counts that belong to the same run but
+ * are not a step ON the way anywhere, so putting them in the body would make the
+ * sequence claim something false. They ride a strip under the mark instead,
+ * which is where the reference design puts them and, more to the point, the only
+ * place they can go without joining a progression they are not part of.
+ */
+export type FunnelExit = {
+  label: string;
+  /**
+   * NULL IS "THIS TILE CANNOT ANSWER FOR THIS PERIOD", and it draws an em dash
+   * rather than vanishing. Dropping the row would leave the reader with no way
+   * to tell a missing outcome from one that never happened — and zero and
+   * unknown are the exact pair `composeFunnel` refuses to let a STAGE conflate.
+   * The strip is a footnote, so it discloses instead of refusing.
+   */
+  value: number | null;
+};
+
+/**
+ * THE FUNNEL BODY — one connected ribbon, drawn once and arranged four ways.
  *
  * Two axes of choice, and they are independent. `align` centres the body into a
  * symmetric silhouette or anchors it to one edge; `flow` decides whether the
@@ -12,19 +33,27 @@ import type { FunnelResult } from "@/lib/metrics/compute";
  * and "Funnel" differ only in `align`, and `flow` is the author's, from
  * `config.flow`.
  *
- * BOTH MARKS USED TO BE ROWS OF BARS with a label line above each, and the
- * owner's verdict was that it reads as a table rather than a funnel. The stages
- * are polygons that touch now, so the SLOPE between two of them is the drop —
- * drawn in the space a bar chart leaves empty, costing no ink, no label and no
- * sentence.
+ * THE MARK IS A SMOOTH RIBBON, and the arithmetic under it did not move. Each
+ * stage is still exactly as wide as its share of the largest; the only change
+ * from the chamfered polygons this replaced is that the transition between two
+ * stages is a cubic sigmoid, so consecutive bands meet without a corner. The
+ * reference design this was rebuilt from draws its own stages as a gentle taper
+ * whatever the counts do — an 11412 → 2952 fall rendered as a mild slope — and
+ * that silhouette was refused on purpose. `tests/funnel-ribbon.test.ts` is where
+ * the refusal is enforced rather than remembered.
+ *
+ * COLOUR IS A LADDER, NOT A PALETTE. Stages are a sequence — each one is the one
+ * before it, minus the people who left — so they take a single hue deepening
+ * along the flow (`stageFill`), never the pie's categorical order. The pale end
+ * is mixed against the CARD rather than cut from a fixed hex, which is what lets
+ * the same ladder recede on white and on #151515 instead of glowing on the dark
+ * ground.
  *
  * WHERE THE LABELS GO IS A CONSEQUENCE OF THE FLOW, not a second preference.
  * Running DOWN, a label cannot sit above its own stage without cutting the body
  * in half, so names go in a lane beside it. Running ACROSS, every stage has the
- * full width of its own column overhead — so the name sits ABOVE its section
- * and the conversion figure sits IN THE GAP between two sections, which is
- * where a reader looking for a drop-off actually looks. That is the whole
- * reason the second flow is worth having.
+ * full width of its own column overhead — so the name and the count sit in a
+ * header row above the body, and the conversion rides the narrowing itself.
  *
  * Text is never laid over the fill in either: no single ink token is legible on
  * both the accent and the card in both themes, and the first attempt at this
@@ -37,6 +66,7 @@ export function FunnelBody({
   cols = 6,
   align,
   flow = "down",
+  exits = [],
 }: {
   result: FunnelResult;
   accent: string;
@@ -46,28 +76,52 @@ export function FunnelBody({
    * ratio stops calling itself a conversion, and no drop-off may be CLAIMED.
    */
   composed?: boolean;
-  /** The tile's width in grid columns — only the drop-off pill reads it. */
+  /** The tile's width in grid columns — the header row sizes its counts by it. */
   cols?: number;
   align: "center" | "left";
   flow?: "down" | "across";
+  /** Outcomes beside the funnel rather than steps along it. Empty draws no strip. */
+  exits?: FunnelExit[];
 }) {
   const counts = result.stages.map((s) => s.count);
   const bands = funnelShape(counts, { align, flow });
   const fmt = { format: "number" as const };
   const n = result.stages.length;
-  const danger = (i: number) => !composed && result.bottleneckIndex === i;
+
+  /**
+   * THE BOTTLENECK IS NAMED IN THE RATIO, NOT PAINTED ON THE BODY.
+   *
+   * It used to fill the worst stage in danger red and stamp a "Biggest drop-off"
+   * badge beside it. Both are gone: red on one segment of a blue ladder reads as
+   * a different KIND of thing rather than as the same thing going badly, and the
+   * badge spent a whole row of a short tile restating what the figure beneath it
+   * already said. The worst conversion's own pill takes danger INK instead —
+   * findable when you look for it, silent when you are not.
+   *
+   * A composed funnel never has one: its stages are independent metrics, so a
+   * fall between two of them is not a drop-off anybody can claim.
+   */
+  const worstDrop = (i: number) => !composed && result.bottleneckIndex === i;
 
   /**
    * A RATIO NEEDS A DENOMINATOR THAT EXISTS. `funnelFromCounts` guards its
    * division and answers 0 when the previous stage was empty, which is right for
-   * the arithmetic and wrong on screen: the owner's card printed "0% vs prev"
-   * beside a count of 12, because the stage above it was zero. Going from
-   * nothing to twelve is not a nought per cent of anything.
+   * the arithmetic and wrong on screen: the owner's card printed "0%" beside a
+   * count of 12, because the stage above it was zero. Going from nothing to
+   * twelve is not a nought per cent of anything.
    */
   const ratioAt = (i: number): string | null => {
+    /**
+     * BOUNDS FIRST, because the ACROSS flow asks about the stage AFTER a band
+     * and the last band has none. Reading `stages[n].conversionFromPrev` threw
+     * and blanked the whole tile — past every source check and every unit test,
+     * since none of them render this arrangement. The caller also stops at
+     * `n - 1`; this is the guard that does not depend on the caller remembering.
+     */
+    const stage = result.stages[i];
+    if (!stage) return null;
     const prev = i > 0 ? result.stages[i - 1].count : null;
     if (prev == null || prev === 0) return null;
-    const stage = result.stages[i];
     const share = formatMetricValue(stage.conversionFromPrev * 100, { format: "percent", precision: 0 });
     /**
      * A COMPOSED STAGE'S RATIO IS NOT A CONVERSION, and above 1 it is not even a
@@ -78,17 +132,39 @@ export function FunnelBody({
     return composed ? (multipleLabel(stage.conversionFromPrev) ?? share) : share;
   };
 
+  /**
+   * THE CONVERSION PILL — the figure, an arrow, and nothing else.
+   *
+   * It used to read "26% vs prev", and the owner's instruction was to take the
+   * comparison language off these charts entirely. The arrow does that work
+   * without a word: a pill sitting in the narrowing between two stages, pointing
+   * the way the funnel runs, cannot be read as anything but the passage between
+   * them. No shadow — the kit's shadow ladder is `none` at every rung and
+   * `scripts/shadow-check.mjs` renders both themes to prove it — so the pill is
+   * lifted off the body by its own card ground and a hairline instead.
+   */
+  const pill = (text: string, worst: boolean) => (
+    <span
+      className={`tnum inline-flex items-center gap-1 whitespace-nowrap rounded-control border border-border bg-card px-1.5 py-0.5 text-2xs ${
+        worst ? "text-danger" : "text-muted-foreground"
+      }`}
+    >
+      {text}
+      <span aria-hidden>{flow === "down" ? "↓" : "→"}</span>
+    </span>
+  );
+
   const marks = (
     <>
       {bands.map((b, i) =>
-        b.width === 0 ? (
+        b.path === "" ? (
           /**
-           * A ZERO STAGE STILL HAS TO BE SOMETHING. Its polygon is degenerate —
-           * the point the body comes to — so left alone the band is blank, and
-           * if that stage is also the bottleneck the danger fill has nothing to
-           * colour. On the owner's own data it IS the bottleneck. A dashed rule
-           * on the band's own axis says "this stage is here and it is empty"
-           * without manufacturing the width the 4% floor used to invent.
+           * A ZERO STAGE STILL HAS TO BE SOMETHING. Its body is the point the
+           * ribbon comes to, so `funnelShape` hands back an empty path rather
+           * than a degenerate shape that would still paint a hairline of accent
+           * and read as "a few". A dashed rule on the band's own axis says "this
+           * stage is here and it is empty" without manufacturing the width the
+           * old 4% floor used to invent.
            */
           <line
             key={i}
@@ -96,27 +172,25 @@ export function FunnelBody({
             x2={flow === "down" ? b.cx : (b.y0 + b.y1) / 2}
             y1={flow === "down" ? b.y0 : 0}
             y2={flow === "down" ? b.y1 : 100}
-            stroke={danger(i) ? "var(--color-danger)" : "var(--color-muted-foreground)"}
+            stroke="var(--color-muted-foreground)"
             strokeWidth={1}
             strokeDasharray="4 4"
             vectorEffect="non-scaling-stroke"
           />
         ) : (
-          <polygon
-            key={i}
-            points={b.points}
-            fill={danger(i) ? "var(--color-danger)" : accent}
-            /**
-             * THE SEAM IS THE CARD'S OWN COLOUR — the same trick `pie.tsx` uses
-             * between two adjacent arcs. The stages read as separate without a
-             * second hue and without a gap that would break the body in two.
-             * `non-scaling-stroke` keeps it one pixel however far the box is
-             * stretched.
-             */
-            stroke="var(--color-card)"
-            strokeWidth={1}
-            vectorEffect="non-scaling-stroke"
-          />
+          /**
+           * NO SEAM STROKE ANY MORE. The polygons needed a card-coloured hairline
+           * between them to read as separate stages in one flat accent; the
+           * ladder does that job with colour, and a stroke across a smooth
+           * junction would put back exactly the visible joint the curve exists to
+           * remove.
+           */
+          /* `data-funnel-band` is for the harness, and it earns its place: the
+             body used to be `<polygon>`, which no other mark drew, so a check
+             could find a stage by tag name alone. As a `<path>` it is
+             indistinguishable from a pie's arcs, and `composed-check` counts
+             both on the same card. */
+          <path key={i} data-funnel-band d={b.path} fill={stageFill(i, n, accent)} />
         ),
       )}
       {/**
@@ -154,32 +228,92 @@ export function FunnelBody({
     "aria-hidden": true,
   };
 
+  /**
+   * OUTCOMES, UNDER A RULE, IN THE ORDER THE AUTHOR NAMED THEM.
+   *
+   * Divided by hairlines rather than set in their own boxes: these are a
+   * footnote to the mark, and giving each one a card would make three
+   * afterthoughts look like three more stages.
+   */
+  const exitStrip = exits.length > 0 && (
+    <div
+      data-funnel-exits
+      className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-t border-border pt-2"
+    >
+      {exits.map((exit, i) => (
+        <span
+          key={`${exit.label}-${i}`}
+          className={`flex min-w-0 items-baseline gap-1.5 text-2xs ${i > 0 ? "border-l border-border pl-3" : ""}`}
+          data-tip={`${exit.label} · ${exit.value == null ? "no number this period" : formatMetricValue(exit.value, fmt)}`}
+        >
+          <span className="truncate text-muted-foreground" title={exit.label}>
+            {exit.label}
+          </span>
+          <span
+            className={`tnum shrink-0 font-semibold ${exit.value == null ? "text-muted-foreground" : "text-foreground"}`}
+          >
+            {exit.value == null ? "—" : formatMetricValue(exit.value, fmt)}
+          </span>
+        </span>
+      ))}
+    </div>
+  );
+
   if (flow === "across") {
     return (
-      <div className="flex min-h-0 flex-1 flex-col gap-1">
-        {/* THE NAME AND THE FIGURE, ABOVE THEIR OWN SECTION. Each stage owns the
-            full width of its column here, which is the arrangement the DOWN flow
-            cannot offer without cutting the body in half. */}
-        <div className="grid shrink-0" style={{ gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))` }}>
+      <div className="flex min-h-0 flex-1 flex-col gap-2">
+        {/**
+         * THE HEADER ROW — a name, a key to its own segment, and the count.
+         *
+         * Each stage owns the full width of its column here, which is the
+         * arrangement the DOWN flow cannot offer without cutting the body in
+         * half. The dot is not decoration: it is painted with that stage's own
+         * ladder fill, so the row is a legend for the ribbon beneath it and the
+         * reader never has to count segments to find which one a number belongs
+         * to.
+         */}
+        <div
+          className="grid shrink-0 border-b border-border pb-2"
+          style={{ gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))` }}
+        >
           {result.stages.map((stage, i) => (
-            <div key={i} className="flex min-w-0 flex-col items-center px-1 text-center">
-              {/* TRUNCATION HERE IS THE DESIGN, not a defect, and it is marked so
-                  the harness can tell the two apart. A stage name running ACROSS
-                  shares the card with n-1 siblings — four stages on a
-                  four-column tile is about 110px each — so there is nowhere else
-                  for a long name to go, and the full string stays in `title`.
-                  That is a different thing from the DOWN flow's name lane, where
-                  "Booked Leads" once rendered "Booke…" because a pill took room
-                  the name could have had. One is arithmetic; the other was a bug. */}
-              <span
-                data-stage-name
-                className="w-full truncate text-2xs text-muted-foreground"
-                title={stage.label}
-              >
-                {stage.label}
+            <div
+              key={i}
+              className={`flex min-w-0 flex-col gap-0.5 ${i > 0 ? "border-l border-border pl-2" : ""} ${
+                i < n - 1 ? "pr-2" : ""
+              }`}
+            >
+              <span className="flex min-w-0 items-center">
+                {/* NO COLOUR KEY IN THIS ROW, and it was tried. A dot painted
+                    with the stage's own ladder fill looked like the reference's
+                    coloured icons and was wrong twice over: the header cell sits
+                    in the same grid column as the segment beneath it, so
+                    POSITION already keys the two together — and a dot is the
+                    vocabulary of a CATEGORICAL legend, which says the stages are
+                    a set of unrelated things when the ladder exists to say they
+                    are one sequence. It also cost about 16px of an 85px cell,
+                    measured on a four-stage tile, which the name needs more.
+
+                    TRUNCATION HERE IS THE DESIGN, not a defect, and it is marked so
+                    the harness can tell the two apart. A stage name running ACROSS
+                    shares the card with n-1 siblings — four stages on a
+                    four-column tile is about 110px each — so there is nowhere else
+                    for a long name to go, and the full string stays in `title`.
+                    That is a different thing from the DOWN flow's name lane, where
+                    "Booked Leads" once rendered "Booke…" because a pill took room
+                    the name could have had. One is arithmetic; the other was a bug. */}
+                <span data-stage-name className="truncate text-2xs text-muted-foreground" title={stage.label}>
+                  {stage.label}
+                </span>
               </span>
+              {/* THE COUNT IS THE LOUD THING ON THIS CARD — "quiet chrome, loud
+                  numbers", and this row is where a funnel gets to spend it. It
+                  sizes with the tile because 17px in a 110px column is the whole
+                  point on a wide board and an overflow on a narrow one. */}
               <span
-                className={`tnum text-xs font-semibold ${stage.count === 0 ? "text-muted-foreground" : "text-foreground"}`}
+                className={`tnum font-semibold ${cols >= 5 ? "text-md" : "text-sm"} ${
+                  stage.count === 0 ? "text-muted-foreground" : "text-foreground"
+                }`}
               >
                 {formatMetricValue(stage.count, fmt)}
               </span>
@@ -187,91 +321,92 @@ export function FunnelBody({
           ))}
         </div>
 
+        {/* THE BODY, WITH THE CONVERSIONS ON THE NARROWINGS THEMSELVES. Each pill
+            is centred on the band's `waist` — where the taper actually happens —
+            rather than on the band boundary, which is where the taper finishes
+            and so reads as belonging to the stage after it. */}
         <div className="relative min-h-0 flex-1">
           <svg {...svgProps}>{marks}</svg>
-        </div>
-
-        {/* THE CONVERSION IN THE GAP IT DESCRIBES. A drop-off belongs BETWEEN the
-            two stages it is a ratio of, not stapled to the right-hand one — and
-            running across there is finally somewhere to put it. Each figure is
-            centred on the boundary it names, which is why this is an absolutely
-            positioned strip rather than another grid of cells. */}
-        <div className="relative h-4 shrink-0">
-          {result.stages.map((_stage, i) => {
-            const r = ratioAt(i);
-            if (i === 0 || !r) return null;
+          {bands.map((b, i) => {
+            if (i >= n - 1) return null;
+            const r = ratioAt(i + 1);
+            if (!r) return null;
             return (
               <span
                 key={i}
-                className="tnum absolute -translate-x-1/2 text-2xs text-muted-foreground"
-                style={{ left: `${(i * 100) / n}%` }}
+                className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2"
+                style={{ left: `${b.waist}%` }}
               >
-                {r}
+                {pill(r, worstDrop(i + 1))}
               </span>
             );
           })}
         </div>
-        {danger(result.bottleneckIndex ?? -1) && cols >= 5 && (
-          <div className="flex shrink-0 justify-center">
-            <StatusPill tone="danger">Biggest drop-off</StatusPill>
-          </div>
-        )}
+
+        {exitStrip}
       </div>
     );
   }
 
   return (
-    <div
-      className="grid min-h-0 flex-1 items-stretch gap-x-3"
-      style={{
-        // The body takes a fixed share of the width so it stays a recognisable
-        // shape on a narrow tile; the name lane absorbs whatever is left.
-        gridTemplateColumns: "minmax(0,1fr) 38% auto",
-        gridTemplateRows: `repeat(${n}, minmax(0, 1fr))`,
-      }}
-    >
-      {/* ONE SVG SPANNING EVERY ROW, so the body is continuous across the band
-          boundaries instead of being cut into one element per stage. */}
-      <svg {...svgProps} style={{ gridColumn: 2, gridRow: `1 / ${n + 1}` }}>
-        {marks}
-      </svg>
+    <div className="flex min-h-0 flex-1 flex-col gap-2">
+      <div
+        className="grid min-h-0 flex-1 items-stretch gap-x-3"
+        style={{
+          // The body takes a fixed share of the width so it stays a recognisable
+          // shape on a narrow tile; the name lane absorbs whatever is left.
+          gridTemplateColumns: "minmax(0,1fr) 38% auto",
+          gridTemplateRows: `repeat(${n}, minmax(0, 1fr))`,
+        }}
+      >
+        {/* ONE SVG SPANNING EVERY ROW, so the body is continuous across the band
+            boundaries instead of being cut into one element per stage. */}
+        <svg {...svgProps} style={{ gridColumn: 2, gridRow: `1 / ${n + 1}` }}>
+          {marks}
+        </svg>
 
-      {result.stages.map((stage, i) => {
-        const r = ratioAt(i);
-        // Keyed by index: two stages may legitimately share a label, and
-        // `computeFunnel` does not dedupe them. Position IS identity here.
-        return (
-          <div key={i} className="contents">
-            <span
-              className="flex min-w-0 items-center justify-end gap-1.5 overflow-hidden"
-              style={{ gridColumn: 1, gridRow: i + 1 }}
-            >
-              {/* The pill stands down before the NAME does — at the tile's own
-                  `minW` it won and rendered "Booked Leads" as "Booke…". The
-                  bottleneck is also carried by the segment's own fill. */}
-              {danger(i) && cols >= 5 && <StatusPill tone="danger">Biggest drop-off</StatusPill>}
-              <span className="truncate text-xs text-foreground" title={stage.label}>
-                {stage.label}
-              </span>
-            </span>
-            <span className="flex shrink-0 items-center" style={{ gridColumn: 3, gridRow: i + 1 }}>
-              {/* THE RATIO IS THE POINT OF THE CHART, so it is never the thing
-                  that stands down. It was briefly gated on tile width alongside
-                  the pill, which hid the drop-off figure on exactly the size most
-                  boards use. Stacked under the count: two short lines fit a
-                  narrow column where one long row does not. */}
-              <span className="flex flex-col items-end leading-tight">
-                <span
-                  className={`tnum text-xs font-semibold ${stage.count === 0 ? "text-muted-foreground" : "text-foreground"}`}
-                >
-                  {formatMetricValue(stage.count, fmt)}
+        {result.stages.map((stage, i) => {
+          const r = ratioAt(i);
+          // Keyed by index: two stages may legitimately share a label, and
+          // `computeFunnel` does not dedupe them. Position IS identity here.
+          return (
+            <div key={i} className="contents">
+              <span
+                className="flex min-w-0 items-center justify-end overflow-hidden"
+                style={{ gridColumn: 1, gridRow: i + 1 }}
+              >
+                {/* No colour key here either — same reasoning as the across
+                    flow's header: the lane's row IS the band's row. */}
+                <span className="truncate text-xs text-foreground" title={stage.label}>
+                  {stage.label}
                 </span>
-                {r && <span className="tnum text-2xs text-muted-foreground">{r} vs prev</span>}
               </span>
-            </span>
-          </div>
-        );
-      })}
+              <span className="flex shrink-0 items-center" style={{ gridColumn: 3, gridRow: i + 1 }}>
+                {/* THE RATIO IS THE POINT OF THE CHART, so it is never the thing
+                    that stands down. It was briefly gated on tile width alongside
+                    a pill that no longer exists, which hid the drop-off figure on
+                    exactly the size most boards use. Stacked under the count: two
+                    short lines fit a narrow column where one long row does not.
+
+                    RUNNING DOWN, THE PILL STAYS IN ITS COLUMN rather than riding
+                    the body the way it does running across. The body is 38% of a
+                    tile that is often four columns wide — around 90px — and a
+                    pill centred on it overhangs both edges of the ribbon. */}
+                <span className="flex flex-col items-end gap-0.5 leading-tight">
+                  <span
+                    className={`tnum text-xs font-semibold ${stage.count === 0 ? "text-muted-foreground" : "text-foreground"}`}
+                  >
+                    {formatMetricValue(stage.count, fmt)}
+                  </span>
+                  {r && pill(r, worstDrop(i))}
+                </span>
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      {exitStrip}
     </div>
   );
 }

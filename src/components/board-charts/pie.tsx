@@ -59,6 +59,16 @@ export function PieChart({
         ))}
         {donut && <circle r="24" fill="var(--color-card)" />}
       </svg>
+      {/**
+       * THE DONUT'S HOLE STAYS EMPTY, and that was a decision rather than an
+       * oversight. Putting the total in it is the obvious move and it was built,
+       * photographed and removed: every tile that draws a pie already prints
+       * that same figure as its HEADLINE, two lines above the circle, so the
+       * centre restated a number the eye had just read. A five-figure total also
+       * has to be truncated to clear a hole that is 48% of the mark's diameter,
+       * which means the redundant copy is the one at risk of being the unreadable
+       * one.
+       */}
 
       {legend !== "none" && (
         <div className="min-h-0 min-w-0 flex-1 space-y-1 overflow-y-auto quiet-scroll">
@@ -72,7 +82,13 @@ export function PieChart({
               <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground" title={s.label}>
                 {s.label}
               </span>
-              <span className="tnum shrink-0 text-xs text-foreground">{formatMetricValue(s.value, format)}</span>
+              {/* THE FIGURE IS THE LOUD THING IN THE ROW, matching the funnel's
+                  header counts. It sat at the same weight as its own label, so a
+                  legend read as four columns of equal text and the reader had to
+                  find the numbers before comparing them. */}
+              <span className="tnum shrink-0 text-xs font-semibold text-foreground">
+                {formatMetricValue(s.value, format)}
+              </span>
               <span className="tnum w-8 shrink-0 text-right text-xs text-muted-foreground">{pct(s.share)}</span>
             </div>
           ))}

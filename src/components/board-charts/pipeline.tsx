@@ -1,4 +1,4 @@
-import { FunnelBody } from "@/components/board-charts/funnel-body";
+import { FunnelBody, type FunnelExit } from "@/components/board-charts/funnel-body";
 import type { FunnelResult } from "@/lib/metrics/compute";
 
 /**
@@ -15,6 +15,7 @@ export function Pipeline({
   composed,
   cols,
   flow,
+  exits,
 }: {
   result: FunnelResult;
   accent: string;
@@ -22,6 +23,18 @@ export function Pipeline({
   cols?: number;
   /** Which way the stages run — the author's choice, from `config.flow`. */
   flow?: "down" | "across";
+  /** Outcomes beside the funnel rather than steps along it — the strip under the mark. */
+  exits?: FunnelExit[];
 }) {
-  return <FunnelBody result={result} accent={accent} composed={composed} cols={cols} align="center" flow={flow} />;
+  return (
+    <FunnelBody
+      result={result}
+      accent={accent}
+      composed={composed}
+      cols={cols}
+      align="center"
+      flow={flow}
+      exits={exits}
+    />
+  );
 }

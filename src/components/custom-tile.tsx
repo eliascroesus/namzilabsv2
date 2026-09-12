@@ -12,6 +12,7 @@ import { BarsVertical, LineChart } from "@/components/board-charts/cartesian";
 import { BarsHorizontal, groupsFooter } from "@/components/board-charts/bars-horizontal";
 import { PieChart, pieFooter } from "@/components/board-charts/pie";
 import { Pipeline } from "@/components/board-charts/pipeline";
+import type { FunnelExit } from "@/components/board-charts/funnel-body";
 import { ChartTable } from "@/components/board-charts/table";
 import { ChartHover } from "@/components/chart-hover";
 import {
@@ -138,6 +139,17 @@ export type CustomTileSource =
        * than drawing a funnel with a stage quietly missing from the middle.
        */
       parts?: ComposedPart[];
+      /**
+       * The metrics named by `config.exits` — outcomes drawn in the strip under
+       * the funnel rather than as bands in it. Resolved down the identical path
+       * as `parts`, and carrying the identical shape, because an exit IS a
+       * published sibling tile; only the claim the mark makes about it differs.
+       *
+       * A KEY THAT NO LONGER RESOLVES IS DROPPED SILENTLY, where a missing part
+       * refuses the whole chart. A hole in a sequence invalidates the sequence; a
+       * missing footnote is one fewer figure in a footnote.
+       */
+      exits?: ComposedPart[];
     }
   | { kind: "classic"; result: AggregateResult | FunnelResult | null; target: number | null };
 
@@ -299,6 +311,8 @@ export function CustomTile({
    * refused and never optional. They render under the mark, every time.
    */
   let composeNotes: string[] = [];
+  /** Outcomes for the strip under a funnel — empty unless the author named some. */
+  let funnelExits: FunnelExit[] = [];
 
   if (source.kind === "flow") {
     const slot = stored.byRange?.[rangeKey];
@@ -387,6 +401,21 @@ export function CustomTile({
           format: p.format,
         })),
       ];
+      /**
+       * THE EXIT STRIP'S FIGURES — read for the ACTIVE range, like everything
+       * else on this tile, and deliberately not put through `compose.ts`.
+       *
+       * The rules in that module all exist to protect a CLAIM: that stages sum
+       * into a sequence, that slices partition a whole. The strip claims nothing
+       * of the sort — each figure is its own metric, printed beside the mark and
+       * summing to nothing — so there is no honesty question for those rules to
+       * answer, and running them here would only invent refusals (unit
+       * disagreement, non-additivity) for numbers that were never being added.
+       */
+      funnelExits = (source.exits ?? []).map((e) => ({
+        label: e.label,
+        value: e.byRange[rangeKey] ?? null,
+      }));
       const slot = PARTS_SLOT[chart];
       const out = chart === "pie" ? composePie(members, slot) : composeFunnel(members, slot);
       if (isRefusal(out)) composeRefusal = out.refusal;
@@ -723,11 +752,18 @@ export function CustomTile({
              hover, and to a screen reader — without taking a single row from the
              chart. Joined with newlines because a native tooltip honours them. */
           <div className="min-h-0 flex-1 overflow-y-auto quiet-scroll" title={composeNotes.join("\n") || undefined}>
-            <FunnelView result={w.funnel!} composed={composed} cols={cols} flow={config.flow} />
+            <FunnelView result={w.funnel!} composed={composed} cols={cols} flow={config.flow} exits={funnelExits} />
           </div>
         ) : chart === "pipeline" ? (
           <div className="flex min-h-0 flex-1 flex-col" title={composeNotes.join("\n") || undefined}>
-            <Pipeline result={w.funnel!} accent={accent} composed={composed} cols={cols} flow={config.flow} />
+            <Pipeline
+              result={w.funnel!}
+              accent={accent}
+              composed={composed}
+              cols={cols}
+              flow={config.flow}
+              exits={funnelExits}
+            />
           </div>
         ) : chart === "table" ? (
           <ChartTable head={[hasSeries ? "Period" : "Group", "Value"]} rows={tableRows} />

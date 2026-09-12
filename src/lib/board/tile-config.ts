@@ -29,6 +29,20 @@ import type { ChartId } from "./charts";
  * stored bag is parseable, whichever build wrote it.
  */
 
+/**
+ * HOW MANY OUTCOMES THE STRIP UNDER A FUNNEL WILL HOLD.
+ *
+ * Read by the schema (to refuse a longer array) and by the panel (to stop
+ * offering "Add outcome"), for the same reason `PARTS_SLOT` is read by both
+ * sides: a cap enforced only while ADDING is not a cap, and the two would
+ * disagree the first time either moved.
+ *
+ * Four because the exits render as one wrapped line of hairline-divided figures
+ * under the mark. A fifth turns a footnote into a second chart, on a tile whose
+ * height the body already owns.
+ */
+export const EXITS_MAX = 4;
+
 const KEYS = {
   /** The name on the card. Absent = follow the metric's own name. */
   title: z.string().trim().min(1).max(60),
@@ -123,6 +137,37 @@ const KEYS = {
     .array(z.string().regex(/^flow:[^:]+:.+$/).max(200))
     .min(1)
     .max(7)
+    .refine((a) => new Set(a).size === a.length, "A metric can only appear once."),
+  /**
+   * OUTCOMES BESIDE THE FUNNEL RATHER THAN STEPS ALONG IT — "Unqualified", "No
+   * show", "Refunded".
+   *
+   * SAME STORAGE, SAME KEY SHAPE, SAME PERMISSION PATH AS `parts`, and that is
+   * the whole reason this is a second list rather than a flag on the first. An
+   * exit resolves through the identical `Map.get` against `flowByKey`, so it
+   * costs a lookup and nothing else.
+   *
+   * WHY IT CANNOT SIMPLY BE A LATER STAGE. A funnel's stages are a SEQUENCE, and
+   * the mark says so in its geometry: each band is measured against the largest
+   * and the taper between two of them is the loss. An outcome is not on the way
+   * anywhere — "Unqualified" is where people went INSTEAD — so drawing it as a
+   * band would put it in a progression it is not part of, and would fold its
+   * count into a ratio that claims to describe passage between two steps.
+   *
+   * CAPPED AT FOUR, and the cap is about the strip rather than about storage. The
+   * exits render as one wrapped line of hairline-divided figures under the mark;
+   * a fifth turns a footnote into a second chart, on a tile whose height the body
+   * already owns.
+   *
+   * NOT DEDUPED AGAINST `parts`. A metric may legitimately be both — a funnel
+   * ending at "Won" can still want "Won" in the strip beside "Lost" — and the
+   * two lists are read by different code for different claims. Within itself it
+   * dedupes for the same reason `parts` does: twice is not a drawing anyone
+   * meant.
+   */
+  exits: z
+    .array(z.string().regex(/^flow:[^:]+:.+$/).max(200))
+    .max(EXITS_MAX)
     .refine((a) => new Set(a).size === a.length, "A metric can only appear once."),
 } as const;
 
@@ -255,6 +300,43 @@ export function sliceAccent(index: number, label?: string): string {
 }
 
 /**
+ * THE FUNNEL'S LADDER — one hue, deepening along the flow.
+ *
+ * A funnel's stages are a SEQUENCE, not a set of categories, and colouring them
+ * from `SLICE_ORDER` would say the opposite: eight unrelated hues implying eight
+ * unrelated things, when the whole claim of the mark is that each stage IS the
+ * one before it, minus the people who left. So the hue is constant and only its
+ * DEPTH moves, which is the one encoding that reads as progression.
+ *
+ * MIXED AGAINST THE CARD, WHICH IS WHY IT SURVIVES BOTH THEMES. This is
+ * `calendar-board`'s `heatFill` idiom exactly: the pale end is not "light blue",
+ * it is "mostly card" — so on white it lands as a pale tint and on #151515 it
+ * lands as a dark muted blue, receding in both. A ladder cut from fixed hexes
+ * would need inverting per theme, and a near-white blue on the dark ground
+ * GLOWS: brighter than the surface it sits on, which reads as the emphasis the
+ * first stage is least entitled to.
+ *
+ * THE CEILING IS 100% WHERE THE CALENDAR'S IS 56%, and the difference is not an
+ * oversight. A calendar day prints its figure ON the fill, so its mix has to
+ * stop where ink stops reading against it. `FunnelBody` lays no text over the
+ * body at all — deliberately, and documented there — so nothing constrains the
+ * deep end but the hue.
+ */
+const LADDER_FLOOR = 16;
+const LADDER_RISE = 84;
+
+export function stageFill(index: number, count: number, accent: string): string {
+  /**
+   * A ONE-STAGE FUNNEL IS THE ACCENT, FLAT. Spreading a ladder across a single
+   * band hands it the floor — a 16% wash — so a lone stage would render as a
+   * ghost of the colour every other chart on the board draws it in.
+   */
+  if (count <= 1) return accent;
+  const share = index / (count - 1);
+  return `color-mix(in srgb, ${accent} ${(LADDER_FLOOR + share * LADDER_RISE).toFixed(1)}%, var(--card))`;
+}
+
+/**
  * WHICH SETTINGS EACH CHART ACTUALLY USES — one table, read by BOTH sides.
  *
  * The panel reads it to decide what to OFFER; the renderer reads it to decide
@@ -293,8 +375,8 @@ export const CONFIG_FIELDS = {
   category: [...EVERY_TILE, "color", "precision", "sort", "limit"],
   pie: [...EVERY_TILE, "precision", "limit", "donut", "legend", "parts"],
   progress: [...EVERY_TILE, "precision", "target"],
-  funnel: [...EVERY_TILE, "parts", "flow"],
-  pipeline: [...EVERY_TILE, "color", "parts", "flow"],
+  funnel: [...EVERY_TILE, "parts", "flow", "exits"],
+  pipeline: [...EVERY_TILE, "color", "parts", "flow", "exits"],
   table: [...EVERY_TILE, "precision"],
 
   /**

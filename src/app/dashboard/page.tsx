@@ -993,7 +993,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
      * has already been through that derivation at this point, so reading the
      * active key here gets the assembled slot rather than a miss.
      */
-    const parts = (parseTileConfig(row.config).parts ?? []).flatMap((key) => {
+    const resolveMembers = (keys: string[]) => keys.flatMap((key) => {
       const part = flowByKey.get(key);
       if (!part) return [];
       const t = (part.tile ?? {}) as {
@@ -1027,6 +1027,24 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       ];
     });
 
+    const composeConfig = parseTileConfig(row.config);
+    const parts = resolveMembers(composeConfig.parts ?? []);
+    /**
+     * THE EXIT STRIP'S NUMBERS, DOWN THE IDENTICAL PATH.
+     *
+     * Same `Map.get`, same permission gate, same range slots — an exit is a
+     * published sibling tile exactly as a stage is, and the only thing that
+     * differs is the claim the renderer makes about it. Resolving it through a
+     * second copy of this walk was the alternative, and the two copies would have
+     * drifted at the first change to how a range is read.
+     *
+     * A DROPPED EXIT IS NOT A REFUSAL, which is where the two lists part company.
+     * A missing stage puts a hole in a sequence, so `composeFunnel` refuses the
+     * whole mark; a missing exit just means one fewer figure in a footnote, and
+     * blanking a working funnel over it would be the tail wagging the dog.
+     */
+    const exits = resolveMembers(composeConfig.exits ?? []);
+
     const source: CustomTileSource | null = flow
       ? {
           kind: "flow",
@@ -1038,6 +1056,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           error: flow.error,
           flowId: flow.flowId,
           parts: parts.length > 0 ? parts : undefined,
+          exits: exits.length > 0 ? exits : undefined,
         }
       : classic
         ? {

@@ -111,10 +111,18 @@ const composed = (
   anchor: number,
   parts: ComposedPart[],
   over: Record<string, unknown> = {},
+  /**
+   * Outcomes for the strip under the mark. They ride the SOURCE, like parts and
+   * for the same reason: `config.exits` is only the list of keys the author
+   * stored, and it is `page.tsx` that turns those into figures. A specimen
+   * setting only the config would draw an empty strip and photograph nothing.
+   */
+  exits: ComposedPart[] = [],
 ): Extract<CustomTileSource, { kind: "flow" }> => ({
   kind: "flow",
   status: "fresh",
   parts,
+  exits: exits.length > 0 ? exits : undefined,
   tile: {
     name: "Total Leads",
     format: "number",
@@ -151,6 +159,28 @@ const COMPOSED_CHARTS: Array<{ label: string; chart: ChartId; source: CustomTile
     chart: "pipeline",
     source: composed(420, [part("Booked Leads", 252), part("On Calendar", 96), part("Showed", 41)]),
     config: { ...keys(3), flow: "across" },
+    h: 6,
+  },
+  {
+    /**
+     * THE REFERENCE DESIGN, AS CLOSE AS THE ARITHMETIC ALLOWS — the owner's
+     * 12 Sep screenshot: five stages running across, a header row of counts, a
+     * conversion on each narrowing, and a strip of outcomes under the mark.
+     *
+     * ITS OWN NUMBERS, DELIBERATELY. 11412 -> 2952 is a 74% fall that the
+     * reference draws as a gentle taper; drawn honestly it is a cliff, and this
+     * specimen is where the difference between the two is visible rather than
+     * argued about. `tests/funnel-ribbon.test.ts` pins the same pair.
+     */
+    label: "The reference funnel — five stages, outcomes beneath",
+    chart: "pipeline",
+    source: composed(
+      11412,
+      [part("In contact", 2952), part("Qualified", 780), part("Booked call", 210), part("Won", 64)],
+      { name: "New" },
+      [part("Unqualified", 3009), part("Deposit", 4), part("No show", 19)],
+    ),
+    config: { ...keys(4), flow: "across", exits: ["flow:demo:x0", "flow:demo:x1", "flow:demo:x2"] },
     h: 6,
   },
   {

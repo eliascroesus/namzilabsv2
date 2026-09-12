@@ -506,6 +506,49 @@ describe("what a restricted rank may point a chart at", () => {
     ).toMatchObject({ parts: ["flow:f1:o2", "flow:f1:o3"] });
   });
 
+  it("refuses a HIDDEN flow smuggled in through config.exits either", async () => {
+    /**
+     * THE THIRD DOOR, opened by the funnel's outcome strip.
+     *
+     * `exits` stores tile keys in the config bag exactly as `parts` does — same
+     * `flow:` regex, same resolver, same `Map.get` against `flowByKey` — so it
+     * inherits the whole of the hole the test above closes. A gate that reads
+     * only `parts` leaves the second array as an unchecked path to any metric's
+     * numbers, and nothing about the shape of the write would look unusual.
+     *
+     * Sabotage: drop `...(parsed.exits ?? [])` from the `tileKeysAllowed` call
+     * in `setCustomTileAction` and this goes green while `flow:f2` lands in
+     * jsonb and renders for the next colleague who can see it.
+     */
+    const a = await addCustomTileAction("va", "flow:f1:o1", "number");
+    if (!a.ok) throw new Error("setup failed");
+    await assignBuilderRank(["flow:f1"]);
+
+    const hidden = await setCustomTileAction(a.tile.id, { config: { exits: ["flow:f2:o1"] } });
+    expect(hidden).toEqual({ ok: false, error: "That isn't a metric we know." });
+    expect(seeded((await db.select().from(dashboardTiles).where(eq(dashboardTiles.id, a.tile.id)))[0].config)).toEqual(
+      {},
+    );
+
+    // A hidden key hiding behind visible STAGES is the shape this actually
+    // takes in the wild: the funnel itself is legitimate and the smuggling
+    // rides along in the footnote.
+    const mixed = await setCustomTileAction(a.tile.id, {
+      config: { parts: ["flow:f1:o2"], exits: ["flow:f2:o1"] },
+    });
+    expect(mixed.ok).toBe(false);
+
+    // And the positive half, or a check that refused every `exits` write would
+    // satisfy the rule above while making the feature unusable.
+    const visible = await setCustomTileAction(a.tile.id, {
+      config: { parts: ["flow:f1:o2"], exits: ["flow:f1:o3"] },
+    });
+    expect(visible.ok).toBe(true);
+    expect(
+      (await db.select().from(dashboardTiles).where(eq(dashboardTiles.id, a.tile.id)))[0].config,
+    ).toMatchObject({ exits: ["flow:f1:o3"] });
+  });
+
   it("still lets a block sentinel and the unset sentinel through a restricted rank", async () => {
     // Neither joins to a metric at all — `visibilityKeyOf` reads both as
     // outside the permission system entirely, not as "hidden".

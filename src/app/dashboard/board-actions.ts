@@ -1235,7 +1235,17 @@ export async function addCustomTileAction(
      * above, or giving this action the `config` argument its sibling already
      * has, cannot reopen the hole in silence.
      */
-    const partsError = await tileKeysAllowed(db, ctx.orgId, access, parseTileConfig(config).parts ?? []);
+    /**
+     * BOTH KEY LISTS, ONE GATE. `exits` names sibling metrics exactly as `parts`
+     * does and reaches the renderer down the same resolution path, so a config
+     * bag that could smuggle a restricted key past this check through the second
+     * array would have reopened the hole the first one closes.
+     */
+    const seeded = parseTileConfig(config);
+    const partsError = await tileKeysAllowed(db, ctx.orgId, access, [
+      ...(seeded.parts ?? []),
+      ...(seeded.exits ?? []),
+    ]);
     if (partsError) return fail(partsError);
 
     const row: BoardTileRow = {
@@ -1412,14 +1422,22 @@ export async function duplicateCustomTileAction(id: string): Promise<Result<{ ti
     /* Through the parser rather than off the row: `BoardTileRow.config` is a
        bare `Record<string, unknown>` bag, and `parts` has to arrive typed to be
        filtered. Same idiom as the guards above. */
-    const visibleParts = parseTileConfig(copy.config).parts?.filter((k) =>
-      access.canSeeMetric(visibilityKeyOf(k) ?? k),
-    );
+    const copied = parseTileConfig(copy.config);
+    const visible = (keys?: string[]) => {
+      const kept = keys?.filter((k) => access.canSeeMetric(visibilityKeyOf(k) ?? k));
+      return kept?.length ? kept : undefined;
+    };
+    /* `exits` names metrics the same way `parts` does and leaks the same way —
+       an admin's funnel can carry an outcome this caller's rank hides, and the
+       echo is where that key would have crossed the wire. Filtered out of the
+       response, kept in the row. */
+    const visibleParts = visible(copied.parts);
+    const visibleExits = visible(copied.exits);
     return {
       ok: true,
       tile: {
         ...copy,
-        config: { ...copy.config, parts: visibleParts?.length ? visibleParts : undefined },
+        config: { ...copy.config, parts: visibleParts, exits: visibleExits },
         x: placed.x,
         y: placed.y,
         w: placed.w,
@@ -1582,7 +1600,13 @@ export async function setCustomTileAction(
      * action rather than return a refusal the client knows how to show.
      */
     try {
-      const partsError = await tileKeysAllowed(db, ctx.orgId, access, parsed.parts ?? []);
+      /* Both key lists, one gate — see the seed site above. This is the LIVE
+         one: it takes a caller's `config` directly, so an `exits` array missing
+         from it would be an unchecked path to any metric's numbers. */
+      const partsError = await tileKeysAllowed(db, ctx.orgId, access, [
+        ...(parsed.parts ?? []),
+        ...(parsed.exits ?? []),
+      ]);
       if (partsError) return fail(partsError);
     } catch (e) {
       return oops(e);

@@ -457,6 +457,39 @@ export type FunnelBand = {
    * below them belongs to the transition into the next stage.
    */
   points: string;
+  /**
+   * THE SAME BODY AS A SMOOTH RIBBON — the shape that actually gets painted.
+   *
+   * Identical to `points` at every stage edge; the only difference is that the
+   * transition between two stages is a cubic sigmoid rather than a straight
+   * chamfer, so consecutive bands meet without a corner and the funnel reads as
+   * one flowing body. The control points each hold their own endpoint's measured
+   * coordinate, which is what makes the curve leave and arrive parallel to the
+   * stage edges instead of cutting across them.
+   *
+   * `points` REMAINS THE ARITHMETIC OF RECORD and is still what the older
+   * assertions read. A curve invites tuning by eye in a way a polygon does not,
+   * so the two are kept side by side deliberately: any easing that moved a stage
+   * edge would put `path` out of step with a `points` nothing asked to change.
+   *
+   * EMPTY FOR A ZERO STAGE. A degenerate path is invisible but still fills, and a
+   * stage with nothing in it that paints a hairline of accent reads as "a few"
+   * rather than "none" — so the band says outright it has no body and the caller
+   * draws the dashed rule instead.
+   */
+  path: string;
+  /**
+   * WHERE THE TRANSITION IS CENTRED, on the band's own sequence axis.
+   *
+   * The conversion pill belongs on the narrowing itself, not on the band
+   * boundary — the boundary is where the taper FINISHES, so a pill placed there
+   * sits below the drop it describes and reads as belonging to the next stage.
+   *
+   * Exported rather than recomputed by the caller because the arithmetic needs
+   * `shoulder`, and a component that re-derived it would be holding a private
+   * copy of a constant this module is free to re-tune.
+   */
+  waist: number;
   /** Band top and bottom, so a caller can place a hit target or a label. */
   y0: number;
   y1: number;
@@ -527,6 +560,16 @@ export function funnelShape(
      */
     const pt = (measured: number, along: number) =>
       flow === "down" ? `${measured},${along}` : `${along},${measured}`;
+    /**
+     * THE CURVE'S WAIST — halfway down the transition, never anywhere else.
+     *
+     * Both control points sit on this line, which is what makes the sigmoid
+     * symmetric: it gives up half its width in the first half of the gap and
+     * half in the second. Moving it is the one "improvement" available to
+     * somebody tuning the shape by eye, and it would slide the apparent drop
+     * toward whichever stage the waist moved away from.
+     */
+    const ym = round10((yk + y1) / 2);
     return {
       points: [
         pt(l0, y0),
@@ -536,6 +579,25 @@ export function funnelShape(
         pt(l1, y1),
         pt(l0, yk),
       ].join(" "),
+      /**
+       * Down one side, across the floor, back up the other. A RISING stage makes
+       * both cubics degenerate — its floor is its own width, so control points
+       * and endpoint share a coordinate and the segment renders dead straight,
+       * which is how the step survives being drawn with a curve command.
+       */
+      path:
+        w === 0
+          ? ""
+          : [
+              `M ${pt(l0, y0)}`,
+              `L ${pt(r0, y0)}`,
+              `L ${pt(r0, yk)}`,
+              `C ${pt(r0, ym)} ${pt(r1, ym)} ${pt(r1, y1)}`,
+              `L ${pt(l1, y1)}`,
+              `C ${pt(l1, ym)} ${pt(l0, ym)} ${pt(l0, yk)}`,
+              "Z",
+            ].join(" "),
+      waist: ym,
       y0,
       y1,
       width: w,

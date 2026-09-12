@@ -93,11 +93,22 @@ const cards = await page.evaluate(() => {
      * top) and the stage below simply starts wider. A floor wider than its own
      * top is the flare coming back.
      */
-    const polyGeom = [...(card?.querySelectorAll("polygon") ?? [])].map((el) => {
-      const pts = (el.getAttribute("points") ?? "")
-        .trim()
-        .split(/\s+/)
-        .map((pair) => pair.split(",").map(Number));
+    /**
+     * SELECTED BY `data-funnel-band`, NOT BY TAG. The body was `<polygon>`,
+     * which no other mark in the kit drew, so counting tags was enough to find a
+     * stage. It is a smooth `<path>` now and a pie's arcs are paths too — on a
+     * page that draws both, a tag selector would have measured arcs as stages
+     * and reported widths for a chart that has none.
+     */
+    const polyGeom = [...(card?.querySelectorAll("path[data-funnel-band]") ?? [])].map((el) => {
+      /* Every coordinate pair in the `d`, in order: the two top corners, the
+         shoulder, the right transition's controls and landing, then the floor
+         and back up. Only the corners are measured, so the curve commands
+         between them are skipped by reading pairs rather than parsing verbs. */
+      const pts = [...(el.getAttribute("d") ?? "").matchAll(/(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/g)].map((m) => [
+        Number(m[1]),
+        Number(m[2]),
+      ]);
       /**
        * MEASURE WHICHEVER AXIS CARRIES THE COUNT. Running DOWN, a stage's edge
        * is horizontal and the measure is x; running ACROSS the whole shape is
@@ -109,17 +120,32 @@ const cards = await page.evaluate(() => {
         pts[a] && pts[b]
           ? Math.round(Math.max(Math.abs(pts[b][0] - pts[a][0]), Math.abs(pts[b][1] - pts[a][1])) * 10) / 10
           : 0;
-      // 0,1 are the stage's own edge; 4,3 are the band's far edge.
-      return { top: w(0, 1), floor: w(4, 3) };
+      // 0,1 are the stage's own edge; 6,5 are the band's far edge.
+      return { top: w(0, 1), floor: w(6, 5) };
     });
     const polys = polyGeom.map((g) => g.top);
     /** A zero stage draws no polygon at all — it is a dashed rule on the band's axis. */
     const zeroMarks = (card?.querySelectorAll("line[stroke-dasharray]") ?? []).length;
     const bars = filledDivs;
-    const arcs = [...(card?.querySelectorAll("path, circle") ?? [])].filter(
+    /* The funnel's bands are excluded by name: they are paths now, and counting
+       them here reported a four-stage funnel as a pie with four arcs. */
+    const arcs = [...(card?.querySelectorAll("path:not([data-funnel-band]), circle") ?? [])].filter(
       (el) => el.getBoundingClientRect().width > 0,
     );
     const titles = [...(card?.querySelectorAll("[title]") ?? [])].map((el) => el.getAttribute("title") ?? "");
+    /**
+     * THE OUTCOMES STRIP — counts that left the funnel sideways, printed under
+     * the mark rather than drawn as bands in it.
+     *
+     * Measured, not just counted: the whole risk with a strip under a chart is
+     * that it gets laid out to zero height on a tile the body has already filled
+     * and nobody notices, because the text is still in the DOM and every source
+     * check that greps for it passes. A row with no box is not on the page.
+     */
+    const exits = [...(card?.querySelectorAll("[data-funnel-exits] > span") ?? [])].map((el) => {
+      const r = el.getBoundingClientRect();
+      return { text: (el.textContent ?? "").replace(/\s+/g, " ").trim(), w: Math.round(r.width), h: Math.round(r.height) };
+    });
     /**
      * THE BAR LENGTHS THEMSELVES, in the order they are drawn. Counting bars was
      * enough while every width was a share of the FIRST stage and clamped — the
@@ -188,6 +214,7 @@ const cards = await page.evaluate(() => {
       polys,
       polyGeom,
       zeroMarks,
+      exits,
       notches,
       notes,
       overflow,
@@ -367,6 +394,42 @@ if (owner) {
   if (!stepped) problems.push(`the owner's tile does not step out (${owner.polys.join(", ")})`);
   if (!pinched) problems.push(`the owner's zero stage is not a dashed rule (${owner.polys.length} segments, ${owner.zeroMarks} marks)`);
   say(stepped && pinched, `the owner's tile steps out and pinches to nothing (${owner.polys.join(", ")} + ${owner.zeroMarks} mark)`);
+}
+
+const reference = byTitle("reference funnel");
+if (reference) {
+  /**
+   * THE OUTCOMES STRIP IS ON THE PAGE, WITH BOXES.
+   *
+   * Three figures, each laid out — an exit that resolves to nothing draws an em
+   * dash rather than vanishing, so a short list here means the resolver dropped
+   * something rather than that the data was quiet. The height test is the one
+   * that matters: the strip shares a card with a body that takes every pixel it
+   * is given, and a row flattened to zero height is still fully present in the
+   * DOM for anything that only greps the source.
+   */
+  const laid = reference.exits.filter((e) => e.w > 0 && e.h > 0);
+  const ok = laid.length === 3 && reference.exits.every((e) => /\d|—/.test(e.text));
+  if (!ok) {
+    problems.push(
+      `the outcomes strip drew ${laid.length} of ${reference.exits.length} laid-out figures (${reference.exits
+        .map((e) => `${e.text} ${e.w}x${e.h}`)
+        .join(", ")})`,
+    );
+  }
+  say(ok, `outcomes ride under the mark, laid out (${laid.map((e) => e.text).join(" | ")})`);
+
+  /**
+   * AND THE BODY STILL COLLAPSES HONESTLY BENEATH THEM. This specimen carries
+   * the reference design's own numbers, whose whole point is that 11412 -> 2952
+   * is a cliff the reference draws as a gentle slope. Stage 2 must measure about
+   * a quarter of stage 1 — if it ever reads as half, the silhouette was matched
+   * by eye and the arithmetic lost.
+   */
+  const [a, b] = reference.polys;
+  const honest = a > 0 && b > 0 && b / a < 0.35;
+  if (!honest) problems.push(`the reference funnel's second stage is not a quarter of its first (${a}, ${b})`);
+  say(honest, `the 74% fall is drawn as a 74% fall (${reference.polys.join(", ")})`);
 }
 
 const across = byTitle("left to right");

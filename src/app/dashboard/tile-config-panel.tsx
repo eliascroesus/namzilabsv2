@@ -9,7 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { PANEL_SHELL, PanelTabs } from "@/components/flow/panel-chrome";
 import { GROUP_ACCENT, groupAccent } from "@/components/flow/node-accent";
 import { CHARTS, asChartId, blockKindOf, blockTileKey, type BlockId, type ChartId } from "@/lib/board/charts";
-import { PARTS_SLOT, fieldsFor, type TileConfig } from "@/lib/board/tile-config";
+import { EXITS_MAX, PARTS_SLOT, fieldsFor, type TileConfig } from "@/lib/board/tile-config";
 import { RANGE_OPTIONS, MATERIALIZED_RANGES } from "@/lib/metrics/range";
 import { MetricList } from "./add-tile-picker";
 import type { CustomTileOption } from "@/lib/board/types";
@@ -199,6 +199,137 @@ function NumberRow({
  * refusal ("A pie shows at most 5 parts — remove some in the tile's settings")
  * sends the author here to do.
  */
+/**
+ * A LIST OF METRIC KEYS THE AUTHOR IS EDITING, held locally until the server
+ * agrees. Shared by the stages picker and the exits picker, which write to
+ * different config fields down the identical path — the full reasoning for why
+ * a draft is needed at all is at the call site in `PartsGroup`, and duplicating
+ * that mechanism per field is how the two would drift.
+ */
+function useComposedDraft(stored: string[], onChange: (next: string[]) => void): [string[], (next: string[]) => void] {
+  const signature = stored.join("\n");
+  const [seen, setSeen] = useState(signature);
+  const [draft, setDraft] = useState(stored);
+  if (seen !== signature) {
+    setSeen(signature);
+    setDraft(stored);
+  }
+  return [
+    draft,
+    (next: string[]) => {
+      setDraft(next);
+      onChange(next);
+    },
+  ];
+}
+
+/**
+ * OUTCOMES BESIDE THE FUNNEL — the strip under the mark, not bands in it.
+ *
+ * Deliberately NOT a third mode of `PartsGroup`. That component is built around
+ * a single distinction (stages versus parts) which it spends in eight places —
+ * the anchor chip, the "Stage N ·" prefix, the cap arithmetic, the hint, the
+ * noun — and every one of those is wrong for an exit. An exit has no anchor to
+ * head a list, no position in a sequence to name, and no floor to be short of.
+ * The draft mechanism is the only part genuinely shared, and it is shared.
+ *
+ * NO REORDER BUTTONS, which is a real difference rather than an omission. The
+ * chips for a funnel's stages carry them because the ORDER IS THE CHART: move
+ * stage 3 above stage 2 and the mark, the ratios and the bottleneck all change.
+ * The strip's order is reading order for a handful of independent figures, so
+ * two buttons per row would buy a preference at the cost of the widest control
+ * in a narrow panel.
+ */
+function ExitsGroup({
+  chart,
+  stored,
+  options,
+  busy,
+  onExits,
+}: {
+  chart: ChartId;
+  stored: string[];
+  options: CustomTileOption[];
+  busy: boolean;
+  onExits: (next: string[]) => void;
+}) {
+  const [adding, setAdding] = useState(false);
+  const [exits, write] = useComposedDraft(stored, onExits);
+  const full = exits.length >= EXITS_MAX;
+  const CHIP = "flex items-center gap-1 rounded-control border border-border bg-control px-2 py-1";
+
+  return (
+    <Group label={`Outcomes (${exits.length} of ${EXITS_MAX})`}>
+      <div>
+        {exits.length > 0 && (
+          <div className="flex flex-col gap-1">
+            {exits.map((key, i) => {
+              /* A metric that is gone still gets a chip — same reasoning as a
+                 part's: dropping the row would leave a key in the bag with
+                 nothing on screen able to remove it. */
+              const name = options.find((o) => o.key === key)?.title;
+              return (
+                <div key={key} className={CHIP}>
+                  <span
+                    className={`min-w-0 flex-1 truncate text-sm ${name ? "text-foreground" : "text-muted-foreground"}`}
+                  >
+                    {name ?? "This metric isn’t published any more"}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="iconXs"
+                    disabled={busy}
+                    onClick={() => write(exits.filter((_, j) => j !== i))}
+                    aria-label={`Remove ${name ?? `outcome ${i + 1}`}`}
+                    title="Remove"
+                  >
+                    <X />
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {adding && (
+          <div className="mt-1 rounded-control border border-border p-1">
+            <MetricList
+              options={options}
+              chart={chart}
+              /* Eligible for the chart it is joining, exactly as a stage is —
+                 the strip prints a tally, so a rate or a duration is as wrong
+                 here as it is in the body. */
+              slot={chart}
+              exclude={exits}
+              busy={busy}
+              onPick={(key) => {
+                write([...exits, key]);
+                setAdding(false);
+              }}
+            />
+          </div>
+        )}
+
+        <Button
+          variant={adding ? "ghost" : "secondary"}
+          size="sm"
+          disabled={busy || (!adding && full)}
+          onClick={() => setAdding((v) => !v)}
+          className="mt-1 w-full justify-start"
+        >
+          {adding ? <X /> : <Plus />}
+          <span>{adding ? "Cancel" : "Add outcome"}</span>
+        </Button>
+
+        <FieldHint>
+          Counts that left the funnel sideways — “Unqualified”, “No show”. They’re printed under the chart, never
+          as a stage in it.
+        </FieldHint>
+      </div>
+    </Group>
+  );
+}
+
 function PartsGroup({
   chart,
   stored,
@@ -257,18 +388,7 @@ function PartsGroup({
    * every render (the config bag is re-parsed server-side), so an identity dep
    * would loop and a value dep is exactly the signature compared here.
    */
-  const signature = stored.join("\n");
-  const [seen, setSeen] = useState(signature);
-  const [parts, setParts] = useState(stored);
-  if (seen !== signature) {
-    setSeen(signature);
-    setParts(stored);
-  }
-
-  const write = (next: string[]) => {
-    setParts(next);
-    onParts(next);
-  };
+  const [parts, write] = useComposedDraft(stored, onParts);
   const move = (i: number, by: -1 | 1) => {
     const next = parts.slice();
     const [lifted] = next.splice(i, 1);
@@ -689,6 +809,27 @@ export function TileConfigPanel({
                      */
                     set("parts", next.length > 0 ? next : undefined)
                   }
+                />
+              )}
+
+              {/*
+                THE OUTCOMES, UNDER THE STAGES THEY SIT BESIDE — and gated on
+                `isFlow` for exactly the reason the stages picker above is. A
+                classic funnel metric is legal as `funnel`, but `page.tsx`
+                attaches `source.exits` to the flow source only, so on a classic
+                tile this would be a control writing a key nothing can read.
+              */}
+              {offers.has("exits") && isFlow && (
+                <ExitsGroup
+                  chart={chart}
+                  stored={config.exits ?? []}
+                  options={options}
+                  busy={busy}
+                  /* An empty array is a CLEAR, never a write — the same rule the
+                     stages picker follows, and here it is the ordinary case:
+                     removing the last outcome is how an author turns the strip
+                     off again. */
+                  onExits={(next) => set("exits", next.length > 0 ? next : undefined)}
                 />
               )}
 
