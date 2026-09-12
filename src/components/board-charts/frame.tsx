@@ -168,14 +168,22 @@ export function ChartFrame({
             simply wraps. `min-w-0` alone is not enough — it permits shrinking,
             it does not cause it. Same fix, same reason, as the metric tile's
             own h3: "Speed To Lead (Armaan)" was the name that showed both. */}
-        {/* `min-h-5` IS THE KEBAB'S HEADROOM, and the arithmetic is worth
-            writing down because nothing at runtime can check it. `CardHeader`
-            opens with `pt-4`, so this column starts 16px down the card; the
-            board's floated menu runs from 8px to 36px. 20px of column is what
-            carries the header's bottom past the menu's. With the title hidden
-            and no range label this column is otherwise empty, and the menu would
-            hang over the mark. */}
-        <div className={cn("flex min-w-0 flex-1 flex-col gap-1", hideTitle && "min-h-5")}>
+        {/* NO RESERVED HEADROOM WHEN THE TITLE IS HIDDEN — reversed 12 Sep 2026,
+            after the owner pointed at the white band it left: "move the numbers
+            up because now there is just a white space at the top, it should be
+            16px from the top".
+
+            It briefly carried `min-h-5` so the board's floated tile menu (28px
+            at `top-2`, reaching 36px down the card) would clear the mark. That
+            was the wrong trade and the reason is one line of `custom-board`: the
+            menu is `opacity-0` until `group-hover/cell` or focus. Reserving 36px
+            of every funnel card, permanently, for a control that is invisible
+            until you reach for it — so the card's own content started 36px down
+            where a 16px pad was the whole of what it needed.
+
+            The menu now overlaps the header row on hover, and the row's last
+            cell keeps `pr-6` of its own to stay out from under it. */}
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
           {/* ONE LINE, ALWAYS. A canvas tile's height is its row span, so a
               header that wraps steals it from the mark below and pushes a goal
               bar's own caption out through the bottom edge. `truncate` here is
@@ -293,7 +301,13 @@ export function ChartFrame({
           short chart met the legend rather than floating above it with dead
           air between; with the legend gone that rule strands the chart at the
           bottom of a tall card instead. */}
-      <div className="mt-3 flex min-h-0 flex-1 flex-col">
+      {/* `mt-3` SEPARATES THE MARK FROM WHAT IS ABOVE IT, so it comes off when
+          nothing is. On a card with a headline those 12px are the air between
+          the figure and the chart; on a funnel — no headline by design, and
+          since 12 Sep no title either — they were 12px of nothing on top of the
+          header's own 16px pad, which is the white band the owner measured at
+          "29px when it should be 16". */}
+      <div className={cn("flex min-h-0 flex-1 flex-col", (headline !== undefined || !hideTitle) && "mt-3")}>
         {blocked ? (
           <p className="text-xs text-muted-foreground" title={blocked}>
             {blocked.length > 160 ? `${blocked.slice(0, 160)}…` : blocked}

@@ -137,7 +137,17 @@ const composed = (
 /** `config.parts` only has to be the right LENGTH — the numbers ride on the source. */
 const keys = (n: number) => ({ parts: Array.from({ length: n }, (_, i) => `flow:demo:p${i}`) });
 
-const COMPOSED_CHARTS: Array<{ label: string; chart: ChartId; source: CustomTileSource; config: Record<string, unknown>; h: number }> = [
+const COMPOSED_CHARTS: Array<{
+  label: string;
+  chart: ChartId;
+  source: CustomTileSource;
+  config: Record<string, unknown>;
+  h: number;
+  /** The tile's width in BOARD columns — what the mark sizes its type against. Defaults to the gallery's own 4. */
+  cols?: number;
+  /** Take the whole gallery row, for a specimen whose point is that it is wide. */
+  span?: boolean;
+}> = [
   {
     label: "Composed funnel",
     chart: "funnel",
@@ -182,6 +192,28 @@ const COMPOSED_CHARTS: Array<{ label: string; chart: ChartId; source: CustomTile
     ),
     config: { ...keys(4), flow: "across", exits: ["flow:demo:x0", "flow:demo:x1", "flow:demo:x2"] },
     h: 6,
+  },
+  {
+    /**
+     * THE OWNER'S "TOTAL LEADS" TILE AT ITS REAL WIDTH — 12 Sep 2026.
+     *
+     * Three stages across a full-width card, which is the ONE shape that reaches
+     * the 28px display step for its counts: every other specimen here sits in a
+     * third of the gallery at `cols={4}`, where four or five stages fall to the
+     * 18px rung. Without this the rung the owner actually asked for would be
+     * rendered by nothing, checked by nothing and photographed by nothing —
+     * which is this repo's standing failure mode rather than a hypothetical.
+     *
+     * It also carries the RISE (24 -> 41) that the smoothing was asked for, so
+     * the curve going back out is on screen beside the counts it belongs to.
+     */
+    label: "The owner's tile at full width — three stages, a rise, 28px counts",
+    chart: "pipeline",
+    source: composed(52, [part("Booked Leads", 24), part("Organic Leads", 41)], { name: "Total Leads" }),
+    config: { ...keys(2), flow: "across" },
+    cols: 12,
+    span: true,
+    h: 5,
   },
   {
     label: "The owner's tile, left to right",
@@ -496,17 +528,27 @@ export default function CanvasSpecimen() {
 
               The cell grows by the caption's own line so the tile keeps the
               height its row span asked for. */}
-          {COMPOSED_CHARTS.map(({ label, chart, source, config, h }) => (
+          {COMPOSED_CHARTS.map(({ label, chart, source, config, h, cols, span }) => (
             <div
               key={label}
-              className="flex flex-col gap-1"
+              className={`flex flex-col gap-1 ${span ? "md:col-span-2 xl:col-span-3" : ""}`}
               style={{ height: `${h * ROW_UNIT_PX + 20}px` }}
             >
               <span className="shrink-0 truncate text-2xs text-muted-foreground" title={label}>
                 {label}
               </span>
               <div className="min-h-0 flex-1">
-                <CustomTile chart={chart} title={label} rangeKey="today" source={source} config={config} cols={4} />
+                <CustomTile
+                  chart={chart}
+                  title={label}
+                  rangeKey="today"
+                  source={source}
+                  config={config}
+                  /* `cols` is the tile's BOARD width, which the funnel sizes its
+                     counts against — so a specimen that spans the gallery has to
+                     say so, or it draws a wide card with a narrow card's type. */
+                  cols={cols ?? 4}
+                />
               </div>
             </div>
           ))}

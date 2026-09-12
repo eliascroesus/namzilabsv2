@@ -108,8 +108,39 @@ export function FunnelBody({
    * not fit at all. Rungs only, no arbitrary sizes: the ratio picks between
    * `text-display-xs` (24), `text-lg` (18) and `text-sm` (14).
    */
-  const room = cols / Math.max(1, n);
-  const countSize = room >= 2.5 ? "text-display-xs" : room >= 1.2 ? "text-lg" : "text-sm";
+  /**
+   * 28px — `--text-display-md`, THE TILE'S HEADLINE NUMBER, and this is the same
+   * figure wearing the same clothes rather than a lookalike.
+   *
+   * `custom-tile` passes `headline={undefined}` for a funnel and a pipeline
+   * because there is no single number to head the card; these counts are what
+   * stands in for it, so they take exactly what `ChartFrame` and `MetricCard`
+   * give theirs — `stat-numeral text-display-md text-heading`. An earlier pass
+   * had them on a ladder topping out at 26px, and the owner's verdict on the
+   * 18px rung it actually picked was that a funnel's numbers should read like
+   * every other metric on the board. They should; they are the same kind of
+   * thing.
+   *
+   * THE ONE STEP DOWN IS ABOUT FITTING, NOT ABOUT TASTE. A truncated number is
+   * a WRONG number — "11,412" ellipsised to "11,4…" is worse than the same
+   * figure set smaller — so a cell too narrow for the display step drops to
+   * 18px rather than clipping.
+   *
+   * The width estimate is deliberately crude and deliberately written down: a
+   * board column is a twelfth of the canvas, near 95px at the sizes this product
+   * is used at, and a stage gets the tile's width split n ways. Nothing in this
+   * file can measure a box, so the estimate is tuned to fail SAFE — too small is
+   * legible, too large is CLIPPED, and a clipped number is a wrong one.
+   *
+   * THE RUNGS WERE SET BY THE BROWSER, NOT BY ARITHMETIC. The first pass put the
+   * floor at 100px with 18px beneath it, and `composed-check` immediately caught
+   * the five-stage specimen rendering "11,412…" — the ellipsis turning a real
+   * count into a smaller wrong one. That check measures a laid-out box and this
+   * cannot, which is exactly the division of labour the repo's standing note
+   * describes; the thresholds below are where it stopped complaining.
+   */
+  const cellPx = (cols * 95 - 16) / Math.max(1, n);
+  const countSize = cellPx >= 110 ? "text-display-md" : cellPx >= 85 ? "text-lg" : "text-sm";
 
   /**
    * THE BOTTLENECK IS NAMED IN THE RATIO, NOT PAINTED ON THE BODY.
@@ -168,7 +199,11 @@ export function FunnelBody({
    */
   const pill = (text: string, worst: boolean) => (
     <span
-      className={`tnum inline-flex items-center gap-1 whitespace-nowrap rounded-control border border-border bg-card px-1.5 py-0.5 text-2xs ${
+      /* 13px, THE SAME STEP AS THE STAGE NAMES IT SITS BETWEEN — the owner's
+         12 Sep note. It was `text-2xs` (12px), the size an AXIS label takes,
+         which made the one figure a reader looks for when hunting a drop-off
+         the smallest text on the card. A conversion is not chrome. */
+      className={`tnum inline-flex items-center gap-1 whitespace-nowrap rounded-control border border-border bg-card px-1.5 py-0.5 text-xs ${
         worst ? "text-danger" : "text-muted-foreground"
       }`}
     >
@@ -266,7 +301,10 @@ export function FunnelBody({
       {exits.map((exit, i) => (
         <span
           key={`${exit.label}-${i}`}
-          className={`flex min-w-0 items-baseline gap-1.5 text-2xs ${i > 0 ? "border-l border-border pl-3" : ""}`}
+          /* 13px like the stage names and the conversion pills — one step for
+             every label on this card, rather than a third size for the row that
+             happens to be last. */
+          className={`flex min-w-0 items-baseline gap-1.5 text-xs ${i > 0 ? "border-l border-border pl-3" : ""}`}
           data-tip={`${exit.label} · ${exit.value == null ? "no number this period" : formatMetricValue(exit.value, fmt)}`}
         >
           <span className="truncate text-muted-foreground" title={exit.label}>
@@ -302,8 +340,13 @@ export function FunnelBody({
           {result.stages.map((stage, i) => (
             <div
               key={i}
+              /* THE LAST CELL KEEPS THE KEBAB'S LANE. With the card's title row
+                 gone this header is the top of the card, and the board floats a
+                 tile menu over its right corner on hover. `pr-6` is the same
+                 24px `ChartFrame`'s own status line reserves, for the same
+                 reason and against the same invisible component. */
               className={`flex min-w-0 flex-col gap-0.5 ${i > 0 ? "border-l border-border pl-2" : ""} ${
-                i < n - 1 ? "pr-2" : ""
+                i < n - 1 ? "pr-2" : "pr-6"
               }`}
             >
               <span className="flex min-w-0 items-center">
@@ -337,8 +380,12 @@ export function FunnelBody({
                   numbers", and this row is where a funnel gets to spend it,
                   because the card has no headline for it to compete with. */}
               <span
+                /* `text-heading`, not `text-foreground` — the ink the headline
+                   takes on every other card. In dark they resolve alike; in
+                   light the headline is #313131 against a plain black, which is
+                   the difference the metric card spells out at its own numeral. */
                 className={`stat-numeral truncate ${countSize} ${
-                  stage.count === 0 ? "text-muted-foreground" : "text-foreground"
+                  stage.count === 0 ? "text-muted-foreground" : "text-heading"
                 }`}
               >
                 {formatMetricValue(stage.count, fmt)}
