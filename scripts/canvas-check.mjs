@@ -352,30 +352,57 @@ console.log("\na view with a hidden chart is read-only, and says so");
   check(errors.length === 0, "no uncaught page errors on a frozen board", errors.join(" · "));
 }
 
-// ── the handle is the head of the card ──────────────────────────────────────
-console.log("\nonly the top half of a card drags it");
+// ── a press on a PLOT reads it; a press anywhere else drags the card ────────
+console.log("\na plot is for reading, the rest of the card drags");
 {
   await load();
-  const cell = page.locator(`${LIVE} [data-canvas] [data-canvas-cell]`).first();
-  const box = await cell.boundingBox();
-  const before = await layout();
+  /**
+   * THE PLOT, FOUND RATHER THAN ASSUMED — and the old spelling of this is why
+   * the section below it went unrun for days.
+   *
+   * It used to take the FIRST cell and press 20px up from its bottom edge. Both
+   * halves were wrong against this harness's own data: the first cell is a
+   * SCORECARD (`Booked Leads 12 +50%`), which has no plot at all and is
+   * explicitly draggable everywhere — `canvas-drag.ts` exempts `[data-plot]`
+   * and says in as many words that the numeral and the padding still drag. And
+   * on the one cell that does carry a plot, 20px from the bottom lands under it,
+   * on the axis labels.
+   *
+   * So the assertion could never have passed, and nobody found out, because the
+   * "+ Add" timeout above threw and killed the script before reaching it. A
+   * check that cannot be reached is a check that cannot fail.
+   */
+  const plot = page.locator(`${LIVE} [data-canvas] [data-canvas-cell] [data-plot]`).first();
+  if ((await plot.count()) === 0) {
+    check(false, "the live board has a chart with a plot to press", "no [data-plot] in any cell");
+  } else {
+    const plotBox = await plot.boundingBox();
+    /* The HEAD press uses the FIRST cell, not the plot's own. The two halves
+       ask different questions — "a plot is exempt" and "a head is not" — and the
+       plot-bearing card here sits where a 320px shove re-packs to the same
+       column, which reads as "the head did not drag" when it dragged fine. */
+    const cellBox = await page.locator(`${LIVE} [data-canvas] [data-canvas-cell]`).first().boundingBox();
+    const before = await layout();
 
-  // BELOW the handle: the chart's own area, where a press is for pointing at a
-  // bar, not for shoving the board. It must move nothing.
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height - 20);
-  await page.mouse.down();
-  await page.mouse.move(box.x + box.width / 2 + 300, box.y + box.height - 20, { steps: 10 });
-  await page.mouse.up();
-  await page.waitForTimeout(300);
-  check(JSON.stringify(await layout()) === JSON.stringify(before), "a press on the chart moves nothing");
+    // INSIDE THE PLOT: a press here is for pointing at a bar, not for shoving
+    // the board. Dead centre, so the offset cannot drift onto an axis label.
+    const px = plotBox.x + plotBox.width / 2;
+    const py = plotBox.y + plotBox.height / 2;
+    await page.mouse.move(px, py);
+    await page.mouse.down();
+    await page.mouse.move(px + 300, py, { steps: 10 });
+    await page.mouse.up();
+    await page.waitForTimeout(300);
+    check(JSON.stringify(await layout()) === JSON.stringify(before), "a press on the plot moves nothing");
 
-  // ABOVE it: the title bar, which is what moves.
-  await page.mouse.move(box.x + 60, box.y + 16);
-  await page.mouse.down();
-  await page.mouse.move(box.x + 60 + 320, box.y + 16, { steps: 12 });
-  await page.mouse.up();
-  await page.waitForTimeout(350);
-  check(JSON.stringify(await layout()) !== JSON.stringify(before), "a press on the head still drags");
+    // The head of the same card, which is what moves.
+    await page.mouse.move(cellBox.x + 60, cellBox.y + 16);
+    await page.mouse.down();
+    await page.mouse.move(cellBox.x + 60 + 320, cellBox.y + 16, { steps: 12 });
+    await page.mouse.up();
+    await page.waitForTimeout(350);
+    check(JSON.stringify(await layout()) !== JSON.stringify(before), "a press on the head still drags");
+  }
 
   check(errors.length === 0, "no uncaught page errors around the handle", errors.join(" · "));
 }

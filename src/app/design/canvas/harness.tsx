@@ -30,11 +30,21 @@ export function CanvasHarness({
   tiles: initial,
   options,
   layoutFrozen = false,
+  slotId = "canvas-add-chart",
 }: {
   tiles: CanvasTile[];
   options: CustomTileOption[];
   /** Stands in for "this view holds a row your rank hides" — see `layoutFrozen`. */
   layoutFrozen?: boolean;
+  /**
+   * ONE ID PER HARNESS ON THIS PAGE, because this page mounts three of them and
+   * an `id` is supposed to be unique in a document. All three used to render
+   * `id="canvas-add-chart"`; `getElementById` answers the FIRST, so all three
+   * boards portalled their "+ Add" into the topmost specimen's div and the live
+   * board's own button rendered outside `[data-live-board]` — invisible to the
+   * check written to press it.
+   */
+  slotId?: string;
 }) {
   const [tiles, setTiles] = useState(initial);
   const minted = useRef(0);
@@ -123,7 +133,7 @@ export function CanvasHarness({
             harmless on a canvas that can't edit (`canEdit` is hard-coded true
             above, so it never actually sits empty here, but the class keeps
             this specimen honest about what the real target does). */}
-        <div id="canvas-add-chart" className="flex items-center empty:hidden" />
+        <div id={slotId} className="flex items-center empty:hidden" />
       </div>
       <CustomBoard
         viewId="design"
@@ -133,6 +143,7 @@ export function CanvasHarness({
         canEdit
         layoutFrozen={layoutFrozen}
         actions={actions}
+        slotId={slotId}
       />
     </div>
   );

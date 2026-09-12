@@ -1,7 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { createPortal } from "react-dom";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   AreaChart,
@@ -41,6 +40,7 @@ import { CHARTS, asChartId, blockKindOf, blockTileKey, minSize, type BlockId, ty
 import { UNSET_TILE_KEY, type BoardTileRow, type CustomTileOption } from "@/lib/board/types";
 import type { TileConfig } from "@/lib/board/tile-config";
 import { CustomTile, type CustomTileSource } from "@/components/custom-tile";
+import { PortalSlot } from "@/components/portal-slot";
 import { CANVAS_ATTR, CELL_ATTR, HANDLE_ATTR, useCanvasDrag } from "./canvas-drag";
 import { useSettle } from "./board-settle";
 import { MetricPicker } from "./add-tile-picker";
@@ -122,22 +122,36 @@ export type CanvasTile = GridBox & {
 /**
  * RENDER INTO A SLOT THE PAGE PUT IN ITS CHROME.
  *
- * The same portal `calendar-board.tsx`'s own `Slot` and `FlowToolbar.tsx`'s
- * `TopBarStatusPortal` use, and for the same reason: `page.tsx` is an async
- * server component that cannot hold `picking`/`busy`/`addTile` — those are
- * this component's own client state — so "+ Add" is instantiated here, where
- * the state lives, and only its rendered DOM output moves into the header's
- * placeholder div. Neither side can hand the other what it has.
+ * `page.tsx` is an async server component that cannot hold `picking`/`busy`/
+ * `addTile` — those are this component's own client state — so "+ Add" is
+ * instantiated here, where the state lives, and only its rendered DOM output
+ * moves into the header's placeholder div. Neither side can hand the other
+ * what it has.
  *
- * `null` until the effect runs — the slot cannot be read during render, and
- * `useEffect` is the only hook allowed to touch the document. One frame of an
- * empty header slot, exactly as the calendar's own portals have always had.
+ * `PortalSlot` SINCE 12 SEP 2026, AND THIS FILE WAS THE ONE THE SWEEP MISSED.
+ *
+ * The 11 Sep commit "Resolve portal targets continuously" extracted
+ * `portal-slot.tsx` and converted `topbar-slots`, `calendar-board`,
+ * `board-layout` and `FlowToolbar` — its own note says "four files each carried
+ * their own four-line copy". There were five. This one kept the local version:
+ *
+ *     useEffect(() => setNode(document.getElementById(id)), [id]);
+ *
+ * which resolves the target ONCE and never again, so when the header's
+ * `#canvas-add-chart` is REPLACED — a soft navigation between views, or the
+ * `router.refresh()` `FreshnessPoller` fires to reconcile the shell — the
+ * stored node is a div that is no longer in the document. React portals "+ Add"
+ * into it faithfully and nobody can see it. Nothing throws and nothing logs;
+ * `empty:hidden` on the header's target then collapses the gap where the button
+ * would have been, so the board loses its ONLY route to adding a chart with no
+ * trace that anything happened. It comes back on a hard reload, which is what
+ * made it read as a ghost rather than a bug.
+ *
+ * Reported by the owner on 12 Sep: "where the fuck did the add thing go, I
+ * can't add new metrics or charts". `scripts/canvas-check.mjs` had been timing
+ * out on this button for days and was read as a flaky harness.
  */
-function Slot({ id, children }: { id: string; children: ReactNode }) {
-  const [node, setNode] = useState<HTMLElement | null>(null);
-  useEffect(() => setNode(document.getElementById(id)), [id]);
-  return node ? createPortal(children, node) : null;
-}
+const Slot = PortalSlot;
 
 export function CustomBoard({
   viewId,
@@ -147,6 +161,7 @@ export function CustomBoard({
   canEdit,
   layoutFrozen = false,
   actions: actionOverrides,
+  slotId = "canvas-add-chart",
 }: {
   /** Always a real id: the default view has no row and is always a groups view. */
   viewId: string;
@@ -169,6 +184,20 @@ export function CustomBoard({
   layoutFrozen?: boolean;
   /** Test seam only — see `CanvasActions`. The dashboard leaves it unset. */
   actions?: Partial<CanvasActions>;
+  /**
+   * WHICH HEADER SLOT "+ ADD" PORTALS INTO. Test seam, like `actions`: the
+   * dashboard renders exactly one board and leaves this at its default.
+   *
+   * It exists because `/design/canvas` mounts THREE boards on one page, each
+   * offering a target div of its own — so the page carried three elements with
+   * `id="canvas-add-chart"`, `getElementById` answered the first one to all of
+   * them, and every board's button piled into the frozen specimen's div at the
+   * top. The live board's "+ Add" was on the page the whole time, outside
+   * `[data-live-board]` where its own check could not see it, which is why
+   * `canvas-check` read as a flaky harness for days while a real portal bug sat
+   * underneath it.
+   */
+  slotId?: string;
 }) {
   const router = useRouter();
   const act: CanvasActions = {
@@ -652,7 +681,7 @@ export function CustomBoard({
           this kind of board; `canEdit` is still checked here, so a viewer
           without `create_flows` portals nothing into it. */}
       {canEdit && (
-        <Slot id="canvas-add-chart">
+        <Slot id={slotId}>
           <AddChartMenu
             open={picking}
             setOpen={setPicking}

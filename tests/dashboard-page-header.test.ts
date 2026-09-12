@@ -166,11 +166,39 @@ describe("the dashboard's page header, 4 Sep 2026 blue retheme", () => {
      */
     const custom = read("src/app/dashboard/custom-board.tsx");
     const beforeDefinition = custom.slice(0, custom.indexOf("function AddChartMenu"));
-    expect(beforeDefinition, "the call is wrapped by the canvas-add-chart Slot").toMatch(
-      /<Slot id="canvas-add-chart">\s*<AddChartMenu/,
+    /**
+     * THE ID IS A PROP NOW, so this reads the binding rather than the literal.
+     * `/design/canvas` mounts two boards and each offered a target div of its
+     * own — both spelled `canvas-add-chart`, so `getElementById` handed every
+     * board the first one and the live board's button rendered inside the frozen
+     * specimen. `slotId` gives each specimen its own; the DASHBOARD never passes
+     * it, which is what the default below pins.
+     */
+    expect(beforeDefinition, "the call is wrapped by the Slot").toMatch(/<Slot id=\{slotId\}>\s*<AddChartMenu/);
+    expect(custom, "and the slot it defaults to is the header's own").toMatch(
+      /slotId\s*=\s*"canvas-add-chart"/,
     );
     const calls = beforeDefinition.match(/<AddChartMenu\s/g) ?? [];
     expect(calls.length, "AddChartMenu is instantiated exactly once").toBe(1);
+
+    /**
+     * AND THE PORTAL RESOLVES CONTINUOUSLY. This file was the one the 11 Sep
+     * `PortalSlot` sweep missed, so "+ Add" portalled into a detached div
+     * whenever the header was replaced — a soft navigation, `FreshnessPoller`'s
+     * refresh, or a theme toggle — and the board silently lost its only route to
+     * adding a chart. A local `getElementById` copy here is that bug returning.
+     *
+     * `scripts/portal-check.mjs` proves the BEHAVIOUR in a browser; this is the
+     * cheap guard that fails in the suite rather than only in the harness.
+     *
+     * ASSERTED ON A DECLARATION, NOT ON THE EFFECT BODY. The first spelling of
+     * this looked for `setNode(document.getElementById` and failed instantly —
+     * against the COMMENT above `const Slot`, which quotes the broken line to
+     * explain what went wrong. A source grep cannot tell code from prose, so it
+     * has to match something prose would not say.
+     */
+    expect(custom, "the slot is the shared PortalSlot").toMatch(/^const Slot = PortalSlot;$/m);
+    expect(custom, "there is no local Slot definition to drift from it").not.toMatch(/^function Slot\(/m);
   });
 
   it("collapses the + Add target to nothing when it stays empty", () => {

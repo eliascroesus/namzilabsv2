@@ -575,6 +575,12 @@ export default function CanvasSpecimen() {
         <div {...{ "data-frozen-board": "" }}>
           <CanvasHarness
             layoutFrozen
+            /* ITS OWN SLOT ID. Sharing `canvas-add-chart` with the live board
+               below put both boards' "+ Add" into whichever div came first in
+               the document — this one — so the live board's button rendered
+               here, outside `[data-live-board]`, and `canvas-check` timed out
+               pressing a button that was on the page all along. */
+            slotId="frozen-add-chart"
             options={[]}
             tiles={TILES.slice(0, 3).map((t) => ({
               id: t.id,
