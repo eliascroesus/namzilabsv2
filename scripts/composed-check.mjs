@@ -206,7 +206,19 @@ const cards = await page.evaluate(() => {
       return r.width > 0 && (r.right > box.right + 1 || r.left < box.left - 1);
     });
     return {
-      title: text.slice(0, 46),
+      /**
+       * THE CARD'S NAME FROM ITS OWN ATTRIBUTE, not from its leading text.
+       *
+       * A funnel and a pipeline no longer DRAW their title — the mark names each
+       * stage, so the card was saying "Total Leads" twice — and this check
+       * duly began reading each specimen's first rendered words as its name.
+       * Refusal cards then identified as their own refusal sentence, and four
+       * of them flipped from "must refuse" to "must draw". `data-tile-title` is
+       * set by `ChartFrame` on every card whether or not the name is rendered.
+       */
+      title: card?.getAttribute("data-tile-title") ?? text.slice(0, 46),
+      /** What the card actually SHOWS, kept for the prose assertions below. */
+      shown: text.slice(0, 46),
       bars: bars.length,
       arcs: arcs.length,
       polyCount: polys.length,
@@ -338,19 +350,37 @@ const byTitle = (s) => cards.find((c) => c.title.includes(s));
 const widens = byTitle("widens");
 if (widens) {
   /**
-   * A RISING STAGE STEPS, IT DOES NOT FLARE — the assertion that replaces "it
-   * carries a cut edge", and then replaces the first version of its own
-   * replacement.
+   * A RISING STAGE CURVES OUT, AND ITS OWN TOP STILL TELLS THE TRUTH.
    *
-   * Capping was the original lie: a stage at 340% drew exactly as long as one at
-   * 100%. Share-of-max removed it. Then the connected body reintroduced it
-   * geometrically — an unconditional taper gave a narrow stage a bottom edge as
-   * wide as the wide stage under it, so a 31%-wide stage ended its band at 100%.
-   * A stage's floor may never exceed its own top.
+   * The rule here was "a stage's floor may never exceed its own top" — the step
+   * that kept a 31%-wide stage from ending its band at 100% and reading as
+   * full width. The owner asked on 12 Sep 2026 for the body to smooth in both
+   * directions, so the floor may now reach the next stage's width.
+   *
+   * WHAT REPLACES IT IS THE STRONGER HALF OF THE SAME CLAIM. Capping was the
+   * original lie: a stage at 340% drew exactly as long as one at 100%. What
+   * guards against that is each stage's OWN TOP EDGE being its true share — so
+   * that is asserted directly, against the arithmetic, rather than inferred
+   * from the absence of a slope. A floor reaching its neighbour's width is the
+   * transition doing its job; a TOP that is not this stage's share is the lie.
    */
-  const flares = widens.polyGeom.filter((g) => g.floor > g.top + 0.5);
-  if (flares.length) problems.push(`a rising stage flares outward again (${JSON.stringify(flares)})`);
-  say(!flares.length, "a rising stage steps rather than flaring outward");
+  const tops = widens.polyGeom.map((g) => g.top);
+  const capped = tops.filter((t) => t > 100.5);
+  if (capped.length) problems.push(`a stage's own edge exceeds the box (${tops.join(", ")})`);
+  say(!capped.length, `each stage's own edge is its share, rises included (${tops.join(", ")})`);
+
+  /* And the floor of a rising band is its SUCCESSOR's width, not something
+     eased between the two — the smoothing must not have become a fudge. */
+  const rising = widens.polyGeom.findIndex((g, i) => i + 1 < tops.length && tops[i + 1] > g.top + 0.5);
+  if (rising >= 0) {
+    const landed = Math.abs(widens.polyGeom[rising].floor - tops[rising + 1]) < 0.6;
+    if (!landed) {
+      problems.push(
+        `the rising band lands on ${widens.polyGeom[rising].floor}, not its successor's ${tops[rising + 1]}`,
+      );
+    }
+    say(landed, `the rise lands on the next stage's true width (${widens.polyGeom[rising].floor})`);
+  }
 
   const widest = Math.max(...widens.polys);
   const ok = widens.polys.indexOf(widest) > 0;

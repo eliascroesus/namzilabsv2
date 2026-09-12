@@ -497,7 +497,12 @@ export type FunnelBand = {
   width: number;
   /** The band's own axis: 50 centred, 0 left-anchored. A zero stage's mark rides it. */
   cx: number;
-  /** The next stage is WIDER, so this band's floor is a step rather than a slope. */
+  /**
+   * The next stage is WIDER than this one. Reported, not acted on: the body
+   * curves the same way in both directions since 12 Sep 2026 (see `floor`), and
+   * this survives because "did the funnel go back up here" is a fact about the
+   * data that a caller may want to say something about, not a drawing rule.
+   */
   rise: boolean;
 };
 
@@ -527,25 +532,33 @@ export function funnelShape(
     const next = i === n - 1 ? w : widths[i + 1];
     const rise = next > w;
     /**
-     * TAPER DOWN, STEP UP — and the asymmetry is the whole point.
+     * ONE TRANSITION IN BOTH DIRECTIONS — it taper s down AND it widens back out,
+     * on the owner's instruction of 12 Sep 2026: "smooth the thing even if it
+     * goes from a smaller number to then a bigger one again".
      *
-     * A FALL is drawn in the space between the two stages: the sides close
-     * inward and the slope IS the loss, which is what makes this a pipeline
-     * rather than a stack of bars.
+     * THIS REVERSES A DELIBERATE ASYMMETRY, so here is what that was protecting
+     * and why the protection is no longer needed. A rising stage used to hold
+     * its own width to the end of its band and let the next one simply START
+     * wider, because sloping OUT gives stage i a far edge as wide as stage i+1 —
+     * so a stage genuinely 31% of the largest ended its band at 100% and could
+     * be read as reaching full width. That was measured on a real tile (On
+     * Calendar, 30.8% wide, floor 100%) and the step was the fix.
      *
-     * A RISE must NOT slope outward, and the first version of this did. Sloping
-     * out gives stage i a far edge as wide as stage i+1, so a stage that is
-     * genuinely 31% of the largest ends its band at 100% and reads as reaching
-     * full width — precisely the "two identical slabs" misreading this redesign
-     * exists to kill, rebuilt in the geometry after being removed from the
-     * arithmetic. Measured on the owner's own data: On Calendar is 30.8% wide
-     * and its polygon floor was 100%.
+     * TWO THINGS CHANGED. The shoulder means a stage holds its TRUE width for
+     * the first 55% of its own band before the transition starts, so there is a
+     * definite width to read in both directions — the same guarantee a FALL has
+     * always relied on, and nobody proposed stepping those. And the ACROSS flow
+     * now prints every stage's count in a header row directly above its own
+     * column, so the width is no longer the only thing saying how big a stage
+     * is. The misreading the step defended against was one a reader had to make
+     * from the silhouette alone; they no longer have to.
      *
-     * So a rising stage keeps its own width to the end of its band and the
-     * stage after it simply STARTS wider. The step is visible and honest, and
-     * is what Looker Studio's stepped bars do.
+     * What has NOT changed is the arithmetic: `stageWidths` is still a share of
+     * the largest, every stage's own edge is still exactly that share, and the
+     * curve still lands on its neighbour's true width. A rise is drawn as a
+     * rise, which is what it is.
      */
-    const floor = rise ? w : next;
+    const floor = next;
     const [l0, r0] = edges(w);
     const [l1, r1] = edges(floor);
     /**

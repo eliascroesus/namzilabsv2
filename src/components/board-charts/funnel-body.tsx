@@ -89,6 +89,29 @@ export function FunnelBody({
   const n = result.stages.length;
 
   /**
+   * HOW BIG THE STAGE COUNTS GET — the kit's own steps, chosen by how much
+   * column each stage actually has.
+   *
+   * A funnel is the one chart with NO headline: `custom-tile` passes
+   * `headline={undefined}` for funnel and pipeline because there is no single
+   * figure to head the card. These counts are what stands in for it, so they
+   * take `.stat-numeral` — the tabular figures, 600 weight and -0.0386em
+   * tracking that every other card's number already uses. They were `tnum
+   * font-semibold`, which is the same idea spelled by hand and half of it
+   * missing.
+   *
+   * THE SIZE IS A FUNCTION OF COLS AND STAGES, not of cols alone. Running
+   * across, n figures share one row, so the room per stage is what decides
+   * whether a display step fits — three stages on a wide tile have a column
+   * each and can carry the 24px figure the rest of the product leads with;
+   * five on a four-column tile have about 70px, where "11,412" at 24px would
+   * not fit at all. Rungs only, no arbitrary sizes: the ratio picks between
+   * `text-display-xs` (24), `text-lg` (18) and `text-sm` (14).
+   */
+  const room = cols / Math.max(1, n);
+  const countSize = room >= 2.5 ? "text-display-xs" : room >= 1.2 ? "text-lg" : "text-sm";
+
+  /**
    * THE BOTTLENECK IS NAMED IN THE RATIO, NOT PAINTED ON THE BODY.
    *
    * It used to fill the worst stage in danger red and stamp a "Biggest drop-off"
@@ -250,7 +273,7 @@ export function FunnelBody({
             {exit.label}
           </span>
           <span
-            className={`tnum shrink-0 font-semibold ${exit.value == null ? "text-muted-foreground" : "text-foreground"}`}
+            className={`stat-numeral shrink-0 ${exit.value == null ? "text-muted-foreground" : "text-foreground"}`}
           >
             {exit.value == null ? "—" : formatMetricValue(exit.value, fmt)}
           </span>
@@ -302,16 +325,19 @@ export function FunnelBody({
                     That is a different thing from the DOWN flow's name lane, where
                     "Booked Leads" once rendered "Booke…" because a pill took room
                     the name could have had. One is arithmetic; the other was a bug. */}
-                <span data-stage-name className="truncate text-2xs text-muted-foreground" title={stage.label}>
+                {/* 13px, the step `bars-horizontal` gives its own category
+                    names — this row is that same question ("which thing is this
+                    figure for"), so it gets that same answer rather than the
+                    12px an AXIS uses. */}
+                <span data-stage-name className="truncate text-xs text-muted-foreground" title={stage.label}>
                   {stage.label}
                 </span>
               </span>
               {/* THE COUNT IS THE LOUD THING ON THIS CARD — "quiet chrome, loud
-                  numbers", and this row is where a funnel gets to spend it. It
-                  sizes with the tile because 17px in a 110px column is the whole
-                  point on a wide board and an overflow on a narrow one. */}
+                  numbers", and this row is where a funnel gets to spend it,
+                  because the card has no headline for it to compete with. */}
               <span
-                className={`tnum font-semibold ${cols >= 5 ? "text-md" : "text-sm"} ${
+                className={`stat-numeral truncate ${countSize} ${
                   stage.count === 0 ? "text-muted-foreground" : "text-foreground"
                 }`}
               >
@@ -394,7 +420,12 @@ export function FunnelBody({
                     pill centred on it overhangs both edges of the ribbon. */}
                 <span className="flex flex-col items-end gap-0.5 leading-tight">
                   <span
-                    className={`tnum text-xs font-semibold ${stage.count === 0 ? "text-muted-foreground" : "text-foreground"}`}
+                    /* Running DOWN the count sits in a narrow column beside its
+                       own pill, so it keeps the 13px step rather than taking the
+                       across flow's display size — but it takes the numeral
+                       treatment, which is what makes it the same KIND of figure
+                       as every other number in the product. */
+                    className={`stat-numeral text-xs ${stage.count === 0 ? "text-muted-foreground" : "text-foreground"}`}
                   >
                     {formatMetricValue(stage.count, fmt)}
                   </span>

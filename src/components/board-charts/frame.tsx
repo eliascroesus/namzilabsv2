@@ -35,6 +35,7 @@ import type { ImportCoverage } from "@/connectors/types";
  */
 export function ChartFrame({
   title,
+  hideTitle,
   rangeLabel,
   headline,
   delta,
@@ -49,6 +50,26 @@ export function ChartFrame({
   children,
 }: {
   title: string;
+  /**
+   * DRAW NO NAME ON THE CARD — for a mark that already names its own parts.
+   *
+   * The owner's ask on 12 Sep 2026: "remove the title because there is a title
+   * at each part in the funnel/pipeline". A funnel running across prints every
+   * stage's name in its header row, and stage 1 IS the tile's own metric, so the
+   * card was saying "Total Leads" twice, eleven pixels apart.
+   *
+   * THE TITLE IS STILL REQUIRED AND STILL PASSED. It is what the tile MENU
+   * renames, what the settings panel's header reads, and what a screen reader
+   * gets from the card's `title` attribute — this hides the rendered line, it
+   * does not make the tile anonymous.
+   *
+   * THE HEADER ROW ITSELF STAYS. The board floats a tile menu at `absolute
+   * right-2 top-2`, 28px tall, which reaches 36px down the card and belongs to a
+   * component this one cannot see. Collapsing the header to nothing would put
+   * that menu on top of the mark, so the name's line is given up and its LANE is
+   * not — see the `min-h-5` below.
+   */
+  hideTitle?: boolean;
   /**
    * ACCEPTED AND NO LONGER DRAWN. It said what a tile was drawn AS — "Line",
    * "Bars" — under a picture of exactly that. Kept in the type because
@@ -122,7 +143,24 @@ export function ChartFrame({
      * bring their own 16px, so a `CardHeader` inside an already-padded Card
      * would sit its content 32px in from the card's edge.
      */
-    <Card data-tile-card variant="tile" padding="none" className="flex h-full flex-col overflow-hidden">
+    /**
+     * `data-tile-title` CARRIES THE NAME WHETHER OR NOT THE CARD DRAWS IT.
+     *
+     * Every browser check in `scripts/` used to identify a card by its leading
+     * TEXT, which worked only for as long as the first thing in a card was its
+     * title. `hideTitle` broke that in one commit: `composed-check` started
+     * reading a refusal's own sentence as the card's name and reclassified four
+     * specimens. What a card IS and what a card DRAWS are now different
+     * questions, so the identity gets an attribute of its own rather than being
+     * inferred from the render.
+     */
+    <Card
+      data-tile-card
+      data-tile-title={title}
+      variant="tile"
+      padding="none"
+      className="flex h-full flex-col overflow-hidden"
+    >
       <CardHeader className="gap-2">
         {/* `flex-1` IS WHAT MAKES `truncate` FIRE. Without a basis this column
             sizes to its CONTENT inside the header's `justify-between` row, so
@@ -130,12 +168,19 @@ export function ChartFrame({
             simply wraps. `min-w-0` alone is not enough — it permits shrinking,
             it does not cause it. Same fix, same reason, as the metric tile's
             own h3: "Speed To Lead (Armaan)" was the name that showed both. */}
-        <div className="flex min-w-0 flex-1 flex-col gap-1">
+        {/* `min-h-5` IS THE KEBAB'S HEADROOM, and the arithmetic is worth
+            writing down because nothing at runtime can check it. `CardHeader`
+            opens with `pt-4`, so this column starts 16px down the card; the
+            board's floated menu runs from 8px to 36px. 20px of column is what
+            carries the header's bottom past the menu's. With the title hidden
+            and no range label this column is otherwise empty, and the menu would
+            hang over the mark. */}
+        <div className={cn("flex min-w-0 flex-1 flex-col gap-1", hideTitle && "min-h-5")}>
           {/* ONE LINE, ALWAYS. A canvas tile's height is its row span, so a
               header that wraps steals it from the mark below and pushes a goal
               bar's own caption out through the bottom edge. `truncate` here is
               therefore a height guarantee rather than a width preference. */}
-          <CardTitle title={title}>{title}</CardTitle>
+          {!hideTitle && <CardTitle title={title}>{title}</CardTitle>}
           {/* THE CHART-KIND LINE IS GONE, 6 SEP 2026 — "I dont want to have
               the chart type text on the cards". It read "Line · Today" under
               the name: the tile describing the picture directly beneath it.

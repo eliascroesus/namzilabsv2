@@ -119,20 +119,33 @@ describe("funnelShape — the ribbon path, which is the mark people actually see
     expect(topWidth - floorWidth, "roughly three quarters of the body is gone").toBeCloseTo(74.13, 1);
   });
 
-  it("steps a rising stage instead of bulging the body outward", () => {
+  it("widens back out as smoothly as it narrows, and still shows the true width first", () => {
     /**
-     * `points` already refuses to flare — a rising band's floor is its OWN width,
-     * and the stage after it simply starts wider. The path has to inherit that
-     * refusal rather than reintroduce the flare as a curve, which is the more
-     * tempting spelling because a bulge looks organic.
+     * THE OWNER'S 12 SEP INSTRUCTION, AND THE GUARANTEE THAT REPLACED THE STEP.
+     *
+     * A rising stage used to hold its own width to the end of its band so the
+     * next one simply started wider — the step existed because sloping OUT gives
+     * a 31%-wide stage a far edge at 100%, which can be read as reaching full
+     * width. It curves now, in both directions.
+     *
+     * What keeps that honest is the SHOULDER, and that is what this pins: the
+     * band holds its true width for the first 55% of itself before any
+     * transition begins, so a definite width is always on screen. Lose the
+     * shoulder and the rise really does become the misreading the step was
+     * protecting against — a stage with no width of its own, only a ramp.
      */
     const [a, b] = funnelShape([10, 40], { align: "left" });
     const c = coords(a.path);
+    expect(a.width, "10 of 40 is a quarter").toBe(25);
     expect(b.width, "the second stage is the wider one").toBe(100);
-    expect(
-      measured(c[FLOOR_RIGHT], "down"),
-      "the rising band ends at its own width, not its successor's",
-    ).toBe(measured(c[SHOULDER_RIGHT], "down"));
+
+    // Its own edge, and its shoulder, are both at ITS width — not its successor's.
+    expect(measured(c[TOP_RIGHT], "down")).toBe(25);
+    expect(measured(c[SHOULDER_RIGHT], "down"), "the true width survives to the shoulder").toBe(25);
+    // The shoulder is genuinely 55% down the band, not a token flat before a ramp.
+    expect(along(c[SHOULDER_RIGHT], "down")).toBeCloseTo(a.y0 + (a.y1 - a.y0) * 0.55, 6);
+    // And only then does it open out to the next stage's real width.
+    expect(measured(c[FLOOR_RIGHT], "down"), "the curve lands on stage 2's width").toBe(100);
   });
 
   it("transposes the whole path for a funnel running across", () => {

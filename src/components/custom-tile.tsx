@@ -649,6 +649,12 @@ export function CustomTile({
        */
       chartLabel={chart === "number" || cols < 4 ? undefined : (CHARTS.find((c) => c.id === chart) ?? CHARTS[0]).label}
       rangeLabel={rangeLabel}
+      /* A FUNNEL NAMES ITS OWN PARTS, so the card does not name itself on top of
+         them — the owner's ask on 12 Sep 2026. Stage 1 is this tile's own
+         metric, so a card titled "Total Leads" over a header row whose first
+         cell reads "Total Leads" was printing it twice. The title is still
+         passed: it is what the menu renames and what the panel's header reads. */
+      hideTitle={chart === "funnel" || chart === "pipeline"}
       /* A funnel, a pipeline and a table have no single figure to head. */
       headline={
         chart === "funnel" || chart === "pipeline" || chart === "table" ? undefined : w.unavailable ? null : fmt(w.value)
@@ -751,7 +757,18 @@ export function CustomTile({
              paragraphs under the mark; `title` keeps every word reachable — on
              hover, and to a screen reader — without taking a single row from the
              chart. Joined with newlines because a native tooltip honours them. */
-          <div className="min-h-0 flex-1 overflow-y-auto quiet-scroll" title={composeNotes.join("\n") || undefined}>
+          /* A FLEX COLUMN, LIKE THE PIPELINE BESIDE IT — and the two had drifted.
+             This was a plain block with `overflow-y-auto`, so `FunnelBody`'s own
+             `flex-1` had no flex parent to answer and the mark sized to its
+             CONTENT: the same funnel filled a pipeline tile and floated in the
+             top half of a funnel tile of identical height. The scroller stays
+             (eight stages on a short tile still has to go somewhere); it is just
+             a column now, so the body gets the height its card was already
+             giving it. */
+          <div
+            className="flex min-h-0 flex-1 flex-col overflow-y-auto quiet-scroll"
+            title={composeNotes.join("\n") || undefined}
+          >
             <FunnelView result={w.funnel!} composed={composed} cols={cols} flow={config.flow} exits={funnelExits} />
           </div>
         ) : chart === "pipeline" ? (

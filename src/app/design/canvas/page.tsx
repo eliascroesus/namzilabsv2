@@ -486,9 +486,28 @@ export default function CanvasSpecimen() {
           metrics. A composition that would mislead refuses and says which metric caused it.
         </p>
         <div className={`mt-4 ${BOARD_GRID}`} {...{ "data-composed": "" }}>
+          {/* THE LABEL RIDES ABOVE THE CARD, NOT INSIDE IT. A funnel and a
+              pipeline no longer draw their own title, so on this page — where
+              half the specimens are funnels and the whole point is telling them
+              apart — the name had nowhere to appear. Outside the card it also
+              stays out of `composed-check`'s reading of what the card SHOWS,
+              which is asserting that a refusal replaces its mark and would count
+              a caption as prose on a drawing card.
+
+              The cell grows by the caption's own line so the tile keeps the
+              height its row span asked for. */}
           {COMPOSED_CHARTS.map(({ label, chart, source, config, h }) => (
-            <div key={label} style={{ height: `${h * ROW_UNIT_PX}px` }}>
-              <CustomTile chart={chart} title={label} rangeKey="today" source={source} config={config} cols={4} />
+            <div
+              key={label}
+              className="flex flex-col gap-1"
+              style={{ height: `${h * ROW_UNIT_PX + 20}px` }}
+            >
+              <span className="shrink-0 truncate text-2xs text-muted-foreground" title={label}>
+                {label}
+              </span>
+              <div className="min-h-0 flex-1">
+                <CustomTile chart={chart} title={label} rangeKey="today" source={source} config={config} cols={4} />
+              </div>
             </div>
           ))}
         </div>
