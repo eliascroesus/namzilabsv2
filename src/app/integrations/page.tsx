@@ -275,9 +275,28 @@ function ConnectForm({ entry }: { entry: ConnectorCatalogEntry }) {
         <FieldLabel htmlFor={`name-${entry.source}`}>Connection name</FieldLabel>
         <Input id={`name-${entry.source}`} name="name" placeholder={entry.name} {...NO_AUTOFILL} />
       </div>
+      {/* WHERE TO FIND ALL OF THIS, AS A LINK RATHER THAN AS LABELS.
+          Three sources spelled the route into their own field labels — Whop's
+          ran to "Webhook signing secret (optional — Whop → Developer → Webhooks,
+          Secret column)", which rendered as two wrapped lines of capitals above
+          an input. A label is for naming a box. The page it links to can carry
+          the steps, the caveats and the date it was checked, none of which fit in
+          a label and none of which a label can be tested against. */}
+      {entry.guide && (
+        <p className="text-xs text-muted-foreground">
+          <a href={`/docs/${entry.source}`} target="_blank" rel="noreferrer noopener" className="underline">
+            Where do I find these?
+          </a>
+        </p>
+      )}
       {entry.credentialFields.map((f) => (
         <div key={f.key}>
-          <FieldLabel htmlFor={`cred-${entry.source}-${f.key}`}>{f.label}</FieldLabel>
+          <FieldLabel htmlFor={`cred-${entry.source}-${f.key}`}>
+            {f.label}
+            {/* OPTIONAL IS A FIELD NOW, so it can be shown as what it is —
+                quiet, beside the name — instead of being typed into the name. */}
+            {f.optional && <span className="ml-1.5 font-normal text-muted-foreground">Optional</span>}
+          </FieldLabel>
           {/* No `autoComplete` override here on purpose: `Input` sets
               `new-password` for a masked field, and "off" — which this call
               site used to pass — is the one value browsers ignore on one.

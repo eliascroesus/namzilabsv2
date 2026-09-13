@@ -3,7 +3,18 @@
  * Keeping this separate from the runtime Connector keeps the engine lean while
  * the UI stays data-driven — adding a connector is one entry here.
  */
-export type CredentialField = { key: string; label: string; placeholder?: string };
+/**
+ * `optional` IS A FIELD NOW, WHERE IT USED TO BE A WORD IN THE LABEL.
+ *
+ * Three sources spelled it into their own label text — Whop's ran to
+ * "Webhook signing secret (optional — Whop → Developer → Webhooks, Secret
+ * column)", which the dialog rendered as two wrapped lines of capitals. Prose
+ * cannot be read by the form, so an optional field looked exactly as demanding
+ * as a required one, and the only way to say otherwise was to make the label
+ * longer. `FlowConfigField` below has carried `required?: boolean` all along;
+ * this is the same fact, finally typed on the other half of the system.
+ */
+export type CredentialField = { key: string; label: string; placeholder?: string; optional?: boolean };
 
 /**
  * A per-flow resource field set inside the Get data step (never at connect time):
@@ -92,6 +103,44 @@ export type ConnectorBrand = { color: string; short: string; label?: string };
  */
 export type ConnectorDocs = { url: string; readOn: string; webhooks?: string };
 
+/**
+ * WHERE TO CLICK, IN THE PROVIDER'S OWN INTERFACE — our page, not theirs.
+ *
+ * `docs` above links OUT to the provider's API reference, which is written for
+ * someone building against the API. This is the other thing entirely: the three
+ * clicks that get a key out of their dashboard and into ours, for someone who
+ * does not care that there is an API at all.
+ *
+ * KEYED TO `credentialFields`, and that is the honesty device rather than a
+ * convenience. Each block names the field it fills, a test asserts every `key`
+ * here exists on that source's `credentialFields`, and the connect dialog links
+ * to the page instead of spelling the route inside a field label. So a guide
+ * cannot describe a box that is not on the form, and a renamed field breaks the
+ * suite rather than leaving instructions pointing at nothing.
+ *
+ * `readOn` IS LOAD-BEARING. Whop renamed `company_id` to `account_id` between a
+ * connector being written and a customer connecting, and the stale instruction
+ * was indistinguishable from a fresh one. A guide with no date is a guide nobody
+ * can audit; the page prints it.
+ */
+export type ConnectorGuide = {
+  /** The date every step below was checked against the provider's own docs or app. */
+  readOn: string;
+  /** One block per credential the form asks for, in the order the form asks. */
+  fields: Array<{
+    /** Must match a `credentialFields[].key` on the same entry. */
+    key: string;
+    /** What the reader is going to end up holding. */
+    title: string;
+    /** One click, or one short instruction, per line. */
+    steps: string[];
+    /** Anything true and awkward — a plan gate, a value the provider hides. */
+    note?: string;
+  }>;
+  /** The webhook half, when the source has one worth turning on. */
+  webhook?: { steps: string[]; note?: string };
+};
+
 /** `live` is the date the connector's prober last ran against the real API, or null: unprobed. */
 export type ConnectorVerification = { live: string | null };
 
@@ -105,6 +154,8 @@ export type ConnectorCatalogEntry = {
   oauthProvider?: string;
   brand?: ConnectorBrand;
   docs?: ConnectorDocs;
+  /** The click-by-click setup page at `/docs/<source>`. Absent = no page yet; the dialog links nowhere. */
+  guide?: ConnectorGuide;
   verified?: ConnectorVerification;
   instant: boolean;
   poll: boolean;
@@ -266,7 +317,38 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
     poll: true,
     autoWebhook: true,
     webhookOptional: true,
-    credentialFields: [{ key: "accessToken", label: "Personal Access Token", placeholder: "eyJ..." }],
+    credentialFields: [{ key: "accessToken", label: "Personal Access Token", placeholder: "eyJ…" }],
+    guide: {
+      readOn: "2026-09-13",
+      fields: [
+        {
+          key: "accessToken",
+          title: "A personal access token",
+          steps: [
+            "Log in to Calendly and open the Integrations page.",
+            "Select the API & Webhooks tile.",
+            "Under Personal Access Tokens, choose Get a token now — or Generate new token if you already have one.",
+            "Name the token, choose Create Token, then Copy token.",
+            "Paste it here.",
+          ],
+          note:
+            "Calendly does not store or re-display the token after you close that dialog, so copy it before you leave the page.",
+        },
+      ],
+      webhook: {
+        steps: [
+          "Nothing to do — connecting creates the webhook subscription in your Calendly account, and disconnecting removes it.",
+        ],
+        /**
+         * THE PLAN GATE IS REAL AND ALREADY HANDLED. `RegisterWebhookResult`
+         * carries `unsupported` precisely for this: Calendly gates webhooks to
+         * paid tiers, polling keeps working, and the connection shows no error.
+         * Saying so here stops it reading as a failure.
+         */
+        note:
+          "Calendly reserves webhooks for its paid plans. On a free plan nothing breaks — bookings still arrive by polling, just not instantly — and the connection will not show an error for it.",
+      },
+    },
     // Calendly publishes 60 requests/minute (120 on Enterprise). One account-wide
     // bucket in practice, declared per endpoint so any one can be raised alone.
     rateLimits: {
@@ -606,6 +688,17 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
     name: "Whop",
     brand: { color: "#FF6243", short: "Wh" },
     description: "Payments and memberships from your Whop company.",
+    /**
+     * Added 13 Sep 2026, when both pages were re-read to settle the
+     * `company_id` → `account_id` rename. The entry had carried no `docs` at
+     * all, so the one place a reader could have checked the parameter for
+     * themselves was missing from the product.
+     */
+    docs: {
+      url: "https://docs.whop.com/api-reference/payments/list-payments",
+      readOn: "2026-09-13",
+      webhooks: "https://docs.whop.com/developer/guides/webhooks",
+    },
     connect: "apiKey",
     instant: true,
     poll: true,
@@ -627,11 +720,62 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
      * the poll covers both collections regardless.
      */
     autoWebhook: false,
+    /**
+     * THE LABELS ARE NAMES NOW, NOT ROUTES. Each one used to carry its own
+     * directions — "Whop → Developer → API keys", and a webhook label that ran to
+     * two wrapped lines of capitals in the dialog. The route lives in `guide`
+     * below and the dialog links to it, which is the only place it can be dated,
+     * checked by a test, and read without squinting.
+     */
     credentialFields: [
-      { key: "apiKey", label: "API key", placeholder: "Whop → Developer → API keys" },
-      { key: "companyId", label: "Company ID", placeholder: "biz_..." },
-      { key: "webhookSecret", label: "Webhook signing secret (optional — Whop → Developer → Webhooks, Secret column)", placeholder: "ws_… or whsec_…" },
+      { key: "apiKey", label: "API key", placeholder: "Paste the key from Whop" },
+      { key: "companyId", label: "Company ID", placeholder: "biz_…" },
+      { key: "webhookSecret", label: "Webhook signing secret", placeholder: "ws_… or whsec_…", optional: true },
     ],
+    guide: {
+      readOn: "2026-09-13",
+      fields: [
+        {
+          key: "apiKey",
+          title: "An API key for your Whop company",
+          steps: [
+            "Open your Whop dashboard and go to the Developer section.",
+            "Open API keys and choose Create.",
+            "Give the key a name you will recognise later — “Namzilabs” does the job.",
+            "Copy the key it shows you and paste it here.",
+          ],
+          note:
+            "Whop shows the key once. If you lose it, make another rather than hunting for it — an unused key costs nothing.",
+        },
+        {
+          key: "companyId",
+          title: "Your company ID — the biz_… value",
+          steps: [
+            "In the Whop dashboard, open Developer → API playground.",
+            "Run “Retrieve requesting account”.",
+            "Copy the id in the response that begins with biz_ and paste it here.",
+          ],
+          /**
+           * SAID OUT LOUD BECAUSE IT IS GENUINELY AWKWARD. Whop's own
+           * getting-started page offers no menu for this — it tells you to make
+           * an API call or use the playground. Writing a confident menu path here
+           * would be inventing one.
+           */
+          note:
+            "Whop has no settings page that simply shows this, which is why the route goes through their playground. It is the same value you see in your dashboard URL if you already know where to look.",
+        },
+      ],
+      webhook: {
+        steps: [
+          "In Whop, open Developer → Webhooks and choose Create webhook.",
+          "Paste the webhook URL from your Namzilabs connection page as the destination.",
+          "Save, then copy the value from that webhook's Secret column.",
+          "Reconnect here with that secret in the Webhook signing secret field.",
+        ],
+        note:
+          "Entirely optional: payments and memberships arrive by polling either way, and a webhook only makes them instant. But if you create the webhook in Whop and leave the secret blank here, its deliveries cannot be verified and are refused — so it is both or neither.",
+      },
+    },
     /**
      * The old copy said Namzilabs would "mint one instead — copy it from the
      * field below into Whop". Whop generates the secret itself and has no
@@ -792,6 +936,34 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
     // ~4,300 reads/month per connection, inside the floor.
     rateLimits: { "events.list": { requestsPerMinute: 1_500 } },
     credentialFields: [{ key: "apiKey", label: "Restricted or secret key", placeholder: "rk_live_…" }],
+    guide: {
+      readOn: "2026-09-13",
+      fields: [
+        {
+          key: "apiKey",
+          title: "A restricted key that can read events",
+          steps: [
+            "Open the Stripe Dashboard and make sure the top-left toggle says live mode, not sandbox.",
+            "Go to Developers → API keys.",
+            "In the Restricted keys list, choose Create restricted key.",
+            "Name it “Namzilabs”, then set Events to Read. Leave everything else at None.",
+            "Create the key, reveal it, and paste the rk_live_… value here.",
+          ],
+          /**
+           * A SECRET KEY WORKS AND IS THE WRONG ADVICE. Stripe's own keys page
+           * says it outright — "we don't recommend using secret keys for new use
+           * cases" — and this integration reads one endpoint.
+           */
+          note:
+            "A secret key (sk_live_…) also works, but a restricted key is the better answer: this integration only ever reads your events, and a restricted key can only do what you ticked. Stripe shows the value once.",
+        },
+      ],
+      webhook: {
+        steps: [
+          "Nothing to do — connecting creates the webhook endpoint in your Stripe account for you, and disconnecting removes it.",
+        ],
+      },
+    },
     eventTypeLabels: {
       payment_succeeded: "Payment succeeded",
       checkout_completed: "Checkout completed",
@@ -1939,9 +2111,41 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
      */
     rateLimits: { "api.request": { requestsPerMinute: 60 } },
     credentialFields: [
-      { key: "apiKey", label: "API key", placeholder: "Fathom → Settings → API Access" },
-      { key: "webhookSecret", label: "Webhook signing secret (optional)", placeholder: "whsec_…" },
+      { key: "apiKey", label: "API key", placeholder: "Paste the key from Fathom" },
+      { key: "webhookSecret", label: "Webhook signing secret", placeholder: "whsec_…", optional: true },
     ],
+    guide: {
+      readOn: "2026-09-13",
+      fields: [
+        {
+          key: "apiKey",
+          title: "An API key from your Fathom account",
+          steps: [
+            "Open Fathom and go to Settings.",
+            "Open API Access and create a key.",
+            "Copy it and paste it here.",
+          ],
+          /**
+           * USER-SCOPED, WHICH IS A REAL CONSTRAINT RATHER THAN A CAVEAT.
+           * Fathom's docs say a key reaches only meetings recorded by the
+           * key-holder or shared with their team, so "connect Fathom" is per
+           * person in a way that "connect Stripe" is not.
+           */
+          note:
+            "A Fathom key only reaches meetings that person recorded, or that were shared with their team. To cover a second rep's calls, connect Fathom again with their key rather than looking for a setting.",
+        },
+      ],
+      webhook: {
+        steps: [
+          "In Fathom, open Settings → Webhooks and choose Create webhook.",
+          "Paste the webhook URL from your Namzilabs connection page as the destination.",
+          "Choose the new-meeting-content-ready event.",
+          "Copy the signing secret Fathom shows you, and reconnect here with it in the Webhook signing secret field.",
+        ],
+        note:
+          "Optional: meetings arrive by polling either way, and a webhook only makes them instant. As with Whop, a webhook created in Fathom with the secret left blank here has its deliveries refused — do both or neither.",
+      },
+    },
     /**
      * FALSE FOR WHOP'S REASON rather than a missing endpoint: Fathom can create
      * webhooks through its API, but doing so needs a key with more than read

@@ -48,9 +48,18 @@ const ALLOWLIST: Record<string, string> = {
   clearMembershipCache: "test-only cache reset; no production caller by design",
 };
 
-/** Framework entry points: the framework calls these, not our code. */
+/**
+ * Framework entry points: the framework calls these, not our code.
+ *
+ * `generateStaticParams` and `dynamicParams` joined the list on 13 Sep 2026 with
+ * the first route that pre-renders a set of paths (`/docs/[source]`). They are
+ * the same class of thing as `generateMetadata` beside them — App Router route
+ * segment config — and were missing only because nothing had used them yet. The
+ * ALLOWLIST below was the wrong home for them: that is for code written before
+ * its consumer, and these have a consumer, it is just Next.
+ */
 const FRAMEWORK_EXPORTS = new Set([
-  "default", "metadata", "generateMetadata", "dynamic", "revalidate", "runtime",
+  "default", "metadata", "generateMetadata", "generateStaticParams", "dynamic", "dynamicParams", "revalidate", "runtime",
   "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "middleware", "config",
 ]);
 
