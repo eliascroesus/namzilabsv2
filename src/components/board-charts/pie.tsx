@@ -216,6 +216,19 @@ export function PieChart({
                    percentages it has to agree with. As a utility class it
                    resolved to 60px rather than 60% of the 140px box, so every
                    name wrapped at two thirds of the room it actually had. */
+                /**
+                 * `max-content` IS WHAT LETS THE LABEL LEAVE THE SQUARE, and
+                 * without it nothing else here could work.
+                 *
+                 * An absolutely positioned box with `left` set and no `right`
+                 * shrink-to-fits against its containing block MINUS that left —
+                 * so a right-hand label anchored at 55% of a 140px square had
+                 * 63px to live in, whatever `max-width` said, and "Facebook"
+                 * wrapped mid-word inside it. The label is meant to overflow the
+                 * square into the card's gutter; `max-content` is how it asks for
+                 * its natural width first and lets `max-width` do the capping.
+                 */
+                width: "max-content",
                 maxWidth: "60%",
                 transform: `translate(${p.right ? "0" : "-100%"}, -50%)`,
               }}
@@ -245,15 +258,51 @@ export function PieChart({
                     siblings has nowhere else to go; a radial label has somewhere
                     else to go, which is down. */}
                 <span
-                  className="min-w-0 text-2xs text-muted-foreground [overflow-wrap:anywhere] line-clamp-2"
+                  /**
+                   * `break-word`, NOT `anywhere` — and the difference is the
+                   * whole bug. "Facebook" rendered as "Faceb / ook".
+                   *
+                   * `overflow-wrap: anywhere` sets the element's MIN-CONTENT
+                   * width to zero, which is the point of it. So this flex column
+                   * sized itself to its other child — the "24 55%" row, about
+                   * 48px — and then the name obligingly wrapped to fit a width
+                   * nothing had asked it to fit, mid-word, with 40px of gutter
+                   * going spare beside it.
+                   *
+                   * `break-word` leaves min-content at the longest WORD, so the
+                   * column is at least wide enough for it (up to the max-width
+                   * above) and a break only happens where a single word genuinely
+                   * cannot fit. Long names still wrap; words stop being sawn in
+                   * half.
+                   */
+                  /**
+                   * NO `line-clamp-2`, and it was the second half of the same
+                   * bug. Clamping sets `display: -webkit-box`, which collapses
+                   * the element's MAX-content contribution — so the flex column
+                   * sized itself to the "420 53%" row (60px) and the name wrapped
+                   * into that, with 45px of its own max-width unused. Between
+                   * them, `anywhere` and the clamp meant the name could never ask
+                   * for the room it had.
+                   *
+                   * Unclamped, a very long name wraps to a third line rather than
+                   * being cut — which the de-collision above already leaves space
+                   * for, and which is the better failure anyway: a pie label that
+                   * runs on is legible, one that ends in an ellipsis is not a
+                   * name.
+                   */
+                  className="min-w-0 text-xs text-muted-foreground [overflow-wrap:break-word]"
                   title={p.slice.label}
                 >
                   {p.slice.label}
                 </span>
               </span>
+              {/* 14px FIGURE OVER A 13px NAME — one step apart, which is what
+                  makes the number lead its own label without either shouting.
+                  They were 13 over 12, the axis-label step, which read as two
+                  captions rather than as a figure and its name. */}
               <span className="flex items-baseline gap-1">
-                <span className="stat-numeral text-xs text-heading">{formatMetricValue(p.slice.value, format)}</span>
-                <span className="tnum text-2xs text-muted-foreground">{pct(p.slice.share)}</span>
+                <span className="stat-numeral text-sm text-heading">{formatMetricValue(p.slice.value, format)}</span>
+                <span className="tnum text-xs text-muted-foreground">{pct(p.slice.share)}</span>
               </span>
             </span>
           ))}
