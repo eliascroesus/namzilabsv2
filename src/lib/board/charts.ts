@@ -17,8 +17,8 @@
  * underneath it. Both are here.
  *
  * EVERY CHART LISTED HERE HAS A REAL RENDERER, AND THAT IS DELIBERATE.
- * `custom-tile.tsx` draws all ten of them — number, line, area, bar, category,
- * pie, progress, funnel, pipeline and table — so nothing this file offers can
+ * `custom-tile.tsx` draws all nine of them — number, line, area, bar, category,
+ * pie, progress, pipeline and table — so nothing this file offers can
  * be picked and then silently draw bars instead. (Three further ids, `heading`,
  * `text` and `divider`, are BLOCKS rather than charts — furniture `chartsFor`
  * never returns; see below.) Offering a chart and drawing something else is
@@ -118,15 +118,22 @@ export const CHARTS = [
     minW: 3,
     minH: 4,
   },
-  {
-    id: "funnel",
-    label: "Funnel",
-    blurb: "Stage by stage, with the biggest drop called out.",
-    w: 6,
-    h: 6,
-    minW: 4,
-    minH: 5,
-  },
+  /**
+   * NO "FUNNEL" ROW — RETIRED 13 SEP 2026, and the owner's reason is the whole
+   * of it: "remove the funnel one entirely, it is literally just the pipeline".
+   *
+   * The two drew the same body from the same arithmetic and differed by ONE
+   * argument — `align`, which anchored the stages to an edge instead of centring
+   * them. That was a real distinction while the mark was a row of bars, where a
+   * shared left origin let two stages be compared by length. It stopped being
+   * one when both became the connected ribbon: a reader sees a narrowing either
+   * way, and the picker was asking a question whose two answers differ by where
+   * the whitespace sits.
+   *
+   * `asChartId` maps the stored value onto `pipeline` rather than dropping it —
+   * see the note there. The classic funnel PAGES keep `FunnelView` and its
+   * left-anchored body; they are not tiles and nobody asked about them.
+   */
   {
     id: "pipeline",
     label: "Pipeline",
@@ -224,9 +231,25 @@ export type ChartId = (typeof CHARTS)[number]["id"];
 
 export const CHART_IDS: ChartId[] = CHARTS.map((c) => c.id);
 
+/**
+ * RETIRED IDS THAT STILL SIT IN THE DATABASE, mapped to what replaced them.
+ *
+ * `dashboard_tiles.chart` is a stored string on rows written by earlier builds,
+ * and retiring a chart does not go back and rewrite them. Without this entry a
+ * board full of funnels would have degraded to scorecards the moment the row
+ * left `CHARTS` — every one of them silently, since the fallback below is a
+ * legitimate answer for genuinely unknown values and cannot tell the two apart.
+ *
+ * `funnel` and `pipeline` drew the same body from the same arithmetic, so this
+ * is a rename rather than a substitution: the tile keeps its stages, its parts,
+ * its exits and its flow, and loses only the alignment nobody could name.
+ */
+const RETIRED_CHARTS: Record<string, ChartId> = { funnel: "pipeline" };
+
 /** An unknown stored value degrades to the one chart every metric can draw. */
 export function asChartId(value: unknown): ChartId {
-  return CHART_IDS.includes(value as ChartId) ? (value as ChartId) : "number";
+  if (CHART_IDS.includes(value as ChartId)) return value as ChartId;
+  return RETIRED_CHARTS[value as string] ?? "number";
 }
 
 /**
@@ -382,7 +405,7 @@ export function chartsFor(shape: MetricShape): ChartId[] {
    * carries one, drawing its groups as a funnel would be a lie told in the
    * author's own labels.
    */
-  if (shape.funnel) return ["funnel", "pipeline"];
+  if (shape.funnel) return ["pipeline"];
   const set = new Set<ChartId>();
   if (shape.scalar) set.add("number");
   if (shape.series) for (const id of ["line", "area", "bar"] as const) set.add(id);
@@ -404,7 +427,7 @@ export function chartsFor(shape: MetricShape): ChartId[] {
    * `pie` may arrive from here AND from `groups` above; the Set dedupes, which
    * is the whole reason this function stopped pushing into an array.
    */
-  if (shape.composable) for (const id of ["funnel", "pipeline", "pie"] as const) set.add(id);
+  if (shape.composable) for (const id of ["pipeline", "pie"] as const) set.add(id);
   if (shape.target && shape.scalar) set.add("progress");
   if (shape.series || shape.groups) set.add("table");
   /**

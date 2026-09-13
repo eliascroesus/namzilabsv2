@@ -4,7 +4,6 @@ import { AlertTriangle } from "lucide-react";
 import { formatMetricValue } from "@/lib/format";
 import { Card } from "@/components/ui/card";
 import { Delta, type ChartFormat, type GroupRow, type SeriesPoint } from "@/components/charts";
-import { FunnelView } from "@/components/funnel-view";
 import { deriveDelta } from "@/components/flow-tile";
 import { ChartFooter, ChartFrame } from "@/components/board-charts/frame";
 import { GoalBar, Sparkline } from "@/components/board-charts/scorecard";
@@ -379,7 +378,7 @@ export function CustomTile({
      * is a deliberate act and wins over the metric's own shape; absent it, the
      * grouped pie behaves exactly as it always has.
      */
-    if (composes(chart) && ((config.parts?.length ?? 0) > 0 || chart === "funnel" || chart === "pipeline")) {
+    if (composes(chart) && ((config.parts?.length ?? 0) > 0 || chart === "pipeline")) {
       const anchor: ComposeMember = {
         label: stored.name ?? title,
         value: w.unavailable == null && typeof w.value === "number" ? w.value : null,
@@ -579,7 +578,7 @@ export function CustomTile({
               target == null
               ? "No goal set — add one in the tile’s settings."
               : "A goal of zero has nothing to progress toward."
-          : (chart === "funnel" || chart === "pipeline") && !w.funnel
+          : chart === "pipeline" && !w.funnel
             ? "Only a funnel metric can be drawn this way."
             : chart === "table" && !hasSeries && !hasGroups
               ? "Nothing to list in this period."
@@ -666,7 +665,7 @@ export function CustomTile({
          metric, so a card titled "Total Leads" over a header row whose first
          cell reads "Total Leads" was printing it twice. The title is still
          passed: it is what the menu renames and what the panel's header reads. */
-      hideTitle={chart === "funnel" || chart === "pipeline" || (chart === "pie" && composed)}
+      hideTitle={chart === "pipeline" || (chart === "pie" && composed)}
       /**
        * A funnel, a pipeline and a table have no single figure to head — and
        * since 12 Sep 2026 neither does a COMPOSED pie: "there shouldn't be a big
@@ -680,7 +679,7 @@ export function CustomTile({
        * the circle, and the total is a number no label on the card states.
        */
       headline={
-        chart === "funnel" || chart === "pipeline" || chart === "table" || (chart === "pie" && composed)
+        chart === "pipeline" || chart === "table" || (chart === "pie" && composed)
           ? undefined
           : w.unavailable
             ? null
@@ -790,27 +789,23 @@ export function CustomTile({
           </div>
         ) : chart === "progress" ? (
           <GoalBar value={w.value ?? 0} target={target!} format={bag} />
-        ) : chart === "funnel" ? (
+        ) : chart === "pipeline" ? (
           /* THE DISCLOSURES, COSTING NO PIXELS. They used to be three stacked
              paragraphs under the mark; `title` keeps every word reachable — on
              hover, and to a screen reader — without taking a single row from the
-             chart. Joined with newlines because a native tooltip honours them. */
-          /* A FLEX COLUMN, LIKE THE PIPELINE BESIDE IT — and the two had drifted.
-             This was a plain block with `overflow-y-auto`, so `FunnelBody`'s own
-             `flex-1` had no flex parent to answer and the mark sized to its
-             CONTENT: the same funnel filled a pipeline tile and floated in the
-             top half of a funnel tile of identical height. The scroller stays
-             (eight stages on a short tile still has to go somewhere); it is just
-             a column now, so the body gets the height its card was already
-             giving it. */
+             chart. Joined with newlines because a native tooltip honours them.
+
+             THE SCROLLER CAME FROM THE RETIRED `funnel` BRANCH, and it has to:
+             every funnel tile on every board now resolves here (see
+             `asChartId`), and eight stages on a short tile still has to go
+             somewhere. It is a flex COLUMN as well as a scroller — a plain block
+             with `overflow-y-auto` gave `FunnelBody`'s own `flex-1` no flex
+             parent to answer, so the mark sized to its content and floated in
+             the top half of its card. */
           <div
             className="flex min-h-0 flex-1 flex-col overflow-y-auto quiet-scroll"
             title={composeNotes.join("\n") || undefined}
           >
-            <FunnelView result={w.funnel!} composed={composed} cols={cols} flow={config.flow} exits={funnelExits} />
-          </div>
-        ) : chart === "pipeline" ? (
-          <div className="flex min-h-0 flex-1 flex-col" title={composeNotes.join("\n") || undefined}>
             <Pipeline
               result={w.funnel!}
               accent={accent}

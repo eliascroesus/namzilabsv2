@@ -22,7 +22,7 @@ import { seedMetricFacts } from "@/lib/flow/types";
  * thing that makes it capable of failing.
  */
 
-const FUNNEL_SLOT = PARTS_SLOT.funnel;
+const FUNNEL_SLOT = PARTS_SLOT.pipeline;
 const PIE_SLOT = PARTS_SLOT.pie;
 
 /** A well-formed member. Tests override exactly the field under test. */
@@ -430,9 +430,9 @@ describe("what a composed pie draws", () => {
 describe("which charts a stored tile may now be drawn as", () => {
   const composable: MetricShape = { ...NO_SHAPE, scalar: true, series: true, composable: true };
 
-  it("offers funnel, pipeline and pie on any stored scalar", () => {
+  it("offers pipeline and pie on any stored scalar", () => {
     const offered = chartsFor(composable);
-    for (const id of ["funnel", "pipeline", "pie"] as const) expect(offered).toContain(id);
+    for (const id of ["pipeline", "pie"] as const) expect(offered).toContain(id);
   });
 
   it("offers none of them on a CLASSIC metric, which can never be composed", () => {
@@ -452,7 +452,7 @@ describe("which charts a stored tile may now be drawn as", () => {
      */
     const classic = shapeOfClassic({ kind: "series", series: [1, 2] }, null);
     expect(classic.composable, "a classic metric must never be composable").toBe(false);
-    for (const id of ["funnel", "pipeline", "pie"] as const) expect(chartsFor(classic)).not.toContain(id);
+    for (const id of ["pipeline", "pie"] as const) expect(chartsFor(classic)).not.toContain(id);
     // A classic scalar, too — the branch above returns early for funnels only.
     expect(chartsFor(shapeOfClassic({ kind: "scalar" }, 10))).not.toContain("pie");
   });
@@ -462,13 +462,13 @@ describe("which charts a stored tile may now be drawn as", () => {
     // anchor a funnel the moment this ships — no republish, no migration.
     const stored = shapeOfTile({ value: 42, byRange: { today: { value: 42 } } });
     expect(stored.composable).toBe(true);
-    expect(chartsFor(stored)).toContain("funnel");
+    expect(chartsFor(stored)).toContain("pipeline");
   });
 
   it("leaves a CLASSIC FUNNEL metric offering exactly what it always did", () => {
     // The short-circuit stays: a funnel metric is its own thing and offers
     // nothing else. Widening it would change live boards.
-    expect(chartsFor({ ...NO_SHAPE, funnel: true })).toEqual(["funnel", "pipeline"]);
+    expect(chartsFor({ ...NO_SHAPE, funnel: true })).toEqual(["pipeline"]);
   });
 
   it("offers pie exactly once when it arrives through both doors", () => {
@@ -500,8 +500,8 @@ describe("the parts slot and the config key that feeds it", () => {
     expect(PARTS_SLOT.pie.max + 1).toBe(6);
   });
 
-  it("marks exactly the three composing charts", () => {
-    expect(CHART_IDS.filter(composes).sort()).toEqual(["funnel", "pie", "pipeline"]);
+  it("marks exactly the two composing charts", () => {
+    expect(CHART_IDS.filter(composes).sort()).toEqual(["pie", "pipeline"]);
   });
 
   it("offers `parts` on exactly the charts that compose", () => {
@@ -520,7 +520,7 @@ describe("the parts slot and the config key that feeds it", () => {
      * places — which is the shape of the bug that made `buildTile` drop
      * `countable` while `seedMetricFacts` computed it.
      */
-    expect([...COMPOSED_CHARTS].sort()).toEqual(["funnel", "pie", "pipeline"]);
+    expect([...COMPOSED_CHARTS].sort()).toEqual(["pie", "pipeline"]);
     for (const id of COMPOSED_CHARTS) expect(composes(id), id).toBe(true);
   });
 

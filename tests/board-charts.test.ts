@@ -50,15 +50,15 @@ describe("what a stored flow tile can be drawn as", () => {
    */
   it("offers a trend only when there is a trend", () => {
     const series = shapeOfTile(tileWith({ value: 12, series: [{ bucket: "2026-08", value: 12 }] }));
-    expect(chartsFor(series)).toEqual(["number", "line", "area", "bar", "pie", "funnel", "pipeline", "table"]);
+    expect(chartsFor(series)).toEqual(["number", "line", "area", "bar", "pie", "pipeline", "table"]);
     // Sabotage: return "bar" unconditionally and every scalar metric offers a
     // chart that renders an empty box under a real number.
-    expect(chartsFor(shapeOfTile(tileWith({ value: 12 })))).toEqual(["number", "pie", "funnel", "pipeline"]);
+    expect(chartsFor(shapeOfTile(tileWith({ value: 12 })))).toEqual(["number", "pie", "pipeline"]);
   });
 
   it("offers a breakdown only when there are groups", () => {
     const grouped = shapeOfTile(tileWith({ value: 9, groups: [{ label: "Afeef", value: 9 }] }));
-    expect(chartsFor(grouped)).toEqual(["number", "category", "pie", "funnel", "pipeline", "table"]);
+    expect(chartsFor(grouped)).toEqual(["number", "category", "pie", "pipeline", "table"]);
     // Arriving through both doors must not offer it twice — the Set in
     // `chartsFor` is what makes the composed rule safe to add beside the
     // grouped one.
@@ -81,7 +81,6 @@ describe("what a stored flow tile can be drawn as", () => {
       "bar",
       "category",
       "pie",
-      "funnel",
       "pipeline",
       "table",
     ]);
@@ -134,11 +133,11 @@ describe("availability is a property of the METRIC, not of the period", () => {
 });
 
 describe("classic metrics, which are computed live rather than stored", () => {
-  it("draws a funnel as a funnel and as nothing else", () => {
+  it("draws a funnel metric as a pipeline and as nothing else", () => {
     const funnel = shapeOfClassic({ stages: [{}, {}] }, null);
     // Deriving a funnel from a grouped metric would be a confident lie unless
     // the groups really are ordered stages, and nothing can know that.
-    expect(chartsFor(funnel)).toEqual(["funnel", "pipeline"]);
+    expect(chartsFor(funnel)).toEqual(["pipeline"]);
     expect(chartsFor(funnel)).not.toContain("number");
   });
 
@@ -158,7 +157,7 @@ describe("classic metrics, which are computed live rather than stored", () => {
 });
 
 describe("the chart vocabulary", () => {
-  it("is exactly the ten drawings and the three blocks", () => {
+  it("is exactly the nine drawings and the three blocks", () => {
     /**
      * Every id here has a mark behind it. The rule this pins is the one the
      * file was born for: an id with no renderer would be offered and then draw
@@ -177,7 +176,6 @@ describe("the chart vocabulary", () => {
       "category",
       "pie",
       "progress",
-      "funnel",
       "pipeline",
       "table",
       "heading",
@@ -206,6 +204,20 @@ describe("the chart vocabulary", () => {
     expect(asChartId(undefined)).toBe("number");
     expect(asChartId("pie")).toBe("pie");
     expect(asChartId("bar")).toBe("bar");
+
+    /**
+     * A RETIRED CHART BECOMES ITS REPLACEMENT, NOT A SCORECARD — the migration
+     * the `funnel` removal turns on, and the one thing about it that could break
+     * silently.
+     *
+     * `dashboard_tiles.chart` is a stored string on rows written by earlier
+     * builds, and retiring a chart does not rewrite them. The fallback above is
+     * the correct answer for a genuinely unknown value and would have been
+     * exactly the wrong one here: every funnel on every board would have turned
+     * into a headline figure, keeping its stages, its parts and its exits in a
+     * config nothing read any more. Nothing would have errored.
+     */
+    expect(asChartId("funnel"), "a stored funnel is a pipeline now").toBe("pipeline");
   });
 });
 

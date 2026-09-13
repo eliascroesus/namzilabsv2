@@ -292,13 +292,13 @@ describe("adding lands immediately; the metric question is asked later", () => {
     const html = renderToStaticMarkup(
       createElement(MetricPicker, {
         options: [{ key: "metric:m1", title: "Deals", charts: ["number"] }],
-        chart: "funnel",
+        chart: "pipeline",
         busy: false,
         onClose: () => {},
         onPick: () => {},
       }),
     );
-    expect(html).toContain("Nothing here can be drawn as a funnel yet.");
+    expect(html).toContain("Nothing here can be drawn as a pipeline yet.");
   });
 });
 

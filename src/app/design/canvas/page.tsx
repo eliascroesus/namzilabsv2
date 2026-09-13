@@ -150,7 +150,7 @@ const COMPOSED_CHARTS: Array<{
 }> = [
   {
     label: "Composed funnel",
-    chart: "funnel",
+    chart: "pipeline",
     source: composed(420, [part("Booked Leads", 252), part("On Calendar", 96), part("Showed", 41)]),
     config: keys(3),
     h: 7,
@@ -245,18 +245,11 @@ const COMPOSED_CHARTS: Array<{
     config: keys(2),
     h: 7,
   },
-  {
-    /* The same data as a Funnel rather than a Pipeline — the two marks must not
-       disagree about a width, which they did until both read `stageWidths`. */
-    label: "The same data, drawn as a funnel",
-    chart: "funnel",
-    source: composed(12, [part("Organic Leads", 38), part("Unclaimed Leads", 0)], {
-      name: "On Calendar",
-      timeField: "properties.start.dateTime",
-    }),
-    config: keys(2),
-    h: 7,
-  },
+  /* GONE WITH THE `funnel` CHART, 13 Sep 2026. This drew the specimen above it a
+     second time as a Funnel, to prove the two marks did not disagree about a
+     width — which they had, until both read `stageWidths`. With one chart there
+     is nothing left for it to compare, and an identical card beside its twin is
+     a specimen that can only ever agree with itself. */
   {
     /* A zero TAIL on an otherwise honest funnel: the last row draws no bar at
        all, and the empty frame running to stage 3's width is the drop. */
@@ -270,7 +263,7 @@ const COMPOSED_CHARTS: Array<{
     /* The stage that is BIGGER than the top — legal, disclosed, and its bar cut
        rather than clipped flush. The failure the clamp exists for. */
     label: "Composed funnel — a stage that widens",
-    chart: "funnel",
+    chart: "pipeline",
     source: composed(100, [part("Booked Leads", 340), part("On Calendar", 60)]),
     config: keys(2),
     h: 7,
@@ -301,14 +294,14 @@ const COMPOSED_CHARTS: Array<{
   },
   {
     label: "Unconfigured — the directive, not a dead end",
-    chart: "funnel",
+    chart: "pipeline",
     source: composed(420, []),
     config: {},
     h: 6,
   },
   {
     label: "Refused — a stage that is a duration",
-    chart: "funnel",
+    chart: "pipeline",
     source: composed(420, [
       part("Speed to Lead", 252, { countable: false, format: { format: "duration" } }),
     ]),
@@ -335,21 +328,21 @@ const COMPOSED_CHARTS: Array<{
   },
   {
     label: "Refused — a stage has no number",
-    chart: "funnel",
+    chart: "pipeline",
     source: composed(420, [part("Booked Leads", null)]),
     config: keys(1),
     h: 6,
   },
   {
     label: "Refused — not recomputed since this shipped",
-    chart: "funnel",
+    chart: "pipeline",
     source: composed(420, [part("Booked Leads", 252, { countable: undefined, additive: undefined })]),
     config: keys(1),
     h: 6,
   },
   {
     label: "Disclosed — stages dated differently",
-    chart: "funnel",
+    chart: "pipeline",
     source: composed(420, [part("Booked Leads", 252, { timeField: "booked_at" })]),
     config: keys(1),
     h: 7,

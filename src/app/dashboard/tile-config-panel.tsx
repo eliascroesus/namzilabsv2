@@ -353,7 +353,7 @@ function PartsGroup({
   const [adding, setAdding] = useState(false);
   const slot = PARTS_SLOT[chart];
   /** Funnel and pipeline count stages, anchor included; a pie has a whole and its parts. */
-  const stages = chart === "funnel" || chart === "pipeline";
+  const stages = chart === "pipeline";
 
   /**
    * THE CHIPS ARE DRAWN FROM A LOCAL DRAFT, AND THAT IS NOT A PREFERENCE.
