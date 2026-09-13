@@ -583,6 +583,132 @@ describe("Unite merging sibling branches of one split", () => {
   });
 });
 
+/**
+ * THE REPORTED MESS: "when it gets close to another like split thing branches it
+ * pushes the branches more to the right so the flow goes more and more to the
+ * right etc instead of like actual adaptive branches and like spacing".
+ *
+ * This is the real flow that produced it, read off the canvas: one source, a
+ * six-way Split, and three of those six branches splitting again — one of them
+ * twice. Under the old one-column-per-branch placement plus a row-packing sweep,
+ * the second nested hub sat 344px off the centre of its own two branches and the
+ * third sat 688px off its own, because each nested split claimed a single column,
+ * collided with its neighbour, and was shoved sideways one column per collision.
+ *
+ * The assertions here are about SHAPE, not coordinates: a hub is the midpoint of
+ * the branches it owns, siblings never share a column, and a subtree keeps to its
+ * own band. Exact x values are free to change; these relationships are not.
+ */
+describe("nested splits — the six-way flow that drifted", () => {
+  const split = (id: string, n: number) =>
+    N(id, "paths", { config: { paths: Array.from({ length: n }, (_, i) => ({ id: `${id}_p${i}`, label: `Path ${String.fromCharCode(65 + i)}` })) } });
+  const nodes = [
+    N("src", "app"),
+    split("hub", 6),
+    N("bA", "filter"), N("bB", "filter"), N("bC", "filter"), N("bD", "filter"), N("bE", "filter"), N("bF", "filter"),
+    split("hA", 2), split("hB", 2), split("hC", 2),
+    N("eSum", "group"), N("fBetween", "time_between"),
+    N("aA", "filter"), N("aB", "filter"), N("bBa", "filter"), N("bBb", "filter"), N("cCa", "filter"), N("cCb", "filter"),
+    N("fSum", "group"),
+    split("hAA", 2),
+    N("calcB", "formula", { config: { op: "count" } }),
+    N("calcBB", "formula", { config: { op: "count" } }),
+    N("calcCC", "formula", { config: { op: "count" } }),
+    N("aaA", "filter"), N("aaB", "filter"),
+    N("calcAA", "formula", { config: { op: "count" } }),
+  ];
+  const edges = [
+    E("src", "hub"),
+    E("hub", "bA", { sourceHandle: "hub_p0" }), E("hub", "bB", { sourceHandle: "hub_p1" }), E("hub", "bC", { sourceHandle: "hub_p2" }),
+    E("hub", "bD", { sourceHandle: "hub_p3" }), E("hub", "bE", { sourceHandle: "hub_p4" }), E("hub", "bF", { sourceHandle: "hub_p5" }),
+    E("bA", "hA"), E("bB", "hB"), E("bC", "hC"),
+    E("bE", "eSum"), E("bF", "fBetween"), E("fBetween", "fSum"),
+    E("hA", "aA", { sourceHandle: "hA_p0" }), E("hA", "aB", { sourceHandle: "hA_p1" }),
+    E("hB", "bBa", { sourceHandle: "hB_p0" }), E("hB", "bBb", { sourceHandle: "hB_p1" }),
+    E("hC", "cCa", { sourceHandle: "hC_p0" }), E("hC", "cCb", { sourceHandle: "hC_p1" }),
+    E("aA", "hAA"), E("aB", "calcB"), E("bBb", "calcBB"), E("cCb", "calcCC"),
+    E("hAA", "aaA", { sourceHandle: "hAA_p0" }), E("hAA", "aaB", { sourceHandle: "hAA_p1" }),
+    E("aaB", "calcAA"),
+  ];
+  const pos = computeVerticalLayout(nodes, edges);
+  const x = (id: string) => pos.get(id)!.x;
+  const branchesOf = (hubId: string) => edges.filter((e) => e.source === hubId).map((e) => e.target);
+
+  it("centres EVERY split over its own branches, however deeply nested", () => {
+    for (const hubId of ["hub", "hA", "hB", "hC", "hAA"]) {
+      const kids = branchesOf(hubId).map(x);
+      // Sabotage: restore one-column-per-branch placement and hB lands 344 off
+      // its pair while hC lands 688 off its own — the drift the user reported.
+      expect([hubId, (Math.min(...kids) + Math.max(...kids)) / 2]).toEqual([hubId, x(hubId)]);
+    }
+  });
+
+  it("keeps branches in the order the Split panel lists them", () => {
+    for (const hubId of ["hub", "hA", "hB", "hC", "hAA"]) {
+      const xs = branchesOf(hubId).map(x);
+      expect(xs).toEqual([...xs].sort((a, b) => a - b));
+    }
+  });
+
+  it("never puts two cards of one row in the same column", () => {
+    const byRow = new Map<number, number[]>();
+    for (const n of nodes) {
+      const p = pos.get(n.id)!;
+      byRow.set(p.y, [...(byRow.get(p.y) ?? []), p.x]);
+    }
+    // Reported as row + gap, so a failure names the row that collided rather
+    // than just saying a number was too small.
+    const tight: Array<[number, number]> = [];
+    for (const [y, xs] of byRow) {
+      const sorted = [...xs].sort((a, b) => a - b);
+      for (let i = 1; i < sorted.length; i++) if (sorted[i] - sorted[i - 1] < 344) tight.push([y, sorted[i] - sorted[i - 1]]);
+    }
+    expect(tight).toEqual([]);
+  });
+
+  /**
+   * A subtree is a BAND, and two sibling bands never interleave. This is the
+   * property the old algorithm could not hold: it placed nodes, not subtrees, so
+   * a deep branch's grandchildren wandered under its neighbour.
+   */
+  it("gives each branch of a split its own horizontal band", () => {
+    const descendants = (root: string) => {
+      const out = new Set<string>();
+      const stack = [root];
+      while (stack.length) {
+        const cur = stack.pop()!;
+        if (out.has(cur)) continue;
+        out.add(cur);
+        for (const e of edges) if (e.source === cur) stack.push(e.target);
+      }
+      return [...out];
+    };
+    const bands = branchesOf("hub").map((b) => {
+      const xs = descendants(b).map(x);
+      return { b, lo: Math.min(...xs), hi: Math.max(...xs) };
+    });
+    for (let i = 1; i < bands.length; i++) {
+      expect([bands[i].b, bands[i].lo >= bands[i - 1].hi + 344]).toEqual([bands[i].b, true]);
+    }
+  });
+
+  /**
+   * LOCALITY. Deepening one branch may widen the picture, but it must not drag a
+   * sibling that has nothing to do with it out of position relative to its OWN
+   * hub. Under the old sweep it did: one more card on the left pushed every lane
+   * to its right by a column, and every nested hub lost its branches.
+   */
+  it("deepening one branch leaves the other splits centred on their own hubs", () => {
+    const deeper = [...nodes, N("extra", "filter"), N("extra2", "filter")];
+    const deeperEdges = [...edges, E("calcAA", "extra"), E("extra", "extra2")];
+    const p2 = computeVerticalLayout(deeper, deeperEdges);
+    for (const hubId of ["hub", "hA", "hB", "hC", "hAA"]) {
+      const kids = branchesOf(hubId).map((id) => p2.get(id)!.x);
+      expect([hubId, (Math.min(...kids) + Math.max(...kids)) / 2]).toEqual([hubId, p2.get(hubId)!.x]);
+    }
+  });
+});
+
 describe("describeInputs (Unite + Calculate panels)", () => {
   it("describes each connected input in connection order, with the producer's number", () => {
     const a = N("a", "app", {

@@ -154,41 +154,107 @@ export function computeStepNumbers(nodes: FNode[], allEdges: Edge[]): Map<string
 }
 
 /**
+ * ONE COLUMN PITCH, used for every horizontal decision, because two numbers drift.
+ *
+ * Branch lanes are placed at this pitch, sibling subtrees are held this far
+ * apart, and the last-resort row guard enforces it as a minimum. They are the
+ * same quantity — "how far apart do two columns sit" — so they are the same
+ * constant and cannot disagree. The value follows the card: 300px wide plus a
+ * 44px gutter.
+ */
+const COL = 344;
+
+/**
+ * The horizontal band a whole subtree occupies: its leftmost and rightmost card,
+ * measured relative to its own root.
+ *
+ * A BAND, NOT A PER-ROW CONTOUR, and that is a deliberate choice against the
+ * textbook. Classic tidy-tree layouts compare row-by-row outlines, which lets a
+ * shallow branch tuck under a deep neighbour's overhang and saves a little
+ * width. It also means a branch's grandchildren can sit half a card off the
+ * column of the branch beside them — legal, never overlapping, and exactly the
+ * staircase this canvas was reported as looking like. A Split's branches are
+ * LANES a person is tracing with their eye, so each one gets an exclusive column
+ * band from its first step to its last. Measured on the six-way flow that
+ * prompted this, the extra width is 172px out of 2752 — a price worth paying to
+ * be able to say "a branch owns its column" and have it be true.
+ */
+type Band = { lo: number; hi: number };
+
+/**
+ * A Split's lanes, in the order its panel lists them: each branch, then the
+ * legacy "everything else" lane if the hub still carries one.
+ *
+ * ONE READING OF THE HUB, used by the two things that must never disagree about
+ * it — where a branch sits on the canvas, and what that branch is called.
+ */
+export function laneOf(n: FNode | undefined): Array<{ id: string; label: string }> {
+  if (!n || n.type !== "paths") return [];
+  const cfg = (n.data.config ?? {}) as { paths?: Array<{ id?: unknown; label?: unknown }>; fallbackId?: unknown; fallbackLabel?: unknown };
+  const lanes: Array<{ id: string; label: string }> = [];
+  for (const p of cfg.paths ?? []) {
+    if (typeof p?.id !== "string" || !p.id) continue;
+    lanes.push({ id: p.id, label: typeof p.label === "string" ? p.label : "" });
+  }
+  if (typeof cfg.fallbackId === "string" && cfg.fallbackId) {
+    lanes.push({ id: cfg.fallbackId, label: typeof cfg.fallbackLabel === "string" && cfg.fallbackLabel.trim() ? cfg.fallbackLabel : "Everything else" });
+  }
+  return lanes;
+}
+
+/**
  * Managed top-to-bottom layout. Positions are always computed (users never place
- * nodes): depth flows downward via longest-path layering, and each layer is centred
- * horizontally so branches (Paths) fan out symmetrically. Only structural (chain)
- * edges shape the layout — a compare step's number references NEVER move anything.
- * A junction that genuinely joins several lanes (a Unite, a branch merge) is centred
+ * nodes): depth flows downward via longest-path layering, and each subtree is
+ * given the width it actually needs, so a split fans out symmetrically about its
+ * own hub however deeply it is nested. Only structural (chain) edges shape the
+ * layout — a compare step's number references NEVER move anything. A junction
+ * that genuinely joins several lanes (a Unite, a branch merge) is centred
  * between (and below) the lanes it joins — that merge IS the flow's shape.
+ *
+ * WHY THIS IS A TIDY-TREE PASS AND NOT A ROW OF COLUMNS.
+ *
+ * The previous version placed a branch at `parentX + (i - (n-1)/2) * COL` — one
+ * column per branch, whatever that branch contained — and then swept each row
+ * left to right shoving overlaps to the right. A branch that was ITSELF a split
+ * therefore claimed a single column, collided with its neighbour, and got pushed
+ * sideways; the push moved its children, which collided with theirs, and the
+ * error compounded with depth. On a real six-way split with splits nested under
+ * three of its branches, the second nested hub sat 344px off its own branches
+ * and the third sat 688px off its own: the flow drifted right, and every inner
+ * split stopped being a split anyone could read.
+ *
+ * The fix is to ask what a subtree actually occupies before deciding where its
+ * sibling goes. Each subtree is laid out bottom-up and reports a CONTOUR; two
+ * siblings are pushed apart by the largest overlap between those contours (never
+ * less than one column); a parent is then centred over its children. Nothing
+ * already placed is ever moved by something placed later, so nothing cascades,
+ * and a split is symmetric about its hub by construction rather than by luck.
  */
 export function computeVerticalLayout(nodes: FNode[], allEdges: Edge[]): Map<string, { x: number; y: number }> {
   const structural = structuralEdges(nodes, allEdges);
   const nodeById = new Map(nodes.map((n) => [n.id, n]));
+  const order = new Map(nodes.map((n, i) => [n.id, i]));
 
-  const structuralIncoming = new Map<string, Array<{ source: string; handle: string | null }>>();
+  /** Distinct chain sources per node, in node order so nothing depends on edge order. */
+  const sourcesOf = new Map<string, string[]>();
+  /** The hub handle a child hangs from, for putting branches in their declared order. */
+  const handleFromParent = new Map<string, string | null>();
+  for (const n of nodes) sourcesOf.set(n.id, []);
   for (const e of structural) {
-    if (!structuralIncoming.has(e.target)) structuralIncoming.set(e.target, []);
-    structuralIncoming.get(e.target)!.push({ source: e.source, handle: e.sourceHandle ?? null });
+    const list = sourcesOf.get(e.target);
+    if (!list || !nodeById.has(e.source)) continue;
+    if (!list.includes(e.source)) list.push(e.source);
   }
-
-  // Multi-input junctions (Unite, legacy merges) are centred between their lanes.
-  type Merge = { centering: boolean; allSources: string[]; anchor: { source: string; handle: string | null } | null };
-  const mergeInfo = new Map<string, Merge>();
-  for (const n of nodes) {
-    const chainIns = structuralIncoming.get(n.id) ?? [];
-    if (chainIns.length <= 1) continue;
-    mergeInfo.set(n.id, { centering: true, allSources: [...new Set(chainIns.map((i) => i.source))], anchor: chainIns[0] ?? null });
-  }
+  for (const list of sourcesOf.values()) list.sort((a, b) => (order.get(a) ?? 0) - (order.get(b) ?? 0));
 
   // Depth: longest path over chain edges, so a merge sits below every branch it joins.
-  const depthEdges: Array<{ source: string; target: string }> = structural.map((e) => ({ source: e.source, target: e.target }));
   const indeg = new Map<string, number>();
   const adj = new Map<string, string[]>();
   for (const n of nodes) {
     indeg.set(n.id, 0);
     adj.set(n.id, []);
   }
-  for (const e of depthEdges) {
+  for (const e of structural) {
     if (!indeg.has(e.target) || !adj.has(e.source)) continue;
     indeg.set(e.target, (indeg.get(e.target) ?? 0) + 1);
     adj.get(e.source)!.push(e.target);
@@ -204,91 +270,195 @@ export function computeVerticalLayout(nodes: FNode[], allEdges: Edge[]): Map<str
       if (indeg.get(nx) === 0) queue.push(nx);
     }
   }
+  // A node left unranked was never drained: it sits on a cycle, which the editor
+  // refuses to create but a hand-edited or half-undone graph can still hold.
   for (const n of nodes) if (!depth.has(n.id)) depth.set(n.id, 0);
 
-  // Horizontal position: propagate a lane offset down each branch so a Paths split sends
-  // its branches cleanly to the sides and every step in a branch stays in that branch's
-  // column (instead of drifting back to centre). Non-branching chains stay at x = 0.
-  const pathIds = (n: FNode | undefined): string[] => {
-    if (!n) return [];
-    const paths = (n.data.config?.paths as Array<{ id: string }> | undefined) ?? [];
-    const ids = paths.map((p) => p.id);
-    const fb = n.data.config?.fallbackId as string | undefined;
-    if (fb) ids.push(fb);
-    return ids;
-  };
   /**
-   * ONE COLUMN PITCH, used for both jobs, because two numbers drift.
+   * THE SPANNING FOREST THE TIDY PASS WALKS.
    *
-   * Branch lanes are PLACED at this pitch, and then the same-row packer below
-   * ENFORCES it as a minimum. If the placement value were ever smaller than
-   * the packing value, the packer would shove every lane after the first to
-   * the right and a split would stop being symmetric about its hub — which is
-   * exactly what happened when the card grew and the packing gap was raised
-   * from 288 to 344 while the spread stayed at 320. They are the same
-   * quantity ("how far apart do two columns sit"), so they are now the same
-   * constant and cannot disagree again.
-   *
-   * The value follows the card: 300px wide plus a 44px gutter.
+   * A step with two chain inputs is a genuine junction, not two steps — it can
+   * only be laid out once, so it hangs off its FIRST source here and is moved to
+   * the exact middle of all of them afterwards. Hanging it somewhere real (rather
+   * than nowhere) is what reserves room for its subtree; the move afterwards is
+   * what makes the junction mean "these lanes join".
    */
-  const COL = 344;
-  const xById = new Map<string, number>();
-  /** X under one incoming edge: the parent's lane, offset if it's a Paths branch. */
-  const laneX = (edge: { source: string; handle: string | null }): number => {
-    const px = xById.get(edge.source) ?? 0;
-    const parent = nodeById.get(edge.source);
-    if (parent && parent.type === "paths" && edge.handle) {
-      const ids = pathIds(parent);
-      const idx = ids.indexOf(edge.handle);
-      // A handle the hub no longer lists (a stale edge from an undo, or a
-      // branch removed while its child survived) used to clamp to 0 and so
-      // claim the FIRST lane's column — landing on top of the branch that
-      // really is lane one and shoving it sideways. It has no lane, so it gets
-      // no offset and stays under the hub, where the packing can separate it.
-      if (idx < 0) return px;
-      return px + (idx - (ids.length - 1) / 2) * COL;
+  const parentOf = new Map<string, string>();
+  for (const n of nodes) {
+    const src = (sourcesOf.get(n.id) ?? [])[0];
+    if (src != null) parentOf.set(n.id, src);
+  }
+  for (const e of structural) {
+    if (parentOf.get(e.target) === e.source && !handleFromParent.has(e.target)) handleFromParent.set(e.target, e.sourceHandle ?? null);
+  }
+
+  /** A Paths hub's lanes, in the order the panel lists them (branches, then the legacy fallback). */
+  const pathIds = (n: FNode | undefined): string[] => laneOf(n).map((l) => l.id);
+
+  const childrenOf = new Map<string, string[]>();
+  for (const n of nodes) childrenOf.set(n.id, []);
+  for (const [child, parent] of parentOf) childrenOf.get(parent)?.push(child);
+  for (const [id, kids] of childrenOf) {
+    const hub = nodeById.get(id);
+    const lanes = hub?.type === "paths" ? pathIds(hub) : [];
+    /**
+     * Branches run left to right in the order the Split lists them, so the canvas
+     * and the panel read the same way down the page. A child on a handle the hub
+     * no longer lists (a stale edge from an undo, or a branch removed while its
+     * child survived) has no lane, so it sorts after the real ones rather than
+     * claiming lane one and shoving the branch that really is first.
+     */
+    const rank = (cid: string) => {
+      if (lanes.length === 0) return order.get(cid) ?? 0;
+      const h = handleFromParent.get(cid);
+      const i = h == null ? -1 : lanes.indexOf(h);
+      return i < 0 ? lanes.length : i;
+    };
+    kids.sort((a, b) => rank(a) - rank(b) || (order.get(a) ?? 0) - (order.get(b) ?? 0));
+  }
+
+  /**
+   * Bottom-up placement. Each call returns the contour of the subtree rooted at
+   * `id` in coordinates where that root sits at 0, and records every child's
+   * offset from its own parent. Absolute positions are accumulated afterwards in
+   * one downward pass, so no node is ever moved twice.
+   */
+  const offsetFromParent = new Map<string, number>();
+  const walked = new Set<string>();
+  // A declaration, not a const arrow: it calls itself, and a recursive arrow has
+  // no usable type until its own initializer is checked.
+  function layoutSubtree(id: string): Band {
+    walked.add(id);
+    // `walked` also closes the door on a cycle: a child already being laid out
+    // higher up the stack is not a child again here.
+    const kids = (childrenOf.get(id) ?? []).filter((k) => !walked.has(k));
+    if (kids.length === 0) return { lo: 0, hi: 0 };
+
+    const offsets: number[] = [];
+    let band: Band | null = null;
+    for (const kid of kids) {
+      const c = layoutSubtree(kid);
+      // Clear of everything the siblings already placed occupy, and never closer
+      // than one column even when they are single cards: two lanes sharing a
+      // column would read as one lane.
+      // Annotated because `band` is fed from this very expression, and TypeScript
+      // reads the pair as a cycle without it.
+      const shift: number = band === null ? 0 : Math.max(band.hi + COL - c.lo, offsets[offsets.length - 1] + COL);
+      offsets.push(shift);
+      band = band === null
+        ? { lo: c.lo, hi: c.hi }
+        : { lo: Math.min(band.lo, shift + c.lo), hi: Math.max(band.hi, shift + c.hi) };
     }
-    return px;
-  };
-  const ROW = ROW_PITCH;
-  const MIN_GAP = COL;
+
+    /**
+     * The parent sits over the middle of its outermost children — which is what
+     * makes a Split symmetric about its hub at every depth, not just the first.
+     * Over the children's OWN positions, not over their bands: a hub belongs
+     * above the branch heads a person clicks, not above the centre of mass of
+     * everything hanging under them.
+     *
+     * A JUNCTION DOES NOT GET A VOTE. It is here to have room reserved for it,
+     * not because this is where it belongs — it is moved to the middle of the
+     * lanes it joins a few lines further down. Letting it vote pulls the parent
+     * sideways off its own NEXT STEP: a Filter that continues into one step and
+     * also feeds a Unite would end up half a column away from the step directly
+     * below it, and "the next step is the one underneath" is the single thing
+     * this whole layout is for. (Every child being a junction is the ordinary
+     * two-roots-into-a-Unite shape, and there the junction is all there is.)
+     */
+    const voters = kids.map((_, i) => i).filter((i) => (sourcesOf.get(kids[i]) ?? []).length <= 1);
+    const vote = voters.length > 0 ? voters : kids.map((_, i) => i);
+    const centre = (offsets[vote[0]] + offsets[vote[vote.length - 1]]) / 2;
+    for (let i = 0; i < kids.length; i++) offsetFromParent.set(kids[i], offsets[i] - centre);
+    return { lo: Math.min(0, band!.lo - centre), hi: Math.max(0, band!.hi - centre) };
+  }
+
+  /**
+   * Roots run left to right in graph order, each with its own chain beneath it,
+   * and the FIRST root anchors the trunk at x = 0 — the coordinate the canvas,
+   * the drop lanes and every stored viewport have always been written around.
+   */
+  const rootIds = nodes.filter((n) => (sourcesOf.get(n.id) ?? []).length === 0).map((n) => n.id);
+  // A cycle leaves every node on it holding an incoming edge, so it contributes
+  // no root and would never be drawn. Whatever the walk misses joins the roots.
+  const rootQueue = [...rootIds, ...nodes.map((n) => n.id).filter((id) => !rootIds.includes(id))];
+
+  const pos = new Map<string, { x: number; y: number }>();
+  const rootX = new Map<string, number>();
+  let placed: Band | null = null;
+  let lastRootX = 0;
+  for (const id of rootQueue) {
+    if (walked.has(id)) continue;
+    const c = layoutSubtree(id);
+    const x: number = placed === null ? 0 : Math.max(placed.hi + COL - c.lo, lastRootX + COL);
+    rootX.set(id, x);
+    lastRootX = x;
+    placed = placed === null ? { lo: c.lo, hi: c.hi } : { lo: Math.min(placed.lo, x + c.lo), hi: Math.max(placed.hi, x + c.hi) };
+  }
+
+  // One downward pass turns offsets into coordinates. Nothing is moved twice.
+  function assign(id: string, x: number) {
+    if (pos.has(id)) return;
+    pos.set(id, { x, y: (depth.get(id) ?? 0) * ROW_PITCH });
+    for (const k of childrenOf.get(id) ?? []) {
+      if (parentOf.get(k) !== id) continue;
+      assign(k, x + (offsetFromParent.get(k) ?? 0));
+    }
+  }
+  for (const [id, x] of rootX) assign(id, x);
+  for (const n of nodes) if (!pos.has(n.id)) pos.set(n.id, { x: 0, y: (depth.get(n.id) ?? 0) * ROW_PITCH });
+
+  /**
+   * A JUNCTION SITS IN THE MIDDLE OF WHAT IT JOINS.
+   *
+   * It was laid out under its first lane so its subtree would be given room;
+   * this slides it — and everything hanging off it — to the exact mean of the
+   * lanes it actually joins. Shallowest first, so a junction below a junction
+   * moves after the one it reads.
+   */
+  const merges = nodes
+    .filter((n) => (sourcesOf.get(n.id) ?? []).length > 1)
+    .sort((a, b) => (depth.get(a.id) ?? 0) - (depth.get(b.id) ?? 0));
+  for (const m of merges) {
+    const xs = [...new Set((sourcesOf.get(m.id) ?? []).map((s) => pos.get(s)?.x ?? 0))];
+    const dx = xs.reduce((a, b) => a + b, 0) / Math.max(1, xs.length) - (pos.get(m.id)?.x ?? 0);
+    if (dx === 0) continue;
+    const stack = [m.id];
+    const moved = new Set<string>();
+    while (stack.length) {
+      const cur = stack.pop()!;
+      if (moved.has(cur)) continue;
+      moved.add(cur);
+      const p = pos.get(cur);
+      if (p) pos.set(cur, { x: p.x + dx, y: p.y });
+      for (const k of childrenOf.get(cur) ?? []) if (parentOf.get(k) === cur) stack.push(k);
+    }
+  }
+
+  /**
+   * LAST RESORT, AND IT SHOULD NEVER FIRE ON A TREE.
+   *
+   * The tidy pass cannot produce an overlap between siblings; only the junction
+   * slide above can, and only on a graph where a lane keeps running past the row
+   * its neighbours joined on. This sweep is the guard for that shape — it is the
+   * whole of the old algorithm, kept as the exception rather than used as the
+   * rule. `tests/flow-canvas-utils.test.ts` asserts it stays asleep on a real
+   * six-way split with splits nested two deep, because a guard that fires
+   * routinely is just the old cascade wearing a new comment.
+   */
   const byDepth = new Map<number, string[]>();
   for (const n of nodes) {
     const d = depth.get(n.id) ?? 0;
     if (!byDepth.has(d)) byDepth.set(d, []);
     byDepth.get(d)!.push(n.id);
   }
-  const pos = new Map<string, { x: number; y: number }>();
-  // Level by level, top down: place each node from its already-PACKED parents, then
-  // nudge same-row overlaps apart and write the packed lane back — so a whole subtree
-  // follows its root's final column. Several Get data roots therefore sit side by
-  // side, each with its own chain running straight down its own lane.
-  for (const [d, ids] of [...byDepth.entries()].sort((a, b) => a[0] - b[0])) {
-    for (const nid of ids) {
-      const ins = structuralIncoming.get(nid) ?? [];
-      const info = mergeInfo.get(nid);
-      if (info) {
-        if (info.centering) {
-          const uniqueXs = [...new Set(info.allSources.map((s) => xById.get(s) ?? 0))];
-          xById.set(nid, uniqueXs.reduce((a, b) => a + b, 0) / Math.max(1, uniqueXs.length));
-        } else {
-          // Anchored: exactly where its chain predecessor puts it. Reference sources
-          // (whatever data it pulls in) never move it.
-          xById.set(nid, info.anchor ? laneX(info.anchor) : 0);
-        }
-      } else if (ins.length === 0) {
-        xById.set(nid, 0);
-      } else {
-        xById.set(nid, laneX(ins[0]));
-      }
-    }
-    ids.sort((a, b) => (xById.get(a) ?? 0) - (xById.get(b) ?? 0));
-    let prevX = -Infinity;
+  for (const ids of byDepth.values()) {
+    ids.sort((a, b) => pos.get(a)!.x - pos.get(b)!.x || (order.get(a) ?? 0) - (order.get(b) ?? 0));
+    let prevX = Number.NEGATIVE_INFINITY;
     for (const id of ids) {
-      let x = xById.get(id) ?? 0;
-      if (x - prevX < MIN_GAP) x = prevX + MIN_GAP;
-      pos.set(id, { x, y: d * ROW });
-      xById.set(id, x);
+      const p = pos.get(id)!;
+      const x = p.x - prevX < COL ? prevX + COL : p.x;
+      pos.set(id, { x, y: p.y });
       prevX = x;
     }
   }
