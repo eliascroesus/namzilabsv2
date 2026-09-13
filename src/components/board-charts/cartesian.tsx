@@ -87,7 +87,7 @@ const AXIS_DIVISIONS = 2;
  * Non-duration axes are untouched: a count, a ratio and a currency all still go
  * through `formatMetricValue`, and a currency axis keeps its symbol.
  */
-function axisLabel(t: number, format: ChartFormat, ticks: number[]): string {
+export function axisLabel(t: number, format: ChartFormat, ticks: number[]): string {
   if (format.format !== "duration") return formatMetricValue(t, format);
   const unit = format.unit ?? "seconds";
   const per: Record<string, number> = { seconds: 1, minutes: 60, hours: 3_600, days: 86_400 };
