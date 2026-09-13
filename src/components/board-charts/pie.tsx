@@ -58,6 +58,12 @@ const R_LABEL = R_CIRCLE + 7;
  * Nothing is pushed unless it would actually have overlapped.
  */
 const STACK_PCT = 21;
+/**
+ * The same idea along the top and bottom edges, where labels crowd SIDEWAYS. A
+ * label is wider than it is tall — a name over a figure runs to about 90px on a
+ * 126px square — so the spacing that keeps two apart is correspondingly wider.
+ */
+const SPREAD_PCT = 70;
 
 /**
  * THE SQUARE HAS TO BE SMALLER THAN THE BOX, because it throws labels outside
@@ -83,7 +89,43 @@ const STACK_PCT = 21;
  */
 const SQUARE_SIDE = "max(88px, min(calc(100cqh - 80px), 44cqw))";
 
-type Placed = { slice: PieSlice; i: number; left: number; top: number; right: boolean };
+/**
+ * WHICH EDGE OF THE LABEL FACES THE ARC — and getting this wrong is what made
+ * the gaps uneven.
+ *
+ * A label is a rectangle placed at a point on a circle, and the distance a
+ * reader sees is from the arc to the nearest EDGE of that rectangle, not to its
+ * anchor. Anchoring every label by its left or right side and centring it
+ * vertically is exactly right at 3 and 9 o'clock, where that side IS the near
+ * edge — and wrong at 12 and 6, where the near edge is the bottom or the top.
+ *
+ * Measured on the owner's own pie: Facebook cleared the arc by 8px, Instagram by
+ * 7, and TikTok — the slice pointing almost straight up — by MINUS 7. Its box
+ * was overlapping the circle while its text read as floating far away, because
+ * the part of the box nearest the arc was an empty corner.
+ *
+ * So the zone is chosen by which component of the angle dominates: past 45° the
+ * label belongs above or below its slice, anchored by the edge that faces in.
+ */
+type Zone = "right" | "left" | "top" | "bottom";
+
+type Placed = { slice: PieSlice; i: number; left: number; top: number; zone: Zone };
+
+/** Which way the box is pinned so its near edge lands on the anchor. */
+const TRANSFORM: Record<Zone, string> = {
+  right: "translate(0, -50%)",
+  left: "translate(-100%, -50%)",
+  top: "translate(-50%, -100%)",
+  bottom: "translate(-50%, 0)",
+};
+
+/** Text alignment follows the anchoring: side labels hug their edge, vertical ones centre. */
+const ALIGN: Record<Zone, string> = {
+  right: "items-start text-left",
+  left: "items-end text-right",
+  top: "items-center text-center",
+  bottom: "items-center text-center",
+};
 
 /**
  * WHERE EACH LABEL GOES, AND THE DE-COLLISION THAT MAKES IT USABLE.
@@ -100,17 +142,42 @@ function placeLabels(slices: PieSlice[]): Placed[] {
     // Degrees clockwise from 12 o'clock — `arcPath`'s own convention.
     const rad = (((slice.a0 + slice.a1) / 2 - 90) * Math.PI) / 180;
     const cos = Math.cos(rad);
+    const sin = Math.sin(rad);
+    const zone: Zone = Math.abs(sin) > Math.abs(cos) ? (sin < 0 ? "top" : "bottom") : cos >= 0 ? "right" : "left";
+    /**
+     * ANCHORED TO A BOX AROUND THE CIRCLE, NOT TO A BIGGER CIRCLE — and that is
+     * what finally made the gaps equal.
+     *
+     * Placing every label at `R_LABEL` along its own radius sounds even and is
+     * not: the label's near edge faces one axis, so the gap a reader sees is the
+     * component of that radius along THAT axis — `R_LABEL·|sin|` for a label
+     * above the mark, `R_LABEL·|cos|` for one beside it. Only a slice pointing at
+     * exactly 12 or 3 o'clock gets the full distance; everything in between is
+     * short by however far its angle is from the axis it is anchored to.
+     * Measured: 8px for Facebook (|cos| 0.99) against 4px for TikTok (|sin|
+     * 0.95), on the same chart, from the same constant.
+     *
+     * Pinning the ANCHORED axis to `R_LABEL` and letting the other follow the
+     * slice makes the gap exactly `R_LABEL − R_CIRCLE` for every label, whatever
+     * its angle, while each still sits over the wedge it names.
+     */
     return {
       slice,
       i,
-      left: 50 + R_LABEL * cos,
-      top: 50 + R_LABEL * Math.sin(rad),
-      right: cos >= -0.02,
+      left: zone === "right" ? 50 + R_LABEL : zone === "left" ? 50 - R_LABEL : 50 + R_CIRCLE * cos,
+      top: zone === "bottom" ? 50 + R_LABEL : zone === "top" ? 50 - R_LABEL : 50 + R_CIRCLE * sin,
+      zone,
     };
   });
 
-  for (const side of [true, false]) {
-    const mine = placed.filter((p) => p.right === side).sort((a, b) => a.top - b.top);
+  /**
+   * DE-COLLISION IS A SIDE-LABEL PROBLEM. Only `left` and `right` stack down a
+   * column and can land on each other; a `top` and a `bottom` label are half a
+   * circle apart by definition, and nudging them vertically would push them
+   * straight off the mark they are pointing at.
+   */
+  for (const side of ["right", "left"] as const) {
+    const mine = placed.filter((p) => p.zone === side).sort((a, b) => a.top - b.top);
     for (let k = 1; k < mine.length; k++) {
       if (mine[k].top - mine[k - 1].top < STACK_PCT) mine[k].top = mine[k - 1].top + STACK_PCT;
     }
@@ -118,6 +185,28 @@ function placeLabels(slices: PieSlice[]): Placed[] {
        back rather than letting the card clip it. */
     const overshoot = (mine.at(-1)?.top ?? 0) - 100;
     if (overshoot > 0) for (const p of mine) p.top -= overshoot;
+  }
+
+  /**
+   * AND THE SAME ALONG THE OTHER AXIS, which the zones made necessary.
+   *
+   * While every label hung off its own radius, two slices near 12 o'clock got
+   * two different positions on the arc and the side de-collision above was the
+   * only crowding to worry about. Anchored to a BOX, two such slices both sit on
+   * the top edge at `50 + R_CIRCLE·cos` — and near the top `cos` is near zero for
+   * both, so their labels land on the same spot and overlap. The vertical fix
+   * would have introduced a horizontal bug.
+   *
+   * Wider spacing than `STACK_PCT` because labels are wider than they are tall:
+   * a name over a figure is ~44px and 90-odd wide.
+   */
+  for (const end of ["top", "bottom"] as const) {
+    const mine = placed.filter((p) => p.zone === end).sort((a, b) => a.left - b.left);
+    for (let k = 1; k < mine.length; k++) {
+      if (mine[k].left - mine[k - 1].left < SPREAD_PCT) mine[k].left = mine[k - 1].left + SPREAD_PCT;
+    }
+    const over = (mine.at(-1)?.left ?? 0) - 100;
+    if (over > 0) for (const p of mine) p.left -= over;
   }
   return placed;
 }
@@ -238,7 +327,7 @@ export function PieChart({
                  no source check can see and no screenshot review reliably
                  catches either. */
               data-pie-label
-              className={`absolute flex flex-col leading-tight ${p.right ? "items-start" : "items-end"}`}
+              className={`absolute flex flex-col leading-tight ${ALIGN[p.zone]}`}
               style={{
                 left: `${p.left}%`,
                 top: `${p.top}%`,
@@ -259,8 +348,23 @@ export function PieChart({
                  * its natural width first and lets `max-width` do the capping.
                  */
                 width: "max-content",
-                maxWidth: "60%",
-                transform: `translate(${p.right ? "0" : "-100%"}, -50%)`,
+                /**
+                 * CAPPED BY THE GUTTER, NOT BY THE SQUARE — which is the same
+                 * quantity only by accident, and they move in OPPOSITE
+                 * directions.
+                 *
+                 * `60%` of the square was calibrated when the square was 140px.
+                 * Adding the vertical reserve shrank it to 126, so the cap fell
+                 * to 76px — while the room beside it GREW, because the gutter is
+                 * what the square gives up. "Total Leads" started wrapping in
+                 * 97px of clear space. Every future change to the square's size
+                 * would have mis-tuned this the same way.
+                 *
+                 * The gutter is `(container − square) / 2`, and 12px covers the
+                 * label's own overshoot past the square's edge plus a margin.
+                 */
+                maxWidth: `calc((100cqw - ${SQUARE_SIDE}) / 2 - 12px)`,
+                transform: TRANSFORM[p.zone],
               }}
               data-tip={tip(p.slice)}
             >
