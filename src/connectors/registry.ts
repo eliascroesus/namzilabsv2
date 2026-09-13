@@ -33,6 +33,7 @@ import { woocommerceConnector } from "./woocommerce";
 import { shopifyConnector } from "./shopify";
 
 import { klaviyoConnector } from "./klaviyo";
+import { fathomConnector } from "./fathom";
 
 const registry = new Map<string, Connector>();
 
@@ -76,6 +77,7 @@ for (const connector of [
   woocommerceConnector,
   shopifyConnector,
   klaviyoConnector,
+  fathomConnector,
 ]) {
   registerConnector(connector);
 }

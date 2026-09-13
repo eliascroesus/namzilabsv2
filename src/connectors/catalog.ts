@@ -1909,6 +1909,53 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
       "disconnect. A delivery only makes the next refresh immediate; the events themselves are read by polling the " +
       "metric each step is scoped to.",
   },
+  {
+    source: "fathom",
+    name: "Fathom",
+    description: "Meetings your team recorded with Fathom's notetaker, with who attended and how long they ran.",
+    brand: { color: "#1B7FFF", short: "Fa" },
+    connect: "apiKey",
+    instant: true,
+    poll: true,
+    sync: "incremental",
+    historyNote: "First sync reaches back 30 days.",
+    docs: {
+      url: "https://developers.fathom.ai/api-reference/meetings/list-meetings",
+      readOn: "2026-09-13",
+      webhooks: "https://developers.fathom.ai/webhooks",
+    },
+    /** Unprobed: no live key has been run through `scripts/verify-fathom.ts` yet. */
+    verified: { live: null },
+    /**
+     * 60 calls per minute, from developers.fathom.ai/api-overview (read 13 Sep
+     * 2026): "Users can make 60 calls per minute across all of their API keys" —
+     * the limit is per USER rather than per key, so two connections made by the
+     * same person share it. One declared bucket is therefore the honest shape.
+     *
+     * NOT the "heavy" allowance (30/60s, reducible to 5), because this connector
+     * never sets `include_summary` or `include_transcript` — see the note on
+     * `LIST_PARAMS`. Declaring 60 while asking for transcripts would have been a
+     * budget that permits twelve times the traffic the provider accepts.
+     */
+    rateLimits: { "api.request": { requestsPerMinute: 60 } },
+    credentialFields: [
+      { key: "apiKey", label: "API key", placeholder: "Fathom → Settings → API Access" },
+      { key: "webhookSecret", label: "Webhook signing secret (optional)", placeholder: "whsec_…" },
+    ],
+    /**
+     * FALSE FOR WHOP'S REASON rather than a missing endpoint: Fathom can create
+     * webhooks through its API, but doing so needs a key with more than read
+     * access, and read-only is what this integration should ask for. The paste
+     * stays optional and the poll covers meetings either way.
+     */
+    autoWebhook: false,
+    webhookSetup:
+      "Optional — meetings arrive by polling either way, so a webhook only makes them instant. To turn it on: in " +
+      "Fathom, open Settings → Webhooks → Create webhook, point it at the URL below, choose the " +
+      "“new-meeting-content-ready” event, then copy the signing secret it shows you into the Webhook signing secret " +
+      "field here. Fathom mints that secret itself, so if you leave the field blank its deliveries cannot be " +
+      "verified and are refused — reconnect with the secret to switch them on.",
+  },
 ];
 
 export function catalogEntry(source: string): ConnectorCatalogEntry | undefined {
