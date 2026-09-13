@@ -11,8 +11,12 @@ import { parseDate } from "./field-utils";
  * contradict themselves are handled rather than guessed at (see
  * `verifySignature`). Sources, all fetched while writing this:
  *  - Base URL + auth: docs.whop.com/developer/api/getting-started —
- *    `curl https://api.whop.com/api/v1/payments?company_id=biz_xxx
+ *    `curl https://api.whop.com/api/v1/payments?account_id=biz_xxx
  *     -H "Authorization: Bearer YOUR_API_KEY"`
+ *    (that page's own example said `company_id` when this was written; the
+ *    parameter has since been renamed and the old name is REFUSED — see the
+ *    note at the query builder. Re-checked against the reference pages
+ *    13 Sep 2026.)
  *  - Payments list: docs.whop.com/api-reference/payments/list-payments
  *  - Memberships list: docs.whop.com/api-reference/memberships/list-memberships
  *  - Webhook signing: docs.whop.com/developer/guides/webhooks
@@ -322,7 +326,24 @@ export const whopConnector: Connector = {
       while (pagesLeft > 0) {
         if (outOfTime()) break;
         const params = new URLSearchParams({
-          company_id: companyId,
+          /**
+           * `account_id`, NOT `company_id` — Whop renamed it, and the old name is
+           * now REFUSED rather than ignored.
+           *
+           * This connector was written against a getting-started page whose own
+           * curl example read `?company_id=biz_xxx`, and it worked at the time.
+           * The live API answers that today with
+           * `400 {"error":{"type":"bad_request","message":"company_id is not
+           * supported; filter by account_id"}}`, and both reference pages now
+           * document `account_id` — "The unique identifier of the company to list
+           * payments for", so it is the same `biz_…` value under a new name.
+           *
+           * MEMBERSHIPS WOULD HAVE BROKEN THE QUIETER WAY. Its page adds
+           * "Required when using an API key", so sending the wrong name there is
+           * not a filter that fails — it is a required filter that is absent.
+           * Payments 400s where a reader can see it; that is the lucky half.
+           */
+          account_id: companyId,
           first: String(PAGE_SIZE),
           order: "created_at",
           direction: "asc",

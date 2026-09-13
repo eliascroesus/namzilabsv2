@@ -184,9 +184,21 @@ describe("Whop poll", () => {
 
     expect(res.records.map((r) => r.eventType).sort()).toEqual(["membership", "payment"]);
     expect(res.providerCalls).toBe(2);
-    // Every request is company-scoped: Whop documents company_id as required
-    // for API-key auth on memberships.
-    expect(urls.every((u) => u.includes("company_id=biz_abc"))).toBe(true);
+    /**
+     * `account_id`, AND THIS ASSERTION USED TO PIN THE BUG.
+     *
+     * It read `company_id=biz_abc` — the name Whop's getting-started curl showed
+     * when this connector was written — so the suite was green while the live API
+     * answered `400 company_id is not supported; filter by account_id`. A fake
+     * server that accepts whatever it is sent cannot tell a right parameter from
+     * a wrong one; only the provider can, and it did, on the owner's board.
+     *
+     * Memberships is the reason it must be on EVERY request rather than just
+     * payments: its reference page says "Required when using an API key", so the
+     * wrong name there is a missing required filter rather than a failed one.
+     */
+    expect(urls.every((u) => u.includes("account_id=biz_abc"))).toBe(true);
+    expect(urls.some((u) => u.includes("company_id=")), "the retired name is gone entirely").toBe(false);
   });
 
   it("walks payments on updated_at and memberships on created_at", async () => {
