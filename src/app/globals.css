@@ -2118,6 +2118,35 @@ html.mix {
   outline: none;
   box-shadow: none;
 }
+/*
+ * THREE OF OUR STEP TYPES ARE ALSO REACT FLOW'S OWN NODE NAMES.
+ *
+ * `group`, `output` and `default` name a step in NODE_TYPES and a built-in node
+ * in React Flow, and it ships default chrome for exactly those three — a 150px
+ * grey bordered box with centred 12px text. The rule above strips that from
+ * `.react-flow__node`, but both selectors carry ONE class, so equal specificity
+ * hands it to whichever stylesheet is loaded last, and that is theirs.
+ *
+ * Seen in a browser, not reasoned about: a "Group into categories" step drew a
+ * second box around its card and measured 150px wide — a width the layout then
+ * reads back through `n.measured` when it places the drop slot under it. Every
+ * legacy "Show on dashboard" step has carried the same box.
+ *
+ * A compound selector outranks both, and names all three so the next collision
+ * is one React Flow would have to invent.
+ */
+.react-flow__node.react-flow__node-group,
+.react-flow__node.react-flow__node-output,
+.react-flow__node.react-flow__node-default {
+  width: auto;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font-size: inherit;
+  text-align: left;
+}
 
 /*
  * Managed flow: steps auto-connect, so connection handles are never shown or

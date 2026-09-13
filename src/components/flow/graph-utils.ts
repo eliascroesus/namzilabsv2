@@ -1216,7 +1216,21 @@ export function describeInputs(opts: { selectedId: string; nodes: FNode[]; edges
  * because they are expressed against this rather than as their own literals.
  */
 export const BASE_ZOOM = 1.066;
-export const MIN_ZOOM = BASE_ZOOM * 0.5;
+/**
+ * FAR ENOUGH OUT TO SEE THE WHOLE FLOW, which half-size no longer was.
+ *
+ * Now that a subtree reserves the width it actually occupies, a six-way Split
+ * with splits nested under it measures about 3100px across — and 50% of a
+ * 1600px viewport cannot hold it, so "fit" stopped at the floor with a branch
+ * still off the right edge. Being unable to see your own flow is the same
+ * complaint as it looking a mess; a quarter size fits that flow in about 830px
+ * with room to spare, and cards at 80px still read as a map even though their
+ * text does not.
+ *
+ * Still expressed against BASE_ZOOM, so the toolbar's percentage stays a real
+ * conversion rather than a second scale.
+ */
+export const MIN_ZOOM = BASE_ZOOM * 0.25;
 export const MAX_ZOOM = BASE_ZOOM * 2;
 
 /** Raw React Flow zoom -> the percentage the toolbar shows. */

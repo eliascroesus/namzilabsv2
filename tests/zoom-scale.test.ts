@@ -23,7 +23,7 @@ describe("the zoom scale", () => {
   });
 
   it("reads as a real percentage on both sides of it", () => {
-    expect(zoomPercent(MIN_ZOOM)).toBe(50);
+    expect(zoomPercent(MIN_ZOOM)).toBe(25);
     expect(zoomPercent(MAX_ZOOM)).toBe(200);
     expect(zoomPercent(BASE_ZOOM * 0.75)).toBe(75);
     expect(zoomPercent(BASE_ZOOM * 1.5)).toBe(150);
@@ -33,8 +33,15 @@ describe("the zoom scale", () => {
     expect(zoomPercent(1)).toBe(94);
   });
 
-  it("bounds the canvas at half and double the resting size", () => {
-    expect(MIN_ZOOM).toBeCloseTo(BASE_ZOOM / 2);
+  /**
+   * The floor came down from half to a quarter when the layout started
+   * reserving each subtree's real width: a six-way Split with splits nested
+   * under it is ~3100px across, and half size could not fit it on a 1600px
+   * viewport — "fit" hit the floor with a branch still off screen. Both bounds
+   * are still expressed against BASE_ZOOM, which is the part that matters.
+   */
+  it("bounds the canvas at a quarter and double the resting size", () => {
+    expect(MIN_ZOOM).toBeCloseTo(BASE_ZOOM / 4);
     expect(MAX_ZOOM).toBeCloseTo(BASE_ZOOM * 2);
   });
 
