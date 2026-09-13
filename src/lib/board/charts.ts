@@ -17,7 +17,7 @@
  * underneath it. Both are here.
  *
  * EVERY CHART LISTED HERE HAS A REAL RENDERER, AND THAT IS DELIBERATE.
- * `custom-tile.tsx` draws all nine of them — number, line, area, bar, category,
+ * `custom-tile.tsx` draws all ten of them — number, line, area, bar, category, ranked,
  * pie, progress, pipeline and table — so nothing this file offers can
  * be picked and then silently draw bars instead. (Three further ids, `heading`,
  * `text` and `divider`, are BLOCKS rather than charts — furniture `chartsFor`
@@ -99,6 +99,27 @@ export const CHARTS = [
     h: 6,
     minW: 3,
     minH: 5,
+  },
+  /**
+   * RANKED BARS ARE NOT "BREAKDOWN", and the difference is where the numbers
+   * come from rather than how they are drawn.
+   *
+   * `category` splits ONE metric by its own groups — by rep, by source — so it
+   * is offered only when the metric carries groups, which is why it does not
+   * appear in Add for an ordinary flow metric. This composes SEVERAL metrics the
+   * author names, exactly as a pipeline and a pie do, so it is offered on any
+   * stored scalar. They share `BarsHorizontal` because the mark is the same
+   * question asked of different data; they are separate entries because one is
+   * available where the other is not.
+   */
+  {
+    id: "ranked",
+    label: "Ranked bars",
+    blurb: "Several metrics side by side, longest first.",
+    w: 4,
+    h: 6,
+    minW: 3,
+    minH: 4,
   },
   {
     id: "pie",
@@ -427,7 +448,7 @@ export function chartsFor(shape: MetricShape): ChartId[] {
    * `pie` may arrive from here AND from `groups` above; the Set dedupes, which
    * is the whole reason this function stopped pushing into an array.
    */
-  if (shape.composable) for (const id of ["pipeline", "pie"] as const) set.add(id);
+  if (shape.composable) for (const id of ["pipeline", "pie", "ranked"] as const) set.add(id);
   if (shape.target && shape.scalar) set.add("progress");
   if (shape.series || shape.groups) set.add("table");
   /**

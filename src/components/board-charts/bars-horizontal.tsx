@@ -121,7 +121,14 @@ export function BarsHorizontal({
             style={{ gridTemplateColumns: COLUMNS }}
             data-tip={`${g.label} · ${formatMetricValue(g.value, format)}`}
           >
-            <span className="truncate text-xs text-muted-foreground" title={g.label}>
+            {/* WRAPS RATHER THAN TRUNCATING, and on this chart that is not a
+                nicety. Composed ranked bars are named by their METRICS, and
+                "Speed to Lead (Felix)" beside "Speed to Lead (Rasmus)" both
+                truncate to "Speed to Le…" in a 5.5rem column — two bars a reader
+                can no longer tell apart, on the chart whose entire job is telling
+                them apart. The row grows a line instead; the grid keeps the bars
+                aligned either way. */}
+            <span className="text-xs text-muted-foreground [overflow-wrap:break-word]" title={g.label}>
               {g.label}
             </span>
             {/* THE TRACK IS THE FULL SCALE, so an empty stretch to the right of a

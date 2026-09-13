@@ -373,6 +373,7 @@ export const CONFIG_FIELDS = {
   area: [...EVERY_TILE, "color", "precision", "showGoal", "target"],
   bar: [...EVERY_TILE, "color", "precision", "showGoal", "target", "showLabels"],
   category: [...EVERY_TILE, "color", "precision", "sort", "limit"],
+  ranked: [...EVERY_TILE, "color", "precision", "sort", "limit", "parts"],
   pie: [...EVERY_TILE, "precision", "limit", "donut", "legend", "parts"],
   progress: [...EVERY_TILE, "precision", "target"],
   pipeline: [...EVERY_TILE, "color", "parts", "flow", "exits"],
@@ -438,6 +439,8 @@ export const PARTS_SLOT = {
    * part already makes two slices, which is a pie.
    */
   pie: { min: 1, max: 5 },
+  /** 7 others + the anchor = 8 bars, which is what fits before the list scrolls. */
+  ranked: { min: 1, max: 7 },
   progress: { min: 0, max: 0 },
   /** 7 parts + the anchor = 8 stages, which is what a funnel tile holds before it scrolls. */
   pipeline: { min: 1, max: 7 },

@@ -54,7 +54,12 @@ const cards = await page.evaluate(() => {
      * screen. `segments` is the union: the things that carry a stage's ink,
      * whichever mark drew them.
      */
-    const filledDivs = [...(card?.querySelectorAll("div[style*='width']") ?? [])].filter((el) => {
+    /* ANY ELEMENT, NOT JUST A DIV. `BarsHorizontal` draws each bar as a `span`
+       (it lives inside another span, in a grid cell), and a tag-name selector
+       reported four perfectly good ranked bars as "painted nothing". What makes
+       something a bar here is a percentage width and its own fill, which is what
+       the filter below actually tests — the tag was never part of the claim. */
+    const filledDivs = [...(card?.querySelectorAll("[style*='width']") ?? [])].filter((el) => {
       const r = el.getBoundingClientRect();
       if (!(r.width > 0 && r.height > 0 && /%$/.test(el.style.width))) return false;
       const cls = (el.className || "").toString();

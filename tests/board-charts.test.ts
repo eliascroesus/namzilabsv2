@@ -50,15 +50,15 @@ describe("what a stored flow tile can be drawn as", () => {
    */
   it("offers a trend only when there is a trend", () => {
     const series = shapeOfTile(tileWith({ value: 12, series: [{ bucket: "2026-08", value: 12 }] }));
-    expect(chartsFor(series)).toEqual(["number", "line", "area", "bar", "pie", "pipeline", "table"]);
+    expect(chartsFor(series)).toEqual(["number", "line", "area", "bar", "ranked", "pie", "pipeline", "table"]);
     // Sabotage: return "bar" unconditionally and every scalar metric offers a
     // chart that renders an empty box under a real number.
-    expect(chartsFor(shapeOfTile(tileWith({ value: 12 })))).toEqual(["number", "pie", "pipeline"]);
+    expect(chartsFor(shapeOfTile(tileWith({ value: 12 })))).toEqual(["number", "ranked", "pie", "pipeline"]);
   });
 
   it("offers a breakdown only when there are groups", () => {
     const grouped = shapeOfTile(tileWith({ value: 9, groups: [{ label: "Afeef", value: 9 }] }));
-    expect(chartsFor(grouped)).toEqual(["number", "category", "pie", "pipeline", "table"]);
+    expect(chartsFor(grouped)).toEqual(["number", "category", "ranked", "pie", "pipeline", "table"]);
     // Arriving through both doors must not offer it twice — the Set in
     // `chartsFor` is what makes the composed rule safe to add beside the
     // grouped one.
@@ -80,6 +80,7 @@ describe("what a stored flow tile can be drawn as", () => {
       "area",
       "bar",
       "category",
+      "ranked",
       "pie",
       "pipeline",
       "table",
@@ -157,7 +158,7 @@ describe("classic metrics, which are computed live rather than stored", () => {
 });
 
 describe("the chart vocabulary", () => {
-  it("is exactly the nine drawings and the three blocks", () => {
+  it("is exactly the ten drawings and the three blocks", () => {
     /**
      * Every id here has a mark behind it. The rule this pins is the one the
      * file was born for: an id with no renderer would be offered and then draw
@@ -174,6 +175,7 @@ describe("the chart vocabulary", () => {
       "area",
       "bar",
       "category",
+      "ranked",
       "pie",
       "progress",
       "pipeline",

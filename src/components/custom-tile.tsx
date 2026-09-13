@@ -26,7 +26,7 @@ import {
   type ChartId,
 } from "@/lib/board/charts";
 import { accentOf, composes, honoured, PARTS_SLOT, type TileConfig } from "@/lib/board/tile-config";
-import { composeFunnel, composePie, isRefusal, type ComposeMember, type MemberUnits } from "@/lib/board/compose";
+import { composeFunnel, composePie, composeRanked, isRefusal, type ComposeMember, type MemberUnits } from "@/lib/board/compose";
 import { RANGE_OPTIONS, resolveRange } from "@/lib/metrics/range";
 import { bucketLabel, type BucketUnit } from "@/lib/board/scale";
 import type { AggregateResult, FunnelResult } from "@/lib/metrics/compute";
@@ -378,7 +378,7 @@ export function CustomTile({
      * is a deliberate act and wins over the metric's own shape; absent it, the
      * grouped pie behaves exactly as it always has.
      */
-    if (composes(chart) && ((config.parts?.length ?? 0) > 0 || chart === "pipeline")) {
+    if (composes(chart) && ((config.parts?.length ?? 0) > 0 || chart === "pipeline" || chart === "ranked")) {
       const anchor: ComposeMember = {
         label: stored.name ?? title,
         value: w.unavailable == null && typeof w.value === "number" ? w.value : null,
@@ -416,7 +416,12 @@ export function CustomTile({
         value: e.byRange[rangeKey] ?? null,
       }));
       const slot = PARTS_SLOT[chart];
-      const out = chart === "pie" ? composePie(members, slot) : composeFunnel(members, slot);
+      const out =
+        chart === "pie"
+          ? composePie(members, slot)
+          : chart === "ranked"
+            ? composeRanked(members, slot)
+            : composeFunnel(members, slot);
       if (isRefusal(out)) composeRefusal = out.refusal;
       else if ("result" in out) {
         w.funnel = out.result;
@@ -434,8 +439,15 @@ export function CustomTile({
          * up to 800. Two totals on one card is the precise failure the residual
          * arithmetic used to exist to prevent, and it would have arrived as a
          * side effect of removing that arithmetic.
+         *
+         * RANKED BARS HAVE NO WHOLE and must not get one: the bars are several
+         * metrics side by side, not parts of anything, so their sum is a number
+         * with no meaning. `"whole" in out` is what tells the two composed
+         * group-shaped results apart — they are otherwise the same shape, which
+         * is exactly how a ranked tile would have quietly headlined a total
+         * nobody asked for.
          */
-        w.value = out.whole;
+        if ("whole" in out && typeof out.whole === "number") w.value = out.whole;
       }
     }
   } else {
@@ -557,8 +569,19 @@ export function CustomTile({
         ? stale
           ? `This ${chartLabel} hasn’t been recomputed since periods started carrying their own buckets — press Refresh all above.`
           : `Only one point in this period — ${anChart} needs at least two.`
-      : (chart === "category" || chart === "pie") && !hasGroups
-        ? "No breakdown in this period."
+      : /**
+         * RANKED BARS HAVE NO GROUPS OF THEIR OWN, so "no breakdown" would be
+         * the wrong sentence AND the wrong diagnosis. Its bars are composed from
+         * metrics the author names; reaching here with none means the tile is a
+         * ranked chart on data that cannot compose — a classic metric carrying a
+         * stored `ranked`, which `chartsFor` never offers but a config bag can
+         * still hold. Without this rung `w.groups!` is undefined and the mark
+         * throws rather than explaining itself.
+         */
+        chart === "ranked" && !hasGroups
+        ? "Ranked bars are built from several metrics — this one can’t be composed."
+        : (chart === "category" || chart === "pie") && !hasGroups
+          ? "No breakdown in this period."
         : chart === "pie" && !(w.groups ?? []).some((g) => g.value > 0)
           ? /**
              * A PIE OF NOTHING-ABOVE-ZERO. `pieSlices` excludes non-positive
@@ -665,7 +688,7 @@ export function CustomTile({
          metric, so a card titled "Total Leads" over a header row whose first
          cell reads "Total Leads" was printing it twice. The title is still
          passed: it is what the menu renames and what the panel's header reads. */
-      hideTitle={chart === "pipeline" || (chart === "pie" && composed)}
+      hideTitle={chart === "pipeline" || chart === "ranked" || (chart === "pie" && composed)}
       /**
        * A funnel, a pipeline and a table have no single figure to head — and
        * since 12 Sep 2026 neither does a COMPOSED pie: "there shouldn't be a big
@@ -679,7 +702,7 @@ export function CustomTile({
        * the circle, and the total is a number no label on the card states.
        */
       headline={
-        chart === "pipeline" || chart === "table" || (chart === "pie" && composed)
+        chart === "pipeline" || chart === "ranked" || chart === "table" || (chart === "pie" && composed)
           ? undefined
           : w.unavailable
             ? null
@@ -764,8 +787,20 @@ export function CustomTile({
             target={config.showGoal ? target : null}
             showLabels={config.showLabels}
           />
-        ) : chart === "category" ? (
-          <BarsHorizontal groups={w.groups!} format={bag} accent={accent} sort={config.sort} limit={config.limit} />
+        ) : chart === "category" || chart === "ranked" ? (
+          /* ONE MARK, TWO SOURCES. `category` splits one metric by its own
+             groups; `ranked` composes several metrics the author named. By the
+             time either reaches here both are `{label, value}[]` in `w.groups`,
+             which is the whole reason the composition layer normalises into the
+             same shape — a second bar component would have been the same drawing
+             maintained twice. `ranked` carries its disclosures in `title`, as the
+             other composed charts do. */
+          <div
+            className="flex min-h-0 flex-1 flex-col"
+            title={chart === "ranked" ? composeNotes.join("\n") || undefined : undefined}
+          >
+            <BarsHorizontal groups={w.groups!} format={bag} accent={accent} sort={config.sort} limit={config.limit} />
+          </div>
         ) : chart === "pie" ? (
           <div className="flex min-h-0 flex-1 flex-col" title={composeNotes.join("\n") || undefined}>
             <PieChart

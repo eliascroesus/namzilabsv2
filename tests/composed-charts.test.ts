@@ -500,8 +500,8 @@ describe("the parts slot and the config key that feeds it", () => {
     expect(PARTS_SLOT.pie.max + 1).toBe(6);
   });
 
-  it("marks exactly the two composing charts", () => {
-    expect(CHART_IDS.filter(composes).sort()).toEqual(["pie", "pipeline"]);
+  it("marks exactly the three composing charts", () => {
+    expect(CHART_IDS.filter(composes).sort()).toEqual(["pie", "pipeline", "ranked"]);
   });
 
   it("offers `parts` on exactly the charts that compose", () => {
@@ -520,7 +520,7 @@ describe("the parts slot and the config key that feeds it", () => {
      * places — which is the shape of the bug that made `buildTile` drop
      * `countable` while `seedMetricFacts` computed it.
      */
-    expect([...COMPOSED_CHARTS].sort()).toEqual(["pie", "pipeline"]);
+    expect([...COMPOSED_CHARTS].sort()).toEqual(["pie", "pipeline", "ranked"]);
     for (const id of COMPOSED_CHARTS) expect(composes(id), id).toBe(true);
   });
 

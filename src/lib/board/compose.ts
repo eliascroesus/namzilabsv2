@@ -136,7 +136,25 @@ function unitsAgree(members: ComposeMember[]): boolean {
  * before per-period ones, because "a stage has no number in this period" reads
  * as a data problem and must not be printed over what is really a setup problem.
  */
-function refuseShared(members: ComposeMember[], noun: string): Refusal | null {
+function refuseShared(
+  members: ComposeMember[],
+  noun: string,
+  /**
+   * DOES THIS CHART COUNT THINGS, or does it only put them side by side?
+   *
+   * A funnel and a pie both do arithmetic ACROSS their members — a conversion
+   * divides one by the next, a share divides one by the sum — so a duration or a
+   * ratio among them is nonsense and is refused below. RANKED BARS do no
+   * arithmetic at all: each bar is one metric's own figure drawn at its own
+   * length, so "Speed to Lead (Felix)" beside "Speed to Lead (Rasmus)" is a
+   * perfectly good chart and refusing it would be this rule fired out of habit.
+   *
+   * Everything else in here still applies to all three, because it is about the
+   * members being COMPARABLE rather than about them being summable: a unit they
+   * share, a period they were all computed for, and names that tell them apart.
+   */
+  { tally = true }: { tally?: boolean } = {},
+): Refusal | null {
   const unstamped = members.filter((m) => m.countable === undefined);
   if (unstamped.length > 0) {
     return {
@@ -154,7 +172,7 @@ function refuseShared(members: ComposeMember[], noun: string): Refusal | null {
    * duration ("Speed to Lead") and a ratio ("Booked/Total Leads"), so it is the
    * first composition somebody will try.
    */
-  const wrongKind = members.filter((m) => m.countable === false);
+  const wrongKind = tally ? members.filter((m) => m.countable === false) : [];
   if (wrongKind.length > 0) {
     const m = wrongKind[0];
     const what = m.format.format === "duration" ? "a length of time" : "not a tally of things";
@@ -397,4 +415,71 @@ export function composePie(
    * that produced it are gone with the anchor-as-whole rule above.
    */
   return { groups: slices, notes, whole };
+}
+
+export type ComposedRanked = { groups: Array<{ label: string; value: number }>; notes: string[] };
+
+/**
+ * SEVERAL METRICS SIDE BY SIDE — the composition that does no arithmetic across
+ * its members at all.
+ *
+ * A funnel says these are stages of one journey; a pie says these are parts of
+ * one whole. Both are CLAIMS, and most of this file exists to stop a drawing
+ * making one it cannot support. This chart claims nothing beyond "here are these
+ * numbers, drawn to one scale" — so it has the fewest ways to lie, and
+ * correspondingly the fewest refusals.
+ *
+ * WHICH IS WHY IT TAKES DURATIONS AND RATIOS. `refuseShared`'s tally rule is
+ * skipped (see its own note): nothing here is divided by anything, so "Speed to
+ * Lead" per rep is exactly the chart somebody wants, and the funnel's refusal
+ * would be a rule applied past its reason. What it still insists on is ONE UNIT
+ * — bars share an axis, and a chart mixing dollars with counts draws two scales
+ * as one and invites the comparison it cannot support.
+ *
+ * NO ORDER IMPOSED HERE. `BarsHorizontal` ranks by value and the tile's own
+ * `sort` overrides it; this returns the author's stored order and lets
+ * presentation be presentation.
+ */
+export function composeRanked(
+  members: ComposeMember[],
+  slot: { min: number; max: number },
+): Refusal | ComposedRanked {
+  const parts = members.length - 1;
+  if (parts < slot.min) {
+    return { refusal: "Add another metric to rank this one against, in the tile’s settings." };
+  }
+  if (parts > slot.max) {
+    return { refusal: `Ranked bars show at most ${slot.max + 1} metrics — remove some in the tile’s settings.` };
+  }
+
+  const shared = refuseShared(members, "Ranked bars", { tally: false });
+  if (shared) return shared;
+
+  const blank = members.filter((m) => m.value == null);
+  if (blank.length > 0) {
+    return { refusal: `${nameList(blank.map((m) => m.label))} has no number in this period.` };
+  }
+
+  const groups = members.map((m) => ({ label: m.label, value: m.value as number }));
+
+  /**
+   * A NEGATIVE BAR NEEDS AN AXIS THAT CROSSES ZERO, and `BarsHorizontal` draws
+   * from a zero baseline rightward. Handed one it clamps the width to nothing —
+   * so the metric would be in the list, in the tooltip and in the screen-reader
+   * line, and simply absent from the drawing. Refusing says the true thing;
+   * a zero-length bar for -40 is the silent kind of wrong this file exists to
+   * prevent.
+   */
+  const negative = groups.filter((g) => g.value < 0);
+  if (negative.length > 0) {
+    return { refusal: `${nameList(negative.map((g) => g.label))} is below zero, which these bars can’t draw.` };
+  }
+
+  /**
+   * NO COHORT NOTE AND NO OVERLAP NOTE, because neither failure is available
+   * here. Members that double-count each other break a sum and a sequence; two
+   * bars counting the same subject are just two true figures. Only the shared
+   * disclosures apply — the ones about the members being comparable at all.
+   */
+  return { groups, notes: sharedNotes(members) };
 }

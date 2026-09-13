@@ -269,6 +269,37 @@ const COMPOSED_CHARTS: Array<{
     h: 7,
   },
   {
+    /* RANKED BARS, 13 Sep 2026 — several metrics side by side rather than one
+       metric split by its own groups. Here so the new chart is rendered by
+       something a check can measure; without a specimen it would ship
+       photographed by nothing, which is this repo's standing failure mode. */
+    label: "Ranked bars — several metrics, one scale",
+    chart: "ranked",
+    source: composed(52, [part("Booked Leads", 24), part("Organic Leads", 41), part("Ads Leads", 11)]),
+    config: keys(3),
+    h: 6,
+  },
+  {
+    /* THE CHART THE FUNNEL AND THE PIE BOTH REFUSE. A duration cannot be summed
+       into a whole or divided into a conversion, so it is neither a stage nor a
+       slice — but it ranks perfectly, which is the whole argument for this chart
+       existing beside those two. */
+    label: "Ranked bars — durations",
+    chart: "ranked",
+    source: composed(
+      106,
+      [part("Speed to Lead (Rasmus)", 377, { countable: false, format: { format: "duration", unit: "seconds" } })],
+      {
+        name: "Speed to Lead (Felix)",
+        format: "duration",
+        unit: "seconds",
+        facts: { kind: "avg", shape: "scalar", countable: false, additive: false },
+      },
+    ),
+    config: keys(1),
+    h: 5,
+  },
+  {
     /* THE 12 SEP MODEL: every member is a slice and the circle is their sum, so
        this draws THREE arcs — the tile's own metric among them — where it used
        to draw two parts and a grey "Other" remainder. */
