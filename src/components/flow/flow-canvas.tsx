@@ -84,12 +84,14 @@ async function pollTestResult(runId: string, cancelled: () => boolean): Promise<
 }
 import {
   bridgeEdgesFor,
+  branchLaneOf,
   buildFieldGroups,
   computeNodeStatus,
   computeStepNumbers,
   computeVerticalLayout,
   describeInputs,
   descendantsOf,
+  syncBranchLabels,
   ROW_PITCH,
   isCompareNode,
   laneAncestorIds,
@@ -242,20 +244,35 @@ export function FlowCanvas(props: {
 function CanvasInner({ flowId, name: initialName, status, publishedVersion, publishedFingerprint, initialGraph, connections }: Parameters<typeof FlowCanvas>[0]) {
   const initialNodes: FNode[] = useMemo(
     () =>
-      initialGraph.nodes.map((n) => {
-        const nn = n as { id: string; type: string; position: { x: number; y: number }; data: { config?: unknown; label?: unknown; lastTest?: unknown } };
-        return {
-          id: nn.id,
-          type: nn.type,
-          position: nn.position,
-          data: {
-            config: (nn.data?.config as Record<string, unknown>) ?? {},
-            label: typeof nn.data?.label === "string" ? nn.data.label : undefined,
-            lastTest: (nn.data?.lastTest as NodeTestDTO) ?? null,
-            dirty: false,
-          },
-        } as FNode;
-      }),
+      /**
+       * Names that already drifted are repaired on the way in.
+       *
+       * `addBranch` used to copy the Split's branch name onto the card once, and
+       * the panel's rename then only rewrote the Split — so every flow built
+       * before this still has cards reading "Path A" under a branch called
+       * something else. Reconciling here fixes those on open rather than making
+       * anyone rename a branch twice to unstick it.
+       *
+       * It writes `data.label` only, which `graphFingerprint` excludes, so no
+       * stored flow is flagged as "edited since publishing" just for being read.
+       */
+      syncBranchLabels(
+        initialGraph.nodes.map((n) => {
+          const nn = n as { id: string; type: string; position: { x: number; y: number }; data: { config?: unknown; label?: unknown; lastTest?: unknown } };
+          return {
+            id: nn.id,
+            type: nn.type,
+            position: nn.position,
+            data: {
+              config: (nn.data?.config as Record<string, unknown>) ?? {},
+              label: typeof nn.data?.label === "string" ? nn.data.label : undefined,
+              lastTest: (nn.data?.lastTest as NodeTestDTO) ?? null,
+              dirty: false,
+            },
+          } as FNode;
+        }),
+        initialGraph.edges as Edge[],
+      ),
     [initialGraph],
   );
   const initialEdges: Edge[] = useMemo(() => {
@@ -571,22 +588,50 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
       const displayOnly = Object.keys(patch).length > 0 && Object.keys(patch).every((k) => DISPLAY_ONLY_CONFIG_KEYS.has(k));
       commit();
       const marks = displayOnly ? new Set<string>() : descendants(id);
-      setNodes((ns) =>
-        ns.map((n) => {
+      setNodes((ns) => {
+        const next = ns.map((n) => {
           if (n.id === id) return { ...n, data: { ...n.data, config: { ...n.data.config, ...patch }, dirty: displayOnly ? n.data.dirty : true } };
           if (marks.has(n.id)) return { ...n, data: { ...n.data, dirty: true } };
           return n;
-        }),
-      );
+        });
+        // Renaming a branch in a Split's panel renames the card at the top of
+        // that branch, in the same keystroke — they are two views of one name.
+        return "paths" in patch ? syncBranchLabels(next, edges) : next;
+      });
     },
-    [commit, descendants, setNodes],
+    [commit, descendants, setNodes, edges],
   );
 
   const renameNode = useCallback(
     (id: string, label: string) => {
-      setNodes((ns) => ns.map((n) => (n.id === id ? { ...n, data: { ...n.data, label } } : n)));
+      setNodes((ns) => {
+        const lane = branchLaneOf(id, ns, edges);
+        /**
+         * THE SAME NAME, WHICHEVER END YOU TYPE IT AT.
+         *
+         * A branch head's name belongs to its Split, so renaming the card writes
+         * the hub's branch list too — otherwise the panel goes on calling it
+         * "Path A" and the next hydrate pulls the card's name back.
+         *
+         * An EMPTY box is not a rename. `PathsConfigSchema` requires a non-empty
+         * label and `parseGraph` does not check config, so storing "" would not
+         * fail here — it would fail later, in the engine, on a run, naming no
+         * branch. So the card is allowed to read empty while it is being typed
+         * in, and the hub keeps the last real name until there is a new one.
+         */
+        const keep = label.trim();
+        return ns.map((n) => {
+          if (n.id === id) return { ...n, data: { ...n.data, label } };
+          if (lane && n.id === lane.hubId && keep) {
+            const paths = ((n.data.config as { paths?: Array<{ id: string; label: string }> }).paths ?? []).map((p) => (p.id === lane.pathId ? { ...p, label: keep } : p));
+            const fallback = (n.data.config as { fallbackId?: string }).fallbackId === lane.pathId ? { fallbackLabel: keep } : null;
+            return { ...n, data: { ...n.data, config: { ...n.data.config, paths, ...fallback } } };
+          }
+          return n;
+        });
+      });
     },
-    [setNodes],
+    [setNodes, edges],
   );
 
   const deleteNode = useCallback(

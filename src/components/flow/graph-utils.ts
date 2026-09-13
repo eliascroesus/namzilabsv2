@@ -203,6 +203,86 @@ export function laneOf(n: FNode | undefined): Array<{ id: string; label: string 
 }
 
 /**
+ * THE CARD AT THE TOP OF EACH BRANCH, and the name its Split gives it.
+ *
+ * A Split names its branches; the first card down each lane IS that branch, and
+ * `addBranch` creates it wearing the same name. That was a COPY, made once, and
+ * the two then drifted for the rest of the flow's life: renaming a branch in the
+ * Split's panel rewrote `config.paths[i].label` and nothing else, so the card on
+ * the canvas kept saying "Path A" while the panel said "Booked calls". Renaming
+ * the card instead wrote `data.label` and nothing else, so the panel kept saying
+ * "Path A". Two fields, two writers, no reconciliation.
+ *
+ * The hub's list is the name — it is the field the schema validates, the field
+ * the panel edits, and the one that survives the card being deleted and
+ * rebuilt — and this is the map that hands it back to the cards.
+ *
+ * Only the branch HEAD. A step the user adds further down a branch is an
+ * ordinary step with an ordinary name of its own.
+ */
+export function branchHeadLabels(nodes: FNode[], edges: Edge[]): Map<string, string> {
+  const lanesByHub = new Map<string, Map<string, string>>();
+  for (const n of nodes) {
+    const lanes = laneOf(n);
+    if (lanes.length === 0) continue;
+    lanesByHub.set(n.id, new Map(lanes.filter((l) => l.label.trim()).map((l) => [l.id, l.label])));
+  }
+  const out = new Map<string, string>();
+  for (const e of edges) {
+    const handle = e.sourceHandle ?? null;
+    if (handle == null) continue;
+    const label = lanesByHub.get(e.source)?.get(handle);
+    // First edge wins, so a stale duplicate from an undo cannot rename a card
+    // out from under the lane that really owns it.
+    if (label != null && !out.has(e.target)) out.set(e.target, label);
+  }
+  return out;
+}
+
+/**
+ * The same nodes, with every branch head wearing its Split's name for it.
+ *
+ * Returns the array UNCHANGED when nothing was out of step, because this runs on
+ * the hydrate path and on every branch rename, and handing React a new array
+ * each time would re-render the whole canvas to say nothing.
+ *
+ * DISPLAY ONLY, DELIBERATELY. It writes `data.label`, never the hub's config, so
+ * opening an old flow whose names had already drifted repairs the canvas without
+ * touching the graph the publish check compares (`data.label` is excluded from
+ * `graphFingerprint` — see `src/lib/flow/changes.ts`). A repair that quietly
+ * flagged every stored flow as "edited since publishing" would be a worse bug
+ * than the one it fixes.
+ */
+export function syncBranchLabels(nodes: FNode[], edges: Edge[]): FNode[] {
+  const wanted = branchHeadLabels(nodes, edges);
+  if (wanted.size === 0) return nodes;
+  let changed = false;
+  const next = nodes.map((n) => {
+    const label = wanted.get(n.id);
+    if (label == null || n.data.label === label) return n;
+    changed = true;
+    return { ...n, data: { ...n.data, label } };
+  });
+  return changed ? next : nodes;
+}
+
+/**
+ * The Split lane a card is the head of, or null. The other direction of the same
+ * fact `branchHeadLabels` reads, for the rename that starts at the CARD: typing
+ * a new name into a branch head's panel has to land in the hub's branch list, or
+ * the panel and the canvas part company again on the very next render.
+ */
+export function branchLaneOf(nodeId: string, nodes: FNode[], edges: Edge[]): { hubId: string; pathId: string } | null {
+  for (const e of edges) {
+    const handle = e.sourceHandle ?? null;
+    if (e.target !== nodeId || handle == null) continue;
+    const hub = nodes.find((n) => n.id === e.source);
+    if (laneOf(hub).some((l) => l.id === handle)) return { hubId: e.source, pathId: handle };
+  }
+  return null;
+}
+
+/**
  * Managed top-to-bottom layout. Positions are always computed (users never place
  * nodes): depth flows downward via longest-path layering, and each subtree is
  * given the width it actually needs, so a split fans out symmetrically about its

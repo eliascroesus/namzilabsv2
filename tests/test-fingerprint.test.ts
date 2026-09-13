@@ -56,6 +56,35 @@ describe("testFingerprint — what must NOT move it", () => {
     g.nodes.reverse();
     expect(fp(g)).toBe(baseline());
   });
+
+  /**
+   * Renaming a branch is renaming a card. The engine routes on `paths[].id` and
+   * `paths[].mode`; the label is words on a box. It used to move the hash —
+   * which meant renaming one branch marked every step below it "re-test to
+   * update" while every number stayed exactly what it was.
+   */
+  it("ignores a Split's branch names, which route nothing", () => {
+    const hub = (labels: string[]) => ({
+      id: "s",
+      type: "paths",
+      data: { config: { paths: labels.map((label, i) => ({ id: `p${i}`, label, mode: "custom" })), fallbackId: "fb", fallbackLabel: labels[0] } },
+    });
+    const nodes = (labels: string[]) => [hub(labels), { id: "f", type: "filter", data: { config: {} } }];
+    const edges = [{ source: "s", target: "f", sourceHandle: "p0" }];
+    const named = testFingerprint(nodes(["Booked calls", "No-shows"]), edges, "f");
+    expect(testFingerprint(nodes(["Path A", "Path B"]), edges, "f")).toBe(named);
+  });
+
+  it("still moves when a branch is added, removed or reordered", () => {
+    const withPaths = (paths: Array<{ id: string; label: string }>) => [
+      { id: "s", type: "paths", data: { config: { paths } } },
+      { id: "f", type: "filter", data: { config: {} } },
+    ];
+    const edges = [{ source: "s", target: "f", sourceHandle: "p0" }];
+    const two = testFingerprint(withPaths([{ id: "p0", label: "A" }, { id: "p1", label: "B" }]), edges, "f");
+    expect(testFingerprint(withPaths([{ id: "p0", label: "A" }]), edges, "f")).not.toBe(two);
+    expect(testFingerprint(withPaths([{ id: "p1", label: "B" }, { id: "p0", label: "A" }]), edges, "f")).not.toBe(two);
+  });
 });
 
 describe("testFingerprint — what MUST move it", () => {
