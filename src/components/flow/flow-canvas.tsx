@@ -708,6 +708,31 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
     [commit, setEdges, markDirtyFrom],
   );
 
+  /**
+   * A COMBINE WITH NOTHING LEFT TO COMBINE NEEDS A SOURCE, NOT A LECTURE.
+   *
+   * Its lanes are steps that already exist, and the first Combine anyone builds
+   * has only one such step — the Get data it was added after. The panel's answer
+   * used to be to hide the add control; this is the other answer. It creates the
+   * second source AND wires it in, then selects it, so the next thing on screen
+   * is the question that actually needs answering: which app.
+   *
+   * A plain chain edge, because a Combine's inputs ARE its lanes — the same edge
+   * `setUniteSources` manages. Position is a placeholder: `computeVerticalLayout`
+   * owns every coordinate on this canvas and will put it beside its sibling lane.
+   */
+  const addSourceLane = useCallback(
+    (uniteId: string) => {
+      commit();
+      const id = `app_${Math.random().toString(36).slice(2, 8)}`;
+      setNodes((ns) => [...ns, { id, type: "app", position: { x: 0, y: 0 }, data: { config: defaultConfig("app"), lastTest: null, dirty: false } } as FNode]);
+      setEdges((es) => [...es, { id: rid(), type: "insert", source: id, target: uniteId }]);
+      markDirtyFrom(uniteId);
+      setSelectedId(id);
+    },
+    [commit, setNodes, setEdges, markDirtyFrom],
+  );
+
   // Paths: add a branch = a new labeled handle + its own "Path conditions" (Filter) step.
   const addBranch = useCallback(
     (hubId: string) => {
@@ -2171,6 +2196,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
                   onSetSources: (ids) => setUniteSources(selected.id, ids),
                   onAddBranch: () => addBranch(selected.id),
                   onRemoveBranch: (pid) => removeBranch(selected.id, pid),
+                  onAddSourceLane: () => addSourceLane(selected.id),
                 }
               : null
           }

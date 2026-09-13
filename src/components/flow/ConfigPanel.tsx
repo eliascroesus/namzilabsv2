@@ -190,6 +190,7 @@ export function ConfigPanel({
   onSetSources,
   onAddBranch,
   onRemoveBranch,
+  onAddSourceLane,
 }: {
   node: FNode;
   stepNo?: number;
@@ -226,6 +227,8 @@ export function ConfigPanel({
   onSetInput: (handle: "a" | "b", sourceId: string | null) => void;
   onSetSources: (ids: string[]) => void;
   onAddBranch: () => void;
+  /** Combine only: create a Get data step and wire it straight in as a new lane. */
+  onAddSourceLane?: () => void;
   onRemoveBranch: (pathId: string) => void;
 }) {
   const type = String(node.type) as NodeType;
@@ -409,6 +412,7 @@ export function ConfigPanel({
                 onSetSources={onSetSources}
                 onAddBranch={onAddBranch}
                 onRemoveBranch={onRemoveBranch}
+                onAddSourceLane={onAddSourceLane}
               />
             </div>
           ) : (
@@ -649,6 +653,7 @@ function NodeConfig({
   onSetSources,
   onAddBranch,
   onRemoveBranch,
+  onAddSourceLane,
 }: {
   type: NodeType;
   cfg: Record<string, unknown>;
@@ -665,6 +670,8 @@ function NodeConfig({
   onSetInput: (handle: "a" | "b", sourceId: string | null) => void;
   onSetSources: (ids: string[]) => void;
   onAddBranch: () => void;
+  /** Combine only: create a Get data step and wire it straight in as a new lane. */
+  onAddSourceLane?: () => void;
   onRemoveBranch: (pathId: string) => void;
 }) {
 
@@ -975,6 +982,8 @@ function NodeConfig({
     // Unite is flow shape first: pick which lanes flow into it (its edges ARE
     // the lanes) — then optionally MATCH the two lanes instead of stacking them.
     const laneIds = inputs.map((i) => i.nodeId);
+    /** A step that could become a lane and is not one yet — the real question. */
+    const spare = datasetCandidates.find((c) => !laneIds.includes(c.id));
     const matching = String(cfg.mode ?? "stack") === "match";
     // Rewiring a lane invalidates whatever was matched on it.
     const setLanes = (ids: string[]) => {
@@ -1000,7 +1009,19 @@ function NodeConfig({
                   value={inp.nodeId}
                   width={320}
                   placeholder="Choose a step…"
-                  options={datasetCandidates.filter((c) => c.id === inp.nodeId || !laneIds.includes(c.id)).map((c) => ({ value: c.id, label: `${c.stepNo != null ? `${c.stepNo}. ` : ""}${c.title}` }))}
+                  /**
+                   * THE STEP THIS LANE IS ALREADY WIRED TO IS ALWAYS IN THE LIST.
+                   *
+                   * `datasetCandidates` only offers LINE ENDS, and a lane's source
+                   * stops being one the moment anything else is chained after it.
+                   * The Select falls back to its placeholder when the value matches
+                   * no option, so a correctly wired lane read "Choose a step…" —
+                   * and opening it to look re-wired the lane to whatever was picked.
+                   */
+                  options={[
+                    ...(datasetCandidates.some((c) => c.id === inp.nodeId) ? [] : [{ value: inp.nodeId, label: inp.title }]),
+                    ...datasetCandidates.filter((c) => c.id === inp.nodeId || !laneIds.includes(c.id)).map((c) => ({ value: c.id, label: `${c.stepNo != null ? `${c.stepNo}. ` : ""}${c.title}` })),
+                  ]}
                   onChange={(v) => setLanes(laneIds.map((x, i) => (i === idx ? v : x)))}
                 />
                 <Button type="button" variant="destructiveGhost" size="sm" className="shrink-0" onClick={() => setLanes(laneIds.filter((_, i) => i !== idx))}>
@@ -1008,19 +1029,44 @@ function NodeConfig({
                 </Button>
               </div>
             ))}
-            {laneIds.length < datasetCandidates.length && !(matching && laneIds.length >= 2) && (
-              <button
-                type="button"
-                onClick={() => {
-                  const avail = datasetCandidates.find((c) => !laneIds.includes(c.id));
-                  if (avail) setLanes([...laneIds, avail.id]);
-                }}
-                className={ADD_PILL}
-              >
-                <Plus size={14} /> Add another step
-              </button>
+            {/**
+              * THE ADD CONTROL IS ALWAYS HERE WHEN A LANE IS STILL WANTED.
+              *
+              * It used to be gated on `laneIds.length < datasetCandidates.length`
+              * — a set question asked with two lengths — and the canonical way
+              * anyone builds this step answers it wrong. Get data → "+ Add next
+              * step" → Combine leaves exactly one dataset candidate, already
+              * wired as the one lane: `1 < 1` is false, so the only control that
+              * adds a second lane never rendered. The step cannot be completed,
+              * and nothing on screen says why. Ports are not draggable
+              * (`nodesConnectable={false}`) and no drop slot targets a Combine,
+              * so there was no other way in.
+              *
+              * Two counts can also match while a real candidate is addable — a
+              * lane wired to a step that later stopped being a line end leaves
+              * the list and the count, so an unwired candidate sits unreachable
+              * behind an equal total. The question is "is any candidate not yet
+              * a lane", so that is what it now asks.
+              */}
+            {!(matching && laneIds.length >= 2) && (
+              spare ? (
+                <button type="button" onClick={() => setLanes([...laneIds, spare.id])} className={ADD_PILL}>
+                  <Plus size={14} /> Add another step
+                </button>
+              ) : (
+                /* Nothing left to point a lane at, so the way forward is to make
+                   one. This creates the Get data step AND wires it in, because
+                   the alternative — telling someone to add it from a card's
+                   Add-next button, notice it arrives unattached, then come back
+                   here — is a sequence nobody discovers. */
+                onAddSourceLane && (
+                  <button type="button" onClick={onAddSourceLane} className={ADD_PILL}>
+                    <Plus size={14} /> Add a Get data step
+                  </button>
+                )
+              )
             )}
-            {datasetCandidates.length === 0 && inputs.length === 0 && <p className="text-xs text-muted-foreground">Add a Get data step first, then combine it here.</p>}
+            {inputs.length === 0 && <p className="text-xs text-muted-foreground">Pick the steps whose records this one brings together.</p>}
           </div>
         </div>
 

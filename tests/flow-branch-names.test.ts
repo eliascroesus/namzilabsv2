@@ -1,6 +1,14 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import type { Edge } from "@xyflow/react";
 import { branchHeadLabels, branchLaneOf, syncBranchLabels, type FNode } from "@/components/flow/graph-utils";
+
+vi.mock("server-only", () => ({}));
+vi.mock("@/app/dashboard/flows/actions", () => ({ refreshFlowAction: async () => ({}) }));
+
+// After the mocks, because the panel's import graph reaches the server actions.
+const { ConfigPanel } = await import("@/components/flow/ConfigPanel");
 
 const N = (id: string, type: string, data: Partial<FNode["data"]> = {}): FNode =>
   ({ id, type, position: { x: 0, y: 0 }, data: { config: {}, ...data } }) as FNode;
@@ -77,5 +85,87 @@ describe("branch names — the Split's list and the card are one name", () => {
     const es = [E("hub", "h1", { sourceHandle: "gone" })];
     expect(branchHeadLabels(nodes, es).size).toBe(0);
     expect(branchLaneOf("h1", nodes, es)).toBeNull();
+  });
+});
+
+/**
+ * THE COMBINE STEP COULD NOT BE COMPLETED, IN THE ORDER EVERYONE BUILDS IT.
+ *
+ * Get data → "+ Add next step" → Combine leaves exactly one dataset candidate,
+ * already wired as the one lane. The "Add another step" control was gated on
+ * `laneIds.length < datasetCandidates.length` — `1 < 1` — so it never rendered,
+ * and there is no other route in: ports are not draggable and no drop slot
+ * targets a Combine. The step sat there reading "Ready" with one lane, doing
+ * nothing, with no control on screen that could fix it.
+ */
+describe("Combine — a second lane is always reachable", () => {
+  const unite = N("u", "unite", { config: { mode: "stack" } });
+  const render = (opts: { inputs: Array<{ nodeId: string; title: string }>; candidates: Array<{ id: string; title: string }>; onAddSourceLane?: () => void }) =>
+    renderToStaticMarkup(
+      createElement(ConfigPanel as never, {
+        node: unite,
+        connections: [],
+        fieldGroups: [],
+        inputs: opts.inputs.map((i) => ({ ...i, targetHandle: null })),
+        inputCount: opts.inputs.length,
+        testing: false,
+        numberGroups: [],
+        datasetCandidates: opts.candidates,
+        branch: null,
+        onChange: () => {},
+        onRename: () => {},
+        onTest: () => {},
+        onAddNext: () => {},
+        onSetInput: () => {},
+        onSetSources: () => {},
+        onAddBranch: () => {},
+        onRemoveBranch: () => {},
+        onAddSourceLane: opts.onAddSourceLane,
+      } as never),
+    );
+
+  it("offers a way to add a lane when the only candidate is already wired", () => {
+    // The exact reported state: one Get data, wired, nothing else to point at.
+    const html = render({ inputs: [{ nodeId: "a", title: "Get data" }], candidates: [{ id: "a", title: "Get data" }], onAddSourceLane: () => {} });
+    expect(html).toContain("Add a Get data step");
+  });
+
+  it("offers the existing step when there IS one spare, rather than making a new one", () => {
+    const html = render({ inputs: [{ nodeId: "a", title: "Get data" }], candidates: [{ id: "a", title: "Get data" }, { id: "b", title: "Sheets" }], onAddSourceLane: () => {} });
+    expect(html).toContain("Add another step");
+    expect(html).not.toContain("Add a Get data step");
+  });
+
+  /**
+   * Two counts can agree while a candidate is genuinely addable: a lane wired to
+   * a step that later stopped being a line end leaves `datasetCandidates` and
+   * takes its place in the total with it. The question is a set question.
+   */
+  it("adds a lane even when the counts happen to match", () => {
+    const html = render({ inputs: [{ nodeId: "calc", title: "Calculate" }], candidates: [{ id: "b", title: "Sheets" }], onAddSourceLane: () => {} });
+    expect(html).toContain("Add another step");
+  });
+
+  it("keeps a wired lane readable when its step is no longer a candidate", () => {
+    // Otherwise the Select falls back to its placeholder and a correctly wired
+    // lane reads "Choose a step…", which is both a lie and a trap: opening it
+    // to look re-wires the lane.
+    const html = render({ inputs: [{ nodeId: "calc", title: "Calculate" }], candidates: [{ id: "b", title: "Sheets" }] });
+    expect(html).toContain("Calculate");
+  });
+
+  it("stops offering lanes to a Match, which takes exactly two", () => {
+    const two = N("u", "unite", { config: { mode: "match" } });
+    const html = renderToStaticMarkup(
+      createElement(ConfigPanel as never, {
+        node: two, connections: [], fieldGroups: [],
+        inputs: [{ nodeId: "a", title: "A", targetHandle: null }, { nodeId: "b", title: "B", targetHandle: null }],
+        inputCount: 2, testing: false, numberGroups: [], datasetCandidates: [{ id: "c", title: "C" }], branch: null,
+        onChange: () => {}, onRename: () => {}, onTest: () => {}, onAddNext: () => {},
+        onSetInput: () => {}, onSetSources: () => {}, onAddBranch: () => {}, onRemoveBranch: () => {}, onAddSourceLane: () => {},
+      } as never),
+    );
+    expect(html).not.toContain("Add another step");
+    expect(html).not.toContain("Add a Get data step");
   });
 });
