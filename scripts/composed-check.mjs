@@ -210,6 +210,30 @@ const cards = await page.evaluate(() => {
       const r = el.getBoundingClientRect();
       return r.width > 0 && (r.right > box.right + 1 || r.left < box.left - 1);
     });
+
+    /**
+     * THE PIE'S RADIAL LABELS, MEASURED AGAINST THE CARD'S PADDING.
+     *
+     * A dedicated test rather than a vertical arm on `overflow` above: every
+     * card's structural wrappers legitimately start at the card's own edge —
+     * padding lives on the header and the body, not on the shell — so a general
+     * "nothing within 16px of the top" rule flagged all eighteen specimens.
+     *
+     * What actually needed catching is narrower and was invisible until the owner
+     * hit it: a slice pointing straight up anchors its label ABOVE the mark, and
+     * the label ran off the top of the card where `overflow-hidden` cut it in
+     * half. No specimen here had a slice at twelve o'clock, so nothing drew it.
+     */
+    const pieLabels = [...(card?.querySelectorAll("[data-pie-label]") ?? [])].map((el) => {
+      const r = el.getBoundingClientRect();
+      return {
+        text: (el.textContent || "").replace(/\s+/g, " ").trim().slice(0, 20),
+        top: Math.round(r.top - box.top),
+        bottom: Math.round(box.bottom - r.bottom),
+        left: Math.round(r.left - box.left),
+        right: Math.round(box.right - r.right),
+      };
+    });
     return {
       /**
        * THE CARD'S NAME FROM ITS OWN ATTRIBUTE, not from its leading text.
@@ -232,6 +256,7 @@ const cards = await page.evaluate(() => {
       polyGeom,
       zeroMarks,
       exits,
+      pieLabels,
       notches,
       notes,
       overflow,
@@ -345,6 +370,19 @@ for (const c of cards) {
   }
 
   if (c.overflow) problems.push(`"${c.title}" paints outside its card`);
+  /**
+   * A PIE LABEL MUST CLEAR THE CARD'S OWN 16px ON EVERY SIDE. The failure this
+   * exists for cut "TikTok" in half against the top edge — and only ever on a
+   * pie whose first slice ends at twelve o'clock, which is why it took a real
+   * board to find. `1` of slack because a rect measured against a bordered box
+   * lands a fraction either way.
+   */
+  for (const l of c.pieLabels ?? []) {
+    const worst = Math.min(l.top, l.bottom, l.left, l.right);
+    if (worst < 15) {
+      problems.push(`"${c.title}" label "${l.text}" is ${worst}px from the card edge, inside its 16px padding`);
+    }
+  }
   if (c.w === 0 || c.h === 0) problems.push(`"${c.title}" has a zero-sized card`);
   for (const t of c.clipped) problems.push(`"${c.title}" cuts off the text "${t}…"`);
 }

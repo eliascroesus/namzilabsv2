@@ -59,6 +59,30 @@ const R_LABEL = R_CIRCLE + 7;
  */
 const STACK_PCT = 21;
 
+/**
+ * THE SQUARE HAS TO BE SMALLER THAN THE BOX, because it throws labels outside
+ * itself — and this is the bug the owner hit: "TikTok is out of bounds".
+ *
+ * A slice at the top of the circle anchors its label ABOVE the square's top edge
+ * (`R_LABEL` is 55%, so 5% of the side beyond the halfway mark), and the label is
+ * centred on that anchor — so half of it sits higher again. Sized at `100cqh`
+ * the square filled the whole box, its top edge WAS the card's padding, and
+ * everything above it was clipped: the name cut in half, the padding eaten.
+ *
+ * 80px of vertical reserve, split by `items-center` into 40px above and below.
+ * Measured against the worst label: ~7px for the anchor's overshoot on a 140px
+ * square, plus ~27px for half of a two-line name over its figure, is 34px — so
+ * 40 clears it with the card's own 16px padding still intact.
+ *
+ * THE WIDTH NEEDS NO SUCH RESERVE: at 44% the gutters are 28% of the box each,
+ * which is where the side labels were always going to live.
+ *
+ * The 88px floor is for a box too short to give 80px away — the square stops
+ * shrinking rather than inverting, and a tile that small is below the `cols >= 4`
+ * gate anyway.
+ */
+const SQUARE_SIDE = "max(88px, min(calc(100cqh - 80px), 44cqw))";
+
 type Placed = { slice: PieSlice; i: number; left: number; top: number; right: boolean };
 
 /**
@@ -188,7 +212,7 @@ export function PieChart({
          */}
         <div
           className="relative"
-          style={{ width: "min(100cqh, 44cqw)", height: "min(100cqh, 44cqw)" }}
+          style={{ width: SQUARE_SIDE, height: SQUARE_SIDE }}
         >
           <svg className="h-full w-full" viewBox="-52 -52 104 104" preserveAspectRatio="xMidYMid meet" aria-hidden>
             {marks}
@@ -208,6 +232,12 @@ export function PieChart({
                * card edge is about 0.6 of the square's own side — a share, not a
                * number, and the one that stays true as the tile resizes.
                */
+              /* `data-pie-label` is for the harness: `composed-check` measures
+                 each one against the card's 16px padding, because the way these
+                 fail is by leaving the card entirely and being clipped — which
+                 no source check can see and no screenshot review reliably
+                 catches either. */
+              data-pie-label
               className={`absolute flex flex-col leading-tight ${p.right ? "items-start" : "items-end"}`}
               style={{
                 left: `${p.left}%`,

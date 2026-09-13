@@ -269,6 +269,35 @@ const COMPOSED_CHARTS: Array<{
     h: 7,
   },
   {
+    /**
+     * THE OWNER'S OWN PIE, 13 Sep 2026 — and it is here because it is the WORST
+     * CASE for label placement, not because it is typical.
+     *
+     * A slice whose mid-angle points straight up anchors its label ABOVE the
+     * square's top edge, so half the label sits higher still. That is the one
+     * that went out of bounds ("TikTok is out of bounds"), and every other
+     * specimen on this page happens to have no slice at 12 o'clock — which is
+     * exactly why it shipped. 24/15/5 is his data: Facebook 55%, Instagram 34%,
+     * TikTok 11%, the last of which ends at 360 degrees.
+     */
+    label: "Composed pie — a slice at twelve o'clock",
+    chart: "pie",
+    source: composed(24, [part("Instagram", 15), part("TikTok", 5)], { name: "Facebook" }),
+    config: keys(2),
+    /**
+     * FULL WIDTH, WHICH IS HALF OF WHAT MAKES THIS THE WORST CASE. The square is
+     * `min(height, 44% of width)`, so in the gallery's three-column grid it is
+     * WIDTH-limited at 140px and has vertical slack to spare — the overflow
+     * cannot happen there however the slices fall. On a wide card 44% of the
+     * width exceeds the height, the square becomes HEIGHT-limited, and its top
+     * edge meets the card's padding. That is the owner's board, and it is why
+     * this specimen has to span the row to reproduce anything.
+     */
+    cols: 12,
+    span: true,
+    h: 6,
+  },
+  {
     /* RANKED BARS, 13 Sep 2026 — several metrics side by side rather than one
        metric split by its own groups. Here so the new chart is rendered by
        something a check can measure; without a specimen it would ship
