@@ -1285,7 +1285,7 @@ function execPaths(node: FlowNode, inputs: ResolvedInput[], graph: FlowGraph): N
 function execGroup(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
   const cfg = GroupConfigSchema.parse(node.data.config ?? {});
   const input = requireDataset(inputs, "Group");
-  const groups = cfg.mode === "field" ? groupByField(input.records, cfg) : groupByCategories(input.records, cfg);
+  const { groups, distinct } = grouped(input.records, cfg);
   // The headline over every record, not the sum of the groups — see the note
   // above `aggregate()`'s own grouped branch. Summing agrees with this for
   // count/sum (the groups partition the records), but count_distinct double
@@ -1294,7 +1294,7 @@ function execGroup(node: FlowNode, inputs: ResolvedInput[]): NodeExec {
   return {
     status: "ok",
     nodeType: "group",
-    shape: { kind: "grouped", groups, total },
+    shape: { kind: "grouped", groups, total, ...(distinct > groups.length ? { distinct } : {}) },
     recordsIn: input.records.length,
     recordsOut: groups.length,
     sample: input.records.slice(0, 3),
@@ -1468,11 +1468,24 @@ function execCalculate(node: FlowNode, inputs: ResolvedInput[], timeField?: stri
       categories: cfg.categories,
       fallbackLabel: cfg.fallbackLabel,
     };
-    const groups = cfg.breakdownMode === "field" ? groupByField(input.records, gcfg) : groupByCategories(input.records, gcfg);
+    // `grouped` rather than the branch this used to spell itself — the legacy
+    // Calculate reaches the same two groupers, so it must reach the same cap.
+    const { groups, distinct } = grouped(input.records, {
+      ...gcfg,
+      mode: cfg.breakdownMode === "field" ? "field" : "categories",
+    });
     // Same fix as execGroup, same reason: the groups' own sum double counts a
     // count_distinct subject that lands in more than one group.
     const total = computeAgg(input.records, gcfg.aggregation, [gcfg.valueField], gcfg.distinctField);
-    return { status: "ok", nodeType: "calculate", shape: { kind: "grouped", groups, total }, recordsIn: input.records.length, recordsOut: groups.length, sample: input.records.slice(0, 3), outputSchema: [] };
+    return {
+      status: "ok",
+      nodeType: "calculate",
+      shape: { kind: "grouped", groups, total, ...(distinct > groups.length ? { distinct } : {}) },
+      recordsIn: input.records.length,
+      recordsOut: groups.length,
+      sample: input.records.slice(0, 3),
+      outputSchema: [],
+    };
   }
 
   // number
@@ -1643,6 +1656,14 @@ export function buildTile(spec: TilePresentation, shape: Shape, sample: FlowReco
     tile.value = headlineValue(shape);
   } else if (shape.kind === "grouped") {
     tile.groups = shape.groups;
+    /**
+     * CARRIED EXPLICITLY, because this literal is assembled KEY BY KEY and a
+     * field missing from it is computed on every materialize and dropped every
+     * time — the bug that shipped on 11 Sep with `facts`, whose unit tests
+     * stayed green throughout. `tests/breakdown-cardinality.test.ts` reads the
+     * STORED tile for exactly that reason.
+     */
+    if (shape.distinct != null) tile.groupsDistinct = shape.distinct;
     tile.value = headlineValue(shape);
   } else {
     tile.value = shape.records.length;
@@ -2135,6 +2156,14 @@ export function tileByRange(
         // "Aug '26" over what are actually days.
         ...(tile.series && unit ? { unit } : {}),
         groups: tile.groups,
+        /**
+         * PER SLOT, for the same reason `unit` is: each window re-runs the
+         * grouping over its own records, so how many distinct values existed —
+         * and whether the cap bit at all — is a fact about THIS period. Reading
+         * the tile's top-level count under a narrow window would print
+         * all-time's cardinality over seven days of bars.
+         */
+        ...(tile.groupsDistinct != null ? { groupsDistinct: tile.groupsDistinct } : {}),
         ...(records > 0 ? { records } : {}),
         ...(undatedIds.size > 0 ? { undated: undatedIds.size } : {}),
       };
@@ -2588,16 +2617,71 @@ function computeAgg(records: FlowRecord[], aggregation: string, fields: string[]
   }
 }
 
-function groupByField(records: FlowRecord[], cfg: GroupConfig): Array<{ label: string; value: number }> {
+/**
+ * THE MOST ROWS A BREAKDOWN MAY PRODUCE.
+ *
+ * A breakdown makes one row per distinct value, and the field picker offers
+ * `lead_id`, `email` and a timestamp beside `setter` and `source` — every one
+ * of them one keystroke away, and every one of them different on every record.
+ * With `APP_LOAD_CEILING` at half a million, the honest worst case was 500,000
+ * `{label, value}` pairs written into one tile's jsonb, read back on every
+ * board render against a database that bills by the byte, shipped to the
+ * browser and turned into DOM. Nothing in that chain refused.
+ *
+ * Forty is the owner's number and a good one: it is past what anybody reads off
+ * a chart and far short of what hurts. The rows kept are the LARGEST, because a
+ * breakdown is read for its big values, and the true count travels with them so
+ * the tile can say what it left out — forty bars each reading 1, with nothing
+ * to say ninety values exist, is exactly the confidently-wrong drawing the rest
+ * of this file refuses.
+ */
+export const MAX_GROUPS = 40;
+
+/**
+ * THE LONGEST A GROUP'S NAME MAY BE — the second axis, and the easier one to
+ * hit. `groupKey` was `String(v)`, so breaking down by a free-text column made
+ * every label as long as the cell behind it. Forty groups of a 2KB note is 80KB
+ * of jsonb on a tile that is re-read every twelve seconds, and forty groups is
+ * an ordinary number. Long enough for any real category name, short enough that
+ * the cap above actually bounds the row.
+ */
+export const MAX_GROUP_LABEL = 80;
+
+function groupByField(
+  records: FlowRecord[],
+  cfg: GroupConfig,
+): { groups: Array<{ label: string; value: number }>; distinct: number } {
   const groups = new Map<string, FlowRecord[]>();
   for (const r of records) {
     const key = groupKey(getField(r, cfg.field));
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key)!.push(r);
   }
-  return [...groups.entries()]
+  const all = [...groups.entries()]
     .map(([label, recs]) => ({ label, value: computeAgg(recs, cfg.aggregation, [cfg.valueField], cfg.distinctField) }))
     .sort((a, b) => b.value - a.value);
+  return { groups: all.slice(0, MAX_GROUPS), distinct: all.length };
+}
+
+/**
+ * EITHER WAY OF GROUPING, ANSWERING ONE SHAPE — so no caller has to remember
+ * which of the two can run away.
+ *
+ * A field breakdown is bounded by the DATA and needs the cap; a category
+ * breakdown is bounded by the author's own list, which is a handful of rows
+ * somebody typed, so its `distinct` is simply its length and nothing is ever
+ * trimmed. Three call sites used to branch on `cfg.mode` themselves, and a cap
+ * added to one of them would have been a cap the other two did not have.
+ */
+function grouped(
+  records: FlowRecord[],
+  cfg: GroupConfig,
+): { groups: Array<{ label: string; value: number }>; distinct: number } {
+  if (cfg.mode !== "field") {
+    const groups = groupByCategories(records, cfg);
+    return { groups, distinct: groups.length };
+  }
+  return groupByField(records, cfg);
 }
 
 function groupByCategories(records: FlowRecord[], cfg: GroupConfig): Array<{ label: string; value: number }> {
@@ -2720,7 +2804,12 @@ function requireDataset(inputs: ResolvedInput[], nodeName: string): Dataset {
  * record whose value WAS the string "—".
  */
 function groupKey(v: unknown): string {
-  return v == null || v === "" ? "(not set)" : String(v);
+  if (v == null || v === "") return "(not set)";
+  const s = String(v);
+  // TRIMMED, AND SAYING SO. See `MAX_GROUP_LABEL`: a free-text column would
+  // otherwise put the whole cell in the tile's jsonb, once per group. The
+  // ellipsis is the difference between a short name and a cut one.
+  return s.length <= MAX_GROUP_LABEL ? s : `${s.slice(0, MAX_GROUP_LABEL - 1)}…`;
 }
 
 function num(v: unknown): number | null {

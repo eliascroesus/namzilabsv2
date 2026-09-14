@@ -253,7 +253,23 @@ export function BarsHorizontal({
 }
 
 /** What a limited list owes the reader — the sentence `GroupBars` already writes. */
-export function groupsFooter(groups: GroupRow[], limit?: number, total?: number | null): string | null {
-  if (!limit || groups.length <= limit) return null;
-  return `Top ${limit} of ${groups.length}${total != null ? " — the number above counts them all" : ""}.`;
+export function groupsFooter(
+  groups: GroupRow[],
+  limit?: number,
+  total?: number | null,
+  /**
+   * HOW MANY VALUES THE BREAKDOWN REALLY HAD, when the ENGINE trimmed it — see
+   * `MAX_GROUPS`. Without this the card counts what it was handed, so a
+   * breakdown of 12,431 lead ids capped to forty would read "Top 8 of 40" and
+   * every number in that sentence would be wrong about the thing it names.
+   */
+  distinct?: number | null,
+): string | null {
+  const held = Math.max(groups.length, distinct ?? 0);
+  // NOTHING TO SAY only when nothing was left out — by the display limit OR by
+  // the cap. A tile showing all forty of forty still owes the sentence when the
+  // forty were themselves a slice.
+  const shown = Math.min(limit ?? held, groups.length);
+  if (shown >= held) return null;
+  return `Top ${shown} of ${held.toLocaleString("en-US")}${total != null ? " — the number above counts them all" : ""}.`;
 }

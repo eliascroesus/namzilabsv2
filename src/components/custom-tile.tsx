@@ -67,6 +67,8 @@ type StoredTile = {
   value?: number;
   series?: SeriesPoint[];
   groups?: GroupRow[];
+  /** How many distinct values the breakdown really had — see `MAX_GROUPS`. */
+  groupsDistinct?: number;
   byRange?: Record<
     string,
     {
@@ -158,6 +160,8 @@ type Windowed = {
   /** The same window shifted back by its own length — see `TileSpec.byRange`. */
   compare?: SeriesPoint[];
   groups?: GroupRow[];
+  /** How many distinct values the breakdown really had — see `MAX_GROUPS`. */
+  groupsDistinct?: number;
   funnel?: FunnelResult;
   undated?: number;
   unavailable?: string;
@@ -325,7 +329,12 @@ export function CustomTile({
      */
     const missing = slot == null && (stored.byRange != null || overridden);
     w = {
-      ...(slot ?? { value: stored.value, series: stored.series, groups: stored.groups }),
+      ...(slot ?? {
+        value: stored.value,
+        series: stored.series,
+        groups: stored.groups,
+        groupsDistinct: stored.groupsDistinct,
+      }),
       unavailable:
         slot?.unavailable ??
         (missing
@@ -647,7 +656,9 @@ export function CustomTile({
 
   const footer =
     chart === "category"
-      ? groupsFooter(w.groups ?? [], config.limit)
+      ? // `w.groupsDistinct` so the sentence counts the values that EXISTED, not
+        // the forty the engine kept — see `MAX_GROUPS`.
+        groupsFooter(w.groups ?? [], config.limit, null, w.groupsDistinct)
       : /**
          * A COMPOSED PIE SPEAKS THROUGH ITS NOTES INSTEAD. `pieFooter` reports
          * a top-N roll-up and a count of non-positive rows; composition has no

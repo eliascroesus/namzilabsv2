@@ -1021,7 +1021,19 @@ export type Scalar = { kind: "scalar"; value: number; label?: string };
  * the old sum rather than to `undefined`.
  */
 export type Series = { kind: "series"; series: Array<{ bucket: string; value: number }>; total?: number };
-export type Grouped = { kind: "grouped"; groups: Array<{ label: string; value: number }>; total?: number };
+/**
+ * `distinct` IS HOW MANY VALUES THERE REALLY WERE, present only when that is
+ * MORE than the rows carried — see `MAX_GROUPS`. A breakdown is capped so a
+ * column with a value per record cannot put half a million rows in a tile, and
+ * a cap nobody is told about turns "forty bars each reading 1" into a chart
+ * that looks complete. Absent means nothing was left out.
+ */
+export type Grouped = {
+  kind: "grouped";
+  groups: Array<{ label: string; value: number }>;
+  total?: number;
+  distinct?: number;
+};
 export type Shape = Dataset | Scalar | Series | Grouped;
 
 /** The saved presentation of one Output node. */
@@ -1048,6 +1060,8 @@ export type TileSpec = {
   value?: number;
   series?: Array<{ bucket: string; value: number }>;
   groups?: Array<{ label: string; value: number }>;
+  /** How many distinct values the breakdown really had, when more than `groups`. */
+  groupsDistinct?: number;
   sample?: FlowRecord[];
   /**
    * The same metric computed over each dashboard range, keyed by range key.
