@@ -1,23 +1,23 @@
-/** The board's own gutter — what sits above the first tile, and what the last one earns. */
-export const BOARD_TAIL_GUTTER_PX = 16;
-
 /**
- * HOW MUCH EMPTY ROOM THE BOARD OWES BELOW ITS LAST TILE.
+ * ONE WHOLE SCREEN OF ROOM BELOW THE BOARD, once the board is tall enough to
+ * scroll at all.
  *
  * A board taller than the window stops scrolling the moment its last tile's
- * BOTTOM reaches the bottom of the screen — so the tile furthest down can only
- * ever be read at the very bottom of the viewport, under everything else. The
- * owner asked for the editor behaviour instead: keep scrolling until that last
- * tile sits at the TOP, with the board's own 16px gutter above it.
+ * BOTTOM reaches the bottom of the screen, so the tile furthest down can only
+ * ever be read — and RESIZED — along the bottom edge.
  *
- * That distance is the viewport minus the tile minus the gutter. Anything less
- * strands the tile mid-screen; anything more is dead space you can scroll into,
- * which is the failure mode of a plain `padding-bottom: 100vh`.
+ * THIS WAS CLEVERER ONCE AND THAT WAS THE MISTAKE. The first version worked out
+ * the exact distance that brings the last tile to the top with the board's 16px
+ * gutter above it, on the argument that anything more is dead space you can
+ * scroll into. Correct, and not what the job needs: EXPANDING a bottom tile
+ * eats that room as the tile grows, so the exact amount runs out precisely
+ * during the gesture it was meant to help, and the owner hit it twice. A whole
+ * viewport is the editor behaviour ("scroll past end") and it is what was asked
+ * for, in those words: "have a vh down".
  *
- * NOTHING IS OWED TO A BOARD THAT ALREADY FITS. Handing a short board a
- * viewport of padding gives it a scrollbar over nothing — a page that scrolls
- * and shows no new content reads as broken, and it would be the common case,
- * since most boards are shorter than the screen.
+ * NOTHING IS OWED TO A BOARD THAT ALREADY FITS. Handing a short board a screen
+ * of padding gives it a scrollbar over nothing — a page that scrolls and shows
+ * no new content reads as broken, and most boards are shorter than the screen.
  *
  * Pure, and measured in pixels the caller took from the live DOM rather than
  * summed from the chrome's constants: the height of that scroll region is a
@@ -28,25 +28,12 @@ export const BOARD_TAIL_GUTTER_PX = 16;
 export function tailSpacePx(opts: {
   /** The scroll region's visible height — `#main`'s `clientHeight`. */
   viewportPx: number;
-  /** The height of the tile furthest down the board. */
-  lastTilePx: number;
   /** How tall the board's content is WITHOUT any tail space already added. */
   contentPx: number;
-  /**
-   * WHAT ALREADY SITS BELOW THE LAST TILE — the board container's own bottom
-   * padding, and anything else between that tile and the end of the content.
-   *
-   * Measured, not assumed, and the first version of this did assume: it took
-   * the whole distance for itself and overshot by exactly the board's 24px
-   * inset, so scrolling to the end put the last tile EIGHT PIXELS ABOVE the top
-   * of the screen instead of sixteen below it. The browser check caught it; no
-   * unit test could have, because 24 is a number in a stylesheet.
-   */
-  trailingPx?: number;
 }): number {
-  const { viewportPx, lastTilePx, contentPx, trailingPx = 0 } = opts;
-  if (!(viewportPx > 0) || !(lastTilePx > 0)) return 0;
+  const { viewportPx, contentPx } = opts;
+  if (!(viewportPx > 0)) return 0;
   // A board that fits needs no room to scroll into.
   if (contentPx <= viewportPx) return 0;
-  return Math.max(0, Math.round(viewportPx - lastTilePx - BOARD_TAIL_GUTTER_PX - Math.max(0, trailingPx)));
+  return Math.round(viewportPx);
 }

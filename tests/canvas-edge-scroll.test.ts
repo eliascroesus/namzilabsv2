@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { edgeScrollPx } from "@/app/dashboard/canvas-drag";
-import { tailSpacePx, BOARD_TAIL_GUTTER_PX } from "@/lib/board/tail-space";
+import { tailSpacePx } from "@/lib/board/tail-space";
 
 /**
  * THE EDGE THAT SCROLLS, AND THE GESTURE IT MUST NOT SCROLL FOR.
@@ -49,45 +49,27 @@ describe("the auto-scroll at the canvas edge", () => {
  * of the same complaint. With a viewport of space below the last tile, it can
  * be scrolled to the TOP and resized into open screen, where no edge is near.
  */
-describe("the room below the last tile", () => {
-  it("is exactly enough to bring the last tile to the top under the gutter", () => {
-    // 900 of viewport, a 240px tile: 644 below it puts its top at 16.
-    expect(tailSpacePx({ viewportPx: 900, lastTilePx: 240, contentPx: 3000 })).toBe(900 - 240 - BOARD_TAIL_GUTTER_PX);
-  });
-
-  it("counts what already sits under the last tile, rather than claiming it twice", () => {
+describe("the room below the board", () => {
+  it("is a whole screen, once the board is long enough to scroll", () => {
     /**
-     * THE BUG THE BROWSER FOUND. The board container carries a 24px bottom
-     * inset below the last tile; taking the whole distance on top of it
-     * overshot by exactly that, and scrolling to the end put the tile EIGHT
-     * PIXELS ABOVE the top of the screen — clipped by the chrome — instead of
-     * sixteen below it. No unit test could have caught it on its own: 24 is a
-     * number in a stylesheet, which is why this argument is measured.
+     * A VIEWPORT, not the exact distance that brings the last tile to the top.
+     * The exact amount was the first version and it was too clever: EXPANDING a
+     * bottom tile eats the room as the tile grows, so it ran out during the one
+     * gesture it existed for. "Have a vh down" is the ask, twice.
      */
-    expect(tailSpacePx({ viewportPx: 900, lastTilePx: 240, contentPx: 3000, trailingPx: 24 })).toBe(
-      900 - 240 - BOARD_TAIL_GUTTER_PX - 24,
-    );
-    // Already roomy enough below? Then nothing more is owed.
-    expect(tailSpacePx({ viewportPx: 900, lastTilePx: 240, contentPx: 3000, trailingPx: 5000 })).toBe(0);
-    // A negative reading (sub-pixel rounding) is ignored rather than added on.
-    expect(tailSpacePx({ viewportPx: 900, lastTilePx: 240, contentPx: 3000, trailingPx: -10 })).toBe(
-      900 - 240 - BOARD_TAIL_GUTTER_PX,
-    );
+    expect(tailSpacePx({ viewportPx: 900, contentPx: 3000 })).toBe(900);
+    expect(tailSpacePx({ viewportPx: 700, contentPx: 701 })).toBe(700);
   });
 
   it("gives a board that already fits nothing at all", () => {
     // A scrollbar over empty space is worse than the problem it solves.
-    expect(tailSpacePx({ viewportPx: 900, lastTilePx: 240, contentPx: 400 })).toBe(0);
-    expect(tailSpacePx({ viewportPx: 900, lastTilePx: 240, contentPx: 900 })).toBe(0);
-  });
-
-  it("never goes negative when the last tile is taller than the screen", () => {
-    expect(tailSpacePx({ viewportPx: 400, lastTilePx: 900, contentPx: 3000 })).toBe(0);
+    expect(tailSpacePx({ viewportPx: 900, contentPx: 400 })).toBe(0);
+    expect(tailSpacePx({ viewportPx: 900, contentPx: 900 })).toBe(0);
   });
 
   it("answers nothing when it has not measured anything yet", () => {
     // First paint, before the observers report — 0 is the honest answer, and
     // it keeps the board from jumping on load.
-    expect(tailSpacePx({ viewportPx: 0, lastTilePx: 0, contentPx: 0 })).toBe(0);
+    expect(tailSpacePx({ viewportPx: 0, contentPx: 0 })).toBe(0);
   });
 });

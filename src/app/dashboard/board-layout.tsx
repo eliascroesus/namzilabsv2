@@ -32,6 +32,7 @@ import { BoardColumn } from "./board-column";
 import { DropGap, TileSlot } from "./board-tile-menu";
 import { ACCEPTS_ATTR, AXIS_ATTR, COLUMNS_LANE, LANE_ATTR, SCROLLER_ATTR, UNGROUPED, useBoardDrag } from "./board-drag";
 import { COLUMN_W, LANE_GAP, SCROLLER_BLEED } from "./board-shape";
+import { BoardTailSpace } from "./board-tail-space";
 
 /**
  * THE DASHBOARD'S ARRANGEMENT, AND THE ONE THING THAT OWNS IT.
@@ -493,6 +494,11 @@ export function BoardLayout({
           </div>
         </div>
       )}
+
+      {/* ROOM TO SCROLL PAST THE LAST TILE — see `BoardTailSpace`. A groups
+          view needs it exactly as much as a custom one: the complaint was about
+          reaching the bottom tile, and this board has a bottom tile too. */}
+      <BoardTailSpace />
 
       {/* THE HELD CARD, UNDER THE CURSOR. A sibling of the board rather than a
           child of a scroller, so it stays with the pointer in screen space
