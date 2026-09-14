@@ -133,6 +133,26 @@ export const NODE_LIBRARY: LibraryEntry[] = [
     config: { op: "count" },
   },
   {
+    /**
+     * THE STEP THAT WAS BUILT AND NEVER OFFERED. `execGroup`, its schema, its
+     * config panel and the three charts that draw a grouped tile all shipped;
+     * this entry did not, so no flow could contain one and no tile in any
+     * workspace has ever carried `groups`. The Breakdown, Pie and Ranked
+     * charts have been reporting "nothing here can be drawn that way" over a
+     * product that could not produce the shape they want.
+     *
+     * IT SITS IN "Calculation" beside Summarize, because that is the choice it
+     * competes with: Summarize answers "how many", this one answers "how many
+     * EACH" — the same question with a column named.
+     */
+    key: "group_field",
+    type: "group",
+    label: "Break down",
+    blurb: "One number per value of a field",
+    stage: "Calculation",
+    keywords: "break down breakdown group by category split by per each segment by rep by source by hour distribution share chart pie ranked bars",
+  },
+  {
     key: "formula_compare",
     type: "formula",
     label: "Calculate",

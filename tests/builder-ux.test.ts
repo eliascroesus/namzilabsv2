@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { validateGraph } from "@/lib/flow/validate";
 import { parseGraph, aggregationInputs, AGGREGATIONS, isDatasetFormulaOp, NODE_LABELS, NODE_TYPES } from "@/lib/flow/types";
-import { defaultConfig, defaultTitle, NODE_LIBRARY, STATUS_META } from "@/components/flow/node-meta";
+import { defaultConfig, defaultTitle, NODE_LIBRARY, STAGES, STATUS_META } from "@/components/flow/node-meta";
 import { nodeNeedsSetup, publishesToDashboard } from "@/components/flow/graph-utils";
 
 /**
@@ -67,6 +67,23 @@ describe("validation speaks plain English", () => {
       // Calculate doors title their cards "Calculate", both Combine doors
       // "Combine data" — the picker naming four jobs the canvas names two.
       expect({ key: entry.key, title: defaultTitle(entry.type, { config }) }).toEqual({ key: entry.key, title: entry.label });
+    }
+  });
+
+  it("every picker entry sits in a stage the modal actually draws", () => {
+    /**
+     * `NodeLibraryModal` renders `STAGES.map(...)` and keeps only the entries
+     * whose `stage` matches one of them, so an entry carrying a stage that is
+     * merely MISSPELLED is not an error — it is a step that silently never
+     * appears, in a list nobody counts. Cheap to pin, and the failure it
+     * catches is invisible by construction.
+     */
+    for (const entry of NODE_LIBRARY) {
+      expect({ key: entry.key, stage: entry.stage, known: (STAGES as readonly string[]).includes(entry.stage) }).toEqual({
+        key: entry.key,
+        stage: entry.stage,
+        known: true,
+      });
     }
   });
 

@@ -45,7 +45,14 @@ export const NODE_LABELS: Record<NodeType, string> = {
   output: "Show on dashboard",
   paths: "Split",
   unite: "Combine",
-  group: "Group into categories",
+  /**
+   * "Break down", not "Group into categories" — shortened on 14 Sep 2026 when
+   * the step finally reached the picker. A canvas card holds about thirteen
+   * characters (`builder-ux` pins it), and this is also the word the rest of
+   * the product already uses: the chart is called Breakdown and the owner asks
+   * for it by that name.
+   */
+  group: "Break down",
   formula: "Calculate",
   time: "Date range",
   time_between: "Time between",
