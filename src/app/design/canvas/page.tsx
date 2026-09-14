@@ -416,6 +416,30 @@ const GALLERY_CHARTS = [
   { id: "area" as const, label: "Area", source: rich(), config: { color: "teal" }, h: 6 },
   { id: "bar" as const, label: "Bar", source: rich(), config: { showLabels: true }, h: 6 },
   { id: "category" as const, label: "Breakdown", source: rich(), config: { color: "indigo" }, h: 6 },
+  /**
+   * THE CROWDED END OF THE SAME MARK. Rows share the card's height, so the case
+   * worth photographing is the one where there is no height to share: fourteen
+   * groups on a six-row tile must hold their floor and SCROLL rather than
+   * squash into fourteen slivers. Without a specimen the rule is enforced by a
+   * `min-h` nobody ever looks at.
+   */
+  {
+    id: "category" as const,
+    label: "Breakdown — more rows than height",
+    source: rich({
+      byRange: {
+        today: {
+          value: 96,
+          groups: [
+            "Afeef", "Armaan", "Rasmus", "Felix", "Bianca", "Noor", "Yusuf",
+            "Elena", "Mateo", "Priya", "Jonas", "Amira", "Kofi", "Sofia",
+          ].map((label, i) => ({ label, value: 24 - i * 3 > 0 ? 24 - i * 3 : i })),
+        },
+      },
+    }),
+    config: { color: "indigo" },
+    h: 6,
+  },
   { id: "pie" as const, label: "Pie", source: rich(), config: {}, h: 6 },
   { id: "pie" as const, label: "Donut", source: rich(), config: { donut: true, legend: "bottom" as const }, h: 6 },
   { id: "progress" as const, label: "Progress to goal", source: rich({ target: 20 }), config: {}, h: 4 },

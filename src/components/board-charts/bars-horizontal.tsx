@@ -113,14 +113,53 @@ export function BarsHorizontal({
         <span />
       </div>
 
-      <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto quiet-scroll">
-        {shown.map((g) => (
-          <div
-            key={g.label}
-            className="grid items-center gap-2"
-            style={{ gridTemplateColumns: COLUMNS }}
-            data-tip={`${g.label} · ${formatMetricValue(g.value, format)}`}
-          >
+      {/* THE PLOT — guides behind, rows in front, both on the same column
+          template so a guide stands exactly where its tick says it does. */}
+      <div className="relative min-h-0 flex-1">
+        {/* THE TICK GUIDES, and they are what makes the axis do its job.
+            `niceTicks` was added on 13 Sep so a bar could be read AGAINST a
+            scale rather than against its neighbours — but the numbers sat alone
+            at the top, so reading a bar's length still meant estimating across
+            open space. One hairline per tick is the same ink `cartesian.tsx`
+            spends on its horizontal grid, for the same reason.
+
+            ZERO GETS NO LINE: every bar starts there, so the bars' own left
+            edge already draws it and a second one would only thicken it. The
+            last tick is pulled back by its own width so it lands INSIDE the
+            plot rather than a pixel past its right edge. */}
+        <div aria-hidden className="pointer-events-none absolute inset-0 grid gap-2" style={{ gridTemplateColumns: COLUMNS }}>
+          <span />
+          <span className="relative block">
+            {ticks.slice(1).map((t) => (
+              <span
+                key={t}
+                className="absolute inset-y-0 w-px bg-border"
+                style={{ left: `${width(t)}%`, transform: t === ticks.at(-1) ? "translateX(-1px)" : "none" }}
+              />
+            ))}
+          </span>
+          <span />
+        </div>
+
+        {/* ROWS SHARE THE CARD'S HEIGHT rather than stacking at its top.
+            Measured before this: a four-bar tile on a 240px card ended its ink
+            at 117px and left 123px of white — 51% of the card — while the
+            pipeline beside it ended at 263px of 280px and the area chart at
+            203px of 240px. The mark was the only one on the board not filling
+            its tile, which is what "it doesn't look like the others" was.
+
+            `flex-1` with a MINIMUM is what keeps both halves true: few rows
+            grow into the space, and thirty rows hold their floor and scroll —
+            the rule this chart has had since it was written, since thirty
+            slivers is not a list anybody can read. */}
+        <div className="relative flex h-full flex-col gap-1.5 overflow-y-auto quiet-scroll">
+          {shown.map((g) => (
+            <div
+              key={g.label}
+              className="grid min-h-[1.375rem] flex-1 items-stretch gap-2"
+              style={{ gridTemplateColumns: COLUMNS }}
+              data-tip={`${g.label} · ${formatMetricValue(g.value, format)}`}
+            >
             {/* WRAPS RATHER THAN TRUNCATING, and on this chart that is not a
                 nicety. Composed ranked bars are named by their METRICS, and
                 "Speed to Lead (Felix)" beside "Speed to Lead (Rasmus)" both
@@ -128,27 +167,36 @@ export function BarsHorizontal({
                 can no longer tell apart, on the chart whose entire job is telling
                 them apart. The row grows a line instead; the grid keeps the bars
                 aligned either way. */}
-            <span className="text-xs text-muted-foreground [overflow-wrap:break-word]" title={g.label}>
-              {g.label}
-            </span>
-            {/* THE TRACK IS THE FULL SCALE, so an empty stretch to the right of a
-                short bar is the distance to the axis top rather than dead space.
-                No grey fill behind it: the row's own baseline is the measure, and
-                a track that paints itself competes with the bars for the ink. */}
-            <span className="block h-4">
+              <span className="self-center text-xs text-muted-foreground [overflow-wrap:break-word]" title={g.label}>
+                {g.label}
+              </span>
+              {/* THE TRACK IS THE FULL SCALE, so an empty stretch to the right of a
+                  short bar is the distance to the axis top rather than dead space.
+                  No grey fill behind it: the row's own baseline is the measure, and
+                  a track that paints itself competes with the bars for the ink.
+
+                  THE BAR THICKENS WITH THE ROW, between a floor and a ceiling.
+                  `h-full` inside a stretched cell makes it follow the height the
+                  row was given; `min-h-4` is the 16px it has always been, so a
+                  dense chart is unchanged and a bar can never collapse if the
+                  percentage fails to resolve; `max-h-7` stops a two-bar tile
+                  becoming two slabs. `py-1` is the air that keeps neighbours
+                  apart once they are thick. */}
+              <span className="flex h-full items-center py-1">
+                <span
+                  className="block h-full min-h-4 max-h-7 rounded-xs"
+                  style={{ width: `${width(g.value)}%`, background: accent }}
+                />
+              </span>
               <span
-                className="block h-full rounded-xs"
-                style={{ width: `${width(g.value)}%`, background: accent }}
-              />
-            </span>
-            <span
-              className="stat-numeral truncate text-right text-xs text-heading"
-              title={formatMetricValue(g.value, format)}
-            >
-              {formatMetricValue(g.value, format)}
-            </span>
-          </div>
-        ))}
+                className="stat-numeral self-center truncate text-right text-xs text-heading"
+                title={formatMetricValue(g.value, format)}
+              >
+                {formatMetricValue(g.value, format)}
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

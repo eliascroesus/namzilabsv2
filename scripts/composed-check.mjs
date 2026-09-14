@@ -307,6 +307,36 @@ const panels = await page.evaluate(() => {
   });
 });
 
+/**
+ * THE RANKED MARK'S GEOMETRY, read before the browser goes — the half no source
+ * test can see. Asserted further down, where the other verdicts are.
+ */
+const bars = await page.evaluate(() => {
+  const seen = new Set();
+  const out = [];
+  document.querySelectorAll("[data-tip]").forEach((row) => {
+    // A bar row carries a width-styled span; the funnel's tipped nodes do not.
+    if (!row.querySelector("span[style*='width']")) return;
+    const scroller = row.parentElement;
+    if (seen.has(scroller)) return;
+    seen.add(scroller);
+    const card = scroller.closest("div[class*='rounded']");
+    const box = card.getBoundingClientRect();
+    const rows = [...scroller.querySelectorAll("[data-tip]")];
+    const guides = card.querySelectorAll("span.bg-border");
+    out.push({
+      first: rows[0].getAttribute("data-tip").split(" · ")[0],
+      slack: Math.round(box.bottom - Math.max(...rows.map((r) => r.getBoundingClientRect().bottom))),
+      rowH: Math.round(rows[0].getBoundingClientRect().height),
+      barH: Math.round(rows[0].querySelector("span[style*='width']").getBoundingClientRect().height),
+      scrolls: scroller.scrollHeight > scroller.clientHeight + 1,
+      guides: guides.length,
+      guideW: guides[0] ? Math.round(guides[0].getBoundingClientRect().width) : 0,
+    });
+  });
+  return out;
+});
+
 await browser.close();
 
 if (panels && panels.length > 0) {
@@ -519,9 +549,47 @@ if (across) {
   say(ok, `the across flow measures on its own axis (${across.polys.join(", ")})`);
 }
 
+/**
+ * THE RANKED MARK'S GEOMETRY — the half no source test can see.
+ *
+ * `BarsHorizontal` draws both the composed `ranked` chart and a breakdown's
+ * `category` chart, and until 14 Sep 2026 its rows were a fixed 16px stack
+ * pinned to the top of the card: a four-bar tile ended its ink at 117px of a
+ * 240px card and left 123px of white, while the pipeline beside it ended at
+ * 263px of 280 and the area chart at 203px of 240. It was the one mark on the
+ * board not filling its tile.
+ *
+ * Rows share the card's height now, between a floor and a ceiling, and all
+ * three halves of that rule are invisible to the suite: that a roomy card is
+ * filled, that a bar never grows into a slab, and that a CROWDED one holds its
+ * floor and scrolls rather than squashing thirty groups into thirty slivers.
+ */
+for (const m of bars) {
+  const thick = m.barH >= 16 && m.barH <= 28;
+  if (!thick) problems.push(`a ranked bar measured ${m.barH}px, outside the 16–28px a row may give it (${m.first})`);
+  say(thick, `${m.first}: bar ${m.barH}px, between its floor and its ceiling`);
+
+  const guided = m.guides >= 1 && m.guideW === 1;
+  if (!guided) problems.push(`${m.first} drew ${m.guides} tick guide(s) at ${m.guideW}px — the axis measures nothing without them`);
+  say(guided, `${m.first}: ${m.guides} hairline guide(s) behind the bars`);
+
+  if (m.scrolls) {
+    const held = m.rowH >= 22;
+    if (!held) problems.push(`a crowded breakdown squashed its rows to ${m.rowH}px instead of scrolling (${m.first})`);
+    say(held, `${m.first}: crowded rows hold their ${m.rowH}px floor and scroll`);
+  } else {
+    // The pipeline leaves 17px and the area chart 37px — both their own padding.
+    const fills = m.slack <= 40;
+    if (!fills) problems.push(`a ranked tile left ${m.slack}px of its card empty below the last bar (${m.first})`);
+    say(fills, `${m.first}: fills its card (${m.slack}px below the last bar)`);
+  }
+}
+if (!bars.some((m) => m.scrolls)) problems.push("no crowded breakdown specimen — the scroll floor is unphotographed");
+if (!bars.length) problems.push("no ranked/category specimen rendered at all");
+
 console.log(
   problems.length === 0
-    ? `\n✓ ${cards.length} composed specimens: no prose on a drawing card, every refusal replaces its mark, every disclosure reachable`
+    ? `\n✓ ${cards.length} composed specimens and ${bars.length} bar marks: no prose on a drawing card, every refusal replaces its mark, every disclosure reachable, every bar chart fills its tile`
     : `\n✗ ${problems.length} problem(s):\n  ` + problems.join("\n  "),
 );
 process.exit(problems.length === 0 ? 0 : 1);
