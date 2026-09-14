@@ -47,6 +47,7 @@ const render = (over: Partial<Parameters<typeof TileConfigPanel>[0]> = {}) =>
       onClose: () => {},
       onChart: () => {},
       onMetric: () => {},
+      onOrder: () => {},
       onConfig: () => {},
       ...over,
     }),

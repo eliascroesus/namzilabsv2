@@ -26,7 +26,7 @@ import { partsOnOffer } from "@/lib/board/picker";
  */
 
 /** Below this a search box is clutter; above it, the list is a wall. */
-const SEARCH_AT = 8;
+export const SEARCH_AT = 8;
 
 /**
  * THE LIST ITSELF, WITHOUT A MODAL AROUND IT.

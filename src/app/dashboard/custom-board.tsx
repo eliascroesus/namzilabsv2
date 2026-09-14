@@ -898,6 +898,28 @@ export function CustomBoard({
               onClose={() => setConfiguring(null)}
               onChart={(c) => editTile(configuring, { chart: c })}
               onMetric={(tileKey) => editTile(configuring, { tileKey })}
+              /**
+               * ONE PATCH, BOTH HALVES. The first metric of a composed chart IS
+               * the tile, so promoting a new one repoints AND rewrites the
+               * parts. Two `editTile` calls would be a repoint racing a config
+               * write — and a parts edit deliberately skips the optimistic
+               * overlay (its numbers are resolved on the server), so the loser
+               * of that race would be computed from a stale array.
+               *
+               * AN EMPTY REMAINDER CLEARS THE KEY rather than writing `[]`: the
+               * schema's `parts` is `.min(1)`, so an empty array does not
+               * survive `parseTileConfig` and `setCustomTileAction` refuses the
+               * whole write out loud. Removing the last part is the edit most
+               * likely to be made by somebody starting over.
+               */
+              onOrder={(order) => {
+                const [anchor, ...parts] = order;
+                if (!anchor) return;
+                editTile(configuring, {
+                  tileKey: anchor,
+                  ...(parts.length > 0 ? { config: { parts } } : { clear: ["parts"] }),
+                });
+              }}
               onConfig={(set, clear) => editTile(configuring, { config: set, clear })}
             />
           );

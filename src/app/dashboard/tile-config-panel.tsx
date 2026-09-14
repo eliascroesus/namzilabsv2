@@ -11,7 +11,9 @@ import { GROUP_ACCENT, groupAccent } from "@/components/flow/node-accent";
 import { CHARTS, asChartId, blockKindOf, blockTileKey, type BlockId, type ChartId } from "@/lib/board/charts";
 import { EXITS_MAX, PARTS_SLOT, fieldsFor, type TileConfig } from "@/lib/board/tile-config";
 import { RANGE_OPTIONS, MATERIALIZED_RANGES } from "@/lib/metrics/range";
-import { MetricList } from "./add-tile-picker";
+import { MetricList, SEARCH_AT } from "./add-tile-picker";
+import { partsOnOffer } from "@/lib/board/picker";
+import { cn } from "@/lib/utils";
 import type { CustomTileOption } from "@/lib/board/types";
 
 /**
@@ -330,257 +332,189 @@ function ExitsGroup({
   );
 }
 
-function PartsGroup({
+/**
+ * THE METRICS A COMPOSED CHART IS MADE OF — one numbered list, not a picker
+ * plus a second section of chips.
+ *
+ * It was two controls: METRIC, which repointed the tile, and STAGES, which
+ * listed everything after it. They are one question asked twice — the owner's
+ * reading, and he is right: "have it be a multiple choice thing and then have
+ * it be numeric like 1, 2, 3 so we don't have the stages part". Stage 1 was
+ * always the tile's own metric, so the two lists were already one ordered
+ * sequence with a seam drawn through it.
+ *
+ * THE FIRST ROW IS STILL THE TILE, and that is why this cannot be a plain
+ * checklist. Unticking it does not remove a stage, it REPOINTS the tile — a
+ * different write. `editTile` takes `tileKey` and `config` in one patch, so the
+ * promotion is atomic: one call, not a repoint racing a parts write.
+ *
+ * ORDER STAYS EDITABLE, which a plain multi-select cannot do. A funnel's order
+ * IS its meaning — leads, then booked, then showed — and "untick everything and
+ * retick in the right sequence" is not a reorder. Selected rows sort to the top
+ * in their own order and keep the arrows they had as chips.
+ *
+ * UNITS ARE ONLY POLICED ONCE SOMETHING IS COMPOSED. With a single metric
+ * selected there is no shared axis to protect, so any metric may become the
+ * anchor — otherwise a percentage chart could never be pointed back at a count
+ * and the author would be trapped in the units they started with.
+ */
+function MetricOrderList({
   chart,
-  stored,
-  anchorKey,
-  anchorName,
+  order,
   options,
   busy,
-  onParts,
+  onOrder,
 }: {
   chart: ChartId;
-  /** `config.parts` as the SERVER last agreed it — see the draft below. */
-  stored: string[];
-  /** The tile's own `tile_key`. Fixed: it is the tile, not a member it chose. */
-  anchorKey: string;
-  anchorName: string;
+  /** `[anchor, ...parts]` — the tile's own metric first. */
+  order: string[];
   options: CustomTileOption[];
   busy: boolean;
-  /** The WHOLE array, every time. An empty one clears the key — see the panel. */
-  onParts: (next: string[]) => void;
+  onOrder: (next: string[]) => void;
 }) {
-  const [adding, setAdding] = useState(false);
+  const [query, setQuery] = useState("");
   const slot = PARTS_SLOT[chart];
-  /** Funnel and pipeline count stages, anchor included; a pie has a whole and its parts. */
-  const stages = chart === "pipeline";
+  /** Anchor included, which is what the author is counting on screen. */
+  const max = slot.max + 1;
+  const [picked, write] = useComposedDraft(order, onOrder);
 
+  const byKey = new Map(options.map((o) => [o.key, o]));
   /**
-   * THE CHIPS ARE DRAWN FROM A LOCAL DRAFT, AND THAT IS NOT A PREFERENCE.
-   *
-   * A parts edit is the one config write that does NOT go through the board's
-   * optimistic overlay: each part's numbers are resolved on the server, so
-   * `editTile` refreshes instead (see its own note — an overlaid reorder would
-   * draw the old numbers under the new labels). The consequence lands here. The
-   * `stored` prop is the server's answer and does not move until the refresh
-   * returns, so without a draft this list would sit still for the length of a
-   * round trip, and — far worse — a SECOND edit made in that window would be
-   * computed from the stale array and silently undo the first: move a stage up,
-   * remove another before the refresh lands, and the write that removes is
-   * built from the pre-move order.
-   *
-   * So the draft is what makes two quick edits compose: it follows the prop
-   * whenever the server's array actually CHANGES.
-   *
-   * A REFUSED WRITE IS THE HOLE IN THAT, and it is written down rather than
-   * implied. `editTile`'s refresh branch passes a no-op revert, so a refusal
-   * leaves the server's array exactly where it was — the signature never moves,
-   * this draft is never resynced, and the chips go on showing an order the
-   * server rejected while a toast explains why. The tile itself is correct
-   * throughout; it is the chips that are ahead. Reopening the panel clears it.
-   * Closing it properly means threading a revert down here, which is more
-   * machinery than a refusal — a rank losing sight of a metric mid-edit — is
-   * worth until somebody actually hits it.
-   *
-   * ADJUSTED DURING RENDER RATHER THAN IN AN EFFECT, which is React's own
-   * prescription for "state that follows a prop": an effect would paint the
-   * stale order for a frame first, and `stored` is a fresh array identity on
-   * every render (the config bag is re-parsed server-side), so an identity dep
-   * would loop and a value dep is exactly the signature compared here.
+   * ONLY ONCE THERE IS SOMETHING TO SHARE AN AXIS WITH — see the note above.
+   * `partsOnOffer` applies the chart's own legality rule either way.
    */
-  const [parts, write] = useComposedDraft(stored, onParts);
+  const units = picked.length > 1 ? byKey.get(picked[0])?.units : undefined;
+  const offerable = partsOnOffer(options, { need: chart, exclude: picked, units });
+  const shown = query.trim()
+    ? offerable.filter((o) => o.title.toLowerCase().includes(query.trim().toLowerCase()))
+    : offerable;
+
   const move = (i: number, by: -1 | 1) => {
-    const next = parts.slice();
+    const next = picked.slice();
     const [lifted] = next.splice(i, 1);
     next.splice(i + by, 0, lifted);
     write(next);
   };
 
-  const full = parts.length >= slot.max;
-  const missing = slot.min - parts.length;
-  const noun = stages ? "stage" : "part";
-  /**
-   * THE HINT SAYS ONE THING AT A TIME. Below the floor it says what the chart
-   * is still waiting for, because that is the state where the tile is drawing a
-   * refusal instead of a chart and the panel is where the fix lives. Once it can
-   * be drawn, it explains the anchor — and for a pie that sentence is also why
-   * there is no "Show at most" control above: the residual is arithmetic, not a
-   * roll-up of the rows that did not fit.
-   */
-  /**
-   * IS COMPOSITION WHAT DRAWS THIS TILE? The panel has to answer it exactly as
-   * `custom-tile.tsx` does, or it prints a refusal the renderer is not making.
-   *
-   * A funnel or pipeline has no other way to exist on a flow tile — no stored
-   * shape produces a `FunnelResult` — so composition always draws it. A PIE HAS
-   * A SECOND DOOR: a tile carrying its own `groups` draws them directly, and
-   * composition only takes over once the author has named parts. Without this,
-   * every grouped pie on the board grew a red-herring "Add 2 more parts before
-   * this can be drawn" over a chart that was drawing perfectly.
-   */
-  const composing = stages || parts.length > 0;
-  const hint =
-    composing && missing > 0
-      ? `Add ${missing === 1 ? "one" : missing} more ${noun}${missing === 1 ? "" : "s"} before this can be drawn.`
-      : stages
-        ? "Stage 1 is this tile’s own metric. Each stage is counted on its own over the period."
-        : /* The circle is the parts ADDED UP since 12 Sep 2026 — the tile's own
-             metric is a slice like any other, not the whole they are shares of,
-             so there is no remainder to explain any more. What the author now
-             needs telling is the thing they can no longer see: a metric left out
-             is not drawn as a gap, it simply inflates everything else. */
-          "This tile’s own metric is the first slice. The circle is every slice added together, so anything you leave out isn’t shown.";
-
-  /** A chip is one row: what it is, what it is called, and what can be done to it. */
-  const CHIP = "flex items-center gap-1 rounded-control border border-border bg-control px-2 py-1";
-  /**
-   * THE ROLE AND THE NAME ARE ONE TEXT RUN, not a caps eyebrow beside a label.
-   * "Stage 2 · Booked Leads" is a single thing being said, and splitting it in
-   * two would let the name truncate while its position stayed — the half a
-   * narrow panel can least afford to lose is the name. Colour carries the
-   * difference instead, which is what the rest of the panel does between a
-   * label and its hint.
-   */
-  const ROLE = "text-muted-foreground";
+  const full = picked.length >= max;
+  const missing = slot.min + 1 - picked.length;
+  const ROW = "flex items-center gap-1 rounded-control border border-border bg-control px-2 py-1";
 
   return (
-    <Group
-      label={`${stages ? "Stages" : "Parts"} (${stages ? parts.length + 1 : parts.length} of ${
-        stages ? slot.max + 1 : slot.max
-      })`}
-    >
-      <div>
-        <div className="flex flex-col gap-1">
-          <div className={CHIP}>
-            <span className="min-w-0 flex-1 truncate py-0.5 text-sm text-foreground">
-              {/* "Slice 1", not "Whole" — the anchor stopped being the total the
-                  parts are shares OF on 12 Sep 2026 and became one of them. A
-                  chip still reading "Whole" would be the one place left in the
-                  product teaching the old model. */}
-              <span className={ROLE}>{stages ? "Stage 1" : "Slice 1"} · </span>
-              {anchorName}
-            </span>
-          </div>
-
-          {parts.map((key, i) => {
-            /**
-             * A PART WHOSE METRIC IS GONE STILL GETS A CHIP. It may have been
-             * unpublished, deleted, or restricted to a rank this viewer is not
-             * — `options` holds none of those — and dropping the row would
-             * leave a key in the bag with nothing on screen to remove it,
-             * while the tile refuses to draw. So it says what it is and keeps
-             * its buttons.
-             */
-            const name = options.find((o) => o.key === key)?.title;
-            const what = name ?? (stages ? `stage ${i + 2}` : `part ${i + 1}`);
-            return (
-              <div key={key} className={CHIP}>
-                <span
-                  className={`min-w-0 flex-1 truncate text-sm ${name ? "text-foreground" : "text-muted-foreground"}`}
-                >
-                  {stages && <span className={ROLE}>Stage {i + 2} · </span>}
-                  {name ?? "This metric isn’t published any more"}
-                </span>
-                <Button
-                  variant="ghost"
-                  size="iconXs"
-                  disabled={busy || i === 0}
-                  onClick={() => move(i, -1)}
-                  aria-label={`Move ${what} up`}
-                  title="Move up"
-                >
-                  <ChevronUp />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="iconXs"
-                  disabled={busy || i === parts.length - 1}
-                  onClick={() => move(i, 1)}
-                  aria-label={`Move ${what} down`}
-                  title="Move down"
-                >
-                  <ChevronDown />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="iconXs"
-                  disabled={busy}
-                  onClick={() => write(parts.filter((_, j) => j !== i))}
-                  aria-label={`Remove ${what}`}
-                  title="Remove"
-                >
-                  <X />
-                </Button>
-              </div>
-            );
-          })}
-        </div>
-
-        {/*
-          THE PICKER OPENS INLINE, NOT IN A MODAL, and that is a fact about this
-          panel rather than a preference. A press anywhere outside
-          `[data-tile-panel]` or a Radix popper closes the whole panel — see the
-          pointerdown handler — and `Modal` portals to the body under neither
-          marker, so choosing a stage from a modal would dismiss the settings
-          behind it mid-edit. Inline is also where the answer belongs: the list
-          appears directly under the chips it is about to add to.
-        */}
-        {adding && (
-          <div className="mt-1 rounded-control border border-border p-1">
-            <MetricList
-              options={options}
-              chart={chart}
-              /**
-               * A STAGE MUST BE ELIGIBLE FOR THE CHART IT IS JOINING, which is
-               * a narrower question than "does it give one number".
-               *
-               * `"number"` was the obvious answer and the wrong one: every
-               * metric answers with a number, so the list offered durations and
-               * rates as stages and `compose.ts` refused them one press later.
-               * Asking for the composing chart routes the question through
-               * `tileOptions`, which has already subtracted the composed charts
-               * from any metric whose facts say it is not a tally — so the
-               * stage picker and the metric picker agree by construction rather
-               * than by two lists happening to be filtered the same way.
-               */
-              slot={chart}
-              /**
-               * MEASURED LIKE THE ANCHOR, because bars share an axis and
-               * `composeRanked` refuses a chart mixing dollars with counts. The
-               * anchor's own option carries the key, so this asks the list the
-               * question `unitsAgree` will ask the drawing — rather than
-               * letting the author find out by pressing.
-               *
-               * The anchor is the tile's own metric, so its units ARE the
-               * chart's; a chart with no anchor in `options` (a metric this
-               * viewer may not see) names none and nothing is filtered, which
-               * is the same forgiving default the `slot` rule takes.
-               */
-              units={options.find((o) => o.key === anchorKey)?.units}
-              exclude={[anchorKey, ...parts]}
-              busy={busy}
-              onPick={(key) => {
-                write([...parts, key]);
-                setAdding(false);
-              }}
-            />
-          </div>
-        )}
-
-        <Button
-          variant={adding ? "ghost" : "secondary"}
-          size="sm"
-          /* Open is always closable; the cap only ever blocks OPENING it. */
-          disabled={busy || (!adding && full)}
-          onClick={() => setAdding((v) => !v)}
-          className="mt-1 w-full justify-start"
-        >
-          {adding ? <X /> : <Plus />}
-          <span>{adding ? "Cancel" : `Add ${noun}`}</span>
-        </Button>
-
-        <FieldHint>{hint}</FieldHint>
+    <Group label={`Metrics (${picked.length} of ${max})`}>
+      <div className="flex flex-col gap-1">
+        {picked.map((key, i) => {
+          /**
+           * A METRIC THAT IS GONE STILL GETS ITS ROW. It may be unpublished,
+           * deleted, or restricted to a rank this viewer is not — `options`
+           * holds none of those — and dropping it would leave a key in the bag
+           * with nothing on screen to remove it.
+           */
+          const name = byKey.get(key)?.title;
+          return (
+            <div key={key} className={ROW}>
+              {/* THE NUMBER IS THE POINT. It is the order the chart reads in,
+                  stated plainly, where a chip used to spell "Stage 2 ·". */}
+              <span className="tnum w-5 shrink-0 text-center text-sm text-muted-foreground">{i + 1}</span>
+              <span
+                className={cn("min-w-0 flex-1 truncate py-0.5 text-sm", name ? "text-foreground" : "text-muted-foreground")}
+                title={name ?? key}
+              >
+                {name ?? "This metric isn’t published any more"}
+              </span>
+              <Button
+                variant="ghost"
+                size="iconSm"
+                aria-label={`Move ${name ?? "metric"} up`}
+                disabled={busy || i === 0}
+                onClick={() => move(i, -1)}
+              >
+                <ChevronUp />
+              </Button>
+              <Button
+                variant="ghost"
+                size="iconSm"
+                aria-label={`Move ${name ?? "metric"} down`}
+                disabled={busy || i === picked.length - 1}
+                onClick={() => move(i, 1)}
+              >
+                <ChevronDown />
+              </Button>
+              {/* THE LAST ONE CANNOT GO. A tile points at a metric; removing
+                  the only one would leave it pointing at nothing, which is a
+                  state the board has no way to draw. */}
+              <Button
+                variant="ghost"
+                size="iconSm"
+                aria-label={`Remove ${name ?? "metric"}`}
+                disabled={busy || picked.length === 1}
+                onClick={() => write(picked.filter((k) => k !== key))}
+              >
+                <X />
+              </Button>
+            </div>
+          );
+        })}
       </div>
+
+      {missing > 0 && (
+        <FieldHint>{`Add ${missing === 1 ? "one" : missing} more before this can be drawn.`}</FieldHint>
+      )}
+
+      {!full && (
+        <div className="mt-1 rounded-control border border-border p-1">
+          {offerable.length > SEARCH_AT && (
+            <div className="mb-2">
+              <Input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search metrics"
+                aria-label="Search metrics"
+                className="h-8 w-full"
+              />
+            </div>
+          )}
+          <div className="max-h-56 overflow-y-auto quiet-scroll">
+            {shown.length === 0 ? (
+              <p className="px-1 py-4 text-center text-sm text-muted-foreground">
+                {offerable.length === 0 && picked.length > 1
+                  ? "The rest of your metrics are measured differently, so they can’t share this chart’s axis."
+                  : query.trim()
+                    ? "No metric matches that."
+                    : "Every metric here is already in this chart."}
+              </p>
+            ) : (
+              shown.map((o) => (
+                <Button
+                  key={o.key}
+                  variant="ghost"
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => write([...picked, o.key])}
+                  className="h-auto w-full justify-start gap-2 px-2 py-2 text-left"
+                >
+                  <Plus className="shrink-0 text-muted-foreground" />
+                  <span className="min-w-0 flex-1 truncate">{o.title}</span>
+                </Button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* THREE CHARTS, THREE SENTENCES. The old two-branch version said "the
+          circle is every slice added together" under RANKED BARS, which draw no
+          circle and add nothing up — it predated that chart and nobody had
+          looked at the panel since. What each one owes the author is different:
+          a pipeline counts its stages separately, a pie's whole IS the sum, and
+          ranked bars only share a scale. */}
+      <FieldHint>
+        {chart === "pipeline"
+          ? "Number 1 is this tile’s own metric. Each one is counted on its own over the period."
+          : chart === "ranked"
+            ? "Number 1 is this tile’s own metric. Each bar is drawn to its own length against one shared scale."
+            : "Number 1 is this tile’s own metric. The circle is every slice added together, so anything you leave out isn’t shown."}
+      </FieldHint>
     </Group>
   );
 }
@@ -600,6 +534,7 @@ export function TileConfigPanel({
   onClose,
   onChart,
   onMetric,
+  onOrder,
   onConfig,
 }: {
   chart: string;
@@ -635,6 +570,17 @@ export function TileConfigPanel({
   onClose: () => void;
   onChart: (chart: ChartId) => void;
   onMetric: (tileKey: string) => void;
+  /**
+   * THE WHOLE ORDERED SEQUENCE OF A COMPOSED CHART — `[anchor, ...parts]`.
+   *
+   * One callback rather than `onMetric` and a parts write, because promoting a
+   * new first metric is BOTH: the tile repoints and the remainder becomes the
+   * parts. `editTile` takes `tileKey` and `config` in one patch, so the board
+   * can do it atomically — two calls would be a repoint racing a config write,
+   * against a parts edit that deliberately does not go through the optimistic
+   * overlay.
+   */
+  onOrder: (order: string[]) => void;
   /** Set some keys, clear others. Both halves optimistic; see the header. */
   onConfig: (set: TileConfig, clear?: Array<keyof TileConfig>) => void;
 }) {
@@ -754,84 +700,49 @@ export function TileConfigPanel({
         <div className="flex flex-col gap-4 p-4">
           {tab === "data" ? (
             <>
-              <Group>
-              <Row
-                label="Metric"
-                hint={`Only metrics that can be drawn as a ${(
-                  CHARTS.find((c) => c.id === chart) ?? CHARTS[0]
-                ).label.toLowerCase()} are listed.`}
-              >
-                {/* A bordered, scrolling box so the list reads as a LIST
-                    rather than as loose rows floating in the panel — the same
-                    containment the kit's Table gives a set of rows. */}
-                <div className="rounded-control border border-border p-1">
-                  {/* THE ANCHOR CANNOT BE A METRIC THAT IS ALREADY A STAGE.
-                      The parts picker excludes the anchor; without the mirror
-                      of that here, repointing this row onto a metric already in
-                      `parts` puts the same metric in the composition twice —
-                      and `compose.ts` catches it only incidentally, by
-                      identical labels, answering "rename one so they can be
-                      told apart" about a single metric that cannot be renamed
-                      apart from itself. */}
-                  <MetricList
-                    options={options}
-                    chart={chart}
-                    busy={busy}
-                    selected={tileKey}
-                    exclude={offers.has("parts") ? (config.parts ?? []) : undefined}
-                    onPick={onMetric}
-                  />
-                </div>
-              </Row>
-              </Group>
-
               {/*
-                THE COMPOSITION, DIRECTLY UNDER THE METRIC IT IS BUILT ON,
-                because the row above IS the anchor — the tile's own `tile_key`
-                is stage 1 of a funnel and the whole of a pie. Repointing that
-                row re-heads the composition, so the two questions belong
-                together and in this order.
+                ONE LIST FOR A COMPOSED CHART, TWO FOR EVERYTHING ELSE.
 
-                Offered from the one table, like every other control here:
-                `parts` appears on the funnel, pipeline and pie rows of
-                `CONFIG_FIELDS`, and a chart that does not read it cannot show
-                the editor.
+                A scorecard or a line has exactly one metric, so the question is
+                "which one" and a single-select answers it. A funnel, a pipeline
+                or a composed pie is an ORDERED SEQUENCE whose first member is
+                the tile's own metric — that was always true, and splitting it
+                across a picker and a list of chips drew a seam through one
+                question. `MetricOrderList` closes the seam and numbers the
+                rows; the repoint and the parts write leave together in one
+                `editTile` patch, so promoting a new first metric is atomic.
 
-                AND ONLY FOR A FLOW TILE, which the table cannot express —
-                exactly as the Period control below is a fact about the DATA
-                rather than about the chart. A classic funnel metric is legal as
-                `funnel`, so `offers.has("parts")` alone handed it a working
-                "Add stage" picker whose keys stored fine and then did nothing
-                at all: `page.tsx` attaches `source.parts` to the flow source
-                only, and the whole composition block in `custom-tile.tsx` sits
-                inside `source.kind === "flow"`. A control that writes a value
-                nothing can read is the precise thing `CONFIG_FIELDS` exists to
-                prevent one level up.
+                ONLY FOR A FLOW TILE, exactly as the parts editor was. A classic
+                funnel metric is legal as `funnel`, so `offers.has("parts")`
+                alone handed it a working picker whose keys stored fine and then
+                did nothing: `page.tsx` attaches `source.parts` to the flow
+                source only, and the composition block in `custom-tile.tsx` sits
+                inside `source.kind === "flow"`.
               */}
-              {offers.has("parts") && isFlow && (
-                <PartsGroup
+              {offers.has("parts") && isFlow ? (
+                <MetricOrderList
                   chart={chart}
-                  stored={config.parts ?? []}
-                  anchorKey={tileKey}
-                  /* The METRIC's name, not the tile's — the chips name the
-                     members of the composition, and a renamed tile does not
-                     rename the metric a stage is counted from. */
-                  anchorName={metricName}
+                  order={[tileKey, ...(config.parts ?? [])]}
                   options={options}
                   busy={busy}
-                  onParts={(next) =>
-                    /*
-                     * AN EMPTY ARRAY IS A CLEAR, NEVER A WRITE. The schema's
-                     * `parts` is `.min(1)`, so `[]` does not survive
-                     * `parseTileConfig` — and `setCustomTileAction` refuses
-                     * anything the parser shrinks, out loud and wholesale
-                     * ("That setting won't work: parts"). Removing the LAST
-                     * stage is exactly that case, and it is the one edit most
-                     * likely to be made by somebody starting over.
-                     */
-                    set("parts", next.length > 0 ? next : undefined)
-                  }
+                  onOrder={onOrder}
                 />
+              ) : (
+                <Group>
+                  <Row
+                    label="Metric"
+                    hint={`Only metrics that can be drawn as a ${(
+                      CHARTS.find((c) => c.id === chart) ?? CHARTS[0]
+                    ).label.toLowerCase()} are listed.`}
+                  >
+                    {/* A bordered, scrolling box so the list reads as a LIST
+                        rather than as loose rows floating in the panel — the
+                        same containment the kit's Table gives a set of rows. */}
+                    <div className="rounded-control border border-border p-1">
+                      <MetricList options={options} chart={chart} busy={busy} selected={tileKey} onPick={onMetric} />
+                    </div>
+                  </Row>
+                </Group>
               )}
 
               {/*

@@ -190,6 +190,7 @@ export function PanelSpecimen({ options }: { options: CustomTileOption[] }) {
             onClose={() => {}}
             onChart={() => {}}
             onMetric={() => {}}
+            onOrder={() => {}}
             onConfig={apply}
           />
         </div>
@@ -285,6 +286,7 @@ export function ComposedPanelSpecimen({ options }: { options: CustomTileOption[]
             onClose={() => {}}
             onChart={() => {}}
             onMetric={() => {}}
+            onOrder={() => {}}
             onConfig={() => {}}
           />
         </div>
