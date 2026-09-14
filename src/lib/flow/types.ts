@@ -179,7 +179,22 @@ export type AppConfig = z.infer<typeof AppConfigSchema>;
 
 // ---------- Aggregate ----------
 export const AGGREGATIONS = ["count", "count_distinct", "sum", "avg", "median", "min", "max"] as const;
-export const TIME_UNITS = ["day", "week", "month", "quarter", "year"] as const;
+/**
+ * THE PERIODS A TREND MAY BE BUILT ON — finest first, so the picker reads as a
+ * ladder rather than a set.
+ *
+ * `hour` JOINED ON 14 SEP 2026, at the owner's ask, and it is worth saying that
+ * nothing under it had to change: `bucketKey` has cut the ISO string at the
+ * hour since it was written, `bucketFloorMs` and `bucketNextMs` both branch on
+ * it, and the marks have drawn an hour grid ever since `bucketUnitForWindow`
+ * started choosing one for windows of two days or fewer. The engine could
+ * always answer Hour; this constant was the only thing not offering it, on the
+ * since-withdrawn ground that an hour is the grid a CHART is drawn on rather
+ * than an aggregation a metric is defined by. A sheet whose calls carry a
+ * booking hour is the counter-example — "which hour do people actually show
+ * up" is a question about the data, not about the drawing.
+ */
+export const TIME_UNITS = ["hour", "day", "week", "month", "quarter", "year"] as const;
 
 const GroupBySchema = z
   .discriminatedUnion("type", [

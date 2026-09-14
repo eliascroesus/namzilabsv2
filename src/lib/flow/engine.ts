@@ -1499,9 +1499,10 @@ export type TilePresentation = {
   timeField?: string;
   /**
    * `"hour"` is chosen by `bucketUnitForWindow` for windows of two days or
-   * fewer; it is NOT in `TIME_UNITS`, so it is not a groupBy a flow author can
-   * pick. The distinction is deliberate — this is the grid a CHART is drawn on,
-   * which the window decides, not the aggregation a metric is defined by.
+   * fewer, and since 14 Sep 2026 it is ALSO a groupBy a flow author can pick —
+   * it joined `TIME_UNITS` that day, where the note explaining the reversal
+   * lives. This field spanned both meanings all along, which is why the engine
+   * needed no change to answer it.
    */
   timeUnit?: "hour" | "day" | "week" | "month" | "quarter" | "year";
   /**
