@@ -1,39 +1,49 @@
+import { GRID_GAP_PX } from "@/lib/board/grid";
+
 /**
- * ONE WHOLE SCREEN OF ROOM BELOW THE BOARD, once the board is tall enough to
- * scroll at all.
+ * HOW MUCH EMPTY ROOM THE BOARD OWES BELOW ITS LAST TILE.
  *
- * A board taller than the window stops scrolling the moment its last tile's
- * BOTTOM reaches the bottom of the screen, so the tile furthest down can only
- * ever be read — and RESIZED — along the bottom edge.
+ * A board taller than the window stops scrolling the instant its last tile's
+ * BOTTOM meets the bottom of the screen, so the tile furthest down can only be
+ * read along the bottom edge — and only RESIZED there, a few pixels at a time,
+ * which is the complaint this exists for.
  *
- * THIS WAS CLEVERER ONCE AND THAT WAS THE MISTAKE. The first version worked out
- * the exact distance that brings the last tile to the top with the board's 16px
- * gutter above it, on the argument that anything more is dead space you can
- * scroll into. Correct, and not what the job needs: EXPANDING a bottom tile
- * eats that room as the tile grows, so the exact amount runs out precisely
- * during the gesture it was meant to help, and the owner hit it twice. A whole
- * viewport is the editor behaviour ("scroll past end") and it is what was asked
- * for, in those words: "have a vh down".
+ * WHERE THE SCROLL SHOULD STOP: with that last tile at the TOP, its own padding
+ * above it, exactly where the FIRST tile sits when the board is scrolled to the
+ * beginning. Not a whole empty screen — that was a middle draft, and scrolling
+ * into a void is its own kind of broken.
  *
- * NOTHING IS OWED TO A BOARD THAT ALREADY FITS. Handing a short board a screen
- * of padding gives it a scrollbar over nothing — a page that scrolls and shows
- * no new content reads as broken, and most boards are shorter than the screen.
+ * THE GAP IT RESTS IN IS THE BOARD'S OWN GUTTER, `GRID_GAP_PX` — the 16px
+ * between any two tiles, borrowed rather than retyped, so it cannot drift from
+ * the grid it is supposed to match.
  *
- * Pure, and measured in pixels the caller took from the live DOM rather than
- * summed from the chrome's constants: the height of that scroll region is a
- * total of the top bar, the view strip, the frame's inset and the panel's
- * padding, five numbers living in four files, and `calendar-check.mjs` already
- * carries the scar from adding them up somewhere else.
+ * AN EARLIER DRAFT MEASURED IT INSTEAD, as "however far the FIRST tile sits
+ * from the top of the content", which is a prettier idea and wrong: the board
+ * is not always the only thing in the scroller, and on a page with anything
+ * above it that distance is the height of everything above it. The check caught
+ * it reading 7208px. A gutter is a constant; the thing that genuinely varies is
+ * what sits BELOW the last tile, and that is still measured.
+ *
+ * The identity it produces, for anyone checking the algebra: scrolled fully
+ * down, the last tile's top sits `GRID_GAP_PX` from the top of the scroll
+ * region. Every other term cancels.
+ *
+ * NOTHING IS OWED TO A BOARD THAT ALREADY FITS. Handing a short board padding
+ * gives it a scrollbar over nothing, and most boards are shorter than the
+ * screen.
  */
 export function tailSpacePx(opts: {
-  /** The scroll region's visible height — `#main`'s `clientHeight`. */
+  /** The scroll region's visible height — the real scroller's, not `<main>`'s. */
   viewportPx: number;
   /** How tall the board's content is WITHOUT any tail space already added. */
   contentPx: number;
+  /** The height of the tile furthest down the board. */
+  lastTilePx: number;
+  /** What already sits below the last tile — the board's bottom inset. */
+  trailingPx: number;
 }): number {
-  const { viewportPx, contentPx } = opts;
-  if (!(viewportPx > 0)) return 0;
-  // A board that fits needs no room to scroll into.
+  const { viewportPx, contentPx, lastTilePx, trailingPx } = opts;
+  if (!(viewportPx > 0) || !(lastTilePx > 0)) return 0;
   if (contentPx <= viewportPx) return 0;
-  return Math.round(viewportPx);
+  return Math.max(0, Math.round(viewportPx - lastTilePx - GRID_GAP_PX - Math.max(0, trailingPx)));
 }

@@ -1,8 +1,17 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { pageScrollerOf } from "./board-drag";
+import { pageScrollerOf, TILE_ATTR } from "./board-drag";
+import { CELL_ATTR } from "./canvas-drag";
 import { tailSpacePx } from "@/lib/board/tail-space";
+
+/**
+ * A TILE, ON EITHER BOARD. A groups view marks its cards with `TILE_ATTR` and a
+ * custom view marks its cells with `CELL_ATTR` — two boards, one complaint, and
+ * naming only one of them is how the first attempt did nothing on half the
+ * product.
+ */
+const TILE_SELECTOR = `[${TILE_ATTR}],[${CELL_ATTR}]`;
 
 /**
  * HALF A SCREEN AND MORE OF ROOM BELOW THE BOARD, so the tile at the bottom can
@@ -53,12 +62,39 @@ export function BoardTailSpace() {
       // case this exists for.
       const scroller = pageScrollerOf(el);
       if (!scroller) return setPx(0);
+      const tiles = [...scroller.querySelectorAll<HTMLElement>(TILE_SELECTOR)];
+      if (tiles.length === 0) return setPx(0);
+
+      /**
+       * CONTENT COORDINATES — the scroller's own, so a measurement taken
+       * mid-scroll says the same thing as one taken at the top.
+       */
+      const top = scroller.getBoundingClientRect().top - scroller.scrollTop;
+      let lastBottom = -Infinity;
+      let lastTilePx = 0;
+      for (const t of tiles) {
+        const r = t.getBoundingClientRect();
+        // THE TILE THAT ENDS LOWEST, by its painted box rather than its stored
+        // row: a row can hold tiles of different heights, and the one that
+        // must come to rest at the top is whichever finishes last.
+        if (r.bottom - top > lastBottom) {
+          lastBottom = r.bottom - top;
+          lastTilePx = r.height;
+        }
+      }
       /**
        * The content WITHOUT this spacer — otherwise the measurement includes
        * what it is about to set and the board grows by its own tail forever.
        */
       const contentPx = scroller.scrollHeight - el.offsetHeight;
-      setPx(tailSpacePx({ viewportPx: scroller.clientHeight, contentPx }));
+      setPx(
+        tailSpacePx({
+          viewportPx: scroller.clientHeight,
+          contentPx,
+          lastTilePx,
+          trailingPx: contentPx - lastBottom,
+        }),
+      );
     };
 
     const ro = new ResizeObserver(measure);
