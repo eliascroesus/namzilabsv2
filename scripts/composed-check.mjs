@@ -165,17 +165,17 @@ const cards = await page.evaluate(() => {
       return /\bw-px\b/.test(cls) && /bg-card/.test(cls);
     }).length;
     /**
-     * THE DISCLOSURES LIVE IN `title` NOW, NOT ON THE CARD FACE — the owner's
-     * call, after a screenshot in which three stacked sentences took more of a
-     * four-column tile than the pipeline they were qualifying and pushed the
-     * last stage's bar under the fold.
+     * THE DISCLOSURES ARE GONE FROM THE BOARD ENTIRELY — 15 Sep 2026, the
+     * owner's call: "when I hover over the pipeline sections this text comes up
+     * please remove so it doesn't display for the user on any of the charts".
      *
-     * So this stops asserting they are VISIBLE and starts asserting they are
-     * REACHABLE, which is the property that actually has to hold: every word is
-     * still on the mark for a hover and for a screen reader, and none of it
-     * costs a row. Asserting the old way would have quietly passed on a build
-     * that dropped them altogether, because the sentences also appear in
-     * refusals.
+     * They were three stacked sentences under the mark, then a `title` on it,
+     * and now nothing. So NOTHING BELOW ASSERTS THEY EXIST, and this note is
+     * here because the summary line used to claim "every disclosure reachable"
+     * while the only remaining use of `notes` was a NEGATIVE check — a claim
+     * that passed by finding nothing, which is this repo's own worst habit
+     * printed in its own output. What `notes` still catches is an apology
+     * outliving the thing it apologised for.
      */
     const notes = titles.join("\n");
     /**
@@ -642,7 +642,7 @@ if (!bars.length) problems.push("no ranked/category specimen rendered at all");
 
 console.log(
   problems.length === 0
-    ? `\n✓ ${cards.length} composed specimens and ${bars.length} bar marks: no prose on a drawing card, every refusal replaces its mark, every disclosure reachable, every bar chart fills its tile`
+    ? `\n✓ ${cards.length} composed specimens and ${bars.length} bar marks: no prose on a drawing card, every refusal replaces its mark, every bar chart fills its tile`
     : `\n✗ ${problems.length} problem(s):\n  ` + problems.join("\n  "),
 );
 process.exit(problems.length === 0 ? 0 : 1);

@@ -792,16 +792,12 @@ export function CustomTile({
              time either reaches here both are `{label, value}[]` in `w.groups`,
              which is the whole reason the composition layer normalises into the
              same shape — a second bar component would have been the same drawing
-             maintained twice. `ranked` carries its disclosures in `title`, as the
-             other composed charts do. */
-          <div
-            className="flex min-h-0 flex-1 flex-col"
-            title={chart === "ranked" ? composeNotes.join("\n") || undefined : undefined}
-          >
+             maintained twice. */
+          <div className="flex min-h-0 flex-1 flex-col">
             <BarsHorizontal groups={w.groups!} format={bag} accent={accent} sort={config.sort} limit={config.limit} />
           </div>
         ) : chart === "pie" ? (
-          <div className="flex min-h-0 flex-1 flex-col" title={composeNotes.join("\n") || undefined}>
+          <div className="flex min-h-0 flex-1 flex-col">
             <PieChart
               groups={w.groups!}
               format={bag}
@@ -824,22 +820,14 @@ export function CustomTile({
         ) : chart === "progress" ? (
           <GoalBar value={w.value ?? 0} target={target!} format={bag} />
         ) : chart === "pipeline" ? (
-          /* THE DISCLOSURES, COSTING NO PIXELS. They used to be three stacked
-             paragraphs under the mark; `title` keeps every word reachable — on
-             hover, and to a screen reader — without taking a single row from the
-             chart. Joined with newlines because a native tooltip honours them.
-
-             THE SCROLLER CAME FROM THE RETIRED `funnel` BRANCH, and it has to:
+          /* THE SCROLLER CAME FROM THE RETIRED `funnel` BRANCH, and it has to:
              every funnel tile on every board now resolves here (see
              `asChartId`), and eight stages on a short tile still has to go
              somewhere. It is a flex COLUMN as well as a scroller — a plain block
              with `overflow-y-auto` gave `FunnelBody`'s own `flex-1` no flex
              parent to answer, so the mark sized to its content and floated in
              the top half of its card. */
-          <div
-            className="flex min-h-0 flex-1 flex-col overflow-y-auto quiet-scroll"
-            title={composeNotes.join("\n") || undefined}
-          >
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto quiet-scroll">
             <Pipeline
               result={w.funnel!}
               accent={accent}
