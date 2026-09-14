@@ -25,6 +25,7 @@ import { CHART_IDS, CHARTS, blockKindOf, chartsFor, shapeOfClassic, shapeOfTile 
 import { COMPOSED_CHARTS, parseTileConfig } from "@/lib/board/tile-config";
 import { listBoardGroups, listTilePlacements } from "@/lib/board/store";
 import { navViews } from "@/lib/board/nav-views";
+import { boardHref } from "@/lib/board/href";
 import { UNSET_TILE_KEY } from "@/lib/board/types";
 import { listBoardTiles } from "@/lib/board/tiles-store";
 import {
@@ -689,16 +690,21 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const calendarSelected =
     activeKind === "calendar" ? (placements[0]?.tileKey?.replace(/^flow:/, "") ?? null) : null;
 
-  const qs = (over: Record<string, string>) => {
-    const p = new URLSearchParams();
-    p.set("range", over.range ?? rangeKey);
-    if (over.source ?? boardSource) p.set("source", over.source ?? boardSource ?? "");
-    // The view rides along with every other filter link, so switching the range
-    // does not silently throw you back to the default board.
-    const v = over.view !== undefined ? over.view : (activeView ?? "");
-    if (v) p.set("view", v);
-    return `/dashboard?${p.toString()}`;
-  };
+  /**
+   * WHAT THIS STILL OWNS is the MERGE — "everything I am on now, except the one
+   * dimension this link changes". Which params ride along is `boardHref`'s, and
+   * it is shared with the rail: the rail used to build its own view links by
+   * hand and carried neither the range nor the source, so the same view opened
+   * from the tab strip and from the rail landed on two different windows.
+   */
+  const qs = (over: Record<string, string>) =>
+    boardHref({
+      range: over.range ?? rangeKey,
+      source: over.source ?? boardSource,
+      // The view rides along with every other filter link, so switching the range
+      // does not silently throw you back to the default board.
+      view: over.view !== undefined ? over.view : activeView,
+    });
 
   /**
    * THE STRIP, AND THE ONE TAB THAT MAY OR MAY NOT BE A ROW.

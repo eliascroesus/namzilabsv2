@@ -198,9 +198,20 @@ describe("views", () => {
     expect(page).toMatch(/activeView = views\.some\(\(v\) => v\.id === requestedView\) \? requestedView : \(ordered\[0\]\?\.id \?\? null\);/);
   });
 
-  it("carries the view through every other filter link", () => {
-    // Or changing the range would silently throw you back to the default board.
-    expect(page).toMatch(/if \(v\) p\.set\("view", v\)/);
+  it("builds its links through the shared builder rather than its own params", () => {
+    /**
+     * WHAT THIS PINS IS THE ABSENCE OF A SECOND COPY, because a second copy is
+     * what broke it. The page's `qs()` carried the range, the source and the
+     * view correctly; the rail hand-rolled `/dashboard?view=${id}` and carried
+     * none of them, so the same view reached from the tab strip and from the
+     * rail showed two different periods. WHICH params ride along now lives in
+     * `boardHref` and is asserted against real URLs in board-href.test.ts —
+     * this only refuses to let the page mint query strings of its own again.
+     *
+     * It was a grep for `if (v) p.set("view", v)`, which was the copy.
+     */
+    expect(page, "the page must delegate to boardHref").toMatch(/qs = \(over: Record<string, string>\) =>\s*\n?\s*boardHref\(/);
+    expect(page, "no hand-built board query string").not.toMatch(/`\/dashboard\?\$\{/);
   });
 
   it("asks for the default view with IS NULL, never `= NULL`", () => {

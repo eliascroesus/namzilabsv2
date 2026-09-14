@@ -11,7 +11,7 @@ import { deleteViewAction, duplicateViewAction, renameViewAction, setViewPositio
 import { MENU_ROW } from "./board-tile-menu";
 import { BOARD_GRID } from "@/components/ui/page";
 import { cn } from "@/lib/utils";
-import { customRangeKey, labelForRange, parseCustomRange } from "@/lib/metrics/range";
+import { customRangeKey, labelForRange, rangeDays } from "@/lib/metrics/range";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 /* ALIASED, because this file already imports the BUILDER's hand-rolled
    `Popover` for the view-tab menus. Two components, one word — the alias
@@ -204,8 +204,16 @@ export function RangeMenu({
    * One function answers both: a preset's own words, or the dates.
    */
   const label = labelForRange(active, now);
-  const current = parseCustomRange(active, now) ?? { key: "", start: 0, end: 0 };
-  const value = current.key ? { from: current.key.slice(0, 10), to: current.key.slice(12) } : null;
+  /**
+   * `rangeDays`, NOT `parseCustomRange`, for the same reason the line above is
+   * `labelForRange`: the control can be standing on either spelling and the
+   * calendar has to open on the window it is standing on. `parseCustomRange`
+   * answers only for a window the customer DREW, so a preset opened the grid
+   * with nothing selected — seven days of numbers on the board and "Pick a
+   * start date." under an empty month. All-time answers `null` and marks
+   * nothing, which is the truth about a window that opens at the epoch.
+   */
+  const value = rangeDays(active, now);
 
   return (
     <Anchored open={open} onOpenChange={setOpen}>

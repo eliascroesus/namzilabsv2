@@ -68,6 +68,39 @@ describe("what the rail's search can find", () => {
     expect(viewHref({ id: "v9" })).toBe("/dashboard?view=v9");
   });
 
+  it("keeps the window and the source when the search is used from the board", () => {
+    /**
+     * THE THIRD COPY OF ONE RULE. The tab strip carried the range, the rail's
+     * view list did not, and neither did this — so a view reached by TYPING
+     * its name landed on "Last 7 days" no matter what the board was showing.
+     * All three build their links through `boardHref` now.
+     */
+    expect(viewHref({ id: "v9" }, { range: "30d", source: "conn_1" })).toBe(
+      "/dashboard?range=30d&source=conn_1&view=v9",
+    );
+    // The default board keeps the window too — it is a view switch like any
+    // other, not a reset.
+    expect(viewHref({ id: null, isDefault: true }, { range: "30d" })).toBe("/dashboard?range=30d");
+  });
+
+  it("carries the window onto every view the search offers", () => {
+    const hrefs = railSearchEntries({
+      items: [],
+      views: [
+        { id: null, name: "Overview", isDefault: true },
+        { id: "v9", name: "Calls" },
+      ],
+      themes: [],
+      carried: { range: "2026-08-03..2026-08-14" },
+    })
+      .filter((e) => e.kind === "view")
+      .map((e) => e.href);
+    expect(hrefs).toEqual([
+      "/dashboard?range=2026-08-03..2026-08-14",
+      "/dashboard?range=2026-08-03..2026-08-14&view=v9",
+    ]);
+  });
+
   it("names a theme so the word people type is in the label", () => {
     /**
      * "Theme: Dark", not "Dark". Someone reaching for it types "theme" or

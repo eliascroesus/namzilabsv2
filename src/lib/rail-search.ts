@@ -35,21 +35,33 @@ export type RailSearchEntry =
  * That is the good failure; this alias is what makes it a one-line fix next
  * time. `theme.tsx` owns the ORDER and the glyphs, this owns the vocabulary.
  */
+import { boardHref } from "@/lib/board/href";
+
 export type ThemeValue = "light" | "mix" | "dark" | "system";
 
 /** The group each entry is listed under, in the order the panel draws them. */
 export const RAIL_SEARCH_GROUPS = ["Pages", "Views", "Theme"] as const;
 
 /**
- * THE VIEW'S HREF RULE, COPIED FROM THE RAIL'S OWN NESTED LIST.
+ * THE VIEW'S HREF RULE, SHARED WITH THE RAIL'S OWN NESTED LIST — it says
+ * "copied from" no longer, because copying it is what broke it.
  *
  * The default board has no `?view=` in the URL — it has no row until it is
  * adopted — so it and an adopted view that happens to be the default both
  * resolve to bare `/dashboard`. Getting this wrong sends someone to a view id
  * that does not exist, which renders the default board with the wrong tab lit.
+ *
+ * `carried` IS THE WINDOW YOU WERE LOOKING AT. Reaching a view by typing its
+ * name is a view switch like any other and must not also reset the period, so
+ * the board's `range` and `source` ride along when the search was opened from
+ * the board. The rail passes them; a caller with nothing to carry omits them
+ * and gets the same bare links this always produced.
  */
-export function viewHref(view: { id: string | null; isDefault?: boolean }): string {
-  return view.id && !view.isDefault ? `/dashboard?view=${view.id}` : "/dashboard";
+export function viewHref(
+  view: { id: string | null; isDefault?: boolean },
+  carried?: { range?: string | null; source?: string | null },
+): string {
+  return boardHref({ ...carried, view: view.id && !view.isDefault ? view.id : null });
 }
 
 export function railSearchEntries(opts: {
@@ -59,10 +71,12 @@ export function railSearchEntries(opts: {
   views: Array<{ id: string | null; name: string; isDefault?: boolean }>;
   /** The modes, from `theme.tsx` — passed in rather than imported, so this stays free of React. */
   themes: ReadonlyArray<{ value: ThemeValue; label: string }>;
+  /** The board's own window and source, so finding a view does not reset them. */
+  carried?: { range?: string | null; source?: string | null };
 }): RailSearchEntry[] {
   return [
     ...opts.items.map(({ label, href }): RailSearchEntry => ({ kind: "page", label, href })),
-    ...opts.views.map((v): RailSearchEntry => ({ kind: "view", label: v.name, href: viewHref(v) })),
+    ...opts.views.map((v): RailSearchEntry => ({ kind: "view", label: v.name, href: viewHref(v, opts.carried) })),
     /**
      * "Theme: Dark" rather than "Dark", because the words someone types are
      * "theme" or "dark" and only one of those is in a bare label. It also stops

@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { viewStrip, type BoardView } from "@/lib/board/types";
+import { boardHref } from "@/lib/board/href";
 import { GROUP_COLOR_KEYS, groupBadge, groupInk } from "@/components/flow/node-accent";
 import { railSearchEntries } from "@/lib/rail-search";
 import { CHOICES } from "@/components/theme";
@@ -403,6 +404,18 @@ export function RailContent({
   const activeView = params.get("view");
   /** The default board is `?view=` absent — and, once adopted, its own row. */
   const onDashboard = pathname === "/dashboard";
+  /**
+   * THE WINDOW AND THE SOURCE FOLLOW A VIEW SWITCH — but only from the board,
+   * which is the only page whose URL carries them. Pressing a view from
+   * Connections has nothing to preserve and lands on the board's own default,
+   * exactly as it did before.
+   *
+   * This is the half of the rule the rail was missing: the tab strip built its
+   * hrefs through the page's `qs()` and kept both, while these were hand-built
+   * as `/dashboard?view=${id}` and kept neither — so the same view reached two
+   * ways showed two different periods.
+   */
+  const carried = onDashboard ? { range: params.get("range"), source: params.get("source") } : {};
   const items = NAV.filter((i) => !hide?.includes(i.label));
 
   /**
@@ -452,6 +465,9 @@ export function RailContent({
         items: items.map(({ label, href }) => ({ label, href })),
         views: ordered,
         themes: CHOICES,
+        // Finding a view by typing its name is a view switch, so it keeps the
+        // window the same way the list below the search does.
+        carried,
       }).filter((e) => e.label.toLowerCase().includes(q))
     : [];
 
@@ -485,7 +501,7 @@ export function RailContent({
              it has been adopted it is an ordinary row with an id like any other,
              so both spellings have to resolve to the same tab. */
           const isDefault = v.isDefault || v.id == null;
-          const href = v.id && !v.isDefault ? `/dashboard?view=${v.id}` : "/dashboard";
+          const href = boardHref({ ...carried, view: v.id && !v.isDefault ? v.id : null });
           const on = onDashboard && (isDefault ? !activeView : activeView === v.id);
           return (
             <Link

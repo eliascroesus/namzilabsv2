@@ -1,3 +1,4 @@
+import { dayKey } from "./calendar";
 import type { DateRange } from "./compute";
 
 /**
@@ -406,4 +407,35 @@ export function labelForRange(key: string | undefined, now: Date = new Date()): 
   return sameYear
     ? `${day(parsed.start, false)} – ${day(parsed.end, true)}`
     : `${day(parsed.start, true)} – ${day(parsed.end, true)}`;
+}
+
+/**
+ * WHICH TWO DAYS THE CALENDAR SHOULD LIGHT UP for the window in force.
+ *
+ * The period control's picker draws a band from a `{ from, to }` pair, and it
+ * had one only for a window the customer DREW: the call site built its value
+ * out of `parseCustomRange`, which answers `null` for a preset. So opening the
+ * popover while the board showed seven days of numbers showed an empty grid
+ * under the words "Pick a start date." — the control disagreeing with the
+ * numbers beside it about what you were looking at.
+ *
+ * This answers for every spelling instead, by asking `resolveRange` — the same
+ * function the board itself resolves the URL with, so the band can never light
+ * up a window other than the one the tiles were computed for. A junk key
+ * resolves to 7d there and lights up 7d here, which is what the tiles are
+ * showing and what `labelForRange` is already printing on the trigger.
+ *
+ * `all` IS THE ONE WINDOW WITH NO ANSWER. Its range opens at the epoch, so the
+ * honest band is every month since 1970 — which says nothing, and would paint
+ * the grid solid on a control whose whole job is to show you where you are.
+ * `null` leaves the calendar unmarked, which is the truth: all-time is not a
+ * pair of days.
+ */
+export function rangeDays(key: string | undefined, now: Date = new Date()): { from: string; to: string } | null {
+  const { preset, range } = resolveRange(key, now);
+  if (preset === "all") return null;
+  // `range.to` is 23:59:59.999 of its last day — `dayKey` reads the UTC date
+  // off it, which is that day, not the next one. Every other date in this
+  // module is UTC for the same reason and the suite runs with TZ=UTC to pin it.
+  return { from: dayKey(range.from), to: dayKey(range.to) };
 }
