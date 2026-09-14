@@ -355,9 +355,16 @@ export function LineChart({
 /**
  * VERTICAL BARS, ANCHORED AT ZERO — `niceTicks` guarantees the axis includes
  * it, so a bar's height is its magnitude rather than its distance from an
- * arbitrary floor. Flat tops: a rounded cap is a radius measured against the
- * bar's WIDTH, and twelve buckets across a wide tile renders as a row of domes
- * (the lesson `Sparkbars` carries in its own comment).
+ * arbitrary floor.
+ *
+ * ROUNDED CAPS SINCE 14 SEP 2026, and the reason they were flat until then is
+ * worth keeping: an `rx` on an SVG rect is measured in USER units, which
+ * `preserveAspectRatio="none"` scales differently on each axis, so one number
+ * read as a gentle round on a wide tile and a row of domes on a narrow one —
+ * the lesson `Sparkbars` still carries in its own comment. The bars are HTML
+ * now, where a radius is pixels and the browser CLAMPS it to the box, so the
+ * cap is 8px (`--radius-md`, what every control on the board wears) and a bar
+ * too narrow to hold it gets a smaller circle rather than an ellipse.
  */
 export function BarsVertical({
   series,
@@ -398,21 +405,54 @@ export function BarsVertical({
       <div className="absolute inset-0">
         <svg className="h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
           <Gridlines ticks={ticks} lo={lo} hi={hi} />
-          {points.map((p, i) => {
-            // A null slot draws NOTHING — the gap is the rendering.
-            if (p.value == null) return null;
-            const y = yPct(p.value, lo, hi);
-            return (
-              <rect
-                key={p.bucket}
-                x={i * slot + slot * 0.15}
-                width={slot * 0.7}
-                y={Math.min(y, zero)}
-                height={Math.max(0.5, Math.abs(zero - y))}
-                fill={accent}
-              />
-            );
-          })}
+        </svg>
+
+        {/* THE BARS ARE HTML, AND THAT IS WHAT BUYS THE ROUNDED CAP.
+
+            They were `<rect>`s in the stretched SVG above, and the comment on
+            this component said flat tops were the price: `rx` is measured in
+            USER units, which `preserveAspectRatio="none"` scales differently on
+            each axis, so one radius reads as a gentle round on a wide tile and
+            a dome on a narrow one — the lesson `Sparkbars` carries too.
+
+            A CSS radius is measured in pixels and CLAMPS: asked for 8px on a
+            bar only 10px wide, the browser scales both corners to 5px and draws
+            a semicircle rather than an ellipse. So the failure the flat top
+            avoided cannot happen here, and the cap is the same 8px
+            (`--radius-md`) every control on the board wears.
+
+            The geometry is the rects' own, unchanged — the same slot maths in
+            percent, against a box the SVG shares. Value labels already rode in
+            HTML over this SVG for a related reason (they stay crisp and
+            unstretched), so the layer was already the established one. */}
+        {points.map((p, i) => {
+          // A null slot draws NOTHING — the gap is the rendering.
+          if (p.value == null) return null;
+          const y = yPct(p.value, lo, hi);
+          /**
+           * THE CAP GOES ON THE END AWAY FROM THE AXIS. A bar below zero hangs
+           * DOWN from the baseline, so rounding its top would round where it
+           * meets the axis it is measured from and leave its free end square —
+           * the drawing reading as if it grew upward into the line.
+           */
+          const below = y > zero;
+          return (
+            <span
+              key={p.bucket}
+              aria-hidden
+              className={`absolute block ${below ? "rounded-b-md" : "rounded-t-md"}`}
+              style={{
+                left: `${i * slot + slot * 0.15}%`,
+                width: `${slot * 0.7}%`,
+                top: `${Math.min(y, zero)}%`,
+                height: `${Math.max(0.5, Math.abs(zero - y))}%`,
+                background: accent,
+              }}
+            />
+          );
+        })}
+
+        <svg className="h-full w-full absolute inset-0" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
           {target != null && (
             <line
               x1="0"

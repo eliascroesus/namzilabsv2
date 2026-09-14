@@ -188,9 +188,18 @@ describe("the cartesian marks", () => {
         unit: "day",
       }),
     );
-    // Three slots, two bars — plus hit rects, which are transparent.
-    const solid = (withGap.match(/<rect(?![^>]*transparent)/g) ?? []).length;
-    expect(solid).toBe(2);
+    /**
+     * Three slots, two bars. Counted by the CAP CLASS rather than by `<rect>`:
+     * the bars became HTML spans on 14 Sep 2026 so their 8px cap could be
+     * measured in pixels instead of in the SVG's stretched user units, where a
+     * single `rx` domed a narrow bar. The claim is unchanged — a bucket with no
+     * value draws nothing — only the tag it is made of.
+     */
+    const bars = (withGap.match(/rounded-[tb]-md/g) ?? []).length;
+    expect(bars).toBe(2);
+    // And the hit bands still cover every slot, gap included, so the tooltip
+    // says "no data" there rather than saying nothing.
+    expect((withGap.match(/data-tip=/g) ?? []).length).toBe(3);
   });
 
   it("gives every bucket a hit band carrying its own pre-formatted tooltip", () => {
