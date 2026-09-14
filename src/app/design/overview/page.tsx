@@ -143,23 +143,6 @@ const DERIVED_ROW = withDerivedRange(
   DERIVED_KEY,
 );
 
-/**
- * THE PREVIOUS WINDOW, for the two-series legend node 0:5 draws.
- *
- * The real board gets this from `byRange[key].compare`, which the materializer
- * builds out of buckets the calendar already measured. This page has no board
- * behind it, so it carries its own — same bucket COUNT as `SERIES`, because the
- * chart plots the comparison by index: the nth bucket of the previous window
- * under the nth of this one.
- */
-const COMPARE = [
-  { bucket: "Aug 19", value: 7 },
-  { bucket: "Aug 20", value: 6 },
-  { bucket: "Aug 21", value: 8 },
-  { bucket: "Aug 22", value: 7 },
-  { bucket: "Aug 23", value: 4 },
-  { bucket: "Aug 24", value: 3 },
-];
 
 const SERIES = [
   { bucket: "Aug 26", value: 4 },
@@ -360,7 +343,6 @@ export default async function OverviewLab({
                 ) : (
                   <LineChart
                     series={SERIES}
-                    compare={COMPARE}
                     format={FMT[c.shape]}
                     accent={accentOf()}
                     area={c.shape === "area"}

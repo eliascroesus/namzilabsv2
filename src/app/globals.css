@@ -858,6 +858,10 @@
    * Node 35:7212 draws it rgba(10,151,213,0.5), which flattens to #84CBEA on
    * white and measures 1.79:1 — an absent line. This is the same READ at a
    * legal weight. One token, so retuning it is one edit. */
+  /* PAINTS NOTHING RIGHT NOW. The comparison line it was cut for was removed
+     on 14 Sep 2026; the stored `compare` series and its contrast-checked colour
+     both stay, so wiring "Compare To" up later needs the path back and no new
+     colour work. */
   --series-compare: #7a90b8; /* 3.23:1 on white — a line, not text */
 
   /* THE CARD — white, and it no longer borrows the chrome, because the chrome

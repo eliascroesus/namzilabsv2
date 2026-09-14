@@ -758,7 +758,6 @@ export function CustomTile({
         ) : chart === "line" || chart === "area" ? (
           <LineChart
             series={w.series!}
-            compare={w.compare}
             format={bag}
             accent={accent}
             unit={unit}

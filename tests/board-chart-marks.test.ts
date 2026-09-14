@@ -596,22 +596,28 @@ describe("the axis reads three lines, and the floor is dashed", () => {
 });
 
 /**
- * THE nTH BUCKET OF THE PREVIOUS WINDOW UNDER THE nTH OF THIS ONE.
+ * THE COMPARISON LINE IS NOT DRAWN ANY MORE.
  *
- * That is what `compare` promises in its own prop doc — "plotted by INDEX
- * rather than by bucket, which is the whole trick" — and until hourly buckets
- * arrived nothing tested it, because nothing could violate it: every
- * day-grained window and its shifted twin have the SAME number of buckets, so
- * spacing each across its own count gave the same answer.
+ * A chart used to plot the previous window as a second, thinner line behind the
+ * current one, on the current window's x positions. The tests that lived here
+ * pinned that alignment — the nth bucket of the previous window under the nth of
+ * this one — because it was the one mark on the chart whose entire meaning is
+ * which point it sits under.
  *
- * Today at an hour grid is the first case where they differ. Its series stops
- * at the last hour that has begun (17 of them at 16:00) while yesterday's is a
- * complete 24, and spacing each across its own count stretches both to the full
- * width — putting 16:00 today against 23:00 yesterday and comparing this
- * afternoon with last night. The comparison is the ONE mark on the chart whose
- * entire meaning is which point it sits under.
+ * The owner removed period comparison from the product on 14 Sep 2026, and this
+ * line was the clearest case of the lot because it had a second problem: there
+ * was NO WAY TO TURN IT OFF. The "Compare To" control that would have governed
+ * it ships disabled, titled "Comparison periods are not built yet", so the line
+ * appeared unbidden on any tile whose stored slot happened to carry one. It also
+ * fed the axis — `values` spanned both series — so a previous period several
+ * times the current one squashed the real data into the bottom of the card,
+ * which is how it was noticed.
+ *
+ * THE DATA IS UNTOUCHED. `materialize` still stores `compare` on the slot and
+ * `tests/compare-series.test.ts` still pins how it is computed, so wiring
+ * "Compare To" up properly later needs the drawing back and nothing else.
  */
-describe("the comparison line's x positions", () => {
+describe("no chart draws a second series", () => {
   const day = Date.UTC(2026, 8, 10);
   const hourly = (n: number, from: number, v: (i: number) => number) =>
     Array.from({ length: n }, (_, i) => ({
@@ -622,7 +628,6 @@ describe("the comparison line's x positions", () => {
   const markup = renderToStaticMarkup(
     createElement(LineChart, {
       series: hourly(17, day, (i) => i + 1),
-      compare: hourly(24, day - 86_400_000, () => 5),
       unit: "hour" as const,
       pad: { fill: 0, period: { from: day, to: day + 86_399_999 } },
       format: { format: "number" },
@@ -630,23 +635,21 @@ describe("the comparison line's x positions", () => {
     }),
   );
 
-  /** The prior path is the one stroked in the comparison colour. */
-  const priorD = markup.match(/<path d="([^"]+)"[^>]*stroke="var\(--color-series-compare\)"/)?.[1];
-
-  it("is drawn at all", () => {
-    expect(priorD, "no comparison path in the markup").toBeTruthy();
+  it("draws nothing in the comparison colour", () => {
+    expect(markup).not.toContain("--color-series-compare");
   });
 
-  it("ends under the current window's last point, not past it or short of it", () => {
-    const xs = [...priorD!.matchAll(/[ML] (-?[\d.]+) /g)].map((m) => Number(m[1]));
-    // 17 positions across the current grid: i/16*100, so the last is exactly
-    // 100. Spacing 24 points across their own count instead put this at 69.6.
-    expect(Math.max(...xs)).toBe(100);
-    expect(new Set(xs).size).toBe(17);
+  it("still draws the series that line sat behind", () => {
+    expect(markup).toContain("<path");
   });
 
-  it("puts hour 8 of yesterday under hour 8 of today", () => {
-    const xs = [...priorD!.matchAll(/[ML] (-?[\d.]+) /g)].map((m) => Number(m[1]));
-    expect([...new Set(xs)].sort((a, b) => a - b)[8]).toBeCloseTo((8 / 16) * 100, 6);
+  /**
+   * The axis is why this mattered beyond taste: a previous window far larger
+   * than the current one used to set the ceiling for both.
+   */
+  it("scales the axis to the current series alone", () => {
+    // The series runs 1..17, so the top tick answers to 17 and not to a prior
+    // window's peak. 20 is niceTicks' step above 17.
+    expect(markup).toContain("20");
   });
 });

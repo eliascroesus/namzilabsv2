@@ -202,7 +202,6 @@ function Gridlines({ ticks, lo, hi }: { ticks: number[]; lo: number; hi: number 
  */
 export function LineChart({
   series,
-  compare,
   format,
   accent,
   unit,
@@ -224,7 +223,6 @@ export function LineChart({
    * than this one is drawn off the top of the frame — a comparison silently
    * clipped is worse than none.
    */
-  compare?: SeriesPoint[];
   format: ChartFormat;
   accent: string;
   unit?: BucketUnit;
@@ -234,8 +232,7 @@ export function LineChart({
   target?: number | null;
 }) {
   const points = padSeries(series, unit, pad);
-  const prior = compare && compare.length > 1 ? padSeries(compare, unit, pad) : [];
-  const values = [...points, ...prior].map((p) => p.value).filter((v): v is number => v != null);
+  const values = points.map((p) => p.value).filter((v): v is number => v != null);
   // The target bounds the axis in BOTH directions. Folded into the max alone,
   // a negative goal put the dashed line 250% below the viewBox — invisible,
   // with nothing to say the goal existed.
@@ -294,57 +291,12 @@ export function LineChart({
   points.forEach((p, i) => (p.value == null ? flush() : run.push({ i, v: p.value })));
   flush();
 
-  /**
-   * The previous window's path, on the CURRENT window's x positions — which is
-   * `x`, the very same function, not a rescaling of its own count.
-   *
-   * IT USED TO SPACE ITSELF ACROSS ITS OWN LENGTH, so that a window with one
-   * bucket fewer still reached the right edge instead of stopping short. That
-   * was invisible for as long as the two lengths were always equal: every
-   * day-grained window and its shifted twin have the same number of buckets,
-   * and `withTrends` refuses a comparison that is not exactly as long as the
-   * window it was measured over, so "one bucket fewer" could not actually
-   * arrive.
-   *
-   * An hour grid produces it for real. Today's series stops at the last hour
-   * that has begun — 17 marks at 16:00 — while yesterday's is a full 24, and
-   * stretching each to the full width lays 16:00 today against 23:00 yesterday.
-   * The comparison is the one mark on this chart whose entire meaning is which
-   * point it sits under, so a cosmetic reach for the right edge cannot be worth
-   * a wrong reading. Anything past the current window's last position is
-   * dropped rather than drawn off the frame.
-   */
-  const priorRuns: string[] = [];
-  let priorOpen = false;
-  prior.slice(0, points.length).forEach((p, i) => {
-    if (p.value == null) {
-      priorOpen = false;
-      return;
-    }
-    const at = `${x(i)} ${yPct(p.value, lo, hi)}`;
-    priorRuns.push(priorOpen ? `L ${at}` : `M ${at} L ${at}`);
-    priorOpen = true;
-  });
 
   return (
     <AxisFrame ticks={ticks} format={format} labels={edgeLabels(points.map((p) => p.bucket), unit)}>
       <svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
         <Gridlines ticks={ticks} lo={lo} hi={hi} />
         {area && areaRuns.length > 0 && <path d={areaRuns.join(" ")} fill={accent} fillOpacity={0.12} />}
-        {/* BEHIND the current period, thinner, and never filled — it is the
-            reference, not the subject. Drawn before the target line so a goal
-            still reads over both. */}
-        {priorRuns.length > 0 && (
-          <path
-            d={priorRuns.join(" ")}
-            fill="none"
-            stroke="var(--color-series-compare)"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            vectorEffect="non-scaling-stroke"
-          />
-        )}
         {target != null && (
           <line
             x1="0"
