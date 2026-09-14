@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input, NativeSelect, Textarea } from "@/components/ui/input";
 import { FieldHint, FieldLabel } from "@/components/ui/field";
 import { Switch } from "@/components/ui/switch";
+import { InfoTip } from "@/components/ui/info-tip";
 import { PANEL_SHELL, PanelTabs } from "@/components/flow/panel-chrome";
 import { GROUP_ACCENT, groupAccent } from "@/components/flow/node-accent";
 import { CHARTS, asChartId, blockKindOf, blockTileKey, type BlockId, type ChartId } from "@/lib/board/charts";
@@ -53,10 +54,44 @@ type Tab = (typeof TABS)[number];
  * position. `mb-1.5` comes from `FieldLabel`, which is the kit's single value
  * for it.
  */
-function Row({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+/** The label row: the question, and an ⓘ when there is more to say about it. */
+function LabelWithInfo({ label, info }: { label: string; info?: string }) {
+  if (!info) return <FieldLabel>{label}</FieldLabel>;
+  return (
+    <div className="mb-1.5 flex items-center gap-1.5">
+      {/* `mb-0` because the row owns the gap now — leaving the label's own
+          margin would put the icon 6px above its baseline. */}
+      <FieldLabel className="mb-0">{label}</FieldLabel>
+      <InfoTip label={label}>{info}</InfoTip>
+    </div>
+  );
+}
+
+function Row({
+  label,
+  info,
+  hint,
+  children,
+}: {
+  label: string;
+  /** A DESCRIPTION — folded into the ⓘ. See `LabelWithInfo`. */
+  info?: string;
+  /**
+   * A LIVE STATE — printed under the control, where it cannot be missed.
+   *
+   * ELEVEN OF THE TWELVE SENTENCES WERE DESCRIPTIONS and moved into the ⓘ. The
+   * twelfth is the one this exists for: "this metric is computed live for the
+   * board's period, so it can't be pinned" is not an explanation of the Period
+   * control, it is the reason that control is DISABLED at this moment. Folding
+   * it into a hover leaves a greyed-out select with no visible account of
+   * itself, and the panel's own test caught exactly that.
+   */
+  hint?: string;
+  children: React.ReactNode;
+}) {
   return (
     <div>
-      <FieldLabel>{label}</FieldLabel>
+      <LabelWithInfo label={label} info={info} />
       {children}
       {hint && <FieldHint>{hint}</FieldHint>}
     </div>
@@ -71,11 +106,14 @@ function Row({ label, hint, children }: { label: string; hint?: string; children
  * grouping without a second type size or a second surface colour — the panel is
  * ONE plane, the argument `panel-chrome.tsx` makes for the builder's.
  */
-function Group({ label, children }: { label?: string; children: React.ReactNode }) {
+function Group({ label, info, children }: { label?: string; info?: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-4 border-t border-border pt-4 first:border-t-0 first:pt-0">
       {label && (
-        <p className="-mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+        <div className="-mb-1 flex items-center gap-1.5">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+          {info && <InfoTip label={label}>{info}</InfoTip>}
+        </div>
       )}
       {children}
     </div>
@@ -85,20 +123,21 @@ function Group({ label, children }: { label?: string; children: React.ReactNode 
 /** A switch with its label on the left, which is the only shape a toggle row takes. */
 function ToggleRow({
   label,
-  hint,
+  info,
   checked,
   onChange,
 }: {
   label: string;
-  hint?: string;
+  /** A DESCRIPTION — folded into the i, like every other row's. */
+  info?: string;
   checked: boolean;
   onChange: (next: boolean) => void;
 }) {
   return (
     <div className="flex items-start justify-between gap-3">
-      <div className="min-w-0">
-        <FieldLabel className="mb-0">{label}</FieldLabel>
-        {hint && <FieldHint className="mt-0.5">{hint}</FieldHint>}
+      <div className="flex min-w-0 items-center gap-1.5">
+        <FieldLabel className="mb-0 truncate">{label}</FieldLabel>
+        {info && <InfoTip label={label}>{info}</InfoTip>}
       </div>
       <Switch
         checked={checked}
@@ -122,7 +161,7 @@ function ToggleRow({
  */
 function NumberRow({
   label,
-  hint,
+  info,
   value,
   placeholder,
   min,
@@ -130,7 +169,7 @@ function NumberRow({
   onCommit,
 }: {
   label: string;
-  hint?: string;
+  info?: string;
   value: number | undefined;
   placeholder?: string;
   min?: number;
@@ -150,7 +189,7 @@ function NumberRow({
   };
 
   return (
-    <Row label={label} hint={hint}>
+    <Row label={label} info={info}>
       <Input
         type="number"
         inputMode="decimal"
@@ -261,7 +300,10 @@ function ExitsGroup({
   const CHIP = "flex items-center gap-1 rounded-control border border-border bg-control px-2 py-1";
 
   return (
-    <Group label={`Outcomes (${exits.length} of ${EXITS_MAX})`}>
+    <Group
+      label={`Outcomes (${exits.length} of ${EXITS_MAX})`}
+      info="Counts that left the funnel sideways — “Unqualified”, “No show”. They’re printed under the chart, never as a stage in it."
+    >
       <div>
         {exits.length > 0 && (
           <div className="flex flex-col gap-1">
@@ -322,11 +364,6 @@ function ExitsGroup({
           {adding ? <X /> : <Plus />}
           <span>{adding ? "Cancel" : "Add outcome"}</span>
         </Button>
-
-        <FieldHint>
-          Counts that left the funnel sideways — “Unqualified”, “No show”. They’re printed under the chart, never
-          as a stage in it.
-        </FieldHint>
       </div>
     </Group>
   );
@@ -384,7 +421,11 @@ function MetricOrderList({
    * `partsOnOffer` applies the chart's own legality rule either way.
    */
   const units = picked.length > 1 ? byKey.get(picked[0])?.units : undefined;
-  const offerable = partsOnOffer(options, { need: chart, exclude: picked, units });
+  const offerable = partsOnOffer(options, {
+    need: chart,
+    exclude: picked,
+    units,
+  });
   const shown = query.trim()
     ? offerable.filter((o) => o.title.toLowerCase().includes(query.trim().toLowerCase()))
     : offerable;
@@ -401,7 +442,16 @@ function MetricOrderList({
   const ROW = "flex items-center gap-1 rounded-control border border-border bg-control px-2 py-1";
 
   return (
-    <Group label={`Metrics (${picked.length} of ${max})`}>
+    <Group
+      label={`Metrics (${picked.length} of ${max})`}
+      info={
+        chart === "pipeline"
+          ? "Number 1 is this tile’s own metric. Each one is counted on its own over the period."
+          : chart === "ranked"
+            ? "Number 1 is this tile’s own metric. Each bar is drawn to its own length against one shared scale."
+            : "Number 1 is this tile’s own metric. The circle is every slice added together, so anything you leave out isn’t shown."
+      }
+    >
       <div className="flex flex-col gap-1">
         {picked.map((key, i) => {
           /**
@@ -417,7 +467,10 @@ function MetricOrderList({
                   stated plainly, where a chip used to spell "Stage 2 ·". */}
               <span className="tnum w-5 shrink-0 text-center text-sm text-muted-foreground">{i + 1}</span>
               <span
-                className={cn("min-w-0 flex-1 truncate py-0.5 text-sm", name ? "text-foreground" : "text-muted-foreground")}
+                className={cn(
+                  "min-w-0 flex-1 truncate py-0.5 text-sm",
+                  name ? "text-foreground" : "text-muted-foreground",
+                )}
                 title={name ?? key}
               >
                 {name ?? "This metric isn’t published any more"}
@@ -457,9 +510,7 @@ function MetricOrderList({
         })}
       </div>
 
-      {missing > 0 && (
-        <FieldHint>{`Add ${missing === 1 ? "one" : missing} more before this can be drawn.`}</FieldHint>
-      )}
+      {missing > 0 && <FieldHint>{`Add ${missing === 1 ? "one" : missing} more before this can be drawn.`}</FieldHint>}
 
       {!full && (
         <div className="mt-1 rounded-control border border-border p-1">
@@ -501,20 +552,6 @@ function MetricOrderList({
           </div>
         </div>
       )}
-
-      {/* THREE CHARTS, THREE SENTENCES. The old two-branch version said "the
-          circle is every slice added together" under RANKED BARS, which draw no
-          circle and add nothing up — it predated that chart and nobody had
-          looked at the panel since. What each one owes the author is different:
-          a pipeline counts its stages separately, a pie's whole IS the sum, and
-          ranked bars only share a scale. */}
-      <FieldHint>
-        {chart === "pipeline"
-          ? "Number 1 is this tile’s own metric. Each one is counted on its own over the period."
-          : chart === "ranked"
-            ? "Number 1 is this tile’s own metric. Each bar is drawn to its own length against one shared scale."
-            : "Number 1 is this tile’s own metric. The circle is every slice added together, so anything you leave out isn’t shown."}
-      </FieldHint>
     </Group>
   );
 }
@@ -731,7 +768,7 @@ export function TileConfigPanel({
                 <Group>
                   <Row
                     label="Metric"
-                    hint={`Only metrics that can be drawn as a ${(
+                    info={`Only metrics that can be drawn as a ${(
                       CHARTS.find((c) => c.id === chart) ?? CHARTS[0]
                     ).label.toLowerCase()} are listed.`}
                   >
@@ -770,7 +807,7 @@ export function TileConfigPanel({
                 <Group label="Layout">
                   <Row
                     label="Direction"
-                    hint={
+                    info={
                       config.flow === "across"
                         ? "Names sit above each stage and the conversion sits in the gap between two."
                         : "Stages stack downward and the width is the count. Best when there are many."
@@ -790,78 +827,87 @@ export function TileConfigPanel({
 
               {offers.has("rangeKey") && (
                 <Group label="Window">
-                <Row
-                  label="Period"
-                  hint={
-                    isFlow
-                      ? "Follows the board's pills unless you pin one here. Every period is already computed, so pinning costs nothing."
-                      : "This metric is computed live for the board's period, so it can't be pinned to another one."
-                  }
-                >
-                  <NativeSelect
-                    value={config.rangeKey ?? ""}
-                    disabled={!isFlow}
-                    aria-label="Period"
-                    onChange={(e) =>
-                      set("rangeKey", (e.target.value || undefined) as TileConfig["rangeKey"] | undefined)
+                  <Row
+                    label="Period"
+                    /* THE SPLIT THIS PANEL'S RULE IS ABOUT, in one control. A
+                     pinnable period is DESCRIBED — fold it away. A period that
+                     cannot be pinned is a disabled select, and the reason has
+                     to stay on screen beside it. */
+                    info={
+                      isFlow
+                        ? "Follows the board's pills unless you pin one here. Every period is already computed, so pinning costs nothing."
+                        : undefined
+                    }
+                    hint={
+                      isFlow
+                        ? undefined
+                        : "This metric is computed live for the board's period, so it can't be pinned to another one."
                     }
                   >
-                    <option value="">
-                      Follow the board ({RANGE_OPTIONS.find((r) => r.key === boardRange)?.label ?? boardRange})
-                    </option>
-                    {RANGE_OPTIONS.filter((r) => (MATERIALIZED_RANGES as string[]).includes(r.key)).map((r) => (
-                      <option key={r.key} value={r.key}>
-                        {r.label}
+                    <NativeSelect
+                      value={config.rangeKey ?? ""}
+                      disabled={!isFlow}
+                      aria-label="Period"
+                      onChange={(e) =>
+                        set("rangeKey", (e.target.value || undefined) as TileConfig["rangeKey"] | undefined)
+                      }
+                    >
+                      <option value="">
+                        Follow the board ({RANGE_OPTIONS.find((r) => r.key === boardRange)?.label ?? boardRange})
                       </option>
-                    ))}
-                  </NativeSelect>
-                </Row>
+                      {RANGE_OPTIONS.filter((r) => (MATERIALIZED_RANGES as string[]).includes(r.key)).map((r) => (
+                        <option key={r.key} value={r.key}>
+                          {r.label}
+                        </option>
+                      ))}
+                    </NativeSelect>
+                  </Row>
                 </Group>
               )}
 
               {(offers.has("sort") || showLimit) && (
                 <Group label="Rows">
                   <>
-              {offers.has("sort") && (
-                <Row label="Order">
-                  <NativeSelect
-                    value={config.sort ?? "stored"}
-                    aria-label="Order"
-                    onChange={(e) => set("sort", e.target.value as TileConfig["sort"])}
-                  >
-                    <option value="stored">As the metric computed them</option>
-                    <option value="value_desc">Largest first</option>
-                    <option value="value_asc">Smallest first</option>
-                    {/* "A – Z" and "Z – A" rather than one option reading "By
+                    {offers.has("sort") && (
+                      <Row label="Order">
+                        <NativeSelect
+                          value={config.sort ?? "stored"}
+                          aria-label="Order"
+                          onChange={(e) => set("sort", e.target.value as TileConfig["sort"])}
+                        >
+                          <option value="stored">As the metric computed them</option>
+                          <option value="value_desc">Largest first</option>
+                          <option value="value_asc">Smallest first</option>
+                          {/* "A – Z" and "Z – A" rather than one option reading "By
                         name": the old wording named the KEY and left the
                         DIRECTION to be discovered by trying it, and there was no
                         way to ask for the other one. */}
-                    <option value="label_asc">A – Z</option>
-                    <option value="label_desc">Z – A</option>
-                  </NativeSelect>
-                </Row>
-              )}
+                          <option value="label_asc">A – Z</option>
+                          <option value="label_desc">Z – A</option>
+                        </NativeSelect>
+                      </Row>
+                    )}
 
-              {showLimit && (
-                <NumberRow
-                  label="Show at most"
-                  hint={
-                    chart === "pie"
-                      ? "Everything past this rolls into one Other slice, and the tile says so."
-                      : "The rest stay counted — the tile prints how many it didn't show."
-                  }
-                  value={config.limit}
-                  placeholder={chart === "pie" ? "6" : "All of them"}
-                  min={1}
-                  max={50}
-                  /* CLAMPED, like Decimals below. `min`/`max` on a number
+                    {showLimit && (
+                      <NumberRow
+                        label="Show at most"
+                        info={
+                          chart === "pie"
+                            ? "Everything past this rolls into one Other slice, and the tile says so."
+                            : "The rest stay counted — the tile prints how many it didn't show."
+                        }
+                        value={config.limit}
+                        placeholder={chart === "pie" ? "6" : "All of them"}
+                        min={1}
+                        max={50}
+                        /* CLAMPED, like Decimals below. `min`/`max` on a number
                      input are constraint validation only — `.value` still
                      returns whatever was typed — so 999 rendered optimistically,
                      was refused by the server, and surfaced the raw key name in
                      a toast. */
-                  onCommit={(n) => set("limit", n == null ? undefined : Math.max(1, Math.min(50, Math.round(n))))}
-                />
-              )}
+                        onCommit={(n) => set("limit", n == null ? undefined : Math.max(1, Math.min(50, Math.round(n))))}
+                      />
+                    )}
                   </>
                 </Group>
               )}
@@ -873,12 +919,14 @@ export function TileConfigPanel({
             offers.has("text") ? (
               <Row
                 label={block === "heading" ? "Heading" : "Note"}
-                hint={block === "heading" ? undefined : "Line breaks are kept."}
+                info={block === "heading" ? undefined : "Line breaks are kept."}
               >
                 <Textarea
                   defaultValue={config.text ?? ""}
                   key={config.text ?? ""}
-                  placeholder={block === "heading" ? "Acquisition" : "What this section shows, and where the numbers come from."}
+                  placeholder={
+                    block === "heading" ? "Acquisition" : "What this section shows, and where the numbers come from."
+                  }
                   aria-label={block === "heading" ? "Heading" : "Note"}
                   maxLength={2000}
                   rows={block === "heading" ? 2 : 6}
@@ -897,165 +945,170 @@ export function TileConfigPanel({
           ) : (
             <>
               <Group>
-              <Row label="Chart">
-                {/* Only what this METRIC can be drawn as. The list came from the
+                <Row label="Chart">
+                  {/* Only what this METRIC can be drawn as. The list came from the
                     server's `chartsFor`; offering an illegal one here and
                     refusing it on click would be a menu that lies. */}
-                <div className="grid grid-cols-2 gap-1.5">
-                  {legal.map((c) => (
-                    <Button
-                      key={c.id}
-                      variant={c.id === chart ? "secondary" : "ghost"}
-                      size="sm"
-                      onClick={() => onChart(c.id)}
-                      aria-pressed={c.id === chart}
-                      className="h-auto justify-start px-2 py-1.5 text-left"
-                    >
-                      <span className="truncate text-sm">{c.label}</span>
-                    </Button>
-                  ))}
-                </div>
-              </Row>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {legal.map((c) => (
+                      <Button
+                        key={c.id}
+                        variant={c.id === chart ? "secondary" : "ghost"}
+                        size="sm"
+                        onClick={() => onChart(c.id)}
+                        aria-pressed={c.id === chart}
+                        className="h-auto justify-start px-2 py-1.5 text-left"
+                      >
+                        <span className="truncate text-sm">{c.label}</span>
+                      </Button>
+                    ))}
+                  </div>
+                </Row>
 
-              <Row label="Name" hint="Leave it empty to follow the metric's own name.">
-                <Input
-                  defaultValue={config.title ?? ""}
-                  key={config.title ?? ""}
-                  placeholder={metricName}
-                  aria-label="Chart name"
-                  maxLength={60}
-                  onBlur={(e) => {
-                    const v = e.target.value.trim();
-                    if (v !== (config.title ?? "")) set("title", v || undefined);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-                  }}
-                  className="h-8 w-full"
-                />
-              </Row>
+                <Row label="Name" info="Leave it empty to follow the metric's own name.">
+                  <Input
+                    defaultValue={config.title ?? ""}
+                    key={config.title ?? ""}
+                    placeholder={metricName}
+                    aria-label="Chart name"
+                    maxLength={60}
+                    onBlur={(e) => {
+                      const v = e.target.value.trim();
+                      if (v !== (config.title ?? "")) set("title", v || undefined);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                    }}
+                    className="h-8 w-full"
+                  />
+                </Row>
               </Group>
 
               <Group label="Appearance">
                 <>
-              {offers.has("color") && (
-                <Row
-                  label="Colour"
-                  /* On a scorecard the accent reaches the TREND LINE and
+                  {offers.has("color") && (
+                    <Row
+                      label="Colour"
+                      /* On a scorecard the accent reaches the TREND LINE and
                      nothing else — the number is ink and the goal bar is a
                      success/marker token, because a 6px measure carrying no ink
                      of its own is a stroke and the brand cannot draw one.
                      Saying so is the difference between a control that appears
                      broken and one whose scope is known. */
-                  hint={chart === "number" ? "Colours the trend line, when it's shown." : undefined}
-                >
-                  {/* THE SAME GRID THE GROUP PICKER USES — twelve swatches, two
+                      info={chart === "number" ? "Colours the trend line, when it's shown." : undefined}
+                    >
+                      {/* THE SAME GRID THE GROUP PICKER USES — twelve swatches, two
                       rows, rounded squares rather than discs, and the hue read
                       from the palette BY KEY so a re-solve restyles every board
                       at once. A list of colour names would be twelve rows to
                       say what this says at a glance. */}
-                  <div className="grid grid-cols-6 gap-1">
-                    {Object.keys(GROUP_ACCENT).map((key) => (
-                      <Button
-                        key={key}
-                        variant="ghost"
-                        size="iconSm"
-                        onClick={() => set("color", key)}
-                        aria-label={key}
-                        aria-pressed={config.color === key}
-                        title={key}
-                        className="flex items-center justify-center"
-                      >
-                        <span
-                          className="flex size-5 items-center justify-center rounded-[calc(var(--radius-control)-3px)]"
-                          style={{ background: groupAccent(key) }}
-                        >
-                          {config.color === key && <Check size={11} strokeWidth={3.5} className="text-white" />}
-                        </span>
-                      </Button>
-                    ))}
-                  </div>
-                </Row>
-              )}
+                      <div className="grid grid-cols-6 gap-1">
+                        {Object.keys(GROUP_ACCENT).map((key) => (
+                          <Button
+                            key={key}
+                            variant="ghost"
+                            size="iconSm"
+                            onClick={() => set("color", key)}
+                            aria-label={key}
+                            aria-pressed={config.color === key}
+                            title={key}
+                            className="flex items-center justify-center"
+                          >
+                            <span
+                              className="flex size-5 items-center justify-center rounded-[calc(var(--radius-control)-3px)]"
+                              style={{ background: groupAccent(key) }}
+                            >
+                              {config.color === key && <Check size={11} strokeWidth={3.5} className="text-white" />}
+                            </span>
+                          </Button>
+                        ))}
+                      </div>
+                    </Row>
+                  )}
 
-              {offers.has("precision") && (
-                <NumberRow
-                  label="Decimals"
-                  hint="Leave it empty to follow the metric's own."
-                  value={config.precision}
-                  placeholder="Follow the metric"
-                  min={0}
-                  max={4}
-                  onCommit={(n) =>
-                    set("precision", n == null ? undefined : Math.max(0, Math.min(4, Math.round(n))))
-                  }
-                />
-              )}
+                  {offers.has("precision") && (
+                    <NumberRow
+                      label="Decimals"
+                      info="Leave it empty to follow the metric's own."
+                      value={config.precision}
+                      placeholder="Follow the metric"
+                      min={0}
+                      max={4}
+                      onCommit={(n) =>
+                        set("precision", n == null ? undefined : Math.max(0, Math.min(4, Math.round(n))))
+                      }
+                    />
+                  )}
 
-              {offers.has("target") && (
-                <NumberRow
-                  label="Goal"
-                  hint={
-                    metricTarget != null
-                      ? "Empty follows the goal set on the metric itself."
-                      : "The metric has no goal of its own."
-                  }
-                  value={config.target ?? undefined}
-                  placeholder={metricTarget != null ? String(metricTarget) : "No goal"}
-                  onCommit={(n) => set("target", n)}
-                />
-              )}
-
+                  {offers.has("target") && (
+                    <NumberRow
+                      label="Goal"
+                      info={
+                        metricTarget != null
+                          ? "Empty follows the goal set on the metric itself."
+                          : "The metric has no goal of its own."
+                      }
+                      value={config.target ?? undefined}
+                      placeholder={metricTarget != null ? String(metricTarget) : "No goal"}
+                      onCommit={(n) => set("target", n)}
+                    />
+                  )}
                 </>
               </Group>
 
               <Group label="What to show">
                 <>
-              {offers.has("showGoal") && (
-                <ToggleRow
-                  label="Mark the goal"
-                  hint={chart === "number" ? "Adds a progress bar under the number." : "Draws it as a dashed line."}
-                  checked={config.showGoal === true}
-                  onChange={(v) => set("showGoal", v)}
-                />
-              )}
+                  {offers.has("showGoal") && (
+                    <ToggleRow
+                      label="Mark the goal"
+                      info={chart === "number" ? "Adds a progress bar under the number." : "Draws it as a dashed line."}
+                      checked={config.showGoal === true}
+                      onChange={(v) => set("showGoal", v)}
+                    />
+                  )}
 
-              {offers.has("showSpark") && (
-                <ToggleRow
-                  label="Show the trend"
-                  hint="A small line under the number. Needs a metric with a trend."
-                  checked={config.showSpark === true}
-                  onChange={(v) => set("showSpark", v)}
-                />
-              )}
+                  {offers.has("showSpark") && (
+                    <ToggleRow
+                      label="Show the trend"
+                      info="A small line under the number. Needs a metric with a trend."
+                      checked={config.showSpark === true}
+                      onChange={(v) => set("showSpark", v)}
+                    />
+                  )}
 
-              {offers.has("showLabels") && (
-                <ToggleRow
-                  label="Label every bar"
-                  hint="Printed only when twelve or fewer bars fit."
-                  checked={config.showLabels === true}
-                  onChange={(v) => set("showLabels", v)}
-                />
-              )}
+                  {offers.has("showLabels") && (
+                    <ToggleRow
+                      label="Label every bar"
+                      info="Printed only when twelve or fewer bars fit."
+                      checked={config.showLabels === true}
+                      onChange={(v) => set("showLabels", v)}
+                    />
+                  )}
 
-              {offers.has("donut") && (
-                <ToggleRow label="Cut out the middle" checked={config.donut === true} onChange={(v) => set("donut", v)} />
-              )}
+                  {offers.has("donut") && (
+                    <ToggleRow
+                      label="Cut out the middle"
+                      checked={config.donut === true}
+                      onChange={(v) => set("donut", v)}
+                    />
+                  )}
 
-              {offers.has("legend") && (
-                <Row label="Legend">
-                  <NativeSelect
-                    value={config.legend ?? ""}
-                    aria-label="Legend"
-                    onChange={(e) => set("legend", (e.target.value || undefined) as TileConfig["legend"] | undefined)}
-                  >
-                    <option value="">Follow the tile&rsquo;s width</option>
-                    <option value="right">Beside it</option>
-                    <option value="bottom">Underneath</option>
-                    <option value="none">Hidden</option>
-                  </NativeSelect>
-                </Row>
-              )}
+                  {offers.has("legend") && (
+                    <Row label="Legend">
+                      <NativeSelect
+                        value={config.legend ?? ""}
+                        aria-label="Legend"
+                        onChange={(e) =>
+                          set("legend", (e.target.value || undefined) as TileConfig["legend"] | undefined)
+                        }
+                      >
+                        <option value="">Follow the tile&rsquo;s width</option>
+                        <option value="right">Beside it</option>
+                        <option value="bottom">Underneath</option>
+                        <option value="none">Hidden</option>
+                      </NativeSelect>
+                    </Row>
+                  )}
                 </>
               </Group>
             </>

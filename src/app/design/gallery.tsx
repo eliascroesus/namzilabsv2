@@ -93,6 +93,7 @@ import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetT
 import { Skeleton } from "@/components/ui/skeleton";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Switch } from "@/components/ui/switch";
+import { InfoTip } from "@/components/ui/info-tip";
 import { Table, TableShell, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Toast } from "@/components/ui/toast";
@@ -389,6 +390,18 @@ export function Gallery() {
             <Switch checked={on} onClick={() => setOn(!on)} aria-label="Flow enabled" />
             <Switch checked={small} size="sm" onClick={() => setSmall(!small)} aria-label="Compact rows" />
             <Switch checked={false} disabled aria-label="Disabled switch" />
+          </Spec>
+          <Spec
+            name="InfoTip"
+            note="The ⓘ beside a field label. It carries the sentence a control used to print under itself — a DESCRIPTION, never a live state, because a message explaining why something is disabled must not be behind a hover. Radix, so it opens on focus as well as hover; it brings its own provider, since a bare Radix tooltip THROWS without one."
+          >
+            <span className="inline-flex items-center gap-1.5">
+              <span className="text-xs font-semibold uppercase tracking-wide text-foreground">Period</span>
+              <InfoTip label="Period">
+                Follows the board&rsquo;s pills unless you pin one here. Every period is already computed, so pinning
+                costs nothing.
+              </InfoTip>
+            </span>
           </Spec>
         </Family>
 
