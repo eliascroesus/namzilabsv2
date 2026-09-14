@@ -437,17 +437,28 @@ export const PARTS_SLOT = {
    * split into "it" and "everything else". With the anchor in the circle, one
    * part already makes two slices, which is a pie.
    */
-  pie: { min: 1, max: 5 },
-  /** 7 others + the anchor = 8 bars, which is what fits before the list scrolls. */
-  ranked: { min: 1, max: 7 },
+  pie: { min: 1, max: 5, counts: true },
+  /**
+   * 7 others + the anchor = 8 bars, which is what fits before the list scrolls.
+   *
+   * `counts: false` IS THE WHOLE DIFFERENCE between this and the two above, and
+   * it is written here because two files were deciding it separately. A funnel
+   * divides one member by the next and a pie divides one by the sum, so a rate
+   * or a duration among their members is nonsense — `composeRanked` skips that
+   * rule deliberately, since nothing here is divided by anything and "Speed to
+   * Lead" per rep is exactly the chart somebody wants. The PICKER did not know,
+   * and subtracted every composed chart from any metric whose facts said it was
+   * not a tally, so a percentage metric was offered no ranked chart at all.
+   */
+  ranked: { min: 1, max: 7, counts: false },
   progress: { min: 0, max: 0 },
   /** 7 parts + the anchor = 8 stages, which is what a funnel tile holds before it scrolls. */
-  pipeline: { min: 1, max: 7 },
+  pipeline: { min: 1, max: 7, counts: true },
   table: { min: 0, max: 0 },
   heading: { min: 0, max: 0 },
   text: { min: 0, max: 0 },
   divider: { min: 0, max: 0 },
-} as const satisfies Record<ChartId, { min: number; max: number }>;
+} as const satisfies Record<ChartId, { min: number; max: number; counts?: boolean }>;
 
 /** True when this chart is drawn from `config.parts` rather than from its own data. */
 export function composes(chart: ChartId): boolean {
@@ -465,6 +476,38 @@ export function composes(chart: ChartId): boolean {
  * fact about the number.
  */
 export const COMPOSED_CHARTS: ChartId[] = (Object.keys(PARTS_SLOT) as ChartId[]).filter(composes);
+
+/**
+ * DOES THIS CHART DO ARITHMETIC ACROSS ITS MEMBERS?
+ *
+ * A funnel's conversion divides one member by the next and a pie's share
+ * divides one by the sum, so a rate, an average or a duration among them is
+ * nonsense. Ranked bars do no arithmetic at all — each bar is one metric drawn
+ * at its own length — which is why `composeRanked` has always skipped that
+ * refusal.
+ *
+ * ONE PLACE, TWO READERS. `compose.ts` asks this to decide what to refuse and
+ * the picker asks it to decide what to offer. They disagreed before: the
+ * renderer took a percentage as a bar and the picker would not list one, so the
+ * feature existed and was unreachable.
+ */
+export function countsThings(chart: ChartId): boolean {
+  // `in` rather than a cast: the table is `as const`, so a chart that composes
+  // nothing genuinely has no `counts` key and the narrowing says so honestly.
+  const slot = PARTS_SLOT[chart];
+  return "counts" in slot && slot.counts === true;
+}
+
+/**
+ * The composed charts a metric with these facts may NOT be drawn as.
+ *
+ * NEGATIVE, so absence still draws: only a positive `countable: false` — an
+ * average, a duration, a rate — bars anything. A tile not yet restamped keeps
+ * every chart it had, because "we have not asked yet" is not "no".
+ */
+export function composedChartsBarred(facts: { countable?: boolean } | undefined): ChartId[] {
+  return facts?.countable === false ? COMPOSED_CHARTS.filter(countsThings) : [];
+}
 
 /** What this chart offers, in the order the panel should show it. */
 export function fieldsFor(chart: ChartId): readonly (keyof TileConfig)[] {

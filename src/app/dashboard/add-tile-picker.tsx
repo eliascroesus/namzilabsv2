@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Modal, ModalTitle } from "@/components/ui/modal";
 import { CHARTS, type ChartId } from "@/lib/board/charts";
 import type { CustomTileOption } from "@/lib/board/types";
+import { partsOnOffer } from "@/lib/board/picker";
 
 /**
  * CHANGE WHICH METRIC A TILE POINTS AT.
@@ -44,6 +45,7 @@ export function MetricList({
   chart,
   slot,
   exclude,
+  units,
   busy,
   selected,
   onPick,
@@ -83,6 +85,17 @@ export function MetricList({
    * endpoint); this is the courtesy that stops the author picking a refusal.
    */
   exclude?: string[];
+  /**
+   * WHAT THE CHART IS ALREADY MEASURED IN — only the parts picker passes it.
+   *
+   * Bars share an axis, so `composeRanked` refuses a chart mixing dollars with
+   * counts. Passing the anchor's `unitsKey` here means the list never offers
+   * the mismatch, which is the same promise the `slot` prop above exists to
+   * keep: a list that offers what it will then reject is worse than a shorter
+   * one. Omitted, nothing is filtered — every caller that predates composition
+   * keeps the behaviour it had.
+   */
+  units?: string;
   busy: boolean;
   /** The tile's current metric, ticked so the list says where you already are. */
   selected?: string;
@@ -106,9 +119,17 @@ export function MetricList({
    * board whose countable metrics are all in use reads "No metric matches
    * that", which is exactly what has happened to the list.
    */
-  const drawable = options.filter((o) => o.charts.includes(need));
-  const taken = new Set(exclude ?? []);
-  const eligible = taken.size > 0 ? drawable.filter((o) => !taken.has(o.key)) : drawable;
+  const drawable = partsOnOffer(options, { need });
+  /**
+   * THE SAME LIST WITHOUT THE UNITS RULE, and it exists only to choose a
+   * sentence. Units invented a FOURTH empty state: a board of eight countable
+   * metrics and one percentage, adding to the percentage, empties this list
+   * while "every metric here is already in this chart" is plainly false — seven
+   * of them are not in it and never can be. Naming the real reason is the same
+   * standard the three sentences below already hold themselves to.
+   */
+  const free = partsOnOffer(options, { need, exclude });
+  const eligible = partsOnOffer(options, { need, exclude, units });
   const shown = query.trim()
     ? eligible.filter((o) => o.title.toLowerCase().includes(query.trim().toLowerCase()))
     : eligible;
@@ -139,7 +160,9 @@ export function MetricList({
               ? `Nothing here can be drawn as a ${label} yet.`
               : query.trim()
                 ? "No metric matches that."
-                : "Every metric here is already in this chart."}
+                : free.length > 0
+                  ? "The rest of your metrics are measured differently, so they can’t share this chart’s axis."
+                  : "Every metric here is already in this chart."}
           </p>
         ) : (
           shown.map((o) => (

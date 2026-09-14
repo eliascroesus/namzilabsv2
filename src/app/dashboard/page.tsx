@@ -22,7 +22,8 @@ import { BoardLayout } from "./board-layout";
 import { CustomBoard, type CanvasTile } from "./custom-board";
 import type { CustomTileSource } from "@/components/custom-tile";
 import { CHART_IDS, CHARTS, blockKindOf, chartsFor, shapeOfClassic, shapeOfTile } from "@/lib/board/charts";
-import { COMPOSED_CHARTS, parseTileConfig } from "@/lib/board/tile-config";
+import { composedChartsBarred, parseTileConfig } from "@/lib/board/tile-config";
+import { unitsKey } from "@/lib/board/compose";
 import { listBoardGroups, listTilePlacements } from "@/lib/board/store";
 import { navViews } from "@/lib/board/nav-views";
 import { boardHref } from "@/lib/board/href";
@@ -907,7 +908,13 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
    */
   const tileOptions: CustomTileOption[] = [
     ...flowTiles.map((row) => {
-      const stored = (row.tile ?? {}) as { name?: string; facts?: { countable?: boolean } };
+      const stored = (row.tile ?? {}) as {
+        name?: string;
+        facts?: { countable?: boolean };
+        format?: string;
+        currency?: string;
+        unit?: string;
+      };
       /**
        * A METRIC THAT IS NOT A TALLY IS NOT OFFERED AS A FUNNEL OR A PIE, and
        * this is the half of the rule `charts.ts` deliberately cannot enforce.
@@ -927,12 +934,26 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
        * NEGATIVE, so absence still draws: only a positive `false` — an average,
        * a duration, a rate — removes anything. A tile not yet restamped keeps
        * every chart it had.
+       *
+       * RANKED BARS ARE NOT SUBTRACTED, and the rule for which charts are lives
+       * in `composedChartsBarred` beside `composeRanked`'s own. This used to
+       * remove all three, which made the renderer's deliberate acceptance of
+       * durations and rates unreachable: a percentage metric was offered no
+       * ranked chart, so the only way to rank two rates side by side was not to
+       * have one.
        */
-      const composedOut: string[] = stored.facts?.countable === false ? COMPOSED_CHARTS : [];
+      const composedOut: string[] = composedChartsBarred(stored.facts);
       return {
         key: tileKeyOfFlow(row.flowId, row.outputNodeId),
         title: stored.name ?? `Output ${row.outputNodeId.slice(0, 8)}`,
         charts: (chartsFor(shapeOfTile(row.tile)) as string[]).filter((c) => !composedOut.includes(c)),
+        /**
+         * WHAT THIS METRIC IS MEASURED IN, so the parts picker can offer only
+         * metrics that may share an axis with it. The same three fields
+         * `unitsAgree` compares, through the same function, rather than a
+         * second opinion about what "the same units" means.
+         */
+        units: unitsKey({ format: stored.format, currency: stored.currency, unit: stored.unit }),
       };
     }),
   ].filter((o) => o.charts.length > 0);

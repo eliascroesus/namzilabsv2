@@ -689,14 +689,24 @@ export default function CanvasSpecimen() {
         </p>
         <div className="mt-4">
           <ComposedPanelSpecimen
+            /* `units` is `unitsKey`'s string — what the parts list filters by,
+               so the mixed board below is what makes that rule visible. The
+               COUNTS may anchor any of the three composed charts; the RATES and
+               the currency may anchor only ranked bars, because a funnel and a
+               pie divide their members. */
             options={[
-              { key: "flow:demo:t1", title: "Total Leads", charts: ["number", "pie", "funnel", "pipeline"] },
-              { key: "flow:demo:t2", title: "Booked Leads", charts: ["number", "pie", "funnel", "pipeline"] },
-              { key: "flow:demo:t3", title: "On Calendar", charts: ["number", "pie", "funnel", "pipeline"] },
-              { key: "flow:demo:t4", title: "Ads Leads", charts: ["number", "pie", "funnel", "pipeline"] },
-              { key: "flow:demo:t5", title: "Organic Leads", charts: ["number", "pie", "funnel", "pipeline"] },
-              { key: "flow:demo:t6", title: "Unclaimed Leads", charts: ["number", "pie", "funnel", "pipeline"] },
-              { key: "flow:demo:t7", title: "Showed", charts: ["number", "pie", "funnel", "pipeline"] },
+              ...["Total Leads", "Booked Leads", "On Calendar", "Ads Leads", "Organic Leads", "Unclaimed Leads", "Showed"].map(
+                (title, i) => ({
+                  key: `flow:demo:t${i + 1}`,
+                  title,
+                  charts: ["number", "pie", "funnel", "pipeline", "ranked"],
+                  units: "number||",
+                }),
+              ),
+              { key: "flow:demo:p1", title: "Booking rate", charts: ["number", "ranked"], units: "percent||" },
+              { key: "flow:demo:p2", title: "Show up rate", charts: ["number", "ranked"], units: "percent||" },
+              { key: "flow:demo:p3", title: "Close Rate", charts: ["number", "ranked"], units: "percent||" },
+              { key: "flow:demo:c1", title: "Revenue", charts: ["number", "ranked"], units: "currency|USD|" },
             ]}
           />
         </div>

@@ -220,8 +220,11 @@ export function PanelSpecimen({ options }: { options: CustomTileOption[] }) {
  *   parts across — and the heading reading "Parts (6 of 5)" beside a disabled
  *   Add button is the only thing on screen that explains the tile's refusal.
  */
+/** Which metric the panel is FOR. Most cases use the board's own first tile. */
+const anchorOf = (c: { anchor?: string }) => c.anchor ?? "flow:demo:t1";
+
 export function ComposedPanelSpecimen({ options }: { options: CustomTileOption[] }) {
-  const CASES = [
+  const CASES: Array<{ label: string; chart: "pipeline" | "pie" | "ranked"; anchor?: string; parts: string[] }> = [
     {
       label: "A pipeline, one stage unpublished",
       chart: "pipeline" as const,
@@ -232,6 +235,33 @@ export function ComposedPanelSpecimen({ options }: { options: CustomTileOption[]
       chart: "pie" as const,
       parts: ["flow:demo:t2", "flow:demo:t3", "flow:demo:t4", "flow:demo:t5", "flow:demo:t6", "flow:demo:t7"],
     },
+    /**
+     * RANKED BARS ANCHORED ON A RATE — the state no source test can see.
+     *
+     * Two rules meet here and both used to be invisible until you pressed
+     * something: a percentage may anchor a ranked chart (it may not anchor a
+     * funnel or a pie, which divide their members), and the parts list may then
+     * offer only the other percentages, because bars share an axis. Rendering
+     * it here is how the list's contents can actually be read.
+     */
+    {
+      label: "Ranked bars on a rate — only rates may join",
+      chart: "ranked" as const,
+      anchor: "flow:demo:p1",
+      parts: ["flow:demo:p2"],
+    },
+    /**
+     * THE FOURTH EMPTY STATE, which units invented. Every rate on this board is
+     * already a bar while eight counts and a currency sit unused, so the list
+     * is empty and "every metric here is already in this chart" would be
+     * plainly false. The sentence has to name the real reason.
+     */
+    {
+      label: "Ranked bars with every compatible metric used",
+      chart: "ranked" as const,
+      anchor: "flow:demo:p1",
+      parts: ["flow:demo:p2", "flow:demo:p3"],
+    },
   ];
   return (
     <div className="grid gap-4 lg:grid-cols-2" data-composed-panel>
@@ -239,10 +269,13 @@ export function ComposedPanelSpecimen({ options }: { options: CustomTileOption[]
         <div key={c.label} className="relative h-[600px] overflow-hidden rounded-surface [transform:translateZ(0)]">
           <TileConfigPanel
             chart={c.chart}
-            charts={["number", "pie", "funnel", "pipeline"]}
+            charts={["number", "pie", "funnel", "pipeline", "ranked"]}
             config={{ parts: c.parts }}
-            metricName="Total Leads"
-            tileKey="flow:demo:t1"
+            metricName={options.find((o) => o.key === anchorOf(c))?.title ?? "Total Leads"}
+            /* The ANCHOR, which is the tile's own metric — per case now, so a
+               chart anchored on a rate can stand beside one anchored on a
+               count. Its units are what the parts list filters by. */
+            tileKey={anchorOf(c)}
             metricTarget={null}
             isFlow
             boardRange="7d"

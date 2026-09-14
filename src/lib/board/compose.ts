@@ -36,6 +36,7 @@
  * both come back in `notes`, which the tile renders every time.
  */
 import { funnelFromCounts, type FunnelResult } from "@/lib/metrics/funnel";
+import { countsThings } from "@/lib/board/tile-config";
 
 /**
  * WHAT A MEMBER IS MEASURED IN — deliberately looser than the renderer's
@@ -121,9 +122,24 @@ function nameList(names: string[]): string {
  * `durationDisplay` is not compared: it is a display choice, and a duration
  * cannot be a member anyway (it is not `countable`).
  */
+/**
+ * THE ONE STRING THAT SAYS WHETHER TWO METRICS ARE MEASURED ALIKE.
+ *
+ * Exported because the PICKER needs the same answer the renderer reaches: a
+ * parts list that offers dollars beside counts is a list whose next press is a
+ * refusal, and the fix is for both to key on the same three fields rather than
+ * for the list to approximate this in its own words.
+ *
+ * `format` falls back to "number" because `custom-tile.tsx` does — a legacy
+ * tile with no stored format draws as a plain number, and a picker that read it
+ * as a fourth kind would bar it from a chart it renders perfectly well.
+ */
+export function unitsKey(format: MemberUnits): string {
+  return `${format.format ?? "number"}|${format.currency ?? ""}|${format.unit ?? ""}`;
+}
+
 function unitsAgree(members: ComposeMember[]): boolean {
-  const k = (m: ComposeMember) => `${m.format.format ?? "number"}|${m.format.currency ?? ""}|${m.format.unit ?? ""}`;
-  return new Set(members.map(k)).size === 1;
+  return new Set(members.map((m) => unitsKey(m.format))).size === 1;
 }
 
 /**
@@ -452,7 +468,9 @@ export function composeRanked(
     return { refusal: `Ranked bars show at most ${slot.max + 1} metrics — remove some in the tile’s settings.` };
   }
 
-  const shared = refuseShared(members, "Ranked bars", { tally: false });
+  // `countsThings` rather than a literal `false`: the picker reads the same
+  // fact to decide what to OFFER, and the two spent a release disagreeing.
+  const shared = refuseShared(members, "Ranked bars", { tally: countsThings("ranked") });
   if (shared) return shared;
 
   const blank = members.filter((m) => m.value == null);

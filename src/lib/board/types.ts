@@ -72,7 +72,15 @@ export type BoardView = { id: string | null; name: string; pos: string; kind: Bo
  * an interface offers and what it draws, which is the gap this whole feature
  * exists to close.
  */
-export type CustomTileOption = { key: string; title: string; charts: string[] };
+/**
+ * `units` is `unitsKey`'s string — the format, the currency and the unit, which
+ * is exactly what `compose.ts` compares when it refuses a chart drawn in two
+ * measures. It rides on the option so the parts picker can decline to offer the
+ * mismatch instead of letting the author discover it by pressing. Optional
+ * because a fixture-built option (the design harness) has none, and absence
+ * means "do not ask" rather than "does not match".
+ */
+export type CustomTileOption = { key: string; title: string; charts: string[]; units?: string };
 
 /**
  * ONE CHART ON A CUSTOM VIEW, as the board reads it.

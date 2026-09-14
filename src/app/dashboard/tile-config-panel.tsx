@@ -544,6 +544,19 @@ function PartsGroup({
                * than by two lists happening to be filtered the same way.
                */
               slot={chart}
+              /**
+               * MEASURED LIKE THE ANCHOR, because bars share an axis and
+               * `composeRanked` refuses a chart mixing dollars with counts. The
+               * anchor's own option carries the key, so this asks the list the
+               * question `unitsAgree` will ask the drawing — rather than
+               * letting the author find out by pressing.
+               *
+               * The anchor is the tile's own metric, so its units ARE the
+               * chart's; a chart with no anchor in `options` (a metric this
+               * viewer may not see) names none and nothing is filtered, which
+               * is the same forgiving default the `slot` rule takes.
+               */
+              units={options.find((o) => o.key === anchorKey)?.units}
               exclude={[anchorKey, ...parts]}
               busy={busy}
               onPick={(key) => {
