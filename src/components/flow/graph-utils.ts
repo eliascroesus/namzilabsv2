@@ -415,9 +415,11 @@ export function computeVerticalLayout(nodes: FNode[], allEdges: Edge[]): Map<str
     if (kids.length === 0) return { lo: 0, hi: 0 };
 
     const offsets: number[] = [];
+    const bands: Band[] = [];
     let band: Band | null = null;
     for (const kid of kids) {
       const c = layoutSubtree(kid);
+      bands.push(c);
       // Clear of everything the siblings already placed occupy, and never closer
       // than one column even when they are single cards: two lanes sharing a
       // column would read as one lane.
@@ -428,6 +430,30 @@ export function computeVerticalLayout(nodes: FNode[], allEdges: Edge[]): Map<str
       band = band === null
         ? { lo: c.lo, hi: c.hi }
         : { lo: Math.min(band.lo, shift + c.lo), hi: Math.max(band.hi, shift + c.hi) };
+    }
+
+    /**
+     * ONE PITCH FOR ALL OF A STEP'S BRANCHES, so a fork looks like a fork.
+     *
+     * Clearing each sibling by exactly what its neighbour occupies is the tight
+     * answer and it produces a RAGGED fan: on the six-way Split that prompted
+     * this, the three branches carrying nested splits sat 774px apart while the
+     * three single-card branches sat 344px apart, and the hub — wherever you put
+     * it — had the wide half on one side and the bunched half on the other. It
+     * read as lopsided because it was, and no amount of moving the hub fixes a
+     * fan whose gaps differ by a factor of two.
+     *
+     * So every gap becomes the widest gap. The branches stay in order and stay
+     * clear of each other (the pitch is the MAX of the gaps, so no pair ends up
+     * closer than it already was), the hub lands dead centre, and an odd split
+     * puts its middle branch exactly underneath. It is bought with width — 3096px
+     * to 4300px on that flow — which is why `MIN_ZOOM` came down to a quarter.
+     */
+    if (offsets.length > 1) {
+      let pitch = 0;
+      for (let i = 1; i < offsets.length; i++) pitch = Math.max(pitch, offsets[i] - offsets[i - 1]);
+      for (let i = 0; i < offsets.length; i++) offsets[i] = i * pitch;
+      band = bands.reduce<Band>((acc, c, i) => ({ lo: Math.min(acc.lo, offsets[i] + c.lo), hi: Math.max(acc.hi, offsets[i] + c.hi) }), { lo: Infinity, hi: -Infinity });
     }
 
     /**
@@ -448,7 +474,23 @@ export function computeVerticalLayout(nodes: FNode[], allEdges: Edge[]): Map<str
      */
     const voters = kids.map((_, i) => i).filter((i) => (sourcesOf.get(kids[i]) ?? []).length <= 1);
     const vote = voters.length > 0 ? voters : kids.map((_, i) => i);
-    const centre = (offsets[vote[0]] + offsets[vote[vote.length - 1]]) / 2;
+    /**
+     * THE MIDDLE BRANCH, NOT THE MIDDLE OF THE OUTERMOST TWO.
+     *
+     * Halfway between the first and last branch is only the middle when the
+     * branches are evenly spaced, and they are not: a branch carrying a nested
+     * split is held further from its neighbour than a branch that is one card.
+     * So on a six-way Split whose left branches were the deep ones, four heads
+     * sat to the right of the hub and two to the left — a fork that does not
+     * look like a fork, which is how it was reported.
+     *
+     * The median puts an equal NUMBER of branches on each side, which is the
+     * symmetry a person actually sees: three each way for six, and for an odd
+     * count the middle branch is exactly under the hub rather than approximately
+     * under it. It costs no width — the branches do not move, the hub does.
+     */
+    const half = vote.length / 2;
+    const centre = vote.length % 2 === 1 ? offsets[vote[(vote.length - 1) / 2]] : (offsets[vote[half - 1]] + offsets[vote[half]]) / 2;
     for (let i = 0; i < kids.length; i++) offsetFromParent.set(kids[i], offsets[i] - centre);
     return { lo: Math.min(0, band!.lo - centre), hi: Math.max(0, band!.hi - centre) };
   }

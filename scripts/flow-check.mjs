@@ -103,22 +103,67 @@ const named = boxes.filter((b) => /Booked calls|No-shows|High ticket|Within 7 da
 check(named.length >= 4, "branch cards show the Split's names", `${named.length} found`);
 
 /**
- * A SPLIT SITS OVER THE MIDDLE OF ITS OWN BRANCHES. Read off the rendered
- * canvas rather than the position map, because this is the thing that was
- * wrong: the hub was centred, the branches were not under it.
+ * THE SAME NUMBER OF BRANCHES EACH SIDE OF A SPLIT — the MEDIAN branch under the
+ * hub, not the midpoint of the outermost two. Branches are not evenly spaced (a
+ * branch carrying a nested split is held further from its neighbour than a
+ * branch that is one card), so the midpoint put four of six heads on one side.
+ * Read off the rendered canvas, because this is the thing that looked wrong.
  */
 const byId = new Map(boxes.map((b) => [b.id, b]));
 const SPLITS = { hub: ["bA", "bB", "bC", "bD", "bE", "bF"], hA: ["aA", "aB"], hB: ["bBa", "bBb"], hC: ["cCa", "cCb"], hAA: ["aaA", "aaB"] };
 for (const [hubId, kids] of Object.entries(SPLITS)) {
   const h = byId.get(hubId);
-  const xs = kids.map((k) => byId.get(k)?.x).filter((x) => x != null);
+  const xs = kids.map((k) => byId.get(k)?.x).filter((x) => x != null).sort((a, b) => a - b);
   if (!h || xs.length !== kids.length) {
     check(false, `${hubId} and its branches all rendered`);
     continue;
   }
-  const mid = (Math.min(...xs) + Math.max(...xs)) / 2;
-  check(Math.abs(mid - h.x) < 1, `${hubId} is centred over its ${kids.length} branches`, `off by ${Math.round(mid - h.x)}px`);
+  const median = xs.length % 2 === 1 ? xs[(xs.length - 1) / 2] : (xs[xs.length / 2 - 1] + xs[xs.length / 2]) / 2;
+  check(Math.abs(median - h.x) < 1, `${hubId}'s middle branch is under the hub`, `off by ${Math.round(median - h.x)}px`);
+  const left = xs.filter((x) => x < h.x).length;
+  const right = xs.filter((x) => x > h.x).length;
+  check(Math.abs(left - right) <= 1, `${hubId} has the same number of branches each side`, `${left} left, ${right} right`);
 }
+
+/**
+ * EVERY BRANCH OF A SPLIT TURNS ON ITS OWN LINE.
+ *
+ * `getSmoothStepPath` turns an edge at the midpoint between its two cards, and a
+ * hub's branches all leave the same card on the same row — so without lanes, six
+ * horizontal runs land on one y, each one's span containing the next, and a line
+ * cannot be followed back to the branch it feeds. Measured, not eyeballed: the
+ * y of each edge's horizontal run, per side of the hub.
+ */
+const runs = await page.evaluate(() =>
+  [...document.querySelectorAll(".react-flow__edge")]
+    .map((el) => {
+      const d = el.querySelector("path.react-flow__edge-path")?.getAttribute("d") ?? "";
+      // Each command's ENDPOINT, which for a Q is its last pair, not its control
+      // point — the horizontal run starts where a rounded corner finishes.
+      const pts = [...d.matchAll(/([MLQ])([^MLQZ]*)/g)].map((m) => {
+        const n = m[2].trim().split(/[\s,]+/).map(Number).filter((v) => !Number.isNaN(v));
+        return { x: n[n.length - 2], y: n[n.length - 1] };
+      });
+      const flat = [];
+      for (let i = 1; i < pts.length; i++) {
+        if (Math.abs(pts[i].y - pts[i - 1].y) < 0.5 && Math.abs(pts[i].x - pts[i - 1].x) > 2) flat.push({ y: pts[i].y, lo: Math.min(pts[i].x, pts[i - 1].x), hi: Math.max(pts[i].x, pts[i - 1].x) });
+      }
+      return { id: el.getAttribute("data-id") ?? "", flat };
+    })
+    .filter((e) => e.id.startsWith("e_hub_") && e.flat.length > 0)
+    .map((e) => ({ id: e.id, y: e.flat[0].y, lo: e.flat[0].lo, hi: e.flat[0].hi })),
+);
+const stacked = [];
+for (let i = 0; i < runs.length; i++) {
+  for (let j = i + 1; j < runs.length; j++) {
+    const a = runs[i];
+    const b = runs[j];
+    // Same y AND overlapping in x is one line drawn over another.
+    if (Math.abs(a.y - b.y) < 1 && a.lo < b.hi - 1 && b.lo < a.hi - 1) stacked.push(`${a.id}/${b.id}@y${Math.round(a.y)}`);
+  }
+}
+check(runs.length >= 6, "the Split's branch edges all draw a horizontal run", `${runs.length} found`);
+check(stacked.length === 0, "no two branch edges share a horizontal line", stacked.join(", "));
 
 await page.screenshot({ path: OUT });
 console.log(`\nshot: ${OUT}`);

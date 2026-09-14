@@ -1980,8 +1980,48 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
       seen.add(key);
       out.push({ ...e, type: "insert", data: { ...(e.data ?? {}), onInsert: e.sourceHandle ? undefined : insertOnEdge, carrying: dragging != null } });
     }
+    /**
+     * A LANE EACH, SO SIX BRANCHES READ AS SIX LINES.
+     *
+     * Every edge out of a Split leaves the same card and arrives on the same
+     * row, so `getSmoothStepPath` turns all of them at the same midpoint — six
+     * horizontal runs on one y, nested inside each other. The outermost branch's
+     * run spans the whole fan and the inner ones are drawn on top of it, so
+     * following a line back to the branch it feeds is guesswork. Measured on the
+     * six-way Split: three runs on the left all sitting on y=385, each one's
+     * span containing the next.
+     *
+     * So each edge gets its own y to turn on, and the order is the part that
+     * matters: the branch travelling FURTHEST turns FIRST, nearest the hub. That
+     * nests the fan — an inner branch's drop is always inside the span of the
+     * runs above it and never crosses one. Do it the other way round and every
+     * drop cuts through every wider run beneath it.
+     */
+    const fanned = new Map<string, Edge[]>();
+    for (const e of out) {
+      if (!e.sourceHandle) continue; // only a hub fans out; a plain chain is one line
+      fanned.set(e.source, [...(fanned.get(e.source) ?? []), e]);
+    }
+    for (const group of fanned.values()) {
+      if (group.length < 2) continue;
+      const hubX = (e: Edge) => layout.get(e.source)?.x ?? 0;
+      const reach = (e: Edge) => (layout.get(e.target)?.x ?? 0) - hubX(e);
+      /**
+       * EACH SIDE GETS ITS OWN LANES, because a run to the left of the hub and a
+       * run to the right never share any horizontal space and so can never be
+       * confused for each other. Splitting them means three branches a side need
+       * three lanes rather than six — the fan stays shallow and the lines stay
+       * far enough apart to tell apart.
+       */
+      for (const side of [group.filter((e) => reach(e) < 0), group.filter((e) => reach(e) >= 0)]) {
+        const order = [...side].sort((a, b) => Math.abs(reach(b)) - Math.abs(reach(a)));
+        order.forEach((e, i) => {
+          e.data = { ...e.data, fanIndex: i, fanCount: order.length };
+        });
+      }
+    }
     return out;
-  }, [nodes, edges, insertOnEdge, selectedId, dragging]);
+  }, [nodes, edges, insertOnEdge, selectedId, dragging, layout]);
 
   const empty = nodes.length === 0;
 

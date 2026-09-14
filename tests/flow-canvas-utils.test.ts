@@ -634,13 +634,59 @@ describe("nested splits — the six-way flow that drifted", () => {
   const x = (id: string) => pos.get(id)!.x;
   const branchesOf = (hubId: string) => edges.filter((e) => e.source === hubId).map((e) => e.target);
 
-  it("centres EVERY split over its own branches, however deeply nested", () => {
+  /**
+   * THE MIDDLE BRANCH IS UNDER THE HUB, which is not the same claim as "halfway
+   * between the outermost two". Branches are not evenly spaced — a branch
+   * carrying a nested split is held further from its neighbour than a branch
+   * that is one card — so the midpoint of the extremes put four of six heads on
+   * one side of the hub. The median puts three each way.
+   */
+  const median = (xs: number[]) => {
+    const s = [...xs].sort((a, b) => a - b);
+    return s.length % 2 === 1 ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2;
+  };
+
+  it("puts the same number of branches on each side of every split", () => {
     for (const hubId of ["hub", "hA", "hB", "hC", "hAA"]) {
       const kids = branchesOf(hubId).map(x);
       // Sabotage: restore one-column-per-branch placement and hB lands 344 off
       // its pair while hC lands 688 off its own — the drift the user reported.
-      expect([hubId, (Math.min(...kids) + Math.max(...kids)) / 2]).toEqual([hubId, x(hubId)]);
+      expect([hubId, median(kids)]).toEqual([hubId, x(hubId)]);
+      expect([hubId, kids.filter((k) => k < x(hubId)).length]).toEqual([hubId, kids.filter((k) => k > x(hubId)).length]);
     }
+  });
+
+  /**
+   * EVERY GAP IS THE WIDEST GAP. Clearing each branch by exactly what its
+   * neighbour occupies is tighter and produces a ragged fan: here three branches
+   * carry nested splits and three are single cards, which under per-pair
+   * clearance sat 774px and 344px apart in the same row. A fork whose gaps
+   * differ by a factor of two reads as lopsided wherever the hub is put.
+   */
+  it("spaces a split's branches evenly, however lopsided their subtrees", () => {
+    const xs = branchesOf("hub").map(x).sort((a, b) => a - b);
+    const gaps = xs.slice(1).map((v, i) => v - xs[i]);
+    expect(new Set(gaps).size).toBe(1);
+    // And the pitch is the widest a pair genuinely needed — never narrower.
+    expect(gaps[0]).toBeGreaterThanOrEqual(344);
+  });
+
+  it("puts the middle branch of an odd split under the hub even when the others are lopsided", () => {
+    // Three lanes, and only the FIRST carries anything — the shape where halfway
+    // between the outermost two is furthest from the middle branch.
+    const hub3 = N("h3", "paths", { config: { paths: [{ id: "h3_p0" }, { id: "h3_p1" }, { id: "h3_p2" }] } });
+    const ns = [N("s", "app"), hub3, N("l", "filter"), N("m", "filter"), N("r", "filter"), N("deep", "filter"), N("deeper", "filter")];
+    const es = [
+      E("s", "h3"),
+      E("h3", "l", { sourceHandle: "h3_p0" }), E("h3", "m", { sourceHandle: "h3_p1" }), E("h3", "r", { sourceHandle: "h3_p2" }),
+      E("l", "deep"), E("deep", "deeper"),
+    ];
+    const p = computeVerticalLayout(ns, es);
+    expect(p.get("m")!.x).toBe(p.get("h3")!.x);
+    expect(p.get("l")!.x).toBeLessThan(p.get("h3")!.x);
+    expect(p.get("r")!.x).toBeGreaterThan(p.get("h3")!.x);
+    // And the trunk stays over the hub, not over the fan's centre of gravity.
+    expect(p.get("s")!.x).toBe(p.get("h3")!.x);
   });
 
   it("keeps branches in the order the Split panel lists them", () => {
@@ -704,7 +750,7 @@ describe("nested splits — the six-way flow that drifted", () => {
     const p2 = computeVerticalLayout(deeper, deeperEdges);
     for (const hubId of ["hub", "hA", "hB", "hC", "hAA"]) {
       const kids = branchesOf(hubId).map((id) => p2.get(id)!.x);
-      expect([hubId, (Math.min(...kids) + Math.max(...kids)) / 2]).toEqual([hubId, p2.get(hubId)!.x]);
+      expect([hubId, median(kids)]).toEqual([hubId, p2.get(hubId)!.x]);
     }
   });
 });

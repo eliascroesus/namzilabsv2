@@ -15,9 +15,33 @@ import { anchorFromRect } from "./NodeLibraryModal";
  * clean.
  */
 export function InsertEdge({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, markerEnd, data }: EdgeProps) {
+  /**
+   * WHERE THIS LINE TURNS, when it is one of several leaving the same Split.
+   *
+   * Left alone, `getSmoothStepPath` turns every edge at the midpoint between the
+   * two cards — and a hub's branches all leave the same card on the same row, so
+   * all of their horizontal runs land on ONE y, drawn over each other. The
+   * canvas hands each fanned edge its place in the order (`fanIndex`, furthest
+   * branch first) and this spaces them into their own lanes.
+   *
+   * The lanes are centred in the gap and never come within `RADIUS` of either
+   * card, because a turn needs room for its corner; when there are too many
+   * branches for `LANE_GAP` apiece they share the gap evenly instead, which is
+   * still every line on its own y.
+   */
+  const fanIndex = (data as { fanIndex?: number } | undefined)?.fanIndex;
+  const fanCount = (data as { fanCount?: number } | undefined)?.fanCount ?? 0;
+  const RADIUS = 22;
+  const LANE_GAP = 18;
+  let centerY: number | undefined;
+  if (fanIndex != null && fanCount > 1) {
+    const room = Math.abs(targetY - sourceY) - RADIUS * 2;
+    const step = Math.min(LANE_GAP, room / (fanCount - 1));
+    centerY = (sourceY + targetY) / 2 - (step * (fanCount - 1)) / 2 + step * fanIndex;
+  }
   // Generously rounded corners give the line a calm, modern turn instead of a
   // hard right angle.
-  const [edgePath, labelX, labelY] = getSmoothStepPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, borderRadius: 22 });
+  const [edgePath, labelX, labelY] = getSmoothStepPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, borderRadius: 22, centerY });
   const onInsert = (data as { onInsert?: (edgeId: string, anchor?: { x: number; y: number; leftX?: number }) => void } | undefined)?.onInsert;
   /**
    * While a step is being carried, every `+` steps aside. The drop placeholder
