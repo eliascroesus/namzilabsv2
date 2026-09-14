@@ -190,9 +190,39 @@ const cards = await page.evaluate(() => {
      * `sr-only` is excluded rather than measured: it is a 1px clip by
      * definition, so every screen-reader summary reports as truncated and would
      * bury the one finding that matters.
+     *
+     * `aria-hidden` IS EXCLUDED FOR THE SAME REASON, and the case that added it
+     * is the ranked bar's name: it is drawn twice, once spanning the plot and
+     * once clipped to the bar so the part ON the colour takes the dark ink. The
+     * clipped copy is cut off whenever a bar is shorter than its name, which is
+     * the design working, and its readable twin is right behind it. A decorative
+     * duplicate that is hidden from the a11y tree cannot be the only copy of
+     * anything — if it were, the finding would be the missing text, not the cut.
      */
+    /**
+     * TEXT A READER IS MEANT TO READ — which is not the same as `textContent`.
+     *
+     * The ranked bar clips its own name on purpose: the name is drawn twice,
+     * once spanning the plot and once inside the bar so the part ON the colour
+     * takes the dark ink, and the inner copy is cut off whenever a bar is
+     * shorter than its name. That copy is `aria-hidden`, but the BAR's
+     * `textContent` still contains it — so measuring the bar reported
+     * "Ads Leads…" as truncated while the full name sat legibly behind it.
+     *
+     * So an element whose text comes ENTIRELY from `aria-hidden` descendants is
+     * skipped. It cannot be the only copy of anything: if it were, the finding
+     * would be text missing from the a11y tree, not text cut off.
+     */
+    const ownText = (el) => {
+      let t = el.textContent ?? "";
+      for (const h of el.querySelectorAll("[aria-hidden]")) t = t.replace(h.textContent ?? "", "");
+      return t.trim();
+    };
     const clipped = [...(card?.querySelectorAll("span,p") ?? [])]
-      .filter((el) => !/sr-only/.test((el.className || "").toString()))
+      .filter(
+        (el) =>
+          !/sr-only/.test((el.className || "").toString()) && !el.hasAttribute("aria-hidden") && ownText(el) !== "",
+      )
       /**
        * A STAGE NAME RUNNING ACROSS HAS NOWHERE ELSE TO GO — it shares the card
        * with every sibling stage, so truncation is the arithmetic rather than a
@@ -326,6 +356,20 @@ const bars = await page.evaluate(() => {
     const guides = card.querySelectorAll("span.bg-border");
     out.push({
       first: rows[0].getAttribute("data-tip").split(" · ")[0],
+      // The name now rides ON the bar: one copy behind it in the muted ink,
+      // one clipped inside it in the dark on-colour ink. Both must be there —
+      // with only the outer one a long bar swallows its own label.
+      onBar: (() => {
+        const bar = rows[0].querySelector("span[style*='width']");
+        const inner = bar?.querySelector("span");
+        if (!inner) return null;
+        const cs = getComputedStyle(inner);
+        return { text: inner.textContent.trim(), color: cs.color };
+      })(),
+      behind: (() => {
+        const outer = rows[0].querySelector("span[aria-hidden]");
+        return outer ? outer.textContent.trim() : null;
+      })(),
       slack: Math.round(box.bottom - Math.max(...rows.map((r) => r.getBoundingClientRect().bottom))),
       rowH: Math.round(rows[0].getBoundingClientRect().height),
       barH: Math.round(rows[0].querySelector("span[style*='width']").getBoundingClientRect().height),
@@ -565,9 +609,18 @@ if (across) {
  * floor and scrolls rather than squashing thirty groups into thirty slivers.
  */
 for (const m of bars) {
-  const thick = m.barH >= 16 && m.barH <= 28;
-  if (!thick) problems.push(`a ranked bar measured ${m.barH}px, outside the 16–28px a row may give it (${m.first})`);
+  /**
+   * 24–32px SINCE THE NAME MOVED INSIDE THE BAR (14 Sep 2026). It was 16–28
+   * while the label lived in its own column and the bar only had to be a bar;
+   * a 13px name needs 24px of pill to sit in without touching the edges.
+   */
+  const thick = m.barH >= 24 && m.barH <= 32;
+  if (!thick) problems.push(`a ranked bar measured ${m.barH}px, outside the 24–32px a name needs to sit in (${m.first})`);
   say(thick, `${m.first}: bar ${m.barH}px, between its floor and its ceiling`);
+
+  const named = m.onBar && m.behind && m.onBar.text === m.behind && m.onBar.text === m.first;
+  if (!named) problems.push(`${m.first}: the name is not drawn both on the bar and behind it (${JSON.stringify(m.onBar)} / ${m.behind})`);
+  say(named, `${m.first}: the name rides on the bar, ${m.onBar?.color} on the fill`);
 
   const guided = m.guides >= 1 && m.guideW === 1;
   if (!guided) problems.push(`${m.first} drew ${m.guides} tick guide(s) at ${m.guideW}px — the axis measures nothing without them`);

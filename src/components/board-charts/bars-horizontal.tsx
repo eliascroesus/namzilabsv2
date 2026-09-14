@@ -40,8 +40,26 @@ import type { ChartFormat, GroupRow } from "@/components/charts";
  * compared: the one thing a ranked bar chart is for.
  */
 
-/** Label, bar, figure. Fixed either side so every bar shares one scale. */
-const COLUMNS = "5.5rem minmax(0, 1fr) 3.5rem";
+/**
+ * BAR, THEN FIGURE — and the label moved INSIDE the bar on 14 Sep 2026, which
+ * is what retired the third column.
+ *
+ * It was `5.5rem minmax(0,1fr) 3.5rem`: a fixed name column, then the plot,
+ * then the value. The names were the reason it existed and 88px was never
+ * enough for them — the old comment here argued they must WRAP rather than
+ * truncate, because "Speed to Lead (Felix)" and "Speed to Lead (Rasmus)" both
+ * become "Speed to Le…" in that width, on the chart whose entire job is telling
+ * them apart. Wrapping solved the truncation and spent two lines of row height
+ * on it.
+ *
+ * Inside the bar the name has the whole width of the plot to sit in, so it
+ * neither truncates nor wraps in any realistic case, and the bars start at the
+ * card's edge where they are longest and easiest to compare. The figure column
+ * stays fixed for the reason it always was: an `auto` column would make each
+ * row's bar start and stop somewhere slightly different, which is a chart whose
+ * lengths cannot be compared.
+ */
+const COLUMNS = "minmax(0, 1fr) 3.5rem";
 /** Three divisions — the count `cartesian.tsx` settled on, for the same reason. */
 const TICK_COUNT = 3;
 
@@ -98,7 +116,6 @@ export function BarsHorizontal({
           rows' template exactly, which is the whole reason a tick sits above the
           length it measures. */}
       <div className="grid shrink-0 items-end gap-2" style={{ gridTemplateColumns: COLUMNS }}>
-        <span />
         <span className="relative block h-3">
           {ticks.map((t) => (
             <span
@@ -135,7 +152,6 @@ export function BarsHorizontal({
             last tick is pulled back by its own width so it lands INSIDE the
             plot rather than a pixel past its right edge. */}
         <div aria-hidden className="pointer-events-none absolute inset-0 grid gap-2" style={{ gridTemplateColumns: COLUMNS }}>
-          <span />
           <span className="relative block">
             {ticks.slice(1).map((t) => (
               <span
@@ -163,37 +179,64 @@ export function BarsHorizontal({
           {shown.map((g) => (
             <div
               key={g.label}
-              className="grid min-h-[1.375rem] flex-1 items-stretch gap-2"
+              className="grid min-h-8 flex-1 items-stretch gap-2"
               style={{ gridTemplateColumns: COLUMNS }}
               data-tip={`${g.label} · ${formatMetricValue(g.value, format)}`}
             >
-            {/* WRAPS RATHER THAN TRUNCATING, and on this chart that is not a
-                nicety. Composed ranked bars are named by their METRICS, and
-                "Speed to Lead (Felix)" beside "Speed to Lead (Rasmus)" both
-                truncate to "Speed to Le…" in a 5.5rem column — two bars a reader
-                can no longer tell apart, on the chart whose entire job is telling
-                them apart. The row grows a line instead; the grid keeps the bars
-                aligned either way. */}
-              <span className="self-center text-xs text-muted-foreground [overflow-wrap:break-word]" title={g.label}>
-                {g.label}
-              </span>
-              {/* THE TRACK IS THE FULL SCALE, so an empty stretch to the right of a
-                  short bar is the distance to the axis top rather than dead space.
-                  No grey fill behind it: the row's own baseline is the measure, and
-                  a track that paints itself competes with the bars for the ink.
+              {/* THE NAME RIDES ON THE BAR, and it is drawn TWICE to do it.
+                  Both copies sit at the same x; the bar is opaque and paints
+                  over the first, and the second is clipped to the bar's own
+                  box. So a label shorter than its bar reads as dark ink ON the
+                  colour, a label longer than its bar continues past the end in
+                  the ordinary muted grey, and one that straddles the edge
+                  changes colour exactly where the bar stops.
 
-                  THE BAR THICKENS WITH THE ROW, between a floor and a ceiling.
-                  `h-full` inside a stretched cell makes it follow the height the
-                  row was given; `min-h-4` is the 16px it has always been, so a
-                  dense chart is unchanged and a bar can never collapse if the
-                  percentage fails to resolve; `max-h-7` stops a two-bar tile
-                  becoming two slabs. `py-1` is the air that keeps neighbours
-                  apart once they are thick. */}
-              <span className="flex h-full items-center py-1">
+                  WHY NOT MEASURE AND PICK ONE. Whether a name fits inside its
+                  bar depends on the text, the font and the tile's width, none
+                  of which the server knows and all of which change when the
+                  board is resized. Every version of that is a measurement that
+                  can be wrong for a frame; this is right at every width without
+                  asking anything.
+
+                  THE INK IS `primary-foreground`, WHICH IS DARK IN BOTH THEMES
+                  — deliberately, and the palette says why in as many words:
+                  #568CFF is "3.18:1 on white — a line, not text", while #1f1f1f
+                  on it is 5.18:1. White-on-brand would have been the obvious
+                  copy of the reference and would have failed to read. Every
+                  accent in `GROUP_ACCENT` is a mid-tone for the same reason, so
+                  the one dark ink serves all twelve. */}
+              <span className="relative flex h-full items-center py-1">
+                {/* THIS is the copy a screen reader reads: it spans the whole
+                    plot and is never clipped by anything but the card. The one
+                    inside the bar is the decoration — it is cut off by design
+                    whenever the bar is shorter than the name, and marking THAT
+                    one as the accessible text would hand assistive tech
+                    "Speed to Lea" and nothing else. */}
+                <span className="pointer-events-none absolute inset-x-3 truncate text-xs text-muted-foreground">
+                  {g.label}
+                </span>
+                {/* THE TRACK IS THE FULL SCALE, so an empty stretch to the right
+                    of a short bar is the distance to the axis top rather than
+                    dead space. No grey fill behind it: the row's own baseline is
+                    the measure, and a track that paints itself competes with the
+                    bars for the ink.
+
+                    `relative` so it paints ABOVE the label behind it — two
+                    positioned siblings, and the later one wins. THE BAR THICKENS
+                    WITH THE ROW between a floor and a ceiling: `min-h-6` is the
+                    24px a 13px name needs to sit in, and `max-h-8` stops a
+                    two-bar tile becoming two slabs. */}
                 <span
-                  className="block h-full min-h-4 max-h-7 rounded-xs"
+                  className="relative block h-full min-h-6 max-h-8 overflow-hidden rounded-md"
                   style={{ width: `${width(g.value)}%`, background: accent }}
-                />
+                >
+                  <span
+                    aria-hidden
+                    className="absolute inset-y-0 left-3 flex items-center whitespace-nowrap text-xs text-primary-foreground"
+                  >
+                    {g.label}
+                  </span>
+                </span>
               </span>
               <span
                 className="stat-numeral self-center truncate text-right text-xs text-heading"
