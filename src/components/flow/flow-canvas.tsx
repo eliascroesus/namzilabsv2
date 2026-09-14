@@ -587,10 +587,31 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
       // honoured here and hashed there would flip every card to "re-test to update".
       const displayOnly = Object.keys(patch).length > 0 && Object.keys(patch).every((k) => DISPLAY_ONLY_CONFIG_KEYS.has(k));
       commit();
-      const marks = displayOnly ? new Set<string>() : descendants(id);
       setNodes((ns) => {
-        const next = ns.map((n) => {
-          if (n.id === id) return { ...n, data: { ...n.data, config: { ...n.data.config, ...patch }, dirty: displayOnly ? n.data.dirty : true } };
+        const patched = ns.map((n) => (n.id === id ? { ...n, data: { ...n.data, config: { ...n.data.config, ...patch } } } : n));
+        /**
+         * WHICH STEPS THIS EDIT ACTUALLY REACHES.
+         *
+         * Everything below an edited step normally changes, so `descendants` is
+         * the right answer and the cheap one. A SPLIT is the exception: its
+         * branches do not read each other (only an "everything else" lane does),
+         * so editing the hub reaches some lanes and not others — and which ones
+         * is a question `testFingerprint` already answers exactly, for the same
+         * reason and by the same rules.
+         *
+         * Asking it rather than re-deriving the rule here is the point. Two
+         * places deciding what a Split edit invalidates is two places to drift,
+         * and the drift would be invisible: the in-session mark would say
+         * "re-test" while a reload said the number was fine, or worse the other
+         * way round.
+         */
+        const marks = displayOnly
+          ? new Set<string>()
+          : String(ns.find((n) => n.id === id)?.type) !== "paths"
+            ? descendants(id)
+            : new Set([...descendants(id)].filter((d) => testFingerprint(ns, edges, d) !== testFingerprint(patched, edges, d)));
+        const next = patched.map((n) => {
+          if (n.id === id) return { ...n, data: { ...n.data, dirty: displayOnly ? n.data.dirty : true } };
           if (marks.has(n.id)) return { ...n, data: { ...n.data, dirty: true } };
           return n;
         });
