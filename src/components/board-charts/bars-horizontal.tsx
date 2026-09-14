@@ -62,7 +62,7 @@ export function BarsHorizontal({
    * stored order still has `sort` in the tile's settings and it is still
    * honoured exactly.
    */
-  sort?: "stored" | "value_desc" | "value_asc" | "label_asc";
+  sort?: "stored" | "value_desc" | "value_asc" | "label_asc" | "label_desc";
   limit?: number;
 }) {
   const ordered =
@@ -73,7 +73,14 @@ export function BarsHorizontal({
             ? b.value - a.value
             : sort === "value_asc"
               ? a.value - b.value
-              : a.label.localeCompare(b.label, "en", { numeric: true, sensitivity: "base" }),
+              : /**
+                 * ONE COMPARISON, READ BACKWARDS FOR Z–A. `numeric` so "Hour 2"
+                 * precedes "Hour 10", and `sensitivity: "base"` so case does not
+                 * sort — without it every capitalised label stacks above every
+                 * lower-case one, which reads as no order at all.
+                 */
+                (sort === "label_desc" ? -1 : 1) *
+                a.label.localeCompare(b.label, "en", { numeric: true, sensitivity: "base" }),
         );
   const shown = limit ? ordered.slice(0, limit) : ordered;
   /**

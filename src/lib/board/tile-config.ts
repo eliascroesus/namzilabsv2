@@ -56,7 +56,7 @@ const KEYS = {
   showLabels: z.boolean(),
   showSpark: z.boolean(),
   /** Grouped charts: how the rows are ordered. "stored" is the materializer's order. */
-  sort: z.enum(["stored", "value_desc", "value_asc", "label_asc"]),
+  sort: z.enum(["stored", "value_desc", "value_asc", "label_asc", "label_desc"]),
   /** Grouped charts: how many rows before the honesty footer takes over. */
   limit: z.number().int().min(1).max(50),
   donut: z.boolean(),

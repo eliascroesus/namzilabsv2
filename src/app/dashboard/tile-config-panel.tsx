@@ -921,7 +921,12 @@ export function TileConfigPanel({
                     <option value="stored">As the metric computed them</option>
                     <option value="value_desc">Largest first</option>
                     <option value="value_asc">Smallest first</option>
-                    <option value="label_asc">By name</option>
+                    {/* "A – Z" and "Z – A" rather than one option reading "By
+                        name": the old wording named the KEY and left the
+                        DIRECTION to be discovered by trying it, and there was no
+                        way to ask for the other one. */}
+                    <option value="label_asc">A – Z</option>
+                    <option value="label_desc">Z – A</option>
                   </NativeSelect>
                 </Row>
               )}

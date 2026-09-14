@@ -45,6 +45,7 @@ import { CANVAS_ATTR, CELL_ATTR, HANDLE_ATTR, useCanvasDrag } from "./canvas-dra
 import { useSettle } from "./board-settle";
 import { MetricPicker } from "./add-tile-picker";
 import { TileConfigPanel } from "./tile-config-panel";
+import { BoardTailSpace } from "./board-tail-space";
 import {
   addCustomTileAction,
   deleteCustomTileAction,
@@ -860,6 +861,11 @@ export function CustomBoard({
           ))}
         </div>
       )}
+
+      {/* ROOM TO SCROLL THE LAST TILE UP TO THE TOP — see `BoardTailSpace`. It
+          sits outside the canvas grid on purpose: inside, it would be a cell
+          the packer has to place and the drag has to ignore. */}
+      <BoardTailSpace />
 
       {configuring &&
         canEdit &&

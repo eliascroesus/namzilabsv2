@@ -63,6 +63,36 @@ const CANVAS_START_PX = 8;
 /** How close to the viewport edge starts the page moving, and how fast. */
 const CANVAS_SCROLL_EDGE = 64;
 const CANVAS_SCROLL_MAX = 18;
+
+/**
+ * HOW FAST THE BOARD SCROLLS WHILE A GESTURE HOLDS THE POINTER NEAR AN EDGE —
+ * and the one gesture it must refuse to scroll for.
+ *
+ * MOVING a tile towards the bottom of the window should scroll: the place you
+ * are taking it to may be off-screen, and 18px a frame is the speed that makes
+ * a long carry bearable.
+ *
+ * RESIZING is the same geometry and the opposite fact. The pointer is not going
+ * anywhere — it is HOLDING AN EDGE — so scrolling under it moves that edge, the
+ * tile grows, the pointer is still in the edge zone, and it scrolls again. At
+ * 18px a frame that loop runs at roughly twenty-seven grid rows a second in
+ * whichever direction it started, which is what the owner met: "it scrolls
+ * super quick and then when I try to make it small it collapses almost because
+ * it is moving so quick". Nothing about the speed fixes it; the feedback is the
+ * bug, so a resize scrolls at zero.
+ *
+ * The room to resize a bottom tile comfortably comes from elsewhere — the board
+ * now keeps a viewport of space below its last tile (`tailSpacePx`), so that
+ * tile can be scrolled to the top and grown into open screen where no edge is
+ * anywhere near the pointer.
+ */
+export function edgeScrollPx({ y, viewportH, mode }: { y: number; viewportH: number; mode: "move" | "resize" }): number {
+  if (mode === "resize") return 0;
+  const up = y < CANVAS_SCROLL_EDGE ? -CANVAS_SCROLL_MAX * (1 - y / CANVAS_SCROLL_EDGE) : 0;
+  const bottom = viewportH - y;
+  const down = bottom < CANVAS_SCROLL_EDGE ? CANVAS_SCROLL_MAX * (1 - bottom / CANVAS_SCROLL_EDGE) : 0;
+  return up || down;
+}
 /** A chart smaller than this has no room to mean anything. */
 /**
  * The floor when the caller offers none. Every real board passes `minOf`, which
@@ -173,10 +203,8 @@ export function useCanvasDrag(
     if (!s) return;
     const { x, y } = s.pointer;
     // One scroller, the page's — a canvas has no sideways scroll of its own.
-    const up = y < CANVAS_SCROLL_EDGE ? -CANVAS_SCROLL_MAX * (1 - y / CANVAS_SCROLL_EDGE) : 0;
-    const bottom = window.innerHeight - y;
-    const down = bottom < CANVAS_SCROLL_EDGE ? CANVAS_SCROLL_MAX * (1 - bottom / CANVAS_SCROLL_EDGE) : 0;
-    const dv = up || down;
+    // The rule, including why a resize gets none, is `edgeScrollPx`.
+    const dv = edgeScrollPx({ y, viewportH: window.innerHeight, mode: s.mode });
     if (dv) {
       if (s.pageScroller) s.pageScroller.scrollTop += dv;
       else window.scrollBy(0, dv);
