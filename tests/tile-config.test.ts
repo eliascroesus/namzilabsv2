@@ -32,7 +32,7 @@ describe("each key parses independently", () => {
       sort: "biggest",
       limit: 0,
       legend: "left",
-      showDelta: "yes",
+      showSpark: "yes",
       donut: true,
     });
     expect(out).toEqual({ donut: true });
@@ -57,7 +57,6 @@ describe("each key parses independently", () => {
       precision: 2,
       color: "teal",
       target: 40,
-      showDelta: true,
       showGoal: false,
       showLabels: true,
       showSpark: false,

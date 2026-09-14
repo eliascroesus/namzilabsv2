@@ -57,13 +57,13 @@ const row = (name: string, value: number, opts: Partial<FlowResultRow> = {}): Fl
  * `durationDisplay: "hours"` is what prints the leading "0h": every unit from
  * the chosen one down, which is the export's own reading.
  *
- * THE DELTA COMES FROM YESTERDAY, NOT FROM A SERIES, and that is the export's
- * composition rather than a shortcut. `deriveDelta` has two paths: a
- * today/yesterday pair, or the last two points of a `series`. The second one
- * also satisfies `drawsItsSeries`, so a tile carrying a series draws SPARKBARS
- * under its number — and the export's metric cards have no mark at all, only a
- * figure and a chip. Rendering them off `byRange` is what gives the two-row
- * 108px card this page exists to check.
+ * THE PAIR IS WHAT IS LEFT OF THE DELTA. A today/yesterday `byRange` used to
+ * feed a comparison chip beside the headline; the chip, `deriveDelta` and the
+ * `showDelta` setting were all removed on 14 Sep 2026 (see custom-tile.tsx).
+ * The shape is kept because it is still what stops these cards drawing a mark:
+ * a tile carrying a `series` satisfies `drawsItsSeries` and grows SPARKBARS,
+ * and the export's metric cards have no mark at all — only a figure. Rendering
+ * them off `byRange` is what gives the two-row 108px card this page checks.
  */
 const pair = (today: number, yesterday: number) => ({
   today: { value: today },
@@ -315,8 +315,8 @@ export default async function OverviewLab({
         {/* BAR TWO'S LEFT HALF — the frame draws "Overview" at 24/700 and
             "Updated just now" at 13/400, and both are slots the page fills.
             `new Date()` rather than HOUR_AGO on purpose: the tiles below are an
-            hour stale by design (they prove a formatted "1 hr ago" fits beside
-            a delta chip), but the BOARD was rendered now, and "Updated just
+            hour stale by design (they prove a formatted "1 hr ago" fits on the
+            footline), but the BOARD was rendered now, and "Updated just
             now" is the string node 0:5 draws. */}
         <TopBarTitle range="Sat, 1 Sep - Sat, 1 Sep">Overview</TopBarTitle>
         <TopBarFreshness at={new Date()} />
@@ -337,15 +337,14 @@ export default async function OverviewLab({
         >
           {CHARTS.map((c, i) => (
             <div key={`chart-${i}`} style={{ gridColumn: "span 4", gridRow: "span 10" }}>
-              {/* A LEGEND, NOT A DELTA — and this page had it backwards.
-                  It passed a `delta` on every chart card "as the one tile shape
-                  most likely to carry one", which was a guess about the design
-                  rather than a reading of it. Both 8 September frames draw a
-                  chart card as title, freshness, figure, mark, LEGEND — no chip
-                  anywhere on it — and put the chip on the stat tiles below
-                  instead. The real tiles agree and always did: `custom-tile`
-                  only derives a delta when `chart === "number"`, so this page
-                  was the ONLY place a chart card ever carried one. */}
+              {/* A LEGEND, AND NOTHING ELSE BESIDE THE FIGURE. This page once
+                  passed a comparison chip on every chart card "as the one tile
+                  shape most likely to carry one" — a guess about the design
+                  rather than a reading of it, since both 8 September frames draw
+                  a chart card as title, freshness, figure, mark, LEGEND with no
+                  chip anywhere on it. The argument is settled twice over now:
+                  the comparison was removed from the product entirely on
+                  14 Sep 2026, so no tile of any shape carries one. */}
               <ChartFrame
                 title={c.title}
                 headline={c.headline}

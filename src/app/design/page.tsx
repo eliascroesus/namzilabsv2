@@ -24,7 +24,7 @@ import { PANEL_SHELL } from "@/components/flow/panel-chrome";
 import { FlowList } from "@/app/dashboard/flows/FlowRow";
 import { CalendarBoard, type CalendarMetric } from "@/components/calendar/calendar-board";
 import { calendarMonths, dayKey, daysInMonth } from "@/lib/metrics/calendar";
-import { Delta, GroupBars, Sparkbars, TargetBar } from "@/components/charts";
+import { GroupBars, Sparkbars, TargetBar } from "@/components/charts";
 import { SourceMark } from "@/components/source-mark";
 import { PrimitiveSpecimens } from "./primitives";
 import { BrandSheet } from "./brand-sheet";
@@ -824,14 +824,13 @@ export default function DesignPage() {
 
         <Section
           title="Marks"
-          note="What a dashboard tile is made of. The series is the BRAND — --color-brand-400 (#568CFF), the same blue as the buttons, with a wash under it — and it is the stroke step in BOTH themes now, because #568CFF clears the 3:1 a line owes on white where the lime's 1.20:1 did not. The comparison series had to be re-cut rather than re-pointed: it was a blue chosen to sit beside a lime, and with both series blue the separation moved to LIGHTNESS — a desaturated slate (#7A90B8) that is unmistakably behind the subject, and the one channel every kind of colour-blind reader keeps. A breakdown walks the brand plus the accent three. TargetBar drew met in --success and in-progress in --marker, which were the same green while success WAS the brand — so it rendered both states identically and stopped reporting the only thing it exists to report. That collision is long gone, but the fix outlived it on its own merits: the unmet meter is greyscale and colour ARRIVES when the goal lands, which is the honest reading anyway — a bar at 40% is not good, it is 40%. Every value goes through formatMetricValue, so the tooltip and the headline say the same quantity the same way. A delta is never green or red: up is good for Booked Leads and bad for Speed to Lead, and nothing on a tile knows which — so it is coloured by WHETHER it moved, and the arrow alone carries direction."
+          note="What a dashboard tile is made of. The series is the BRAND — --color-brand-400 (#568CFF), the same blue as the buttons, with a wash under it — and it is the stroke step in BOTH themes now, because #568CFF clears the 3:1 a line owes on white where the lime's 1.20:1 did not. The comparison series had to be re-cut rather than re-pointed: it was a blue chosen to sit beside a lime, and with both series blue the separation moved to LIGHTNESS — a desaturated slate (#7A90B8) that is unmistakably behind the subject, and the one channel every kind of colour-blind reader keeps. A breakdown walks the brand plus the accent three. TargetBar drew met in --success and in-progress in --marker, which were the same green while success WAS the brand — so it rendered both states identically and stopped reporting the only thing it exists to report. That collision is long gone, but the fix outlived it on its own merits: the unmet meter is greyscale and colour ARRIVES when the goal lands, which is the honest reading anyway — a bar at 40% is not good, it is 40%. Every value goes through formatMetricValue, so the tooltip and the headline say the same quantity the same way. There is no period-over-period delta on a tile at all any more — the owner removed it on 14 Sep 2026: up is good for Booked Leads and bad for Speed to Lead, nothing on a tile knows which, and a comparison nobody asked for is a claim the card cannot back."
         >
           <div className="grid gap-4 rounded-card bg-canvas-bg p-4 sm:grid-cols-2">
             <div className="rounded-surface border border-border bg-card p-5 shadow-card">
               <p className="text-sm font-semibold text-foreground">Total leads</p>
               <div className="mt-1.5 flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
                 <p className="stat-numeral text-display-md leading-none">44</p>
-                <Delta current={44} previous={32} format={{ format: "number" }} since="vs prior" />
               </div>
               <Sparkbars
                 series={[4, 7, 5, 9, 12, 8, 14, 11, 16, 13, 18, 15].map((v, i) => ({ bucket: `d${i}`, value: v }))}
@@ -842,7 +841,6 @@ export default function DesignPage() {
               <p className="text-sm font-semibold text-foreground">Pickup rate</p>
               <div className="mt-1.5 flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
                 <p className="stat-numeral text-display-md leading-none">57.1%</p>
-                <Delta current={57.1} previous={55.1} format={{ format: "percent", precision: 1 }} since="vs yesterday" />
               </div>
               <TargetBar value={57.1} target={50} format={{ format: "percent", precision: 1 }} />
             </div>

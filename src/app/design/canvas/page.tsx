@@ -410,7 +410,7 @@ const COMPOSED_CHARTS: Array<{
 ];
 
 const GALLERY_CHARTS = [
-  { id: "number" as const, label: "Single number", source: rich(), config: { showDelta: true }, h: 4 },
+  { id: "number" as const, label: "Single number", source: rich(), config: {}, h: 4 },
   { id: "number" as const, label: "Number + sparkline", source: rich(), config: { showSpark: true }, h: 5 },
   { id: "line" as const, label: "Line", source: rich(), config: {}, h: 6 },
   { id: "area" as const, label: "Area", source: rich(), config: { color: "teal" }, h: 6 },

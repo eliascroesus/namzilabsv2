@@ -79,7 +79,6 @@ describe("what the panel puts on screen", () => {
       legend: "Legend",
       showLabels: "Label every bar",
       showSpark: "Show the trend",
-      showDelta: "Compare to the period before",
       sort: "Order",
     };
     for (const id of CHART_IDS) {

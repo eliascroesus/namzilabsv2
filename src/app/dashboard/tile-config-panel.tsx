@@ -1091,14 +1091,6 @@ export function TileConfigPanel({
                 />
               )}
 
-              {offers.has("showDelta") && (
-                <ToggleRow
-                  label="Compare to the period before"
-                  checked={config.showDelta !== false}
-                  onChange={(v) => set("showDelta", v)}
-                />
-              )}
-
               {offers.has("showSpark") && (
                 <ToggleRow
                   label="Show the trend"

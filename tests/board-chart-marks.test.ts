@@ -473,9 +473,33 @@ describe("the kit's shape", () => {
      * the magnitude), which is the same device the flat state always used.
      * Still no honesty rule moved: zero-anchoring, `formatMetricValue` and the
      * direction-blind wash are untouched.
+     *
+     * AND A TENTH TIME — the biggest of them, because `Delta` IS DELETED.
+     *
+     * Nine of these entries are the history of one component's colour, radius
+     * and ink. The owner removed the component itself on 14 Sep 2026, along
+     * with `deriveDelta` and the `showDelta` setting: no tile anywhere compares
+     * one period to another now.
+     *
+     * The reason is written in this comment eight times over without ever being
+     * named. Every pass above had to re-argue that the chip must not paint up
+     * green and down red, because up is good for Booked Leads and bad for Speed
+     * to Lead and nothing on a tile knows which. A caption that cannot say
+     * whether the movement it reports is good news is a number looking for a
+     * meaning, and the honest version of it — direction-blind, muted, flat on
+     * "no change" — had been argued down to something nobody reads. So it went.
+     *
+     * DELETED, not defaulted off: `showDelta` is out of `TileConfigSchema` and
+     * out of the settings panel too, because a switch nobody can reach is a
+     * feature still shipping. The undated footnote under the number went in the
+     * same change (see custom-tile.tsx).
+     *
+     * The honesty rules this freeze actually guards are untouched, and are now
+     * the whole of what it guards: bars are still zero-anchored and every value
+     * still goes through `formatMetricValue`.
      */
     const hash = createHash("sha256").update(readFileSync(join(process.cwd(), "src/components/charts.tsx"))).digest("hex");
-    expect(hash).toBe("83bbf1d2962a544099966f56cc208fd4806ffa222f12c558b0000398289716c7");
+    expect(hash).toBe("e77688708bc005a9abac27c474aa4f75d44df3052b9af9e35019e8c7013825e8");
   });
 });
 

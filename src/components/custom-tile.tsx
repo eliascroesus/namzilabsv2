@@ -3,8 +3,7 @@
 import { AlertTriangle } from "lucide-react";
 import { formatMetricValue } from "@/lib/format";
 import { Card } from "@/components/ui/card";
-import { Delta, type ChartFormat, type GroupRow, type SeriesPoint } from "@/components/charts";
-import { deriveDelta } from "@/components/flow-tile";
+import type { ChartFormat, GroupRow, SeriesPoint } from "@/components/charts";
 import { ChartFooter, ChartFrame } from "@/components/board-charts/frame";
 import { GoalBar, Sparkline } from "@/components/board-charts/scorecard";
 import { BarsVertical, LineChart } from "@/components/board-charts/cartesian";
@@ -481,7 +480,6 @@ export function CustomTile({
   const fmt = (v?: number) => formatMetricValue(v, bag);
   const hasSeries = (w.series?.length ?? 0) > 0;
   const hasGroups = (w.groups?.length ?? 0) > 0;
-  const undated = w.undated ?? 0;
   /**
    * A SERIES COMPUTED BEFORE WINDOWS CARRIED THEIR OWN BUCKET SIZE.
    *
@@ -607,8 +605,6 @@ export function CustomTile({
               ? "Nothing to list in this period."
               : undefined;
 
-  const delta =
-    chart === "number" && config.showDelta !== false ? deriveDelta(stored, { ...stored, ...w }, rangeKey) : null;
 
   /**
    * THE LEGEND IS GONE, AND SO IS THE ARITHMETIC THAT BUILT IT.
@@ -708,7 +704,6 @@ export function CustomTile({
             ? null
             : fmt(w.value)
       }
-      delta={delta ? <Delta current={delta.current} previous={delta.previous} format={bag} since={delta.since} /> : null}
       status={source.kind === "flow" ? source.status : undefined}
       unavailable={w.unavailable}
       emptyReason={emptyReason}
@@ -738,25 +733,19 @@ export function CustomTile({
               sentence instead of a chart, and that sentence replaces the mark
               rather than sitting under it. The disclosures were only ever for
               charts honest enough to draw; the guarantee lives in the refusal,
-              not in the footnote. */}
-          {!w.unavailable && undated > 0 && (
-            <p className="mt-2 text-xs text-warn-ink">
-              {/* ONE STRING, NO JSX TEXT NODES AT ALL — and that is not
-                  fussiness, it is the second fix for this sentence.
+              not in the footnote.
 
-                  It shipped as "3 records carryno date". The first repair kept
-                  an expression next to wrapped prose and asserted the rendered
-                  output, which PASSED under vitest and stayed broken in the
-                  browser: esbuild keeps the space that begins a text node on
-                  the same line as the expression before it, and Next's SWC
-                  transform drops it. A test cannot arbitrate that — it runs
-                  under the transform that agrees with it.
+              THE UNDATED SENTENCE WENT THE SAME WAY on 14 Sep 2026, and it is
+              the reason this comment is worth keeping. "3130 records carry no
+              date in this metric's time reference — counted in All time, in no
+              period." was four lines of warn-red under a headline, taller than
+              the number it qualified. The COUNT is untouched: `undated` is still
+              measured and still stored per range, so which records land in which
+              period is exactly as before. Only the card stopped saying it.
 
-                  So the sentence does not ask. Nothing here is a JSX text node,
-                  so no transform gets an opinion about its whitespace. */}
-              {`${undated === 1 ? "1 record carries" : `${undated} records carry`} no date in this metric’s time reference — counted in All time, in no period.`}
-            </p>
-          )}
+              So the pattern holds across all three removals: what a tile REFUSES
+              to draw is the guarantee; what it writes underneath was never
+              carrying it. Do not put prose back here without the owner. */}
         </>
       }
     >

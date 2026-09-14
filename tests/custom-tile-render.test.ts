@@ -70,26 +70,35 @@ const RICH = {
 /** Rendered markup with every tag and attribute removed — what a reader sees. */
 const text = (html: string) => html.replace(/<[^>]*>/g, " ");
 
+/**
+ * THE TILE WRITES NO QUALIFYING PROSE AT ALL NOW.
+ *
+ * It used to print "3130 records carry no date in this metric's time reference
+ * — counted in All time, in no period." under the number, in warn ink, and on a
+ * real board that sentence was four lines of red under a headline and taller
+ * than the tile's own chart. The owner removed it on 14 Sep 2026 along with the
+ * period-over-period delta.
+ *
+ * What the count is FOR has not changed and has not moved: `undated` is still
+ * computed and still stored per range (tests/flow-range.test.ts), so nothing
+ * about which records land in which period was altered — only what the card
+ * says out loud. These assertions exist so it does not come back by accident.
+ */
 describe("the sentences the tile writes", () => {
   const undated = (n: number) =>
     render("number", flow({ format: "number", precision: 0, byRange: { today: { value: 12, undated: n } } }))
       .replace(/<[^>]*>/g, "")
       .replace(/&#x27;|&rsquo;|\u2019/g, "'");
 
-  it("keeps its words apart when it counts undated records", () => {
-    expect(undated(3)).toContain("3 records carry no date");
-    // Sabotage: splice the plural back in as `carr{n === 1 ? "ies" : "y"}` and
-    // this reads "carryno date" again.
-    expect(undated(3)).not.toMatch(/carry\S/);
+  it("says nothing about undated records, however many there are", () => {
+    expect(undated(3)).not.toContain("no date");
+    expect(undated(1)).not.toContain("no date");
+    expect(undated(3130)).not.toContain("All time");
   });
 
-  it("agrees with itself about one record", () => {
-    expect(undated(1)).toContain("1 record carries no date");
-    expect(undated(1)).not.toContain("records");
-  });
-
-  it("says nothing at all when every record is dated", () => {
-    expect(undated(0)).not.toContain("no date");
+  it("still draws the number itself", () => {
+    // The removal took the footnote, not the answer.
+    expect(undated(3)).toContain("12");
   });
 });
 
@@ -305,13 +314,15 @@ describe("the five states, now that the boundary carries them", () => {
     expect(html).toContain("12 of 90 days");
   });
 
-  it("undated records are reported beside the number they are missing from", () => {
+  it("reports nothing about undated records — that sentence is gone", () => {
+    // Removed 14 Sep 2026 with the delta; `undated` is still counted and stored
+    // (tests/flow-range.test.ts), the card just no longer says it.
     const html = render("number", {
       kind: "flow",
       tile: { ...base, byRange: { today: { value: 4, undated: 2 } } },
       status: "fresh",
     });
-    expect(html).toContain("2 records carry no date");
+    expect(html).not.toContain("carry no date");
   });
 
   it("draws no freshness at all when the tile is healthy", () => {
@@ -337,43 +348,33 @@ describe("the five states, now that the boundary carries them", () => {
   });
 });
 
-describe("the delta tells the truth or says nothing", () => {
-  it("never fabricates +100% when yesterday is missing", () => {
-    /**
-     * The `?? 0` bug: a today tile whose yesterday entry was absent compared
-     * against zero and printed a confident +100%. `deriveDelta`'s rules —
-     * shared from the groups board, not re-derived — refuse a comparison with
-     * no honest prior.
-     */
-    const html = render("number", {
-      kind: "flow",
-      tile: { format: "number", precision: 0, byRange: { today: { value: 4 } } },
-      status: "fresh",
-    });
-    expect(html).not.toContain("+100%");
-    expect(html).not.toContain("yesterday");
+/**
+ * NO PERIOD-OVER-PERIOD COMPARISON, ANYWHERE, ON ANY TILE.
+ *
+ * There used to be a "+25% vs prior" / "vs yesterday" pill beside the headline,
+ * with a careful set of rules about when it could honestly be drawn. The owner
+ * removed the whole feature on 14 Sep 2026, and the reason the rules were
+ * careful is the reason it went: up is good for Booked Leads and bad for Speed
+ * to Lead, and nothing on a tile knows which, so the card was making a claim it
+ * could not stand behind. `Delta`, `deriveDelta` and the `showDelta` setting are
+ * all deleted rather than defaulted off — a switch nobody can reach is a feature
+ * still shipping.
+ */
+describe("no tile compares one period to another", () => {
+  const withYesterday = render("number", {
+    kind: "flow",
+    tile: { format: "number", precision: 0, byRange: { today: { value: 4 }, yesterday: { value: 2 } } },
+    status: "fresh",
   });
 
-  it("compares against a real yesterday when one exists", () => {
-    const html = render("number", {
-      kind: "flow",
-      tile: { format: "number", precision: 0, byRange: { today: { value: 4 }, yesterday: { value: 2 } } },
-      status: "fresh",
-    });
-    expect(html).toContain("yesterday");
+  it("draws no comparison even when a real prior period is sitting right there", () => {
+    expect(withYesterday).not.toContain("yesterday");
+    expect(withYesterday).not.toContain("vs prior");
+    expect(withYesterday).not.toMatch(/[+\u2212-]\d+%/);
   });
 
-  it("refuses an unavailable yesterday exactly like a missing one", () => {
-    const html = render("number", {
-      kind: "flow",
-      tile: {
-        format: "number",
-        precision: 0,
-        byRange: { today: { value: 4 }, yesterday: { unavailable: "Division by zero." } },
-      },
-      status: "fresh",
-    });
-    expect(html).not.toContain("yesterday");
+  it("still draws the number the comparison used to sit beside", () => {
+    expect(withYesterday).toContain("4");
   });
 });
 

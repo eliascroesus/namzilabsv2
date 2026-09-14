@@ -163,7 +163,7 @@ export function CanvasHarness({
  * Both tabs are mounted side by side because a screenshot cannot click.
  */
 export function PanelSpecimen({ options }: { options: CustomTileOption[] }) {
-  const [config, setConfig] = useState<TileConfig>({ color: "teal", showDelta: true });
+  const [config, setConfig] = useState<TileConfig>({ color: "teal" });
   const apply = (set: TileConfig, clear?: Array<keyof TileConfig>) =>
     setConfig((c) => {
       const next: Record<string, unknown> = { ...c, ...set };

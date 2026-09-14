@@ -52,7 +52,6 @@ const KEYS = {
   color: z.string().refine((c) => Object.hasOwn(GROUP_ACCENT, c)),
   /** The tile's own goal. Seeded from the flow's target; null clears it. */
   target: z.number().finite().nullable(),
-  showDelta: z.boolean(),
   showGoal: z.boolean(),
   showLabels: z.boolean(),
   showSpark: z.boolean(),
@@ -368,7 +367,7 @@ export function stageFill(index: number, count: number, accent: string): string 
 const EVERY_TILE = ["title", "rangeKey"] as const;
 
 export const CONFIG_FIELDS = {
-  number: [...EVERY_TILE, "color", "precision", "showDelta", "showSpark", "showGoal", "target"],
+  number: [...EVERY_TILE, "color", "precision", "showSpark", "showGoal", "target"],
   line: [...EVERY_TILE, "color", "precision", "showGoal", "target"],
   area: [...EVERY_TILE, "color", "precision", "showGoal", "target"],
   bar: [...EVERY_TILE, "color", "precision", "showGoal", "target", "showLabels"],

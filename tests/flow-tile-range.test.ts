@@ -202,19 +202,19 @@ describe("the delta beside the headline", () => {
     },
   };
 
-  it("shows nothing for a forward range", () => {
-    expect(render(row({ tile: seriesTile }), "upcoming")).not.toContain("vs prior");
-  });
-
-  // The counterweight: the same tile under a backward range still compares its
-  // newest COMPLETE bucket to the one before it, so the test above cannot be
-  // satisfied by dropping series deltas altogether.
-  it("still compares complete buckets on a backward range", () => {
-    expect(render(row({ tile: seriesTile }), "7d")).toContain("vs prior");
-  });
-
-  it("still reads Today against Yesterday", () => {
-    expect(render(row(), "today")).toContain("vs yesterday");
+  /**
+   * THE DELTA IS GONE FROM EVERY RANGE, not suppressed on some of them.
+   *
+   * This block used to hold the forward-range rule and its counterweight: no
+   * "vs prior" on Upcoming, but still one on 7d and still "vs yesterday" on
+   * Today. The owner removed the comparison entirely on 14 Sep 2026, so the
+   * counterweight is now the opposite assertion — the ranges that DID draw one
+   * are the ones worth checking no longer do.
+   */
+  it("draws no comparison on any range, forward or backward", () => {
+    for (const range of ["upcoming", "7d", "today"]) {
+      expect([range, render(row({ tile: seriesTile }), range)].map((v, i) => (i === 0 ? v : /vs prior|vs yesterday/.test(v)))).toEqual([range, false]);
+    }
   });
 });
 

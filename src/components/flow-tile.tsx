@@ -1,10 +1,9 @@
 import Link from "next/link";
 import { PencilLine } from "lucide-react";
 import { formatDateTime, formatMetricValue, relativeTime } from "@/lib/format";
-import { isForwardRange } from "@/lib/metrics/range";
 import { MetricCard } from "@/components/metric-card";
 import { StatusPill, type StatusPillProps } from "@/components/ui/badge";
-import { Delta, GroupBars, ImportProgress, Sparkbars, TargetBar } from "@/components/charts";
+import { GroupBars, ImportProgress, Sparkbars, TargetBar } from "@/components/charts";
 import type { ImportCoverage } from "@/connectors/types";
 
 /**
@@ -150,8 +149,6 @@ export function FlowTile({ row, rangeKey }: { row: FlowResultRow; rangeKey?: str
         : "Not computed yet for this range — Refresh to compute it."
       : undefined);
   const t: Tile = windowed && !unavailable ? { ...stored, value: windowed.value, series: windowed.series, groups: windowed.groups } : stored;
-  // Nothing to compare a missing number against.
-  const delta = unavailable ? null : deriveDelta(stored, t, rangeKey);
 
   /**
    * ONE CARD, AND AN UNANSWERED RANGE REMOVES ONLY THE NUMBER. The unavailable
@@ -196,7 +193,6 @@ export function FlowTile({ row, rangeKey }: { row: FlowResultRow; rangeKey?: str
          refreshed. */
       marker={row.status === "fresh" ? null : <Freshness status={row.status} />}
       headline={unavailable ? null : fmt(t.value, t)}
-      delta={delta && <Delta current={delta.current} previous={delta.previous} format={t} since={delta.since} />}
       provenance={
         row.computedAt ? (
           // NO "Updated " PREFIX. At three columns the footline has room for a
@@ -239,23 +235,6 @@ export function FlowTile({ row, rangeKey }: { row: FlowResultRow; rangeKey?: str
             </p>
           )}
 
-          {/* A record with no date in this metric's time reference belongs to no
-              period, so it is in "All time" and in none of the pills. Saying so
-              is the same rule the import bar follows: a number that leaves data
-              out has to admit it, or the gap reads as an answer. */}
-          {windowed?.undated ? (
-            <p className="mt-2 text-xs text-warn-ink">
-              {/* ONE STRING, NO JSX TEXT NODES — and re-broken once already
-                  while moving this block, which is why the test that caught it
-                  exists. esbuild keeps the space that begins a text node on the
-                  same line as the expression before it; Next's SWC transform
-                  drops it. So the sentence renders "3 recordscarry no date" in
-                  the browser and correctly under vitest, and no unit test can
-                  arbitrate — it runs under the transform that agrees with it.
-                  See custom-tile.tsx for the full account. */}
-              {`${windowed.undated} record${windowed.undated === 1 ? "" : "s"} carry no date, so they are counted only in All time.`}
-            </p>
-          ) : null}
 
           {/* Phase 8 — a number computed over an import that is still running is
               accurate and INCOMPLETE, and "Data as of <now>" says only the first
@@ -329,80 +308,6 @@ function drawsItsSeries(assembled: boolean, stored: Tile, t: Tile): boolean {
   return stored.facts?.shape !== "dataset" || t.viz === "line" || t.viz === "bar";
 }
 
-/**
- * The slice of a tile the delta rules read — structural, so the custom tile's
- * own narrower type satisfies it without importing this file's whole `Tile`.
- * EXPORTED because the canvas fabricated its own comparison once (`?? 0`
- * printed "+100%" whenever yesterday was missing) and one set of honesty rules
- * is the entire point of these.
- */
-export type DeltaTile = {
-  value?: number;
-  series?: Array<{ bucket: string; value: number }>;
-  byRange?: Record<string, { value?: number; unavailable?: string; assembled?: boolean }>;
-};
-
-/**
- * WHAT THIS NUMBER CAN HONESTLY BE COMPARED TO.
- *
- * Only two comparisons exist in the data, and neither is invented:
- *
- *  - "Today" has "Yesterday" sitting beside it in `byRange` — both were
- *    computed from the same run, so it is a real like-for-like period.
- *  - A bucketed series carries its own history, so the newest COMPLETE bucket
- *    can be read against the one before it. The final bucket is skipped
- *    because it is still filling: comparing a partial day to a whole one
- *    manufactures a decline every morning.
- *
- * Every other range (7d, 30d, 90d, all) has no stored predecessor — there is
- * no "previous 7 days" bucket — so those tiles show no delta rather than a
- * guess. Returning null is the point: a dashboard that fabricates a
- * comparison is worse than one that omits it.
- *
- * A FORWARD RANGE HAS NO "PRIOR" AT ALL, and the series rule inverts under it.
- * The bucket still filling is the FIRST one (the period we are inside), not the
- * last; the last is the furthest-future, complete one. So the skip-the-final
- * rule dropped the most informative bucket and compared two arbitrary future
- * buckets under a headline that is the whole future total. There is no honest
- * answer to "compared to what" for the future — a booking made for next month
- * is not a movement against anything — so Upcoming gets no delta.
- */
-export function deriveDelta(
-  stored: DeltaTile,
-  t: DeltaTile,
-  rangeKey?: string,
-): { current: number; previous: number; since: string } | null {
-  const current = t.value;
-  if (current == null || !Number.isFinite(current)) return null;
-  if (isForwardRange(rangeKey)) return null;
-
-  if (rangeKey === "today") {
-    const y = stored.byRange?.yesterday;
-    if (y && !y.unavailable && y.value != null && Number.isFinite(y.value)) {
-      return { current, previous: y.value, since: "vs yesterday" };
-    }
-  }
-
-  const series = t.series;
-  // The window's own slot knows whether its points were measured or assembled.
-  const assembled = rangeKey ? stored.byRange?.[rangeKey]?.assembled === true : false;
-  /**
-   * The same rule `drawsItsSeries` states: an assembled trend draws a SHAPE, it
-   * does not yield numbers. "+8 pts vs prior" off two single days, under a
-   * headline that is a thirty-day rate, is a comparison the card is not making.
-   */
-  // The same rule, same reason: an assembled trend draws a shape, it does not
-  // yield numbers. "+8 pts vs prior" off two single days, under a headline that
-  // is a thirty-day rate, is a comparison the card is not making.
-  if (series && series.length >= 3 && !assembled) {
-    const last = series[series.length - 2];
-    const prior = series[series.length - 3];
-    if (last?.value != null && prior?.value != null) {
-      return { current: last.value, previous: prior.value, since: "vs prior" };
-    }
-  }
-  return null;
-}
 
 /**
  * THE NUMBER IS FROM A FLOW THAT NO LONGER EXISTS AS DRAWN.
