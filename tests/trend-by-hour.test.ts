@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { createTestDb } from "./helpers/testdb";
 import { events } from "@/db/schema";
 import { runFlow } from "@/lib/flow/engine";
-import { TIME_UNITS, FormulaConfigSchema, parseGraph } from "@/lib/flow/types";
+import { TIME_UNITS, STORED_TIME_UNITS, FormulaConfigSchema, parseGraph } from "@/lib/flow/types";
 import type { DB } from "@/db/types";
 
 /**
@@ -24,12 +24,33 @@ import type { DB } from "@/db/types";
  * tested one fewer case than it did yesterday. These assert the new rung by
  * name.
  */
-describe("hour, as a period a flow author can pick", () => {
-  it("is offered alongside the other periods, finest first", () => {
-    expect(TIME_UNITS).toContain("hour");
-    // Finest first, so the picker reads as a ladder rather than a set.
-    expect(TIME_UNITS[0]).toBe("hour");
-    expect([...TIME_UNITS]).toEqual(["hour", "day", "week", "month", "quarter", "year"]);
+describe("hour, withdrawn from the picker", () => {
+  it("is not a period a flow author can choose", () => {
+    /**
+     * WITHDRAWN THE MORNING AFTER IT SHIPPED. Offering it was reasoned from the
+     * machinery — `bucketKey`, `bucketFloorMs` and `bucketNextMs` all branch on
+     * hours, and the marks have drawn an hour grid for short windows for ages —
+     * and that reasoning missed CARDINALITY. A bucket per distinct hour is
+     * bounded only by the record count, so a long history puts thousands of
+     * points in a tile's jsonb: the same blow-up `MAX_GROUPS` exists to stop,
+     * one axis over. Day is the floor.
+     */
+    expect(TIME_UNITS).not.toContain("hour");
+    expect([...TIME_UNITS]).toEqual(["day", "week", "month", "quarter", "year"]);
+  });
+
+  it("is still a period a SAVED flow may contain", () => {
+    /**
+     * THE COMPATIBILITY HALF, and the reason `STORED_TIME_UNITS` exists at all.
+     * A graph built during that one day carries `unit: "hour"`; a zod enum that
+     * no longer lists it does not degrade politely, it throws — and the flow
+     * cannot be OPENED, let alone corrected. That is a worse failure than the
+     * one the withdrawal prevents.
+     */
+    expect(STORED_TIME_UNITS).toContain("hour");
+    // The stored list is the offered list plus that rung and nothing else, so
+    // the two cannot quietly drift apart.
+    expect([...STORED_TIME_UNITS].sort()).toEqual([...TIME_UNITS, "hour"].sort());
   });
 
   it("survives the schema a saved step is parsed through", () => {

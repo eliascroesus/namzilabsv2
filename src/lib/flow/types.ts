@@ -201,11 +201,45 @@ export const AGGREGATIONS = ["count", "count_distinct", "sum", "avg", "median", 
  * booking hour is the counter-example — "which hour do people actually show
  * up" is a question about the data, not about the drawing.
  */
-export const TIME_UNITS = ["hour", "day", "week", "month", "quarter", "year"] as const;
+export const TIME_UNITS = ["day", "week", "month", "quarter", "year"] as const;
+
+/**
+ * WHAT A STORED GRAPH MAY CONTAIN — a superset of what the picker offers.
+ *
+ * `hour` was offered for a day (14 Sep 2026) and withdrawn the next morning: on
+ * a long history it makes one bucket per distinct hour, bounded only by the
+ * record count, which puts thousands of points in a tile's jsonb. Day is the
+ * floor.
+ *
+ * IT IS STILL PARSED, and that is the whole reason this constant exists apart
+ * from the one above. A flow saved during that day carries `unit: "hour"`, and
+ * a zod enum that no longer lists it does not degrade politely — `parseGraph`
+ * throws and the flow cannot be OPENED, let alone corrected. The engine has
+ * always been able to answer an hour (`bucketKey`, `bucketFloorMs` and
+ * `bucketNextMs` all branch on it), so one already saved keeps working; it
+ * simply cannot be chosen again.
+ */
+export const STORED_TIME_UNITS = ["hour", ...TIME_UNITS] as const;
+
+/**
+ * THE MOST CATEGORIES A BREAKDOWN MAY BE CONFIGURED WITH — the same forty
+ * `MAX_GROUPS` lets a field breakdown DRAW.
+ *
+ * These are hand-authored, so this is not the runaway the field cap exists for.
+ * But each entry carries a whole `FilterConfig` that is evaluated against every
+ * record, "a person typed them" is an assumption about people rather than a
+ * bound, and a breakdown that cannot draw more than forty rows should not be
+ * configurable with more than forty: two limits disagreeing is how you get a
+ * category that silently never appears.
+ *
+ * Spelled here rather than imported from the engine because this module must
+ * not depend on it — the engine imports these schemas.
+ */
+export const MAX_CATEGORIES = 40;
 
 const GroupBySchema = z
   .discriminatedUnion("type", [
-    z.object({ type: z.literal("time"), unit: z.enum(TIME_UNITS) }),
+    z.object({ type: z.literal("time"), unit: z.enum(STORED_TIME_UNITS) }),
     // `field` tolerates "" so a draft saved while the withdrawn breakdown
     // control was on screen still LOADS. A parse failure here is not a
     // validation message, it is a flow that cannot be opened at all.
@@ -665,7 +699,10 @@ export const GroupConfigSchema = z.object({
   aggregation: z.enum(["count", "sum", "count_distinct"]).default("count"),
   valueField: z.string().default("value"),
   distinctField: z.string().default("subject"),
-  categories: z.array(z.object({ label: z.string().min(1), filters: FilterConfigSchema })).default([]),
+  categories: z
+    .array(z.object({ label: z.string().min(1), filters: FilterConfigSchema }))
+    .max(MAX_CATEGORIES)
+    .default([]),
   fallbackLabel: z.string().default("Other"),
 });
 export type GroupConfig = z.infer<typeof GroupConfigSchema>;
@@ -684,7 +721,10 @@ export const CalculateConfigSchema = z.object({
   // breakdown (group): by a field or custom categories
   breakdownMode: z.enum(["field", "categories"]).default("field"),
   breakdownField: z.string().default("source"),
-  categories: z.array(z.object({ label: z.string().min(1), filters: FilterConfigSchema })).default([]),
+  categories: z
+    .array(z.object({ label: z.string().min(1), filters: FilterConfigSchema }))
+    .max(MAX_CATEGORIES)
+    .default([]),
   fallbackLabel: z.string().default("Other"),
   // compare (formula): a rate/ratio/… over two numbers chosen as pills (handles a/b)
   op: z.enum(FORMULA_OPS).default("percentage"),
@@ -775,7 +815,7 @@ export const MetricSpecSchema = z.object({
   target: z.number().nullable().default(null),
   /** Optional dashboard time axis for line/bar charts: which date field to bucket by. */
   timeField: z.string().optional(),
-  timeUnit: z.enum(TIME_UNITS).default("month"),
+  timeUnit: z.enum(STORED_TIME_UNITS).default("month"),
 });
 export type MetricSpec = z.infer<typeof MetricSpecSchema>;
 
