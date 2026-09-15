@@ -54,7 +54,13 @@ export function ToolMarquee() {
                unique — and duplicate keys in a list this long is React
                silently reusing the wrong node when anything re-renders. */
             key={`${entry.source}-${i}`}
-            className="flex shrink-0 items-center gap-2 rounded-full border border-white/15 bg-white/10 py-1.5 pl-1.5 pr-4"
+            /* A DARK WASH, NOT A LIGHT ONE. `bg-white/10` lightened the ground
+               under the chip's own label, which on the brightened sky put a
+               14px name at 4.35:1. Tinting DOWN instead makes the chip
+               self-sufficient: it reads the same however light the sky
+               underneath it gets, which is one fewer thing coupled to a
+               gradient stop. */
+            className="flex shrink-0 items-center gap-2 rounded-full border border-white/20 bg-neutral-950/25 py-1.5 pl-1.5 pr-4"
           >
             <span
               /* Four of the thirty-one marks are yellow, where white initials

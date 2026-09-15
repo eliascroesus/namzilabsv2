@@ -6,6 +6,8 @@ import { and, eq, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { workspaceOwners } from "@/db/schema";
 import { workspaceCap } from "@/lib/limits";
+import { canManageRanks } from "@/lib/permissions";
+import { revalidatePath } from "next/cache";
 
 /**
  * Create a new WorkOS organization (the tenant/workspace), add the current user
@@ -93,6 +95,57 @@ export async function createOrganizationAction(formData: FormData): Promise<void
   }
 
   await switchToOrganization(org.id, { returnTo: "/dashboard" });
+}
+
+/**
+ * RENAME THE WORKSPACE YOU ARE IN.
+ *
+ * WorkOS is the only store of org identity — there is no local `organizations`
+ * mirror to keep in step (one existed, was write-only, and went with migration
+ * 0022) — so this is one `updateOrganization` call and a revalidate.
+ *
+ * IT RENAMES THE ACTIVE ORG AND TAKES NO ID FROM THE FORM, which is the whole
+ * security design. A server action is a public endpoint whatever the menu
+ * happens to be drawing, and an `organizationId` field would let anybody POST
+ * a new name onto any organization whose id they could guess. `switchOrgAction`
+ * can take one safely because WorkOS validates membership on the switch; there
+ * is no equivalent check inside `updateOrganization`, so the id comes from the
+ * SESSION instead and the question "may I rename this?" reduces to "am I in
+ * it, with authority?".
+ *
+ * AUTHORITY IS `canManageRanks`, not membership. Renaming the workspace is
+ * governance — it changes what the thing is called for everybody in it, the
+ * same class of act as inviting a member or assigning a rank — and this
+ * product deliberately separates "can use everything" from "can govern
+ * everyone" (see `permissions.ts`: an unranked member gets full product access
+ * and no governance). The switcher hides the control for anybody else, but
+ * that is a courtesy; this is the wall.
+ *
+ * NO REDIRECT, unlike its two neighbours. Create and switch both move you to a
+ * different workspace, so they end in `switchToOrganization`. A rename leaves
+ * you exactly where you were and the only thing that changed is a word on
+ * screen — `revalidatePath("/", "layout")` is what repaints the rail, the
+ * switcher and the top bar, all of which read the name from the session's
+ * organization on the server.
+ */
+export async function renameOrganizationAction(formData: FormData): Promise<void> {
+  const auth = await withAuth({ ensureSignedIn: true });
+  const orgId = auth.organizationId;
+  if (!orgId) return;
+
+  const name = String(formData.get("name") ?? "").trim();
+  // Same bounds the create field enforces, restated here because a form post
+  // is a public endpoint and `maxLength` on an input is a hint to a browser.
+  if (!name || name.length > 60) return;
+
+  const allowed = await canManageRanks(getDb(), { orgId, userId: auth.user.id, role: auth.role });
+  if (!allowed) return;
+
+  await getWorkOS().organizations.updateOrganization({ organization: orgId, name });
+
+  // The name is read on the server in the rail, the switcher and the account
+  // menu, so the whole layout is what has to come back — not just the page.
+  revalidatePath("/", "layout");
 }
 
 /**

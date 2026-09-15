@@ -1,5 +1,5 @@
-import { Check, Plus } from "lucide-react";
-import { createOrganizationAction, switchOrgAction } from "@/app/actions";
+import { Check, Pencil, Plus } from "lucide-react";
+import { createOrganizationAction, renameOrganizationAction, switchOrgAction } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SubmitButton } from "@/components/ui/submit-button";
@@ -49,6 +49,7 @@ export function OrgSwitcher({
   orgs,
   currentId,
   canCreate = false,
+  canRename = false,
 }: {
   orgs: Org[];
   currentId: string;
@@ -63,6 +64,17 @@ export function OrgSwitcher({
    * is worse than one that is not there.
    */
   canCreate?: boolean;
+  /**
+   * WHETHER THIS PERSON MAY RENAME THE WORKSPACE THEY ARE IN — owner, WorkOS
+   * admin, or an explicit `manage_workspace` grant, resolved by the shell
+   * through `canManageRanks`.
+   *
+   * The same courtesy-not-gate arrangement as `canCreate` above:
+   * `renameOrganizationAction` asks the identical question and returns without
+   * writing if the answer is no, because a form post is a public endpoint
+   * whatever the menu is drawing.
+   */
+  canRename?: boolean;
 }) {
   const current = orgs.find((o) => o.id === currentId);
   const currentName = current?.name ?? "Workspace";
@@ -70,11 +82,7 @@ export function OrgSwitcher({
   if (orgs.length <= 1) {
     return (
       <div className="space-y-0.5">
-        <p className={cn(ROW, "font-semibold text-foreground")}>
-          <WorkspaceChip id={currentId} name={currentName} className="size-6" />
-          <span className="min-w-0 flex-1 truncate">{currentName}</span>
-          <Check className="size-4 shrink-0 text-accent-foreground" aria-hidden />
-        </p>
+        <CurrentRow id={currentId} name={currentName} canRename={canRename} />
         {canCreate && <NewWorkspaceRow />}
       </div>
     );
@@ -84,14 +92,7 @@ export function OrgSwitcher({
     <div className="space-y-0.5">
       {orgs.map((o) =>
         o.id === currentId ? (
-          // The one you are in is not a button. It has nowhere to take you, and
-          // a pressable row that reloads the page into itself is the kind of
-          // dead affordance that makes a menu feel unfinished.
-          <p key={o.id} className={cn(ROW, "font-semibold text-foreground")} aria-current="true">
-            <WorkspaceChip id={o.id} name={o.name} className="size-6" />
-            <span className="min-w-0 flex-1 truncate">{o.name}</span>
-            <Check className="size-4 shrink-0 text-accent-foreground" aria-hidden />
-          </p>
+          <CurrentRow key={o.id} id={o.id} name={o.name} canRename={canRename} />
         ) : (
           <form key={o.id} action={switchOrgAction}>
             <input type="hidden" name="organizationId" value={o.id} />
@@ -121,6 +122,77 @@ export function OrgSwitcher({
       )}
       {canCreate && <NewWorkspaceRow />}
     </div>
+  );
+}
+
+/**
+ * THE WORKSPACE YOU ARE IN, and the one place its name can be changed.
+ *
+ * It is not a button. It has nowhere to take you, and a pressable row that
+ * reloads the page into itself is the kind of dead affordance that makes a
+ * menu feel unfinished. What it grew is a PENCIL, because the name a workspace
+ * was created with is the name it kept forever — `createOrganizationAction`
+ * was the only writer, and a typo in the onboarding field was permanent.
+ *
+ * THE PENCIL IS A `<summary>`, which is the same move `NewWorkspaceRow` makes
+ * below and for the same reason: this panel is itself a floating menu, so a
+ * dialog opened from inside it either closes the menu underneath (taking the
+ * list you were reading with it) or stacks two overlays. The disclosure swaps
+ * the row for a field in place, and the whole thing stays a plain form post
+ * with no client boundary.
+ *
+ * The row STAYS VISIBLE above the open field, the same way the create row does.
+ * It is the label for what is being renamed, and hiding it would leave a text
+ * input floating in a menu with nothing saying which workspace it belongs to.
+ */
+function CurrentRow({ id, name, canRename }: { id: string; name: string; canRename: boolean }) {
+  const row = (
+    <>
+      <WorkspaceChip id={id} name={name} className="size-6" />
+      <span className="min-w-0 flex-1 truncate">{name}</span>
+      <Check className="size-4 shrink-0 text-accent-foreground" aria-hidden />
+    </>
+  );
+
+  if (!canRename) {
+    return (
+      <p className={cn(ROW, "font-semibold text-foreground")} aria-current="true">
+        {row}
+      </p>
+    );
+  }
+
+  return (
+    <details>
+      <summary
+        /* The tick still marks the current workspace and the pencil sits after
+           it, so the column of glyphs down the right of the menu keeps its
+           order whether or not this person may rename. */
+        className={cn(
+          ROW,
+          "cursor-pointer list-none font-semibold text-foreground transition-colors hover:bg-accent hover:text-accent-foreground [&::-webkit-details-marker]:hidden",
+        )}
+        aria-current="true"
+      >
+        {row}
+        <Pencil className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+        <span className="sr-only">Rename this workspace</span>
+      </summary>
+      <form action={renameOrganizationAction} className="mt-1 space-y-2 px-2 pb-1">
+        <Input
+          name="name"
+          required
+          maxLength={60}
+          defaultValue={name}
+          placeholder="Workspace name"
+          aria-label="Workspace name"
+          className="h-9"
+        />
+        <SubmitButton size="sm" className="w-full" pendingLabel="Saving…">
+          Save name
+        </SubmitButton>
+      </form>
+    </details>
   );
 }
 

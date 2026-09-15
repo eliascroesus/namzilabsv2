@@ -29,8 +29,9 @@ import { cn } from "@/lib/utils";
 
 /** Same list twice — once in the capsule, once in the sheet — so it lives once. */
 const LINKS: Array<{ href: string; label: string }> = [
+  { href: "#problem", label: "The problem" },
   { href: "#how", label: "How it works" },
-  { href: "#proof", label: "The receipts" },
+  { href: "#ai", label: "Ask your AI" },
   { href: "#integrations", label: "Integrations" },
   { href: "/docs", label: "Docs" },
 ];

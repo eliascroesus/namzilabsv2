@@ -6,6 +6,7 @@ import { getDb } from "@/db/client";
 import { requestAccess } from "@/lib/auth";
 import { getProfile } from "@/lib/profile";
 import { workspaceCap } from "@/lib/limits";
+import { canManageRanks } from "@/lib/permissions";
 import { connections, flows, workspaceOwners } from "@/db/schema";
 import { AppFrame } from "./app-frame";
 import { navViewsOrNone } from "@/lib/board/nav-views";
@@ -145,12 +146,32 @@ export async function AppShell({
   // Hiding is a courtesy: the /integrations page gate is the real wall, so on
   // any hiccup the frame shows the full rail rather than failing.
   let hide: string[] | undefined;
+  /**
+   * WHETHER TO OFFER THE RENAME PENCIL, decided by the same governance gate the
+   * action itself enforces.
+   *
+   * Renaming changes what the workspace is called for EVERYONE in it, which
+   * puts it with inviting a member and assigning a rank rather than with
+   * building a metric — and this product separates those two trusts on purpose
+   * (`permissions.ts`: an unranked member gets full product access and no
+   * governance). So: owner, WorkOS admin, or an explicit `manage_workspace`
+   * grant.
+   *
+   * DEFAULTS TO FALSE, which is the opposite of the `hide` default above it and
+   * deliberately so. A failed read there means showing one rail item somebody
+   * might not be able to use; a failed read here would mean offering a
+   * governance control to a plain member, who then presses it and watches the
+   * action silently refuse. Courtesy hiding fails toward the harmless side in
+   * both cases — those are just different sides.
+   */
+  let canRename = false;
   try {
     const role = memberships.find((m) => m.organizationId === orgId)?.roleSlug;
     // Same request-scoped resolution the page used — `cache()` makes this the
     // FIRST call's answer rather than a second set of queries.
     const access = await requestAccess(orgId, userId, role);
     if (!access.can("view_integrations")) hide = ["Apps"];
+    canRename = await canManageRanks(getDb(), { orgId, userId, role });
   } catch {
     // Full rail on failure — never a broken frame.
   }
@@ -314,7 +335,7 @@ export async function AppShell({
               <p className="mb-1 px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 {orgs.length > 1 ? "Workspaces" : "Workspace"}
               </p>
-              <OrgSwitcher orgs={orgs} currentId={orgId} canCreate={ownedCount < workspaceCap()} />
+              <OrgSwitcher orgs={orgs} currentId={orgId} canCreate={ownedCount < workspaceCap()} canRename={canRename} />
             </div>
             <form action={signOutAction} className="border-t border-border p-1.5">
               {/* Same override as the switcher's rows, for the same reason: the

@@ -5,7 +5,9 @@ import { CONNECTOR_CATALOG } from "@/connectors/catalog";
 import { buttonVariants } from "@/components/ui/button";
 import { AppWindow } from "@/components/marketing/app-window";
 import { ToolMarquee } from "@/components/marketing/marquee";
+import { AiPanel } from "@/components/marketing/ai-panel";
 import { PillNav } from "@/components/marketing/pill-nav";
+import { ProblemGrid } from "@/components/marketing/problem";
 import { cn } from "@/lib/utils";
 
 /**
@@ -127,8 +129,8 @@ export default async function Home() {
              * rendering instruction and leaves the text itself alone.
              */}
             <h1 className="font-display text-banner font-semibold uppercase leading-none text-white">
-              <span className="block">One number</span>
-              <span className="mt-1 block text-right sm:mt-2">you can defend</span>
+              <span className="block">See all your data</span>
+              <span className="mt-1 block text-right sm:mt-2">in one place</span>
             </h1>
 
             {/**
@@ -136,24 +138,22 @@ export default async function Home() {
              *
              * There, the supporting paragraph rises into the band of the
              * second headline line and sits in the gap its right-alignment
-             * opens on the left. Tried, and taken out: "AT SCALE" is eight
-             * characters and leaves half a page of gap, while "you can defend"
-             * is fourteen and starts at about 20% of the container — so the
-             * paragraph and the headline overlapped for 300px and the first
-             * line of copy read through the leg of a Y.
+             * opens on the left. Tried, and taken out: the reference's second
+             * line is eight characters and leaves half a page of gap, while
+             * ours runs to twelve and starts around 30% of the container — so
+             * the paragraph and the headline overlapped and the first line of
+             * copy read through the leg of a P.
              *
              * The choices were a shorter second line or no interlock, and the
-             * headline is the more important of the two: "one number you can
-             * defend" is the product's claim, and "one number you trust" is a
-             * weaker sentence bought to buy a layout trick. So the row simply
-             * follows the headline, and the asymmetry the page gets is the one
-             * that survives the copy — text left, action right.
+             * headline is the more important of the two. So the row simply
+             * follows it, and the asymmetry the page keeps is the one that
+             * survives the copy — text left, action right.
              */}
             <div className="mt-12 flex flex-col gap-10 sm:mt-14 lg:flex-row lg:items-end lg:justify-between lg:gap-16">
               <p className="max-w-md text-md leading-relaxed text-white/90 sm:text-lg">
-                Calendly says 41. Close says 38. The spreadsheet says 44. Namzilabs reads all three, works out which
-                records are the same person seen twice, and gives you one figure — with the arithmetic shown
-                underneath it.
+                Your calendar, your CRM, your outreach tool and your payment processor each answer a different half of
+                the same question. Namzilabs reads all of them, matches the records that are the same person twice
+                over, and builds the metric none of them can — with the arithmetic shown underneath it.
               </p>
 
               <div className="flex shrink-0 flex-col items-start gap-3 lg:items-end">
@@ -173,7 +173,7 @@ export default async function Home() {
                     <ArrowRight className="size-4 text-white" aria-hidden />
                   </span>
                 </a>
-                <p className="text-sm text-white/85">
+                <p className="text-sm text-white">
                   Read-only access. Disconnect any tool and keep what it sent.
                 </p>
               </div>
@@ -181,7 +181,12 @@ export default async function Home() {
 
             {/* ---- Reads from: the honest logo wall ---------------------- */}
             <div className="mt-14 sm:mt-16">
-              <p className="text-xs font-semibold uppercase tracking-widest text-white/80">
+              {/* FULL WHITE, not /80. The sky was brightened at the owner's ask and
+                  these two 13px lines are what pays for it: at /80 they measured
+                  3.89:1 on the new ground, where 4.5 is the bar. Transparency
+                  was buying hierarchy that the caps, the tracking and the size
+                  already carry on their own. */}
+              <p className="text-xs font-semibold uppercase tracking-widest text-white">
                 Reads from {CONNECTOR_CATALOG.length} tools, including
               </p>
               <div className="mt-4">
@@ -207,7 +212,15 @@ export default async function Home() {
              * it, which is the overlap plus a section's worth of air.
              */}
             <figure className="relative z-10 mt-14 -mb-40 sm:mt-16 sm:-mb-48">
-              <AppWindow />
+              {/* 16:9, SET FROM THE OUTSIDE. The window used to be as tall as
+                  its own content, which at hero width was 309px of board in a
+                  1152px-wide card — a letterbox, not a screen. The frame states
+                  the ratio and `AppWindow` fills it; its grid rows are
+                  proportional so the same markup works in a 648px frame and in
+                  the 300px one a phone gets. */}
+              <div className="aspect-[4/3] w-full sm:aspect-video">
+                <AppWindow />
+              </div>
               {/* The one caption a screen reader gets, because `AppWindow`
                   itself is `aria-hidden`: forty decorative numbers belonging
                   to a company that does not exist, read out before the visitor
@@ -224,13 +237,17 @@ export default async function Home() {
         {/* The top padding pays for the window hanging into this section:
             112px of overlap plus a section's worth of air above the heading. */}
         <section className="mx-auto w-full max-w-6xl px-5 pb-16 pt-44 sm:px-8 sm:pb-24 sm:pt-56">
-          <div className="grid gap-12 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] lg:items-center lg:gap-16">
+          <div className="grid gap-y-8 gap-x-12 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] lg:grid-rows-[auto_auto] lg:items-start lg:gap-x-16">
             <h2 className="font-display text-display-lg font-semibold leading-tight text-foreground">
               Built to be
               <br />
               argued with.
             </h2>
-            <dl className="grid grid-cols-2 gap-x-8 gap-y-8 sm:grid-cols-4">
+            <p className="max-w-sm text-md leading-relaxed text-muted-foreground lg:col-start-1">
+              Every figure shows its working, so the answer to &ldquo;where did that come from?&rdquo; is a click
+              rather than an afternoon.
+            </p>
+            <dl className="grid grid-cols-2 gap-x-8 gap-y-8 sm:grid-cols-4 lg:col-start-2 lg:row-span-2">
               {FACTS.map((f) => (
                 <div key={f.label}>
                   <dt className="sr-only">{f.label}</dt>
@@ -250,9 +267,44 @@ export default async function Home() {
           </div>
         </section>
 
-        {/* ==== The receipts =============================================== */}
-        <section id="proof" className="scroll-mt-28 border-y border-border bg-card">
+        {/* ==== The problem ================================================ */}
+        {/**
+         * THE SECTION THE PAGE WAS MISSING, and the one everything after it
+         * depends on. "One number you can defend" only lands on somebody who
+         * already feels the disagreement; for everybody else the page opened
+         * with an answer to a question they had not been asked.
+         *
+         * It is deliberately NOT the reconciliation argument — that is the
+         * ledger below, and making it twice would flatten both. This is about
+         * there being nowhere to stand: six tools, six correct answers, six
+         * separate logins, and no way to put two of them in the same sentence.
+         */}
+        <section id="problem" className="scroll-mt-28 border-y border-border bg-card">
           <div className="mx-auto w-full max-w-6xl px-5 py-16 sm:px-8 sm:py-24">
+            <div className="max-w-3xl">
+              <p className="text-xs font-semibold uppercase tracking-widest text-marker">The problem</p>
+              <h2 className="font-display mt-4 text-display-lg font-semibold leading-tight text-foreground">
+                Ten tools. Ten dashboards.
+                <br />
+                No way to put them in one sentence.
+              </h2>
+              <p className="mt-6 text-md leading-relaxed text-muted-foreground">
+                Whether you are a company or one person with an audience, the work runs on about ten pieces of
+                software, and every one of them ships analytics for its own slice. They are all correct. None of them
+                can see the others, so the question you actually have — what did that campaign earn, what does a
+                meeting cost, which channel is carrying the month — has no home, and answering it means exporting
+                four CSVs and hoping the names line up.
+              </p>
+            </div>
+            <div className="mt-12">
+              <ProblemGrid />
+            </div>
+          </div>
+        </section>
+
+        {/* ==== The receipts =============================================== */}
+        <section id="proof" className="mx-auto w-full max-w-6xl scroll-mt-28 px-5 py-16 sm:px-8 sm:py-24">
+          <div className="w-full">
             <div className="grid items-center gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,460px)] lg:gap-20">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-widest text-marker">The receipts</p>
@@ -277,7 +329,8 @@ export default async function Home() {
         </section>
 
         {/* ==== How it works =============================================== */}
-        <section id="how" className="mx-auto w-full max-w-6xl scroll-mt-28 px-5 py-16 sm:px-8 sm:py-24">
+        <section id="how" className="scroll-mt-28 border-y border-border bg-card">
+          <div className="mx-auto w-full max-w-6xl px-5 py-16 sm:px-8 sm:py-24">
           <h2 className="font-display text-display-lg font-semibold leading-tight text-foreground">
             Connected on Monday. Defensible by Friday.
           </h2>
@@ -301,11 +354,65 @@ export default async function Home() {
               </li>
             ))}
           </ol>
+          </div>
+        </section>
+
+        {/* ==== Ask your AI ================================================ */}
+        {/**
+         * NOT A ROADMAP. Namzilabs ships an MCP server at `/api/mcp` with six
+         * tools and a `use_ai_assistants` permission deciding who in a
+         * workspace may point an assistant at it, so every claim in this
+         * section is about something that works today.
+         *
+         * The argument is narrow on purpose: an assistant with no numbers
+         * answers "why did close rate drop" with seasonality and lead quality —
+         * fluent, unfalsifiable, useless. The same assistant with read access
+         * to your published metrics answers it with the two figures that moved
+         * and the one that did not. That is the whole difference, and it is
+         * what the panel draws.
+         */}
+        <section id="ai" className="scroll-mt-28 border-y border-border bg-card">
+          <div className="mx-auto w-full max-w-6xl px-5 py-16 sm:px-8 sm:py-24">
+            <div className="grid items-center gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,520px)] lg:gap-20">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-widest text-marker">Ask your AI</p>
+                <h2 className="font-display mt-4 text-display-lg font-semibold leading-tight text-foreground">
+                  Opinions are cheap.
+                  <br />
+                  Give it the numbers.
+                </h2>
+                <p className="mt-6 max-w-lg text-md leading-relaxed text-muted-foreground">
+                  Connect Claude or ChatGPT to your workspace over MCP and it reads your published metrics directly —
+                  the same figures on the same board, not a screenshot you pasted and not a guess. Ask it what
+                  changed, ask it what to do about it, and the answer arrives with the arithmetic attached.
+                </p>
+                <p className="mt-4 max-w-lg text-md leading-relaxed text-muted-foreground">
+                  Read-only, scoped to one workspace, and switched on per person — so an assistant can analyse
+                  everything it is shown and change nothing.
+                </p>
+                <ul className="mt-8 flex flex-wrap gap-2">
+                  {["list_metrics", "get_metric", "get_metric_days", "list_sources"].map((t) => (
+                    /* The real tool names, because somebody evaluating this
+                       will want to know exactly what an assistant can call —
+                       and because naming them is a claim this repo can be
+                       checked against (`src/lib/mcp/tools`). */
+                    <li
+                      key={t}
+                      className="stat-numeral rounded-full border border-border bg-background px-3 py-1.5 text-xs text-muted-foreground"
+                    >
+                      {t}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <AiPanel />
+            </div>
+          </div>
         </section>
 
         {/* ==== Integrations =============================================== */}
-        <section id="integrations" className="scroll-mt-28 border-y border-border bg-card">
-          <div className="mx-auto w-full max-w-6xl px-5 py-16 sm:px-8 sm:py-24">
+        <section id="integrations" className="mx-auto w-full max-w-6xl scroll-mt-28 px-5 py-16 sm:px-8 sm:py-24">
+          <div className="w-full">
             <h2 className="font-display text-display-lg font-semibold leading-tight text-foreground">
               {CONNECTOR_CATALOG.length} tools, read directly.
             </h2>

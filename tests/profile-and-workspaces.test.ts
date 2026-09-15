@@ -217,3 +217,85 @@ describe("the table behind it", () => {
     expect(read("drizzle/0030_user_profiles.sql")).toMatch(/CREATE TABLE IF NOT EXISTS "user_profiles"/);
   });
 });
+
+describe("renaming the workspace you are in", () => {
+  /**
+   * THE BODY, SLICED OUT, and the slicing is the point.
+   *
+   * `actions.ts` is five hundred lines and every phrase below appears somewhere
+   * in it. A `expect(actions).toMatch(/canManageRanks/)` would pass on the
+   * import line alone, which is this repo's standing failure mode: a grep-shaped
+   * check that degrades to "somewhere in the file" is a check that cannot fail
+   * for the reason it was written. Everything here asks about the ONE function.
+   */
+  const body = (() => {
+    const start = code(actions).indexOf("export async function renameOrganizationAction");
+    expect(start, "renameOrganizationAction is gone").toBeGreaterThan(-1);
+    const rest = code(actions).slice(start);
+    const end = rest.indexOf("\nexport ", 1);
+    return end === -1 ? rest : rest.slice(0, end);
+  })();
+
+  it("takes the workspace from the SESSION and never from the form", () => {
+    /**
+     * The whole security design in one assertion. A server action is a public
+     * endpoint whatever the menu happens to be drawing, and WorkOS's
+     * `updateOrganization` does not check membership the way `switchToOrganization`
+     * does — so an `organizationId` field here would let anybody POST a new name
+     * onto any organization whose id they could guess.
+     */
+    expect(body).toMatch(/auth\.organizationId/);
+    expect(body).not.toMatch(/organizationId["\s]*\)/);
+    expect(body).not.toContain('formData.get("organizationId")');
+    // …and the only thing it DOES read from the form is the name.
+    expect([...body.matchAll(/formData\.get\((["'])(.+?)\1\)/g)].map((m) => m[2])).toEqual(["name"]);
+  });
+
+  it("asks the governance gate before it writes, not after", () => {
+    // Renaming changes what the workspace is called for everyone in it, which
+    // is the same class of act as inviting a member — `canManageRanks`, not
+    // "is a member". And the order matters: a check after the write is a log
+    // entry, not a gate.
+    const gate = body.indexOf("canManageRanks");
+    const write = body.indexOf("updateOrganization");
+    expect(gate).toBeGreaterThan(-1);
+    expect(write).toBeGreaterThan(-1);
+    expect(gate).toBeLessThan(write);
+    expect(body).toMatch(/if \(!allowed\) return;/);
+  });
+
+  it("bounds the name on the server, where `maxLength` is only a hint", () => {
+    expect(body).toMatch(/if \(!name \|\| name\.length > 60\) return;/);
+    // The same bound the field advertises, so the two cannot drift.
+    expect(switcher).toMatch(/maxLength=\{60\}/);
+  });
+
+  it("repaints the layout instead of redirecting", () => {
+    // Create and switch both MOVE you and end in `switchToOrganization`. A
+    // rename leaves you where you were; what changed is a word the rail, the
+    // switcher and the account menu each read on the server.
+    expect(body).toMatch(/revalidatePath\("\/", "layout"\)/);
+    expect(body).not.toMatch(/redirect\(|switchToOrganization\(/);
+  });
+
+  it("offers the pencil only to somebody who may use it", () => {
+    // Courtesy, not the gate — but a control that advertises something the
+    // product will refuse is the pattern `ViewTab` already rules out.
+    expect(switcher).toMatch(/canRename\?: boolean;/);
+    expect(switcher).toMatch(/if \(!canRename\) \{/);
+    expect(switcher).toMatch(/<Pencil /);
+    // The shell answers the question with the same function the action uses.
+    expect(shell).toMatch(/canRename = await canManageRanks\(getDb\(\), \{ orgId, userId, role \}\)/);
+    // …and fails CLOSED, unlike the rail's `hide`, which fails open.
+    expect(shell).toMatch(/let canRename = false;/);
+  });
+
+  it("names the workspace it is renaming, right above the field", () => {
+    // A text input floating in a menu with nothing saying which workspace it
+    // belongs to is the reason the summary row stays visible when open.
+    const row = switcher.slice(switcher.indexOf("function CurrentRow"));
+    expect(row).toMatch(/defaultValue=\{name\}/);
+    expect(row.indexOf("<summary")).toBeLessThan(row.indexOf("<form"));
+  });
+});
+

@@ -50,8 +50,19 @@ const ratio = (a, b) => {
   return (x + 0.05) / (y + 0.05);
 };
 
-/** Everything that sits on a coloured ground, hidden so the ground can be seen. */
-const HIDE = ".hero-sky h1,.hero-sky p,.marquee-track,.sky-card h2,.sky-card p{visibility:hidden!important}";
+/**
+ * Everything that sits on a coloured ground, hidden so the ground can be seen.
+ *
+ * `.marquee span > span` AND NOT `.marquee-track`, which is what this said
+ * first and what made it lie for two rounds. Hiding the whole ticker takes the
+ * CHIPS with it, so the "ground" behind a connector name sampled as raw sky and
+ * the chip's own dark wash — the thing put there specifically to make the name
+ * legible — was never measured. It reported 4.47:1 for text that is actually
+ * at 6.9:1, and no amount of darkening the chip moved the number, which is the
+ * tell: a measurement that does not respond to the fix is measuring something
+ * else. Hiding the label and the mark leaves the pill itself painting.
+ */
+const HIDE = ".hero-sky h1,.hero-sky p,.marquee span > span,.sky-card h2,.sky-card p{visibility:hidden!important}";
 
 const browser = await chromium.launch();
 
@@ -102,9 +113,27 @@ for (const [w, h, name, scheme] of [
       const b = el.getBoundingClientRect();
       return { top: Math.round(b.top + scrollY), bottom: Math.round(b.bottom + scrollY) };
     };
-    return { sky: box(sky), fig: box(fig), next: box(next), docWidth: document.documentElement.scrollWidth };
+    const frame = fig.firstElementChild.getBoundingClientRect();
+    return {
+      sky: box(sky),
+      fig: box(fig),
+      next: box(next),
+      docWidth: document.documentElement.scrollWidth,
+      frameRatio: frame.width / frame.height,
+      sections: [...document.querySelectorAll("main section[id]")].map((n) => n.id),
+    };
   });
   check(geo !== null, "the hero, its product window and the section under it all rendered");
+  if (geo) {
+    /* THE ORDER IS THE ARGUMENT. Problem, then proof, then how, then the AI,
+       then what it reads: each section only lands on somebody who has read the
+       one before it, and the anchors in the nav promise exactly this list. */
+    check(
+      JSON.stringify(geo.sections) === JSON.stringify(["problem", "proof", "how", "ai", "integrations"]),
+      "the page tells its story in order",
+      geo.sections.join(" → "),
+    );
+  }
   if (geo) {
     check(geo.sky.top === 0, "the sky starts at the very top of the page", `top=${geo.sky.top}px`);
     const overlap = geo.fig.bottom - geo.sky.bottom;
@@ -112,6 +141,17 @@ for (const [w, h, name, scheme] of [
     check(geo.next.top - geo.fig.bottom > 24, "and still clears the heading under it", `${geo.next.top - geo.fig.bottom}px`);
     // A page that scrolls sideways on a phone is the classic full-bleed bug.
     check(geo.docWidth <= w + 1, "nothing pushes the page wider than the viewport", `${geo.docWidth} > ${w}`);
+    /* 16:9 FROM `sm` UP, 4:3 BELOW IT. The window used to be as tall as its
+       own content — 309px of board inside a 1152px card, a letterbox rather
+       than a screen — and the frame that fixes that is one class nothing else
+       would notice losing. 4:3 on a phone because a 390px-wide 16:9 box is
+       219px tall and the cards inside it stop being readable. */
+    const want = w >= 640 ? 16 / 9 : 4 / 3;
+    check(
+      Math.abs(geo.frameRatio - want) < 0.02,
+      `the product window is ${w >= 640 ? "16:9" : "4:3"}`,
+      `measured ${geo.frameRatio.toFixed(3)}, wanted ${want.toFixed(3)}`,
+    );
     /* THE SEAM. The gradient's last stop is `var(--background)`, so the hero's
        foot and the page under it should be the same colour to within rounding.
        A literal there instead — the #C0D5FF this shipped with first — is a
@@ -158,7 +198,23 @@ for (const [w, h, name, scheme] of [
     add(sky.querySelector(".uppercase.tracking-widest"), "reads-from label");
     const ps = sky.querySelectorAll("p");
     add(ps[ps.length - 1], "line under the CTA");
-    add(document.querySelector(".marquee span span:last-child"), "a connector name");
+    /**
+     * A CHIP FROM THE MIDDLE OF THE TRACK, not the first one in the DOM.
+     *
+     * `.marquee-track` fades its ends out with a mask — that is what makes a
+     * ticker read as continuous rather than as a clipped div — so the chip at
+     * x=0 is half transparent BY DESIGN, and measuring it reports the fade as
+     * a contrast bug. On a 390px viewport the first chip is inside that fade
+     * and came out at 4.47:1 while every chip anybody can actually read was
+     * over 6:1. So: the first chip whose centre is in the middle half of the
+     * viewport, which is the zone the mask leaves alone.
+     */
+    const chip = [...document.querySelectorAll(".marquee span span:last-child")].find((n) => {
+      const c = n.getBoundingClientRect();
+      const mid = c.left + c.width / 2;
+      return mid > innerWidth * 0.25 && mid < innerWidth * 0.75;
+    });
+    add(chip, "a connector name");
     return out;
   });
   check(spots.length >= 4, "found the hero's text to measure", `${spots.length} elements`);
