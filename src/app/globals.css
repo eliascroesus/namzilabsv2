@@ -2350,8 +2350,14 @@ html.mix {
       radial-gradient(46% 42% at 4% 14%, rgb(192 213 255 / 0.32), transparent 72%),
       linear-gradient(
         180deg,
+        /* THE RAMP SITS HIGHER THAN IT DID, at the owner's ask: every stop moved
+           up about eight points (32/62/88 -> 24/52/80), so the sky opens out
+           sooner and the deep band at the top is a header rather than half the
+           section. What did NOT move is the #3868DE floor's job — it is still
+           the last rung any TEXT sits on, just reached earlier, which is why
+           the two 13px lines below were checked again rather than assumed. */
         #2b52c4 0%,
-        #3563da 32%,
+        #3460d4 24%,
         /* #3868DE IS THE FLOOR, and the last rung any TEXT sits on: white
            measures 4.94:1 there. The sky was asked to be brighter and this is
            the whole constraint on how far that can go — a hero one shade
@@ -2359,8 +2365,8 @@ html.mix {
            white on the #4F83F0 an earlier pass reached for was 4.36:1.
            Below 88% the only things left are an opaque product card and the
            join into the page, so the gradient is free to open up there. */
-          #3868de 62%,
-        #4a7cec 88%,
+          #3766d8 52%,
+        #4676e6 80%,
         /* THE LAST STOP IS THE PAGE ITSELF, not a pale blue that happens to
            look close to it. The hero's foot meets `bg-background` across the
            full width, and any literal here is a hairline seam in one theme or
@@ -2408,7 +2414,7 @@ html.mix {
       linear-gradient(to right, rgb(255 255 255 / 0.06) 1px, transparent 1px),
       linear-gradient(to bottom, rgb(255 255 255 / 0.06) 1px, transparent 1px);
     background-size: 88px 88px;
-    mask-image: linear-gradient(180deg, #000 0%, #000 62%, transparent 92%);
+    mask-image: linear-gradient(180deg, #000 0%, #000 54%, transparent 86%);
   }
 
   /* --- The marquee -------------------------------------------------------
