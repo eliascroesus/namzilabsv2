@@ -514,12 +514,24 @@
   --text-display-lg--line-height: 3.75rem;
 
   /* The landing's one oversized moment, and the only size in the kit that
-     exists purely to be impressive. Fluid, because a fixed 64px headline is a
-     four-line wall on a phone: it resolves to `display-lg` on a narrow screen
-     and grows to 64px once there is room, with no breakpoint to forget.
-     The one name in the scale with no Untitled UI twin, so it keeps its own. */
-  --text-banner: clamp(2.5rem, 1.4rem + 4.6vw, 4rem);
-  --text-banner--line-height: 1.04;
+     exists purely to be impressive. Fluid, because a fixed headline is a
+     four-line wall on a phone: it resolves to 44px on a narrow screen and
+     grows to 120px once there is room, with no breakpoint to forget.
+     The one name in the scale with no Untitled UI twin, so it keeps its own.
+
+     THE CEILING WENT 64 -> 120 when the landing was rebuilt around a headline
+     that is the page's whole first impression rather than a caption over a
+     card. At 64px the two lines read as a heading; at 120 they read as the
+     thing you came to look at, which is the job. The floor moved 40 -> 44 and
+     the slope steepened so a 1280px laptop already gets ~104px — the old curve
+     needed a 1600px display before it topped out, so almost nobody ever saw
+     the size it was tuned for.
+
+     `line-height: 0.92` because display type at 120px sets far too loose at
+     1.04: the two lines of the headline have to read as ONE object with a
+     deliberate gap, not as two paragraphs. */
+  --text-banner: clamp(2.75rem, 0.6rem + 8.4vw, 7.5rem);
+  --text-banner--line-height: 0.92;
 
   /* THE MICRO-LABEL'S TRACKING, as a token because it is spelled at every caps
      label in the product and 0.12px is not a number anybody re-types the same
@@ -2304,5 +2316,146 @@ html.mix {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* ===========================================================================
+ * THE LANDING'S SKY — the one surface in the product that is allowed to shout.
+ *
+ * It lives here rather than in the page because it is COLOUR, and colour in a
+ * component is invisible to a future theme (`check-ui`'s hex rule says so, and
+ * this is the file that rule points at). Everything below is expressed against
+ * the brand ramp already declared above.
+ *
+ * WHY THE GRADIENT IS DARK AT THE TOP AND ONLY PALES AT THE VERY BOTTOM.
+ * White body copy on `--color-brand-400` (#568CFF) measures 2.9:1 — it fails
+ * for anything that is not display type, and a hero whose supporting sentence
+ * cannot be read is a hero with no sentence. So every stop the TEXT sits on is
+ * a deep rung (#1B3577 -> #3462CF, 7-12:1 against white) and the pale rung is
+ * reserved for the last sixth of the section, which holds nothing but an
+ * opaque product card and the seam into the white page below it.
+ * `tests/landing-contrast.test.ts` pins the stops; `scripts/landing-check.mjs`
+ * samples the rendered pixels, because a token can be right while a stacked
+ * overlay quietly lightens what is actually behind the words.
+ * ======================================================================== */
+@layer components {
+  .hero-sky {
+    position: relative;
+    isolation: isolate;
+    background:
+      /* The bloom — Zapmail's cloud, solved as light rather than as an image:
+         a PNG at that size is 300KB of decoration that has to be art-directed
+         at every width, and this is one line that never crops wrong. */
+      radial-gradient(58% 44% at 88% -4%, rgb(255 255 255 / 0.3), transparent 62%),
+      radial-gradient(42% 38% at 6% 12%, rgb(143 178 255 / 0.35), transparent 70%),
+      linear-gradient(
+        180deg,
+        #16305e 0%,
+        #22438f 28%,
+        #2b53ae 56%,
+        /* #3462CF IS THE FLOOR, and the last stop any TEXT sits on. White on it
+           measures 5.6:1; the #4F83F0 that used to be here measured 4.36:1,
+           and the marquee's 14px names were sitting on exactly that. Whatever
+           else this gradient does, it may not get lighter than this rung until
+           the words have run out — which is why the pale stop is at 84% and
+           the only thing below it is an opaque product card. */
+          #3462cf 84%,
+        /* THE LAST STOP IS THE PAGE ITSELF, not a pale blue that happens to
+           look close to it. The hero's foot meets `bg-background` across the
+           full width, and any literal here is a hairline seam in one theme or
+           the other — visible exactly where the eye already is, because the
+           product window straddles that join. A token instead, so the two
+           surfaces cannot drift apart. */
+          var(--background) 100%
+      );
+  }
+
+  /**
+   * THE SAME SKY AS A CARD.
+   *
+   * `.hero-sky` ends on `var(--background)` so its foot disappears into the
+   * page — right for the hero, whose whole bottom edge IS that join. Wrong for
+   * the closing call to action, which is a rounded object sitting ON the page:
+   * there, the page-coloured last stop made the card look like it was
+   * dissolving from the bottom up, the text floating over a fade.
+   *
+   * So the card keeps the same three blues and simply stops being blue at its
+   * own edge instead of before it. Same family, different job — which is why
+   * it is a second class rather than a modifier flag on the first.
+   */
+  .sky-card {
+    position: relative;
+    isolation: isolate;
+    background:
+      radial-gradient(58% 60% at 88% -10%, rgb(255 255 255 / 0.26), transparent 64%),
+      radial-gradient(46% 50% at 4% 6%, rgb(143 178 255 / 0.3), transparent 72%),
+      linear-gradient(180deg, #1b3577 0%, #2a55b8 52%, #3f73e6 100%);
+  }
+
+  /* The ruled paper under the type. 88px squares at 6% white: visible as
+     texture at a glance, gone by the time you are reading a word on top of it.
+     `::before` rather than a third background layer so the mask can fade it
+     out before it reaches the pale foot, where a white grid would read as
+     dirt rather than as structure. */
+  .hero-sky::before,
+  .sky-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background-image:
+      linear-gradient(to right, rgb(255 255 255 / 0.06) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(255 255 255 / 0.06) 1px, transparent 1px);
+    background-size: 88px 88px;
+    mask-image: linear-gradient(180deg, #000 0%, #000 62%, transparent 92%);
+  }
+
+  /* --- The marquee -------------------------------------------------------
+   * A CSS-only ticker, because the alternative is a 12KB dependency to move
+   * one row sideways. The track holds the list TWICE and travels exactly half
+   * its own width, which is what makes the wrap seamless: at -50% the second
+   * copy is standing precisely where the first one started.
+   *
+   * `width: max-content` is load-bearing — a flex track that is allowed to
+   * shrink to its container makes -50% a distance the content does not agree
+   * with, and the row visibly jumps once per lap. */
+  .marquee {
+    display: flex;
+    width: max-content;
+    animation: marquee-scroll 64s linear infinite;
+  }
+
+  /* Hovering pauses it, so a name you want to read stops being a moving
+     target. Not decoration: the row is the list of tools we read, and it is
+     the one thing on this page a visitor scans FOR a specific word. */
+  .marquee-track:hover .marquee {
+    animation-play-state: paused;
+  }
+
+  .marquee-track {
+    /* The ends dissolve instead of being cut off at a hard edge, which is what
+       makes a ticker read as continuous rather than as a clipped div. */
+    mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+  }
+}
+
+@keyframes marquee-scroll {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+/* The reduced-motion block at the top of this file sets every animation to
+   0.01ms, which for an infinite ticker means "teleport to -50% and sit there" —
+   the second copy showing, the first one off-screen left. Correct, and
+   pointlessly so: what somebody asking for less motion wants is the row
+   standing still at the start. */
+@media (prefers-reduced-motion: reduce) {
+  .marquee {
+    animation: none !important;
+    transform: none !important;
   }
 }
