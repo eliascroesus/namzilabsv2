@@ -123,6 +123,62 @@ export const TOUR_STEPS: readonly TourStep[] = [
 ] as const;
 
 /**
+ * THE FLOW BUILDER'S OWN WALKTHROUGH — a second, shorter tour.
+ *
+ * Asked for because the canvas is the hard part. The board's tour explains
+ * where things live; this one explains the three moves the builder is made of,
+ * on the surface where somebody is actually stuck.
+ *
+ * TWO STEPS, AND THE COUNT IS A CONSEQUENCE RATHER THAN A PREFERENCE.
+ *
+ * A tour over a working surface is an interruption — an empty dashboard has
+ * nothing else to offer, but the builder is where somebody arrives already
+ * trying to do something. So every step has to earn itself, and only two can.
+ *
+ * THE ANCHORS HAVE TO BE THINGS THAT ARE ALWAYS THERE, which rules out most of
+ * this screen. The canvas MOVES — nodes pan, zoom and re-lay-out under a drag,
+ * so a spotlight fixed to a node would chase it around and `place()` would
+ * re-measure on every frame of a pan. Worse, most of the builder's controls are
+ * CONDITIONAL: "Add next step" belongs to a terminal node, and the Configure /
+ * Test panel only exists once something is selected.
+ *
+ * A third step on the Test tab was written and then cut for exactly that —
+ * pointing at an element that is usually absent is the bug this tour already
+ * shipped twice. Testing is named in the first step's sentence instead, where
+ * it costs nothing and cannot point at nothing.
+ */
+export const FLOW_TOUR_KEY = "nz_flow_tour_v1";
+
+export const FLOW_TOUR_STEPS: readonly TourStep[] = [
+  {
+    id: "canvas",
+    anchor: "flow-start",
+    title: "A flow is a chain of steps",
+    body: "Pick where the data comes from, filter it, and test each step on real records.",
+    placement: "right",
+  },
+  {
+    id: "publish",
+    anchor: "flow-publish",
+    title: "Then publish it",
+    body: "Publishing puts the number on your dashboard and keeps it updating.",
+    placement: "bottom",
+  },
+] as const;
+
+/**
+ * Should the builder's tour run?
+ *
+ * Self-limiting on the fact that matches what it teaches: this is the first
+ * flow they have. Once a second one exists they have built one, and an
+ * explanation of the canvas has become an interruption rather than help.
+ */
+export function shouldOfferFlowTour(input: { flowCount: number; dismissed: boolean }): boolean {
+  if (input.dismissed) return false;
+  return input.flowCount <= 1;
+}
+
+/**
  * Should a brand-new workspace be offered the tour?
  *
  * Every condition is a reason NOT to show it, which is the safe direction: a

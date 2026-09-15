@@ -4,7 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { TOUR_KEY, TOUR_STEPS, clampStep, shouldOfferTour, visibleSteps, type TourStep } from "@/lib/tour";
+import { clampStep, visibleSteps, type TourStep } from "@/lib/tour";
 import { cn } from "@/lib/utils";
 
 /**
@@ -49,6 +49,17 @@ const PAD = 6; // breathing room between the highlight and the element
 const GAP = 12; // between the highlight and the bubble
 const BUBBLE = 288; // w-72
 
+/**
+ * How long to wait for the rail's anchors before concluding there are none.
+ *
+ * Long enough to cover a slow client render on a cold page; short enough that
+ * a viewport which genuinely has no rail (the drawer, below `md`) stops
+ * looking almost immediately in human terms. Nothing is shown while it waits,
+ * so the cost of the ceiling being generous is a few no-op timeouts.
+ */
+const WAIT_MS = 3000;
+const POLL_MS = 150;
+
 function rectOf(anchor: string): Rect | null {
   if (typeof document === "undefined") return null;
   const el = document.querySelector<HTMLElement>(`[data-tour="${anchor}"]`);
@@ -83,7 +94,27 @@ function place(rect: Rect, placement: TourStep["placement"], vw: number, vh: num
   };
 }
 
-export function Tour({ hasConnection, hasFlow }: { hasConnection: boolean; hasFlow: boolean }) {
+/**
+ * `enabled` is the CALLER's judgement, not this component's.
+ *
+ * The dashboard's rule ("no connections and no flows") and the builder's ("this
+ * is their first flow") are different facts about different things, and both
+ * are pure and tested in `src/lib/tour.ts`. Pushing either into here would give
+ * one component two opinions about who is new.
+ *
+ * What this owns is the part that is the same for every tour: has it been
+ * dismissed, are its anchors on screen yet, and where does the bubble go.
+ */
+export function Tour({
+  steps: declared,
+  storageKey,
+  enabled,
+}: {
+  steps: readonly TourStep[];
+  /** Versioned, so changing the steps can re-show it. See TOUR_KEY. */
+  storageKey: string;
+  enabled: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const [index, setIndex] = useState(0);
   const [steps, setSteps] = useState<TourStep[]>([]);
@@ -95,38 +126,61 @@ export function Tour({ hasConnection, hasFlow }: { hasConnection: boolean; hasFl
   const dismiss = useCallback(() => {
     setOpen(false);
     try {
-      window.localStorage.setItem(TOUR_KEY, "1");
+      window.localStorage.setItem(storageKey, "1");
     } catch {
       // Private mode, or storage blocked. The tour closes either way; the only
       // cost is that it may offer itself again, which is the harmless
       // direction.
     }
-  }, []);
+  }, [storageKey]);
 
   /**
-   * Decide ONCE, on mount, after the rail has rendered.
+   * WAIT FOR THE ANCHORS, RATHER THAN BETTING ON ONE FRAME.
    *
-   * The anchors belong to sibling components, so a measurement taken during
-   * this component's first render would find none of them and conclude there
-   * is nothing to show. `requestAnimationFrame` waits for the paint that puts
-   * them in the document.
+   * This was a single `requestAnimationFrame`: measure once, and if nothing
+   * was found, return and never look again. On `/design/tour` that always
+   * won — the anchors are static markup in the same tree. On the real
+   * dashboard it lost, and the tour never appeared for a single new account.
+   *
+   * The anchors live in `Sidebar`, which is a `"use client"` component, and
+   * the rail is not rendered below `md`. Whatever the precise reason one frame
+   * was too early — hydration order, a width gate, the shell's skeleton — the
+   * BUG is the bet itself: a one-shot measurement of a sibling's DOM, with
+   * giving up forever as the failure mode.
+   *
+   * So it polls, briefly and with a bound. Found on the first tick in the
+   * common case; up to `WAIT_MS` for a slow render; and if the anchors are
+   * genuinely absent — a narrow viewport, where the rail is a drawer — it
+   * stops and stays shut, which is the correct outcome there.
    */
   useEffect(() => {
+    if (!enabled) return;
     let dismissed = false;
     try {
-      dismissed = window.localStorage.getItem(TOUR_KEY) === "1";
+      dismissed = window.localStorage.getItem(storageKey) === "1";
     } catch {
       dismissed = false;
     }
-    if (!shouldOfferTour({ hasConnection, hasFlow, dismissed })) return;
-    const id = requestAnimationFrame(() => {
-      const found = visibleSteps((a) => rectOf(a) !== null, TOUR_STEPS);
-      if (found.length === 0) return; // nothing to point at — stay shut
-      setSteps(found);
-      setOpen(true);
-    });
-    return () => cancelAnimationFrame(id);
-  }, [hasConnection, hasFlow]);
+    if (dismissed) return;
+
+    let timer: ReturnType<typeof setTimeout>;
+    const started = Date.now();
+    const look = () => {
+      const found = visibleSteps((a) => rectOf(a) !== null, declared);
+      if (found.length > 0) {
+        setSteps(found);
+        setOpen(true);
+        return;
+      }
+      if (Date.now() - started < WAIT_MS) timer = setTimeout(look, POLL_MS);
+    };
+    // One frame first so the common case costs nothing extra.
+    const frame = requestAnimationFrame(look);
+    return () => {
+      cancelAnimationFrame(frame);
+      clearTimeout(timer);
+    };
+  }, [enabled, storageKey, declared]);
 
   const step = steps[clampStep(index, steps.length)];
 

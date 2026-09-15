@@ -18,6 +18,7 @@ import { FunnelView } from "@/components/funnel-view";
 import { FlowTile, tileValueForRange, type FlowResultRow } from "@/components/flow-tile";
 import { OnboardingChecklist } from "@/components/onboarding-checklist";
 import { Tour } from "@/components/tour";
+import { TOUR_KEY, TOUR_STEPS, shouldOfferTour } from "@/lib/tour";
 import { BoardControls, RangeMenu, TileArea, ViewStrip } from "./board-controls";
 import { BoardLayout } from "./board-layout";
 import { CustomBoard, type CanvasTile } from "./custom-board";
@@ -1393,7 +1394,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           Here it renders on both branches and decides for itself: it opens
           only while a workspace has no connections and no flows, and only if
           its anchors are on screen. */}
-      <Tour hasConnection={connCount > 0} hasFlow={flowCount > 0} />
+      <Tour
+        steps={TOUR_STEPS}
+        storageKey={TOUR_KEY}
+        enabled={shouldOfferTour({ hasConnection: connCount > 0, hasFlow: flowCount > 0, dismissed: false })}
+      />
       <PageContainer width="full">
         {/* ── NOTHING HERE YET ──────────────────────────────────────────────
             A whole page shape rather than the usual one with holes in it. The

@@ -365,6 +365,9 @@ export function FlowToolbar({
               <Button
                 onClick={onReview}
                 disabled={publishing}
+                /* The builder tour's second spotlight. An always-present
+                   control, unlike the canvas's conditional ones. */
+                data-tour="flow-publish"
                 title={
                   unpublished && publishedVersion != null
                     ? "Your edits are not on the dashboard yet — publish to make them live"

@@ -6,6 +6,10 @@ import { listConnections } from "@/lib/connections";
 import { parseGraph } from "@/lib/flow/types";
 import { FlowCanvas, type ConnMeta } from "@/components/flow/flow-canvas";
 import { AppShell } from "@/components/app-shell";
+import { Tour } from "@/components/tour";
+import { FLOW_TOUR_KEY, FLOW_TOUR_STEPS, shouldOfferFlowTour } from "@/lib/tour";
+import { flows } from "@/db/schema";
+import { eq, sql } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +30,21 @@ export default async function FlowEditorPage({ params }: { params: Promise<{ id:
   const { orgId, userId, role, auth } = await requireOrg();
 
   const flow = await getFlow(getDb(), orgId, id);
+
+  /**
+   * How many flows this workspace has, for the builder's first-run tour.
+   *
+   * One indexed count of a table that holds a handful of rows per workspace —
+   * the same shape as the dashboard's own onboarding reads. It gates a tour
+   * that stops offering itself the moment a second flow exists, so it costs
+   * one count on the page where somebody is learning and nothing afterwards.
+   */
+  const flowCount = await getDb()
+    .select({ c: sql<number>`count(*)::int` })
+    .from(flows)
+    .where(eq(flows.orgId, orgId))
+    .then((r) => Number(r[0]?.c ?? 0))
+    .catch(() => 2); // unknown → assume experienced, so a read failure cannot nag
   if (!flow) notFound();
   // Same 404 as a flow that is not there, on purpose: for a rank-restricted
   // member a hidden flow DOES NOT EXIST, and a 403 would confirm it does.
@@ -100,6 +119,15 @@ export default async function FlowEditorPage({ params }: { params: Promise<{ id:
       ownsMain
       surface="overflow-hidden bg-canvas-bg"
     >
+      {/* THE BUILDER'S WALKTHROUGH, mounted BESIDE the canvas rather than
+          inside it — the canvas is a surface this codebase treats as
+          off-limits to restructure, and an overlay needs nothing from it but
+          two `data-tour` attributes. */}
+      <Tour
+        steps={FLOW_TOUR_STEPS}
+        storageKey={FLOW_TOUR_KEY}
+        enabled={shouldOfferFlowTour({ flowCount, dismissed: false })}
+      />
       <FlowCanvas
         flowId={flow.id}
         name={flow.name}

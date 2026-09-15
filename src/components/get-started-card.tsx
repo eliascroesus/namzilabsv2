@@ -67,7 +67,18 @@ export function GetStartedCard({
   steps,
   className,
   children,
-}: {
+  /**
+   * EVERYTHING ELSE REACHES THE ROOT `div`, and this exists because it did not.
+   *
+   * The builder tour put `data-tour="flow-start"` on this card to spotlight it.
+   * The props were a closed list rendering `<div className={...}>`, so the
+   * attribute was silently dropped — and NOTHING caught it: TypeScript does not
+   * type-check hyphenated `data-*` on a custom component, and the test that
+   * was supposed to prove the anchor exists greps the CALL SITE, where the
+   * string is present either way. The tour would have quietly lost a step.
+   */
+  ...rest
+}: React.ComponentProps<"div"> & {
   eyebrow: string;
   title: string;
   /**
@@ -90,7 +101,7 @@ export function GetStartedCard({
   return (
     /* `overflow-hidden` is what clips the sky's ruled overlay to the radius —
        the gradient would paint to the corners on its own, the grid would not. */
-    <div className={cn("sky-panel overflow-hidden rounded-frame sm:rounded-3xl", className)}>
+    <div {...rest} className={cn("sky-panel overflow-hidden rounded-frame sm:rounded-3xl", className)}>
       <div className="p-8">
         <p className="text-xs font-semibold uppercase tracking-widest text-white/80">{eyebrow}</p>
         {/* 24px. It is the only heading on the screen, and it was once set at

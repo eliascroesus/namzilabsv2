@@ -1,7 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { TOUR_KEY, TOUR_STEPS, clampStep, shouldOfferTour, visibleSteps } from "@/lib/tour";
+import {
+  FLOW_TOUR_KEY,
+  FLOW_TOUR_STEPS,
+  TOUR_KEY,
+  TOUR_STEPS,
+  clampStep,
+  shouldOfferFlowTour,
+  shouldOfferTour,
+  visibleSteps,
+} from "@/lib/tour";
 
 /**
  * THE FIRST-RUN TOUR.
@@ -143,5 +152,123 @@ describe("clampStep", () => {
     // A stale index against a list that shrank must not produce -1 and blank
     // the bubble.
     expect(clampStep(4, 0)).toBe(0);
+  });
+});
+
+
+/**
+ * THE BUILDER'S OWN TOUR — a second, shorter one, on the surface the owner
+ * called hard.
+ *
+ * Its risk is different from the board's. That one points at a rail which is
+ * always there; this lives over a canvas where almost every control is
+ * CONDITIONAL — "Add next step" belongs to a terminal node, the Configure/Test
+ * panel exists only once something is selected, and the nodes themselves pan
+ * and re-lay-out under a drag. Pointing at something usually absent is the bug
+ * this feature has already shipped twice, so what is tested here is that both
+ * anchors are unconditional.
+ */
+describe("the flow builder's walkthrough", () => {
+  it("only offers itself while this is their first flow", () => {
+    expect(shouldOfferFlowTour({ flowCount: 0, dismissed: false })).toBe(true);
+    expect(shouldOfferFlowTour({ flowCount: 1, dismissed: false })).toBe(true);
+    // Two means they have built one. An explanation of the canvas is now an
+    // interruption rather than help.
+    expect(shouldOfferFlowTour({ flowCount: 2, dismissed: false })).toBe(false);
+    expect(shouldOfferFlowTour({ flowCount: 9, dismissed: false })).toBe(false);
+  });
+
+  it("respects a dismissal", () => {
+    expect(shouldOfferFlowTour({ flowCount: 1, dismissed: true })).toBe(false);
+  });
+
+  it("anchors only on elements that are always rendered", () => {
+    /**
+     * Read from the components rather than a list kept in step by hand. The
+     * canvas step points at the CONTAINER and the publish step at the
+     * toolbar's button — the two things on that screen that do not come and go.
+     */
+    const canvas = readFileSync(join(process.cwd(), "src/components/flow/flow-canvas.tsx"), "utf8");
+    const toolbar = readFileSync(join(process.cwd(), "src/components/flow/FlowToolbar.tsx"), "utf8");
+    for (const step of FLOW_TOUR_STEPS) {
+      const rendered = canvas.includes(`data-tour="${step.anchor}"`) || toolbar.includes(`data-tour="${step.anchor}"`);
+      expect(rendered, `nothing renders data-tour="${step.anchor}" for flow step ${step.id}`).toBe(true);
+    }
+  });
+
+  it("reaches the DOM — the component holding it must forward attributes", () => {
+    /**
+     * THE HOLE THE OTHER ANCHOR TEST HAS, and it let a broken anchor through.
+     *
+     * Checking that a call site CONTAINS `data-tour="x"` proves the string was
+     * typed, not that it renders. `GetStartedCard` took a closed prop list and
+     * rendered `<div className={...}>`, so the attribute was dropped on the
+     * floor — and TypeScript says nothing, because it does not type-check
+     * hyphenated `data-*` on a custom component.
+     *
+     * So for any anchor placed on a CUSTOM component (capitalised tag) rather
+     * than a plain element, the receiving component has to spread its rest
+     * props. That is checkable from here; the DOM is not.
+     */
+    const files = [
+      "src/components/flow/flow-canvas.tsx",
+      "src/components/flow/FlowToolbar.tsx",
+      "src/components/sidebar.tsx",
+      "src/components/notifications.tsx",
+    ];
+    let checked = 0;
+    for (const rel of files) {
+      const src = readFileSync(join(process.cwd(), rel), "utf8");
+      // The opening tag that carries each anchor.
+      for (const m of src.matchAll(/<([A-Za-z][\w.]*)\b[^>]*?data-tour=/gs)) {
+        const tag = m[1];
+        if (!/^[A-Z]/.test(tag)) continue; // a plain element always renders it
+        checked++;
+        /**
+         * Mapped by hand on purpose: anchoring a NEW component fails this
+         * until somebody adds it here, which is the moment to check that it
+         * forwards. An automatic import-resolver would quietly cover the next
+         * one without anybody looking.
+         */
+        const known: Record<string, string> = {
+          GetStartedCard: "src/components/get-started-card.tsx",
+          Button: "src/components/ui/button.tsx",
+        };
+        /**
+         * Components whose forwarding is a documented contract rather than
+         * something readable in this repo. Each needs a reason, because
+         * "assume it works" is how the dropped anchor happened.
+         */
+        const byContract: Record<string, string> = {
+          Link: "next/link passes unknown props through to the <a> it renders",
+        };
+        if (byContract[tag]) continue;
+        const compFile = known[tag] ?? null;
+        expect(compFile, `${rel} puts a tour anchor on <${tag}>, which this test does not know how to verify`).not.toBeNull();
+        const comp = readFileSync(join(process.cwd(), compFile), "utf8");
+        expect(comp, `<${tag}> must spread its rest props or the anchor never renders`).toMatch(/\{\.\.\.(rest|props)\}/);
+      }
+    }
+    // Would pass vacuously if every anchor moved onto plain elements — which is
+    // fine, but say so rather than claiming to have checked something.
+    expect(checked, "no anchors sit on custom components right now").toBeGreaterThan(0);
+  });
+
+  it("does not anchor on a node, which moves under a drag", () => {
+    // A spotlight fixed to a node would chase it around the canvas and
+    // re-measure on every frame of a pan.
+    const nodeCard = readFileSync(join(process.cwd(), "src/components/flow/FlowNodeCard.tsx"), "utf8");
+    expect(nodeCard, "FlowNodeCard must carry no tour anchor").not.toContain("data-tour");
+  });
+
+  it("stays short, and keeps its own storage key", () => {
+    // A tour over a working surface is an interruption; the board's five steps
+    // are affordable on an empty dashboard and would not be here.
+    expect(FLOW_TOUR_STEPS.length).toBeLessThanOrEqual(3);
+    expect(FLOW_TOUR_KEY).not.toBe(TOUR_KEY);
+    expect(FLOW_TOUR_KEY).toMatch(/_v\d+$/);
+    for (const step of FLOW_TOUR_STEPS) {
+      expect(step.body.split(". ").length, `${step.id} body is more than one sentence`).toBeLessThanOrEqual(1);
+    }
   });
 });

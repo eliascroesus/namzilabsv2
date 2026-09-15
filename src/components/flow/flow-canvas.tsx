@@ -2382,7 +2382,18 @@ export function EmptyCanvas({ hasConnections, onStart }: { hasConnections: boole
           `GetStartedCard`. `pointer-events-auto` is this caller's alone: the
           positioner above is `pointer-events-none` so the canvas underneath
           stays pannable, and the card has to take its own presses back. */}
+      {/*
+        `data-tour` — the builder tour's first spotlight.
+
+        It was on the canvas CONTAINER, which measures the full viewport
+        (1440×900 when checked): a spotlight that size dims nothing and draws a
+        ring around the edge of the screen. This card is the right target for
+        the same reason it exists — on a new flow it is the one thing to act on
+        — and the tour only runs on a FIRST flow, so it is on screen exactly
+        when the tour is.
+      */}
       <GetStartedCard
+        data-tour="flow-start"
         eyebrow="New flow"
         title="Build a metric in three moves"
         steps={steps}

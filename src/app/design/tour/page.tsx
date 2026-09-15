@@ -23,7 +23,10 @@ import { TourStage } from "./stage";
  */
 export const dynamic = "force-dynamic";
 
-export default function TourDesignPage() {
+export default async function TourDesignPage({ searchParams }: { searchParams: Promise<{ late?: string }> }) {
+  // `?late=1` holds the anchors back, reproducing the timing that kept the
+  // tour from ever opening on the real dashboard. See `TourStage`.
+  const late = (await searchParams).late === "1";
   return (
     <PageContainer>
       <SectionHeading>First-run tour</SectionHeading>
@@ -31,7 +34,7 @@ export default function TourDesignPage() {
         The real component against stand-in anchors. Step through it — the spotlight should sit on each target and the
         bubble beside it.
       </p>
-      <TourStage />
+      <TourStage late={late} />
     </PageContainer>
   );
 }

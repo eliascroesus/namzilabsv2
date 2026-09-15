@@ -178,6 +178,32 @@ await page.waitForLoadState("domcontentloaded").catch(() => {});
 const stillOpen = await page.evaluate(() => Boolean(document.querySelector(".tour-scrim"))).catch(() => false);
 check("and closes the tour", !stillOpen, stillOpen ? "the spotlight is still in the document" : "gone");
 
+// ── 6. IT STILL OPENS WHEN THE ANCHORS ARRIVE LATE ────────────────────────
+/**
+ * THE CHECK FOR THE BUG THAT SHIPPED TWICE.
+ *
+ * The tour measured for its anchors once, on a single `requestAnimationFrame`,
+ * and gave up forever if they were not there. The rail is a `"use client"`
+ * component, so on the real dashboard that bet lost and no new account ever
+ * saw the tour — while this very script passed, because the design page's
+ * anchors are static markup that is always ready on the first frame.
+ *
+ * `?late=1` holds them back 900ms. A check that only ever measures the easy
+ * case is how a timing bug ships green twice.
+ */
+const latePage = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+await latePage.goto(PAGE + "?late=1", { waitUntil: "domcontentloaded" });
+const appeared = await latePage
+  .waitForSelector(".tour-scrim", { timeout: 8000 })
+  .then(() => true)
+  .catch(() => false);
+check(
+  "the tour still opens when the rail renders late",
+  appeared,
+  appeared ? "opened after the anchors arrived" : "gave up before the anchors existed — the one-frame bet is back",
+);
+await latePage.close();
+
 await browser.close();
 console.log(`\n${"═".repeat(72)}`);
 if (failures > 0) {
