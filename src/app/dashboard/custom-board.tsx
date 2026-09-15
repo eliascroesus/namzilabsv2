@@ -1130,11 +1130,19 @@ function EmptyTile({ chart, canEdit, onPick }: { chart: string; canEdit: boolean
      exactly the footprint its filled version will — the board must not reflow
      when a metric is finally chosen. */
   const shell = "flex h-full w-full flex-col items-center justify-center gap-1.5 rounded-surface border border-dashed border-border bg-card/40 p-4 text-center";
-  if (!canEdit) return <div className={shell}>{face}</div>;
+  /* `data-tile-empty` MARKS A BOX THAT IS NOT A CHART YET, for the same reason
+     `ChartFrame` carries `data-tile-card`: `canvas-check` counts cards against
+     cells to prove its "no card on a block" check is not counting zero out of
+     zero, and an invitation wears no card either. Without a name of its own it
+     would read as a chart that had lost its card — a true check failing on a
+     true thing. It is also the hook the fill measurement addresses, which a
+     class string is a poor stand-in for. */
+  if (!canEdit) return <div className={shell} {...{ "data-tile-empty": "" }}>{face}</div>;
   return (
     <Button
       variant="ghost"
       onClick={onPick}
+      {...{ "data-tile-empty": "" }}
       /* `h-auto`/`w-full` because `buttonVariants` opens as a one-line control
          at the FIELD radius (`rounded-control`, 8px), and this slot wants the
          CARD radius (`rounded-surface`, 10px) instead — a real override, just
@@ -1145,7 +1153,17 @@ function EmptyTile({ chart, canEdit, onPick }: { chart: string; canEdit: boolean
          THE HOVER EDGE IS THE MARKER'S, because a border is a line: the brand
          yellow measures 1.55:1 as a stroke on this card and the dashed rim would
          read as vanishing under the pointer rather than as answering it. */
-      className={`${shell} h-auto rounded-[var(--radius-surface)] whitespace-normal hover:border-marker hover:bg-card/60`}
+      /* `h-full`, NOT `h-auto`. The shell above already says `h-full` and this
+         line used to say `h-auto`, which tailwind-merge resolves in favour of
+         the later class — so the invitation collapsed to the height of its own
+         three lines and sat in the top of a tile the board had already reserved
+         four rows for. Every filled tile fills its box; an empty one that does
+         not is the board reflowing the moment a metric is chosen, which is the
+         exact thing the shell's comment says must not happen.
+         `h-auto` was reaching for the right thing by the wrong name: what it
+         was escaping is `buttonVariants`' FIXED one-line height, and `h-full`
+         escapes that just as completely while still filling the cell. */
+      className={`${shell} h-full rounded-[var(--radius-surface)] whitespace-normal hover:border-marker hover:bg-card/60`}
     >
       {face}
     </Button>

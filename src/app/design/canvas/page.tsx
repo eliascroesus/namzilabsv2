@@ -3,6 +3,7 @@ import { defaultSize, type ChartId } from "@/lib/board/charts";
 import { CustomTile, type ComposedPart, type CustomTileSource } from "@/components/custom-tile";
 import { CanvasHarness, ComposedPanelSpecimen, PanelSpecimen } from "./harness";
 import { BOARD_GRID, PageContainer, SectionHeading } from "@/components/ui/page";
+import { UNSET_TILE_KEY } from "@/lib/board/types";
 
 /**
  * THE CUSTOM VIEW'S GRID, DRIVABLE WITHOUT AUTHENTICATION.
@@ -749,22 +750,50 @@ export default function CanvasSpecimen() {
             title: t.title,
             charts: ["number", "bar", "category"],
           }))}
-          tiles={TILES.map((t) => ({
-            id: t.id,
-            tileKey: `flow:demo:${t.id}`,
-            x: t.x,
-            y: t.y,
-            w: t.w,
-            h: t.h,
-            chart: t.chart,
-            charts: ["number", "bar", "category"],
-            metricName: t.title,
-            config: {},
-            attention: 0 as const,
-            // DATA, not markup — the tile renders client-side now, which is
-            // the whole rendering-model change this page exists to exercise.
-            data: t.source,
-          }))}
+          tiles={[
+            ...TILES.map((t) => ({
+              id: t.id,
+              tileKey: `flow:demo:${t.id}`,
+              x: t.x,
+              y: t.y,
+              w: t.w,
+              h: t.h,
+              chart: t.chart,
+              charts: ["number", "bar", "category"],
+              metricName: t.title,
+              config: {},
+              attention: 0 as const,
+              // DATA, not markup — the tile renders client-side now, which is
+              // the whole rendering-model change this page exists to exercise.
+              data: t.source,
+            })),
+            /**
+             * A TILE NOBODY HAS POINTED AT ANYTHING YET — `EmptyTile`, the one
+             * tile state this page could not draw.
+             *
+             * It is the state EVERY added chart passes through (adding one no
+             * longer guesses at a metric) and the state every tile in a
+             * template layout starts in, and it was the one whose box did not
+             * fill: its invitation collapsed to the height of its own three
+             * lines while the board held four rows open beneath it. Four rows
+             * here, deliberately, so the gap between the card and its cell is
+             * the 90-odd pixels a check can measure rather than a hairline.
+             */
+            {
+              id: "t8",
+              tileKey: UNSET_TILE_KEY,
+              x: 0,
+              y: 16,
+              w: 3,
+              h: 4,
+              chart: "number",
+              charts: ["number", "bar", "category"],
+              metricName: "",
+              config: {},
+              attention: 0 as const,
+              data: null,
+            },
+          ]}
         />
         </div>
       </PageContainer>

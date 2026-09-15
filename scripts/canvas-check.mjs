@@ -268,7 +268,11 @@ console.log("\na block is furniture: it lands with no metric and wears no card")
    * because those classes were everywhere by accident.
    */
   const liveCards = await page.locator(`${LIVE} [data-tile-card]`).count();
-  const liveCells = await page.locator(`${LIVE} [data-canvas-cell]`).count();
+  // Minus the boxes that are not charts: a tile nobody has pointed at anything
+  // yet wears no card either, and counting it here would read as a chart that
+  // had lost one.
+  const liveCells =
+    (await page.locator(`${LIVE} [data-canvas-cell]`).count()) - (await page.locator(`${LIVE} [data-tile-empty]`).count());
   check(
     liveCells > 0 && liveCards === liveCells,
     "every chart on the live board wears a card, so the next check can mean something",
@@ -469,6 +473,42 @@ console.log("\nthe gestures still hold");
   await page.waitForTimeout(180);
   check(JSON.stringify(await layout()) === JSON.stringify(before), "a tablet grid refuses the gesture");
   await page.mouse.up();
+}
+
+// ── an empty tile occupies the box the board reserved for it ────────────────
+/**
+ * A TILE WITH NO METRIC YET MUST FILL ITS CELL.
+ *
+ * `EmptyTile`'s shell says `h-full`, and the button branch then said `h-auto` —
+ * tailwind-merge keeps the later height, so the invitation shrank to the height
+ * of its own three lines (96px in a 144px box) and sat in the top of a cell the
+ * board had already reserved four rows for. Its own comment promises the
+ * opposite: "an empty slot occupies exactly the footprint its filled version
+ * will — the board must not reflow when a metric is finally chosen."
+ *
+ * Measured rather than grepped, because this is a class fighting another class
+ * in the same string: the source contains `h-full` in BOTH the broken and the
+ * fixed spelling, so no grep can tell them apart. Only the box can.
+ */
+console.log("\nan empty tile fills the box the board held for it");
+{
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  await load();
+  const box = await page.evaluate(() => {
+    const cell = document.querySelector("[data-live-board] [data-canvas-cell='t8']");
+    const card = cell?.querySelector("[data-tile-empty]");
+    if (!cell || !card) return null;
+    return { cell: cell.getBoundingClientRect().height, card: card.getBoundingClientRect().height };
+  });
+  check(box !== null, "the unset tile is on the page");
+  if (box) {
+    check(box.cell > 120, "its cell is a real four-row box", `${Math.round(box.cell)}px`);
+    check(
+      Math.abs(box.card - box.cell) <= 1,
+      "the invitation fills that box top to bottom",
+      `card ${Math.round(box.card)}px in a ${Math.round(box.cell)}px cell`,
+    );
+  }
 }
 
 check(errors.length === 0, "no uncaught page errors anywhere", errors.join(" · "));
