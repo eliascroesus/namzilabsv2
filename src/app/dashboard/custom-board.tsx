@@ -36,7 +36,7 @@ import { Toast } from "@/components/ui/toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { GrowingTextarea } from "@/components/ui/input";
 import { SectionHeading } from "@/components/ui/page";
-import { CHARTS, asChartId, blockKindOf, blockTileKey, minSize, type BlockId, type ChartId } from "@/lib/board/charts";
+import { ADDABLE_BLOCKS, CHARTS, asChartId, blockKindOf, blockTileKey, minSize, type BlockId, type ChartId } from "@/lib/board/charts";
 import { UNSET_TILE_KEY, type BoardTileRow, type CustomTileOption } from "@/lib/board/types";
 import type { TileConfig } from "@/lib/board/tile-config";
 import { CustomTile, type CustomTileSource } from "@/components/custom-tile";
@@ -1024,7 +1024,15 @@ function AddChartMenu({
       }
     >
       <div className="cursor-default p-1">
-        {CHARTS.map((c) => {
+        {/* HEADING IS NOT OFFERED ANY MORE — see `ADDABLE_BLOCKS`. It was a text
+            block with its size and weight decided for you, from before Text had
+            either; now that Text carries both it is the same block behind a
+            narrower door. Filtered rather than deleted from `CHARTS`, because a
+            board that already has one must keep drawing it. */}
+        {CHARTS.filter((c) => {
+          const b = blockKindOf(blockTileKey(c.id as BlockId));
+          return !b || (ADDABLE_BLOCKS as readonly string[]).includes(b);
+        }).map((c) => {
           const Icon = CHART_ICONS[c.id];
           const block = blockKindOf(blockTileKey(c.id as BlockId));
           /**
@@ -1051,7 +1059,11 @@ function AddChartMenu({
             <div key={c.id}>
               {/* The rule between drawings and furniture. They are different
                   kinds of thing and a flat list of nine says they are not. */}
-              {block === "heading" && <div className="my-1 h-px bg-border" />}
+              {/* The rule now hangs off TEXT, which is the first block left in
+                  the list — it hung off "heading" until that stopped being
+                  offered, at which point the separator vanished with it and the
+                  menu became a flat list of nine again. */}
+              {block === "text" && <div className="my-1 h-px bg-border" />}
             <Button
               {...{ "data-add-chart": c.id }}
               variant="ghost"

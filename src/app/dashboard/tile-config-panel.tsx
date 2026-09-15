@@ -10,7 +10,7 @@ import { InfoTip } from "@/components/ui/info-tip";
 import { PANEL_SHELL, PanelTabs } from "@/components/flow/panel-chrome";
 import { GROUP_ACCENT, groupAccent } from "@/components/flow/node-accent";
 import { CHARTS, asChartId, blockKindOf, blockTileKey, type BlockId, type ChartId } from "@/lib/board/charts";
-import { EXITS_MAX, PARTS_SLOT, fieldsFor, type TileConfig } from "@/lib/board/tile-config";
+import { EXITS_MAX, PARTS_SLOT, TEXT_BLOCK_DEFAULTS, fieldsFor, type TileConfig } from "@/lib/board/tile-config";
 import { RANGE_OPTIONS, MATERIALIZED_RANGES } from "@/lib/metrics/range";
 import { MetricList, SEARCH_AT } from "./add-tile-picker";
 import { partsOnOffer } from "@/lib/board/picker";
@@ -916,7 +916,8 @@ export function TileConfigPanel({
             /* ONLY its content. A block has no chart to change (`chartsFor`
                never offers one), no colour, no decimals and no goal — the field
                table says so, and this reads the table rather than repeating it. */
-            offers.has("text") ? (
+            <>
+            {offers.has("text") && (
               <Row
                 label={block === "heading" ? "Heading" : "Note"}
                 info={block === "heading" ? undefined : "Line breaks are kept."}
@@ -937,11 +938,78 @@ export function TileConfigPanel({
                   className="w-full"
                 />
               </Row>
-            ) : (
+            )}
+            {offers.has("textSize") && (
+              /**
+               * THE THREE THINGS A HEADING USED TO DECIDE FOR YOU. Heading was a
+               * text block at one fixed size and weight; with these on Text it
+               * was the same block behind a narrower door, so the menu stopped
+               * offering it (`ADDABLE_BLOCKS`) and these appeared instead.
+               *
+               * The box fills the tile, which is what makes the two alignments
+               * mean anything: a paragraph pinned to the middle has nothing to
+               * be centred IN, and the only way to move it was to resize the
+               * tile around it.
+               */
+              <Group label="Type">
+                <Row label="Size" info="Steps on the same scale the rest of the product uses. The default is the size a tile's headline number is set at.">
+                  <NativeSelect
+                    value={config.textSize ?? TEXT_BLOCK_DEFAULTS.textSize}
+                    aria-label="Size"
+                    onChange={(e) => set("textSize", e.target.value as TileConfig["textSize"])}
+                  >
+                    <option value="sm">Small</option>
+                    <option value="md">Medium</option>
+                    <option value="lg">Large</option>
+                    <option value="xl">Headline</option>
+                    <option value="2xl">Display</option>
+                  </NativeSelect>
+                </Row>
+                <Row label="Weight">
+                  <NativeSelect
+                    value={config.textWeight ?? TEXT_BLOCK_DEFAULTS.textWeight}
+                    aria-label="Weight"
+                    onChange={(e) => set("textWeight", e.target.value as TileConfig["textWeight"])}
+                  >
+                    <option value="normal">Regular</option>
+                    <option value="medium">Medium</option>
+                    <option value="semibold">Semibold</option>
+                  </NativeSelect>
+                </Row>
+                <Row label="Across" info="Where the words sit left to right.">
+                  <NativeSelect
+                    value={config.align ?? TEXT_BLOCK_DEFAULTS.align}
+                    aria-label="Across"
+                    onChange={(e) => set("align", e.target.value as TileConfig["align"])}
+                  >
+                    <option value="left">Left</option>
+                    <option value="center">Centre</option>
+                    <option value="right">Right</option>
+                  </NativeSelect>
+                </Row>
+                <Row label="Down" info="Where they sit top to bottom. The text box fills the tile, so this moves them within it.">
+                  <NativeSelect
+                    value={config.valign ?? TEXT_BLOCK_DEFAULTS.valign}
+                    aria-label="Down"
+                    onChange={(e) => set("valign", e.target.value as TileConfig["valign"])}
+                  >
+                    <option value="top">Top</option>
+                    <option value="middle">Middle</option>
+                    <option value="bottom">Bottom</option>
+                  </NativeSelect>
+                </Row>
+              </Group>
+            )}
+            {/* A divider is the one block with nothing to say about itself, and
+                saying so beats an empty tab. Keyed off the field table rather
+                than off `block === "divider"`, so a future block with no
+                settings gets the sentence without this line being touched. */}
+            {!offers.has("text") && (
               <p className="text-sm text-muted-foreground">
                 A divider has nothing to set — drag its edges to change how much room it takes.
               </p>
-            )
+            )}
+            </>
           ) : (
             <>
               <Group>

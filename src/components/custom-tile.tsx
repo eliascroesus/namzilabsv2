@@ -24,7 +24,17 @@ import {
   type BlockId,
   type ChartId,
 } from "@/lib/board/charts";
-import { accentOf, composes, honoured, PARTS_SLOT, type TileConfig } from "@/lib/board/tile-config";
+import { cn } from "@/lib/utils";
+import {
+  accentOf,
+  composes,
+  honoured,
+  PARTS_SLOT,
+  TEXT_BLOCK_DEFAULTS,
+  TEXT_SIZE_CLASS,
+  TEXT_WEIGHT_CLASS,
+  type TileConfig,
+} from "@/lib/board/tile-config";
 import { composeFunnel, composePie, composeRanked, isRefusal, type ComposeMember, type MemberUnits } from "@/lib/board/compose";
 import { RANGE_OPTIONS, resolveRange } from "@/lib/metrics/range";
 import { bucketLabel, type BucketUnit } from "@/lib/board/scale";
@@ -215,7 +225,34 @@ function DeadTile({ title }: { title: string }) {
  * block is invisible, and an invisible tile still occupies its grid box, so a
  * board would have a hole in it that can only be found by dragging into it.
  */
-function Block({ kind, text }: { kind: "heading" | "text" | "divider"; text?: string }) {
+/** Where the words sit across the tile, and down it. */
+const ALIGN_CLASS = { left: "text-left", center: "text-center", right: "text-right" } as const;
+const VALIGN_CLASS = { top: "justify-start", middle: "justify-center", bottom: "justify-end" } as const;
+
+/**
+ * A BLOCK — a rule, or words.
+ *
+ * THE TEXT BOX FILLS THE TILE, which is what makes its alignment mean anything.
+ * It used to be a paragraph pinned to the middle at one fixed size, so "centre
+ * it" had no box to be centred in and the only way to move it was to resize the
+ * tile around it. The owner's ask — size, weight, and centring in both axes —
+ * only works against the tile's own area, so that is what it is given.
+ *
+ * HEADING IS STILL DRAWN, AND IS NO LONGER OFFERED. It was a text block with
+ * the size and weight decided for you, from before Text had either; with both
+ * settings on Text it is the same block behind a narrower door. `ADDABLE_BLOCKS`
+ * drops it from the menu, and this keeps rendering it exactly as it did so no
+ * board loses a heading it already has.
+ */
+function Block({
+  kind,
+  text,
+  config,
+}: {
+  kind: "heading" | "text" | "divider";
+  text?: string;
+  config?: TileConfig;
+}) {
   if (kind === "divider") {
     // Centred in its row rather than sitting at the top of it, so the tile's
     // height reads as the space around the rule instead of space under it.
@@ -226,18 +263,34 @@ function Block({ kind, text }: { kind: "heading" | "text" | "divider"; text?: st
     );
   }
   const empty = !text;
-  const words = text || (kind === "heading" ? "Heading" : "Write a note…");
+  if (kind === "heading") {
+    return (
+      <div className={cn("flex h-full min-w-0 flex-col justify-center", empty && "text-muted-foreground")}>
+        <h3 className="truncate text-lg font-semibold text-foreground">{text || "Heading"}</h3>
+      </div>
+    );
+  }
+  const d = TEXT_BLOCK_DEFAULTS;
+  const align = config?.align ?? d.align;
   return (
-    <div className={`flex h-full min-w-0 flex-col justify-center ${empty ? "text-muted-foreground" : ""}`}>
-      {kind === "heading" ? (
-        <h3 className="truncate text-lg font-semibold text-foreground">{words}</h3>
-      ) : (
-        // `whitespace-pre-line` so a paragraph typed with line breaks keeps
-        // them; the tile's own height decides how much of it is on screen.
-        <p className="min-h-0 overflow-y-auto whitespace-pre-line text-sm leading-relaxed text-muted-foreground quiet-scroll">
-          {words}
-        </p>
-      )}
+    <div className={cn("flex h-full min-w-0 flex-col", VALIGN_CLASS[config?.valign ?? d.valign])}>
+      {/* `whitespace-pre-line` so a paragraph typed with line breaks keeps them,
+          and the scroller so a note longer than its tile is reachable rather
+          than clipped. `text-foreground` rather than the muted ink the note
+          used to take: at 28px semibold it is a statement on the board, not a
+          caption under something else — the placeholder stays muted, because
+          that IS a caption until somebody writes. */}
+      <p
+        className={cn(
+          "min-h-0 overflow-y-auto whitespace-pre-line leading-tight quiet-scroll",
+          TEXT_SIZE_CLASS[config?.textSize ?? d.textSize],
+          TEXT_WEIGHT_CLASS[config?.textWeight ?? d.textWeight],
+          ALIGN_CLASS[align],
+          empty ? "text-muted-foreground" : "text-foreground",
+        )}
+      >
+        {text || "Write a note…"}
+      </p>
     </div>
   );
 }
@@ -266,7 +319,13 @@ export function CustomTile({
    * its `source` is null for a completely different reason than a deleted one's.
    */
   const block = blockKindOf(blockTileKey(chart as BlockId));
-  if (block) return <Block kind={block} text={honoured(chart, rawConfig).text} />;
+  /* The WHOLE honoured bag, not just its words: a text block's size, weight and
+     alignment are presentation keys like any other, and `honoured` is what
+     keeps a setting left behind by a previous chart from reaching this one. */
+  if (block) {
+    const cfg = honoured(chart, rawConfig);
+    return <Block kind={block} text={cfg.text} config={cfg} />;
+  }
 
   if (!source) return <DeadTile title={title} />;
   /**

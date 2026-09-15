@@ -235,6 +235,23 @@ export const CHARTS = [
 export const BLOCK_IDS = ["heading", "text", "divider"] as const;
 export type BlockId = (typeof BLOCK_IDS)[number];
 
+/**
+ * THE BLOCKS THE ADD MENU STILL OFFERS — Heading is not one of them.
+ *
+ * A heading was a text block with the size and weight decided for you, back
+ * when Text had neither. Text carries both now, plus its own alignment, so
+ * "Heading" was the same block with three settings pre-filled and no way to
+ * change them — a second door to one room, and the narrower door.
+ *
+ * IT IS WITHDRAWN, NOT DELETED, and the distinction is the whole reason this
+ * constant exists beside `BLOCK_IDS` rather than replacing it. `blockKindOf`
+ * validates a STORED `block:heading` key, `canvasRowFate` reads that answer,
+ * and a board carrying one would otherwise draw "It isn't published any more"
+ * over every heading on it. Existing headings keep rendering exactly as they
+ * did; nobody can add another.
+ */
+export const ADDABLE_BLOCKS: readonly BlockId[] = ["text", "divider"];
+
 export const blockTileKey = (id: BlockId) => `block:${id}`;
 
 /** Is this tile furniture rather than a number? Asked wherever a metric would be. */

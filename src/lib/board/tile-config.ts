@@ -43,6 +43,61 @@ import type { ChartId } from "./charts";
  */
 export const EXITS_MAX = 4;
 
+/**
+ * THE SIZES AND WEIGHTS A TEXT BLOCK MAY TAKE — steps, never numbers.
+ *
+ * A block sits on a board of numbers, so its type has to belong to the same
+ * ladder they do: every step below is an existing token, which means a re-pitch
+ * of the scale carries the furniture with it and nobody can type a note at
+ * 23px. The names are the block's own (`sm`..`2xl`) rather than the token's,
+ * because "display-md" is a fact about the kit and "xl" is a choice in a
+ * dropdown.
+ *
+ * `xl` IS THE DEFAULT, and it is `display-md` — the size the tile's headline
+ * NUMBER is set at. The owner asked for that directly, and it is right: a
+ * board's furniture should be able to sit at the same weight as the figures it
+ * annotates without anyone measuring one against the other.
+ */
+export const TEXT_SIZES = ["sm", "md", "lg", "xl", "2xl"] as const;
+export type TextSize = (typeof TEXT_SIZES)[number];
+
+/** The step each size draws at. One place, read by the renderer and the panel. */
+export const TEXT_SIZE_CLASS: Record<TextSize, string> = {
+  sm: "text-sm",
+  md: "text-lg",
+  lg: "text-2xl",
+  xl: "text-display-md",
+  "2xl": "text-display-lg",
+};
+
+/**
+ * THREE WEIGHTS, NOT FOUR. `check-ui` refuses `font-bold` in as many words —
+ * "the kit runs 400 / medium / semibold; 700 is a fourth weight nothing else in
+ * the product uses" — and a text block is the last place to introduce one: it
+ * sits beside metric figures that are all semibold, so a bold note would be the
+ * heaviest ink on the board by a step nothing else takes.
+ */
+export const TEXT_WEIGHTS = ["normal", "medium", "semibold"] as const;
+export type TextWeight = (typeof TEXT_WEIGHTS)[number];
+
+export const TEXT_WEIGHT_CLASS: Record<TextWeight, string> = {
+  normal: "font-normal",
+  medium: "font-medium",
+  semibold: "font-semibold",
+};
+
+/**
+ * WHAT A TEXT BLOCK IS WHEN NOBODY HAS CHOSEN ANYTHING. Read by the renderer
+ * and by the panel's controls, so an untouched block and a block whose author
+ * picked these exact values are the same tile.
+ */
+export const TEXT_BLOCK_DEFAULTS = {
+  textSize: "xl" as TextSize,
+  textWeight: "semibold" as TextWeight,
+  align: "left" as const,
+  valign: "middle" as const,
+};
+
 const KEYS = {
   /** The name on the card. Absent = follow the metric's own name. */
   title: z.string().trim().min(1).max(60),
@@ -86,6 +141,22 @@ const KEYS = {
    * bound in a jsonb column read on every render.
    */
   text: z.string().trim().min(1).max(2000),
+  /**
+   * HOW A TEXT BLOCK IS SET — the three things a heading used to decide for it.
+   *
+   * Every value is a step on the kit's own scale rather than a number, so a
+   * note cannot be typed at 23px and a re-pitch of the scale moves the blocks
+   * with everything else. `xl` is `display-md`, the size the tile's headline
+   * number is set at, which is what a text block defaults to: the owner's ask,
+   * and the right one — furniture sitting beside numbers should be able to
+   * match them without anyone measuring.
+   */
+  textSize: z.enum(TEXT_SIZES),
+  textWeight: z.enum(TEXT_WEIGHTS),
+  /** Across the tile. */
+  align: z.enum(["left", "center", "right"]),
+  /** Down it — the box fills the tile, so this has somewhere to put the text. */
+  valign: z.enum(["top", "middle", "bottom"]),
   /**
    * WHICH WAY A FUNNEL RUNS — and it is a real choice rather than a preference.
    *
@@ -389,8 +460,10 @@ export const CONFIG_FIELDS = {
    * divider has nothing else — no content, no colour, no size beyond the grid's
    * — and that is the honest entry rather than an omission.
    */
+  /* A stored heading keeps the fields it always had — it can still be edited,
+     it simply cannot be created. See `ADDABLE_BLOCKS`. */
   heading: ["title", "text"],
-  text: ["title", "text"],
+  text: ["title", "text", "textSize", "textWeight", "align", "valign"],
   divider: ["title"],
 } as const satisfies Record<ChartId, readonly (keyof TileConfig)[]>;
 

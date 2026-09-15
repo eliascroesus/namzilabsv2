@@ -255,12 +255,18 @@ describe("adding lands immediately; the metric question is asked later", () => {
     // always offerable because it had nothing to bind — now nothing binds, and
     // that is the only reason this assertion changed shape.
     expect(board).toMatch(/const key = block \? blockTileKey\(block\) : UNSET_TILE_KEY/);
-    // And they are their own section, under a rule: nine items in one flat
-    // list says drawings and furniture are the same kind of thing.
-    // The rule is drawn when the FIRST block is reached, whatever element ends
-    // up drawing it. Pinning the whole `<div className="my-1 h-px bg-border" />`
-    // verbatim made a claim about sectioning into a claim about one div.
-    expect(board).toMatch(/block === "heading" && </);
+    /**
+     * And they are their own section, under a rule: nine items in one flat list
+     * says drawings and furniture are the same kind of thing. The rule is drawn
+     * when the FIRST block is reached — which is TEXT now that Heading is no
+     * longer offered (see `ADDABLE_BLOCKS`). It hung off "heading", so removing
+     * that entry from the menu took the separator with it and nothing failed:
+     * the section quietly merged back into the list.
+     */
+    expect(board).toMatch(/block === "text" && </);
+    // …and the menu really has stopped offering the withdrawn one, while the
+    // renderer keeps drawing a board that already has it.
+    expect(board).toMatch(/ADDABLE_BLOCKS as readonly string\[\]\)\.includes\(b\)/);
   });
 
   it("the two-step modal is gone, and only the change-metric picker survives", () => {

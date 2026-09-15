@@ -96,7 +96,23 @@ describe("an hourly trend, run", () => {
     await close();
   });
 
-  const at = async (hoursAgo: number, subject: string) => {
+  /**
+   * SEEDED FROM THE TOP OF AN HOUR, NOT FROM "NOW" — and the first version of
+   * this file got that wrong in a way only the clock could reveal.
+   *
+   * It placed two events 0.2 and 0.3 hours ago and asserted they shared a
+   * bucket. They usually do; at 00:15 UTC they are 00:03 and 23:57, which are
+   * two hours and two buckets, and the test failed on a change to nobody's
+   * code. `hoursAgo` counts whole hours back from the TOP of the current hour
+   * and `minute` places the event inside it, so "these two are in one hour" is
+   * a property of the fixture rather than a coincidence of when it ran.
+   */
+  const topOfHour = () => {
+    const d = new Date();
+    d.setUTCMinutes(0, 0, 0);
+    return d.getTime();
+  };
+  const at = async (hoursAgo: number, subject: string, minute = 10) => {
     await db.insert(events).values({
       eventId: `webhook:${randomUUID()}`,
       orgId: ORG,
@@ -104,7 +120,7 @@ describe("an hourly trend, run", () => {
       source: "webhook",
       eventType: "booked",
       subject,
-      occurredAt: new Date(Date.now() - hoursAgo * 3_600_000),
+      occurredAt: new Date(topOfHour() - hoursAgo * 3_600_000 + minute * 60_000),
       value: null,
       properties: {},
     });
@@ -112,10 +128,11 @@ describe("an hourly trend, run", () => {
 
   it("splits one day into its hours, keyed so they sort chronologically", async () => {
     // Two in the same hour, one three hours earlier: two buckets, not three,
-    // and not one — which is what a silent fall back to `day` would give.
-    await at(3, "a");
-    await at(0.2, "b");
-    await at(0.3, "c");
+    // and not one — which is what a silent fall back to `day` would give. The
+    // minutes are explicit so the pair cannot drift into separate hours.
+    await at(3, "a", 10);
+    await at(1, "b", 10);
+    await at(1, "c", 40);
 
     const res = await runFlow(
       { db, orgId: ORG },
@@ -157,8 +174,10 @@ describe("an hourly trend, run", () => {
     const now = new Date();
     // Midday YESTERDAY, so both records are firmly in the past whatever the
     // hour of the run; 12:00 and 15:00 share a UTC day on every date there is.
-    const middayAgoH =
-      (now.getTime() - Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1, 12)) / 3_600_000;
+    // Counted from the top of the hour, like every other seed here.
+    const middayAgoH = Math.round(
+      (topOfHour() - Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1, 12)) / 3_600_000,
+    );
     await at(middayAgoH, "a");
     await at(middayAgoH - 3, "b");
     const graph = (unit: string) =>

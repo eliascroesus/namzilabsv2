@@ -276,12 +276,26 @@ console.log("\na block is furniture: it lands with no metric and wears no card")
   );
 
   // ONE PRESS, AND NO METRIC STEP — there is nothing to bind. The board here
-  // has metrics, but a heading would be offerable on an empty one too.
+  // has metrics, but a block would be offerable on an empty one too.
   await page.locator(LIVE).getByRole("button", { name: "Add", exact: true }).click();
   await page.waitForTimeout(200);
-  const heading = page.locator(`${LIVE} [data-add-chart='heading']`);
-  check(await heading.isEnabled(), "a heading is always offerable, metric or not");
-  await heading.click();
+  /**
+   * TEXT, NOT HEADING. This pressed `heading` until 15 Sep 2026, when the menu
+   * stopped offering it: a heading was a text block with its size and weight
+   * decided for you, and Text carries both settings now (`ADDABLE_BLOCKS`).
+   * The check timed out rather than failing — it waited for a button that no
+   * longer exists — which is the right outcome and the wrong message.
+   *
+   * And the withdrawal is asserted here too, so this cannot quietly start
+   * testing nothing if the filter is ever dropped.
+   */
+  check(
+    (await page.locator(`${LIVE} [data-add-chart='heading']`).count()) === 0,
+    "the withdrawn Heading block is not offered",
+  );
+  const block = page.locator(`${LIVE} [data-add-chart='text']`);
+  check(await block.isEnabled(), "a text block is always offerable, metric or not");
+  await block.click();
   await page.waitForTimeout(400);
 
   check((await cellCount()) === before + 1, "it lands", `${before} -> ${await cellCount()}`);
