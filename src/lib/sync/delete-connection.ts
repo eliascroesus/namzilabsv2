@@ -16,6 +16,8 @@ import { FLEET_CONNECTION_ID, FLEET_ORG_ID } from "@/lib/provider-gateway/budget
 import { markStaleForSource } from "@/lib/flow/materialize";
 import { getConnector } from "@/connectors/registry";
 import { getConnectionCredentials } from "@/lib/credentials";
+import { revokeOAuthGrant } from "@/lib/oauth/flow";
+import { oauthProviderFor } from "@/lib/oauth/providers";
 
 /**
  * REMOVING A CONNECTION AND EVERYTHING SYNCED FROM IT. Irreversible.
@@ -47,6 +49,13 @@ export type DeleteConnectionResult = {
    * asked either).
    */
   webhook?: "removed" | "failed" | "none";
+  /**
+   * Whether the customer's OAuth grant was handed back — same shape and same
+   * best-effort policy as `webhook`, and outside `rows` for the same reason:
+   * it describes an HTTP call, not a table. `"none"` means the source does not
+   * authenticate through an OAuth provider that offers revocation.
+   */
+  grant?: "revoked" | "failed" | "none";
 };
 
 /**
@@ -113,6 +122,43 @@ async function unregisterProviderWebhook(db: DB, conn: typeof connections.$infer
   } catch (e) {
     console.warn(
       `[delete-connection] best-effort ${conn.source} webhook teardown failed for ${conn.id}: ${e instanceof Error ? e.message : String(e)}`,
+    );
+    return "failed";
+  }
+}
+
+/**
+ * HAND THE OAUTH GRANT BACK, before the encrypted token goes.
+ *
+ * Deleting the row removes OUR ability to use a credential. It does nothing
+ * about the AUTHORISATION: the customer's Google account goes on listing
+ * Namzilabs among the apps that can read their spreadsheets, indefinitely, for
+ * a connection that no longer exists. For a product whose whole job is other
+ * people's data, "we can no longer use it and they cannot tell" is the wrong
+ * resting state — the only honest one is to say so to the provider.
+ *
+ * ORDERED WITH THE WEBHOOK TEARDOWN AND FOR THE SAME REASON: it needs the
+ * credential, so it has to run while the credential still exists.
+ *
+ * REVOKING LAST OF THE TWO, though, because revocation can invalidate the token
+ * the webhook teardown is about to authenticate with. Both are best-effort;
+ * doing them in the other order would make one of them reliably fail.
+ *
+ * NEVER BLOCKS. The customer has confirmed an irreversible act; a provider that
+ * is slow or unreachable must not hold it hostage.
+ */
+async function revokeProviderGrant(db: DB, conn: typeof connections.$inferSelect): Promise<"revoked" | "failed" | "none"> {
+  const provider = oauthProviderFor(conn.source);
+  if (!provider?.revokeUrl) return "none";
+  try {
+    const creds = await getConnectionCredentials(db, conn);
+    const accessToken = typeof creds.accessToken === "string" ? creds.accessToken : "";
+    const refreshToken = typeof creds.refreshToken === "string" ? creds.refreshToken : undefined;
+    if (!accessToken && !refreshToken) return "none";
+    return await revokeOAuthGrant(provider, { accessToken, refreshToken, expiresAt: 0 });
+  } catch (e) {
+    console.warn(
+      `[delete-connection] best-effort ${conn.source} grant revocation failed for ${conn.id}: ${e instanceof Error ? e.message : String(e)}`,
     );
     return "failed";
   }
@@ -221,8 +267,12 @@ export async function deleteConnectionData(
    */
   await markStaleForSource(db, orgId, conn.source, id).catch(() => []);
 
-  // Step 3 above: tell the provider before the children go.
+  // Step 3 above: tell the provider before the children go. The webhook first
+  // — revoking the grant can invalidate the very token the teardown
+  // authenticates with, so the other order would make one of them fail every
+  // time.
   const webhook = await unregisterProviderWebhook(db, conn);
+  const grant = await revokeProviderGrant(db, conn);
 
   const rows: Record<string, number> = {};
   rows.events = await deleteAllOf(
@@ -248,7 +298,7 @@ export async function deleteConnectionData(
   rows.connections = await count(
     db.delete(connections).where(and(eq(connections.id, id), eq(connections.orgId, orgId))).returning({ id: connections.id }),
   );
-  return { removed: rows.connections > 0, rows, webhook };
+  return { removed: rows.connections > 0, rows, webhook, grant };
 }
 
 /**

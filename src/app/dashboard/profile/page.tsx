@@ -1,7 +1,12 @@
 /* eslint-disable @next/next/no-img-element */
 import { requireOrg } from "@/lib/auth";
 import { getProfile } from "@/lib/profile";
+import { eq } from "drizzle-orm";
+import { getWorkOS } from "@workos-inc/authkit-nextjs";
+import { getDb } from "@/db/client";
+import { workspaceOwners } from "@/db/schema";
 import { AppShell } from "@/components/app-shell";
+import { DeleteAccount } from "./DeleteAccount";
 import { Card } from "@/components/ui/card";
 import { ThemeChoice } from "@/components/theme";
 import { PageContainer, PageHeader, SectionHeading } from "@/components/ui/page";
@@ -29,9 +34,41 @@ export const dynamic = "force-dynamic";
  * next.config — one more piece of configuration that fails closed at runtime,
  * on a 96px image where the optimizer saves nothing worth the coupling.
  */
+/**
+ * Every workspace this person OWNS — the set that a deleted account takes with
+ * it. Read from `workspace_owners` (our fact, not WorkOS's) and named from
+ * WorkOS, which is the only store of org identity.
+ *
+ * Best-effort: a failed read lists nothing rather than taking out the profile
+ * page, and `deleteAccountAction` re-derives the same set on the server, so an
+ * empty list here can only make the warning quieter — never the delete wider.
+ */
+async function ownedWorkspaceNames(userId: string): Promise<string[]> {
+  try {
+    const rows = await getDb()
+      .select({ orgId: workspaceOwners.orgId })
+      .from(workspaceOwners)
+      .where(eq(workspaceOwners.userId, userId));
+    const workos = getWorkOS();
+    const names = await Promise.all(
+      rows.map((r) =>
+        workos.organizations
+          .getOrganization(r.orgId)
+          .then((o) => o.name)
+          .catch(() => null),
+      ),
+    );
+    return names.filter((n): n is string => Boolean(n));
+  } catch {
+    return [];
+  }
+}
+
 export default async function ProfilePage() {
   const { orgId, userId, auth } = await requireOrg();
   const profile = await getProfile(userId, auth.user.email ?? null);
+
+  const ownedWorkspaces = await ownedWorkspaceNames(userId);
 
   return (
     <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email}>
@@ -120,6 +157,11 @@ export default async function ProfilePage() {
             <ThemeChoice />
           </div>
         </Card>
+
+        {/* WHICH WORKSPACES WOULD GO WITH THEM, resolved here so the warning can
+            NAME them. "Workspaces you own will be deleted" is a sentence people
+            read past; a list is what makes somebody stop and check. */}
+        <DeleteAccount email={auth.user.email ?? ""} ownedWorkspaces={ownedWorkspaces} />
       </PageContainer>
     </AppShell>
   );

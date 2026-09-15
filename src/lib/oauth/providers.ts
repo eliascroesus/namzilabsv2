@@ -8,6 +8,20 @@ export type OAuthProvider = {
   name: string;
   authorizeUrl: string;
   tokenUrl: string;
+  /**
+   * WHERE TO HAND THE GRANT BACK, if the provider has such an endpoint.
+   *
+   * Deleting our copy of a token is not the same act as ending the customer's
+   * authorisation. Without this, a workspace that has been destroyed leaves
+   * "Namzilabs" sitting in the customer's Google account permissions forever —
+   * we can no longer use it, and they have no way to know that, so the only
+   * honest state is to say so to the provider.
+   *
+   * Optional because not every provider offers one. Absent means the grant can
+   * only be withdrawn from the provider's own settings, which is a fact about
+   * them rather than a thing to paper over.
+   */
+  revokeUrl?: string;
   clientIdEnv: string;
   clientSecretEnv: string;
   /** The scopes to request for a given source (one provider can back several). */
@@ -46,6 +60,7 @@ export const OAUTH_PROVIDERS: Record<string, OAuthProvider> = {
     name: "Google",
     authorizeUrl: "https://accounts.google.com/o/oauth2/v2/auth",
     tokenUrl: "https://oauth2.googleapis.com/token",
+    revokeUrl: "https://oauth2.googleapis.com/revoke",
     clientIdEnv: "GOOGLE_CLIENT_ID",
     clientSecretEnv: "GOOGLE_CLIENT_SECRET",
     scopesFor: (source) => ["openid", "email", ...(GOOGLE_SCOPES[source] ?? [])],

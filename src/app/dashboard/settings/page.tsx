@@ -18,6 +18,7 @@ import { SubmitButton } from "@/components/ui/submit-button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { PageContainer, PageHeader, SectionHeading } from "@/components/ui/page";
+import { DangerZone } from "./DangerZone";
 import { CopyField } from "@/components/copy-field";
 import { inviteMemberAction, revokeInviteAction } from "./actions";
 import { MemberRankSelect, RanksPanel } from "./RanksPanel";
@@ -151,6 +152,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const invited = one(sp.invited);
   const inviteError = one(sp.invite_error);
   const aiError = one(sp.ai_error);
+  const dangerError = one(sp.danger_error);
   const workos = getWorkOS();
   const db = getReadDb(); // read-only page load: rides the DB_DRIVER_READ soak seam (B.3)
   // Emails via one org-scoped listUsers, not a getUser per membership: the
@@ -222,6 +224,19 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   // Absent row = every default (schema comment on workspace_settings): the
   // switch reads as "on" until someone actually flips it off.
   const aiAssistantsEnabled = aiSettingsRow[0] ? aiSettingsRow[0].on : true;
+
+  /**
+   * THE WORKSPACE'S OWN NAME, for the delete confirmation. WorkOS is the only
+   * store of org identity (the local mirror went with migration 0022), and the
+   * fallback matters: a failed read must not produce a confirm field asking
+   * somebody to type the word "Workspace" at a workspace called something else.
+   * `deleteWorkspaceAction` reads the name again and compares there, so a
+   * wrong label here cannot destroy anything — it can only fail to match.
+   */
+  const workspaceName = await getWorkOS()
+    .organizations.getOrganization(orgId)
+    .then((o) => o.name)
+    .catch(() => "");
 
   const emailByUser = new Map(orgUsers.data.map((u) => [u.id, u.email]));
   const members = memberships.data.map((m) => ({
@@ -544,6 +559,24 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             error={aiError}
           />
 
+          {/* LAST ON THE PAGE, AND ONLY FOR THE OWNER.
+              Last because nothing below it should compete for the attention of
+              somebody who has scrolled this far; owner-only because ending a
+              workspace or handing it over is not governance, which is what
+              `isAdmin` gates. The wall is in `danger-actions.ts` — this is the
+              courtesy, the same arrangement the switcher's create row has. */}
+          {userId === ownerUserId && workspaceName && (
+            <DangerZone
+              workspaceName={workspaceName}
+              members={members.filter((m) => m.userId !== userId).map((m) => ({ userId: m.userId, email: m.email }))}
+            />
+          )}
+
+          {dangerError && (
+            <p className="rounded-card border border-destructive/25 bg-danger-soft px-4 py-3 text-sm text-danger-ink">
+              {dangerError}
+            </p>
+          )}
         </div>
       </PageContainer>
     </AppShell>
