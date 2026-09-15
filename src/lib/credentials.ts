@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { connections } from "@/db/schema";
-import { encrypt, decrypt, getEncryptionKey } from "@/lib/crypto";
+import { encrypt, decryptStored, getEncryptionKey } from "@/lib/crypto";
 import { oauthProviderFor } from "@/lib/oauth/providers";
 import { refreshTokens } from "@/lib/oauth/flow";
 import { HttpError } from "@/lib/http-client";
@@ -12,7 +12,7 @@ type CredConnection = { id: string; source: string; credentialsEncrypted: string
 export function decryptCredentials(conn: { credentialsEncrypted: string | null }): Record<string, unknown> {
   if (!conn.credentialsEncrypted) return {};
   try {
-    return JSON.parse(decrypt(conn.credentialsEncrypted, getEncryptionKey())) as Record<string, unknown>;
+    return JSON.parse(decryptStored(conn.credentialsEncrypted)) as Record<string, unknown>;
   } catch {
     return {};
   }

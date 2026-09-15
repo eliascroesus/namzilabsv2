@@ -8,7 +8,7 @@ import { storeRawEvent } from "@/ingestion/raw-store";
 import { deadLetterRawEvent } from "@/ingestion/pipeline";
 import { inngest } from "@/inngest/client";
 import { headersToObject } from "@/lib/http";
-import { decrypt, getEncryptionKey } from "@/lib/crypto";
+import { decryptStored } from "@/lib/crypto";
 import { promoteToBaseCadence } from "@/lib/sync/cadence";
 import { recordRejectedDelivery } from "@/lib/webhooks/rejections";
 import { parseWebhookBody, challengeFrom } from "@/lib/webhooks/parse-body";
@@ -122,7 +122,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ connectionId: 
   let secret: string | null = null;
   if (conn.signingSecretEncrypted) {
     try {
-      secret = decrypt(conn.signingSecretEncrypted, getEncryptionKey());
+      secret = decryptStored(conn.signingSecretEncrypted);
     } catch {
       console.error(`[webhook] signing secret unreadable for connection ${conn.id} — rejecting until it is re-set`);
       await recordRejectedDelivery(db, conn, "unreadable-secret");

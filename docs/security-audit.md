@@ -21,6 +21,20 @@ scoping. The two findings were both in the perimeter rather than the logic —
 which is worth noticing, because the perimeter is the part no amount of careful
 code review reaches.
 
+**Follow-up pass, same day.** Three of the seven gaps under **Not covered** were
+then closed, chosen on one criterion — *can the product RESPOND when something
+goes wrong?* Prevention was already in good shape; detection and response were
+where the holes were.
+
+| | Was | Now |
+|---|---|---|
+| **Governance audit trail** (§10) | No record of who changed a rank, took a workspace, or destroyed one | 18 acts recorded, append-only, outliving the workspace, holding nothing personal |
+| **Dependency scanning** (§6) | Clean once, by hand, never again | In CI on every push and weekly on a schedule |
+| **Key rotation** (§4) | Impossible — a compromised key meant break everything or do nothing | Three-step rotation with a dry-run script and a two-key read path |
+
+The remaining four gaps, and why each was left, are set out under
+[What the follow-up pass deliberately left alone](#what-the-follow-up-pass-deliberately-left-alone).
+
 ---
 
 ## What was checked, and what it found
@@ -100,6 +114,22 @@ message from `randomBytes`, the auth tag stored and verified on decrypt, and a
 key that must decode to exactly 32 bytes or throw. GCM's real failure mode is
 nonce reuse; per-call random nonces are the standard answer and are safe to
 ~2³² messages per key.
+
+**Rotation, added in the follow-up pass.** The original audit listed "no
+`ENCRYPTION_KEY` rotation path" as a gap, and it was the sharpest of the seven:
+a suspected key compromise had two available responses, do nothing or break
+every connection in the product at once. There is now a three-step rotation —
+set `ENCRYPTION_KEY_PREVIOUS`, run `pnpm rotate:key`, remove it again — built on
+the property that makes it safe at all: **AES-GCM is authenticated**, so "try
+the new key, then the old" cannot silently return the wrong plaintext, it
+throws. `tests/key-rotation.test.ts` asserts that property first, because every
+other guarantee in the mechanism is downstream of it.
+
+Two details worth stating because they are the ones that go wrong: the script is
+a **dry run** until `--live`, since the columns it rewrites are every customer's
+access to their own connected accounts; and `decryptStored` **warns on every
+fallback**, so an unfinished rotation is noisy rather than comfortable. Two live
+keys is weaker than one, and step 3 is the step people skip.
 
 ### 5. Webhook ingestion — PASS, and better than I expected
 
@@ -202,7 +232,47 @@ token is hashed for the binding key and never stored or forwarded.
 - The referral cookie is `httpOnly`, `sameSite=lax` (required — sign-up leaves
   for WorkOS and comes back) and `secure` in production.
 
-### 10. Deletion — PASS (built in the previous pass)
+### 10. Governance audit trail — **was the largest gap; built in the follow-up pass**
+
+Every gate in this product held under the audit. What the audit could not find
+anywhere was a **record**. Who became an admin, who was handed the workspace,
+who destroyed it, whose credential was replaced, when the AI assistant was let
+in — `console.info` at best, in a stream with no retention, no query path and no
+tenant scoping. An incident that opens "when did this person become an admin?"
+had no answer.
+
+`audit_log` now records **eighteen acts**, and the line is deliberate: the acts
+that change WHO CAN REACH THE DATA, DESTROY SOME OF IT, MOVE A CREDENTIAL, or
+OPEN A PATH FOR IT TO LEAVE. Of seventy-eight server actions, eighteen qualify.
+Moving a tile and renaming a flow do not, and leaving them out is the point — a
+log that records everything is a log nobody reads, and the signal that matters
+(a rank widened at 3am) would be four hundred rows deep in somebody rearranging
+a dashboard.
+
+**It outlives the workspace it describes.** This is the one deliberate exception
+to the product's hard-delete promise, and it is load-bearing rather than an
+oversight: the product has a one-click irreversible workspace delete, and
+deleting the workspace to destroy the record of what you did inside it is the
+canonical anti-forensics move. An audit log the audited act erases answers
+nothing.
+
+**What makes that defensible is what is not in it.** No email, no display name,
+no credential, no customer record, no free text. An invited address — the one
+audited subject that genuinely is personal data — is stored as a truncated
+SHA-256 with only the domain in clear, so a suspected address can be *confirmed*
+but addresses cannot be *enumerated*. `tests/audit.test.ts` enforces this
+mechanically at every call site, and `tests/destroy.test.ts` carries the
+exemption with its reason attached. The two run in the same suite on purpose: if
+the no-personal-data invariant ever breaks, the exemption becomes indefensible,
+and the test that permits it should fail in the same run as the test that
+guarded it.
+
+**Append-only.** No update path and no delete path exists anywhere in `src/`,
+and a test fails if one appears. An audit log the application can rewrite is one
+that anybody with application access can rewrite — which is precisely the access
+an incident is investigating.
+
+### 11. Deletion — PASS (built in the previous pass)
 
 Hard delete, no grace period. Twenty-five tables swept with a coverage test that
 walks the schema and fails **naming** any `org_id` table left behind. Provider
@@ -217,26 +287,50 @@ authorisation. Our data before WorkOS's, so a half-finished sweep is retryable.
 1. **No live penetration testing.** Everything here is a code and header read.
    Nothing was attacked at runtime: no attempt to actually forge a webhook, ride
    a session, or reach another tenant's row through the running app.
-2. **The dependency tree is clean TODAY and that is all.** It went from 24
-   advisories to zero in this pass, and it will drift again — advisories are
-   published against versions you already shipped. This needs to run on a
-   schedule (CI, weekly) rather than when somebody remembers. Nothing in the
-   repo does that yet.
+2. ~~**No scheduled dependency scanning.**~~ **Closed in the follow-up pass.**
+   `pnpm check:deps` now runs in CI on every push (catching a bad dependency
+   being ADDED) and `.github/workflows/dependency-audit.yml` runs it weekly
+   (catching an existing one GOING BAD — which no push-triggered check can see,
+   because the lockfile does not change when the advisory lands). `pnpm
+   check:tenancy` was added to CI in the same pass; it had been a laptop-only
+   gate, which is the wrong home for the check that guards the one bug class
+   that ends a data company. *Residual risk:* a red scheduled run still depends
+   on somebody noticing it. Nothing pages.
 3. **Rate limiting is uneven.** Outbound provider calls have a fleet budget.
    Inbound has body caps but no per-connection request throttle: a party holding
    a valid signing secret can write at will. Low severity (that is the real
    provider) but it is not bounded.
-4. **No audit log of governance acts.** Rank changes, ownership transfers,
-   deletions and invites are `console.info` at best. There is no queryable
-   record of who did what, which is the first thing an enterprise customer asks
-   for and the first thing an incident needs.
+4. ~~**No audit log of governance acts.**~~ **Closed in the follow-up pass** —
+   see §10. *Residual risk:* there is no UI for it yet. The rows are queryable
+   and indexed two ways (by workspace and by actor, both newest-first), but
+   reading them today means reaching for SQL.
 5. **Backup and recovery are unexamined.** Hard delete with no grace period puts
    real weight on Neon's PITR window. Nobody has tested a restore.
-6. **`ENCRYPTION_KEY` has no rotation path.** The code handles an unreadable
-   secret gracefully (item 5), but re-encrypting existing rows under a new key is
-   not implemented. Losing the key loses every stored credential.
+6. ~~**`ENCRYPTION_KEY` has no rotation path.**~~ **Closed in the follow-up
+   pass** — see §4. *Residual risk:* the procedure has never been run against
+   production. It is covered by unit tests and a dry-run mode, which is not the
+   same as having done it once on purpose.
 7. **Session lifetime and revocation** are WorkOS's defaults; nobody has decided
    what they should be, and there is no "sign out everywhere".
+
+## What the follow-up pass deliberately left alone
+
+Three of the seven gaps were closed (2, 4, 6 above). The other four were left,
+and the reasoning is as much a part of the audit as the fixes:
+
+- **Rate limiting (3)** — the wall on inbound is the signing secret, and a party
+  holding a valid one is the real provider. Real, bounded, low.
+- **Penetration testing (1)** and **backup restore (5)** cannot be done from a
+  code change. They need a human with production access, and writing code that
+  gestures at them would only make the gap harder to see.
+- **Session lifetime (7)** is a decision plus WorkOS configuration, not code. It
+  needs an answer to "how long should a session live" that nobody has given yet.
+
+The three that were fixed share a property the four do not: each one was a case
+where the product could not RESPOND to something going wrong. No record of who
+did what, no way to learn a dependency went bad, no way to rotate a compromised
+key. Prevention was already in good shape; detection and response were where the
+holes were.
 
 ## One thing found and NOT fixed
 
@@ -254,4 +348,13 @@ concern, not a security one, and folding it into this commit would mix the two.
 | `pnpm check:tenancy` | No request-facing query touches tenant data without `org_id` |
 | `pnpm headers` | All seven headers on the wire on every route class; CSP directives intact; the bundle still runs |
 | `pnpm vitest run tests/security.test.ts` | Every action gated; no tenant id from a form; SQL escaping survives attack-shaped paths; GCM used correctly; no secret logged |
-| `pnpm vitest run tests/destroy.test.ts` | Deletion reaches every tenant table; grants revoked; ours before WorkOS's |
+| `pnpm vitest run tests/destroy.test.ts` | Deletion reaches every tenant table; grants revoked; ours before WorkOS's; the one exemption states its reason |
+| `pnpm vitest run tests/audit.test.ts` | All 18 governance acts recorded; no email, name, credential or free text reaches a row; the table is append-only |
+| `pnpm vitest run tests/key-rotation.test.ts` | GCM still fails closed on the wrong key; the fallback reads both keys; the rotation script is dry-run by default and prints no secret |
+| `pnpm check:deps` | No known high or critical advisory in the shipped tree |
+| `pnpm rotate:key` | *(operational, not a gate)* Dry-runs a key rotation and reports what it would rewrite |
+
+**Three of these now run in CI** rather than on a laptop: `check:tenancy` and
+`check:deps` on every push, and `check:deps` again weekly on a schedule. The two
+new test files run with the rest of the suite. `pnpm headers` still needs a live
+server and stays local.

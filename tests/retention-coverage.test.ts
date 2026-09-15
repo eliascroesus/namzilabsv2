@@ -110,6 +110,19 @@ const TABLES: Record<string, Classification> = {
       "someone connects an assistant to a workspace and revoked in place (revoked_at) rather than deleted, " +
       "so it grows with membership times connections, never with calls",
   },
+  audit_log: {
+    kind: "bounded",
+    by:
+      "one row per GOVERNANCE ACT — eighteen action types, every one a human decision behind a rank or owner gate: " +
+      "an invite, a rank edit, a connection, a deletion, the AI switch. Nothing automated writes here and nothing " +
+      "per-delivery, per-sync or per-call does either, which is the whole reason the action list is closed and short " +
+      "(src/lib/audit.ts explains what is deliberately left out). A busy workspace produces a few hundred rows a year. " +
+      "KEPT WITH NO CUTOFF ON PURPOSE, which is the one place this table differs from everything else in this list: " +
+      "it holds no personal data and no user content to minimise — opaque ids, enum values and counts, with an invited " +
+      "address stored as a truncated hash — so there is nothing a window would protect, and an audit trail that forgets " +
+      "its oldest rows cannot answer 'when did this person first become an admin'. Revisit only if something automated " +
+      "ever becomes an audited act",
+  },
   workspace_settings: {
     kind: "bounded",
     by: "at most one row per org — the org id is the primary key, same as workspace_owners; a workspace with no row simply reads every default",

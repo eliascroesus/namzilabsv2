@@ -32,7 +32,8 @@
     "refer": "node scripts/refer-check.mjs",
     "check:tenancy": "tsx scripts/check-tenancy.ts",
     "headers": "node scripts/headers-check.mjs",
-    "check:deps": "pnpm audit --audit-level=high"
+    "check:deps": "pnpm audit --audit-level=high",
+    "rotate:key": "tsx scripts/rotate-encryption-key.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.0.0",

@@ -1224,3 +1224,102 @@ columns.
 > `batch5/retention-purge` branch. Like 0024–0030 this migration carries no
 > drizzle snapshot and its journal entry uses a synthetic `when` stamp
 > continuing that sequence.
+
+## 0032 — `referral_codes` + `referrals` (the invite/affiliate ledger)
+
+> **This one was MISSED, and the miss is the lesson.** The migration was
+> generated and committed; it was never written up here, so the procedure above
+> was never run against it and the tables were never created. The referral
+> system shipped recording nothing — silently, because every one of its writes
+> swallows its own failure by design. It surfaced as an error in the UI days
+> later. **A migration that is not in this file does not exist**, whatever is
+> sitting in `drizzle/`.
+
+Two tables, nothing altered. `referral_codes` is the reverse lookup used at
+signup: the code itself is DERIVED from the WorkOS user id (a hash, so any
+surface can print a correct link with no database at all), but resolving a code
+back to its owner needs a row. `referrals` is the ledger of who brought whom,
+with a unique on `referred_user_id` so one person can only ever be counted once.
+
+Until this is applied, shared links still resolve and still set the attribution
+cookie — and the signup they lead to is dropped on the floor.
+
+```sql
+CREATE TABLE IF NOT EXISTS "referral_codes" (
+  "code" text PRIMARY KEY NOT NULL,
+  "user_id" text NOT NULL,
+  "created_at" timestamp with time zone DEFAULT now() NOT NULL,
+  CONSTRAINT "referral_codes_user_id_unique" UNIQUE("user_id")
+);
+CREATE TABLE IF NOT EXISTS "referrals" (
+  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+  "referrer_user_id" text NOT NULL,
+  "referred_user_id" text NOT NULL,
+  "code" text NOT NULL,
+  "created_at" timestamp with time zone DEFAULT now() NOT NULL,
+  CONSTRAINT "referrals_referred_user_id_unique" UNIQUE("referred_user_id")
+);
+CREATE INDEX IF NOT EXISTS "referrals_referrer_idx" ON "referrals" USING btree ("referrer_user_id","created_at" DESC);
+```
+
+Verify (expect 2):
+
+```sql
+SELECT count(*) AS should_be_2 FROM information_schema.tables
+WHERE table_schema='public' AND table_name IN ('referral_codes','referrals');
+```
+
+## 0033 — `audit_log` (the governance audit trail)
+
+One table, nothing altered. One row per act that changes who can reach a
+workspace's data, destroys some of it, moves a credential, or opens a path for
+data to leave — eighteen action types, listed in `src/lib/audit.ts`.
+
+**`org_id` and `actor_id` are both nullable on purpose.** An account-level act
+(`account.delete`) belongs to no workspace, and that is exactly the act you
+least want to be unable to record.
+
+Additive and safe to paste before the deploy. Note the failure mode if it is
+NOT applied, because it is silent by design: `recordAudit` swallows its own
+errors — a logging fault must never block a workspace deletion the owner has
+already confirmed by typing its name — so the product keeps working perfectly
+and writes nothing. There is no user-visible symptom at all. That is the
+opposite of 0032's behaviour and arguably worse, so run the verify.
+
+```sql
+CREATE TABLE IF NOT EXISTS "audit_log" (
+  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+  "org_id" text,
+  "actor_id" text,
+  "action" text NOT NULL,
+  "target" text,
+  "detail" jsonb DEFAULT '{}'::jsonb NOT NULL,
+  "at" timestamp with time zone DEFAULT now() NOT NULL
+);
+CREATE INDEX IF NOT EXISTS "audit_log_org_at_idx" ON "audit_log" USING btree ("org_id","at" DESC);
+CREATE INDEX IF NOT EXISTS "audit_log_actor_at_idx" ON "audit_log" USING btree ("actor_id","at" DESC);
+```
+
+Verify (expect 7):
+
+```sql
+SELECT count(*) AS should_be_7 FROM information_schema.columns
+WHERE table_schema='public' AND table_name='audit_log';
+```
+
+Then confirm the first row appears: rename a workspace, and
+
+```sql
+SELECT action, org_id IS NOT NULL AS has_org, at FROM audit_log ORDER BY at DESC LIMIT 5;
+```
+
+should show `workspace.rename`. If the table exists and stays empty after a
+governance act, check the server logs for `[audit] write failed`.
+
+`scripts/schema-audit.sql` was regenerated alongside these: 30 tables, 269
+columns.
+
+> **Numbering note.** 0016 is still reserved by the unmerged
+> `batch5/retention-purge` branch. Like 0024–0031 these carry no drizzle
+> snapshot and their journal entries use synthetic `when` stamps continuing
+> that sequence.

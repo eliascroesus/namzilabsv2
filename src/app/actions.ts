@@ -8,6 +8,7 @@ import { workspaceOwners } from "@/db/schema";
 import { workspaceCap } from "@/lib/limits";
 import { canManageRanks } from "@/lib/permissions";
 import { revalidatePath } from "next/cache";
+import { recordAudit } from "@/lib/audit";
 
 /**
  * Create a new WorkOS organization (the tenant/workspace), add the current user
@@ -85,6 +86,17 @@ export async function createOrganizationAction(formData: FormData): Promise<void
   } catch (e) {
     console.error(`[onboarding] owner row failed for ${org.id}: ${e instanceof Error ? e.message : String(e)}`);
   }
+
+  // The first row of every workspace's audit trail, and the one that gives
+  // every later row a beginning: "this tenant was created by this person at
+  // this time". `ownedBefore` is the cap's view of them at the moment — a
+  // count, not anybody's data.
+  await recordAudit(getDb(), {
+    action: "workspace.create",
+    orgId: org.id,
+    actorId: auth.user.id,
+    detail: { ownedBefore: owned, cap },
+  });
   // If the environment DOES define an admin role, wear it too — it makes the
   // zero-query admin short-circuit true for the creator. Roles are dashboard
   // config we cannot assume, so failure here is expected and silent.
@@ -142,6 +154,12 @@ export async function renameOrganizationAction(formData: FormData): Promise<void
   if (!allowed) return;
 
   await getWorkOS().organizations.updateOrganization({ organization: orgId, name });
+
+  // THE FACT, NOT THE STRINGS. Who renamed the workspace and when is the
+  // security question; what it is now called is on screen. Keeping names out
+  // is what lets `audit_log` outlive the workspace it describes — see the
+  // schema comment for why it has to.
+  await recordAudit(getDb(), { action: "workspace.rename", orgId, actorId: auth.user.id });
 
   // The name is read on the server in the rail, the switcher and the account
   // menu, so the whole layout is what has to come back — not just the page.

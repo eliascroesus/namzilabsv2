@@ -1,0 +1,75 @@
+name: Dependency audit
+
+# IS THERE A PUBLISHED VULNERABILITY IN ANYTHING WE SHIP?
+#
+# WHY THIS EXISTS, and it is the most instructive failure in this repo's
+# security history. The 15 Sep 2026 audit was drafted with dependencies listed
+# as "not covered in this pass". Then the command was actually run, and it found
+# the single most severe issue in the system: Next.js 16.2.10 carried TWO
+# unauthenticated remote-code-execution advisories, one of them in the image
+# pipeline. 24 advisories, 2 critical, 11 high — none of it visible from
+# reading our own code, all of it one command away.
+#
+# THE PART THAT MATTERS MORE THAN THE FIX. That tree is clean today and being
+# clean today means almost nothing. Advisories are published against versions
+# you ALREADY SHIPPED — the vulnerable release is the one running in production
+# while the lockfile sits unchanged and every test stays green. There is no
+# commit to hang the check on, because the code did not change; the world's
+# knowledge about it did. A check that only runs on push cannot see that class
+# of problem at all, which is why this one runs on a clock.
+#
+# TWO TRIGGERS, DELIBERATELY:
+#   - the `verify` job in ci.yml runs `pnpm check:deps` on every push, which
+#     catches a BAD DEPENDENCY BEING ADDED.
+#   - this workflow runs weekly, which catches AN EXISTING DEPENDENCY GOING BAD.
+# They are different failures and neither trigger finds the other.
+#
+# HONEST LIMITATION: a red scheduled run is only as good as somebody noticing
+# it. This does not page anyone. It is a strictly better position than "nobody
+# runs the command for four months", which is the position it replaces, and the
+# weekly cadence means the worst case is seven days rather than indefinite.
+on:
+  workflow_dispatch:
+  schedule:
+    # 07:40 UTC Mondays. Start of the week, so a finding has five working days
+    # in front of it rather than landing on a Friday night.
+    - cron: "40 7 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependency-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      # `--frozen-lockfile` so the audit describes the tree we actually ship,
+      # not whatever resolution a fresh install would pick today.
+      - run: pnpm install --frozen-lockfile
+
+      # Fails on high and critical. Moderates are reported and not gated: the
+      # five open at the time of writing are all dev-only surfaces (a dev
+      # server, source maps, a test mocker) and gating on them trains people to
+      # ignore the check, which costs more than the moderates do.
+      - name: Audit
+        run: pnpm check:deps
+
+      # Runs whatever the outcome, so a failing gate still leaves the full
+      # picture in the log instead of just the first thing over the threshold.
+      - name: Full report
+        if: always()
+        run: pnpm audit || true

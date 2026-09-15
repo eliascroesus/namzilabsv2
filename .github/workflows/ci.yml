@@ -53,3 +53,30 @@ jobs:
       # commit that does that is exactly the one nobody thought to run it on.
       - name: UI kit
         run: pnpm check:ui
+
+      # TENANT ISOLATION — the one bug class that ends a data company. Not a
+      # crash and not a leak of our own internals: one customer's records
+      # rendered into another customer's dashboard, silently, with every test
+      # green. Twenty-five of twenty-nine tables carry an `org_id` and the only
+      # thing standing between them and a cross-tenant read is that somebody
+      # remembered the predicate at each call site.
+      #
+      # It scans the request-facing boundary (`src/app` — every server action
+      # and route handler), because that is where an id arrives from somebody
+      # who may not own the row it names. Exceptions are allowlisted in the
+      # script BY FILE AND TABLE with a stated reason, so "this query does not
+      # filter by tenant" always shows up in a diff.
+      #
+      # This gate existed for a week before it ran anywhere but a laptop, which
+      # is the wrong place for it for the same reason the UI kit check was: the
+      # commit that breaks it is exactly the one nobody thought to run it on.
+      - name: Tenant isolation
+        run: pnpm check:tenancy
+
+      # Has a dependency we ship picked up a published vulnerability? This
+      # catches a bad dependency BEING ADDED; the weekly
+      # `dependency-audit.yml` catches an existing one GOING BAD, which no
+      # push-triggered check can see because the lockfile does not change when
+      # the advisory lands. See that file for the RCE this found in Sep 2026.
+      - name: Dependency audit
+        run: pnpm check:deps

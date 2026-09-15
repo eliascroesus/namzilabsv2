@@ -1298,3 +1298,83 @@ export const dashboardTiles = pgTable(
   // the read. No index on `source_key`: nothing looks a tile up by its metric.
   (t) => [index("dashboard_tiles_view_idx").on(t.orgId, t.viewId)],
 );
+
+/**
+ * WHO DID THE THING. The governance audit trail — one row per act that changes
+ * who can reach a workspace's data, destroys some of it, moves a credential, or
+ * opens a path for data to leave.
+ *
+ * WHY THIS TABLE EXISTS. Every gate in this product was verified in the Sep
+ * 2026 audit and every one of them held: tenancy walled, actions gated,
+ * credentials encrypted, webhooks fail-closed, the assistant's org claim
+ * verified rather than trusted. What the audit could not find anywhere was a
+ * RECORD. Rank changes, ownership transfers and workspace deletions were a
+ * `console.info` at best, which means they lived in a log stream with no
+ * retention guarantee, no query path and no tenant scoping. An incident
+ * response that begins "when did this person become an admin?" had no answer,
+ * and it is the first question both an incident and an enterprise buyer ask.
+ *
+ * ═══ IT SURVIVES THE DELETION OF THE WORKSPACE IT DESCRIBES ═══
+ *
+ * This is the one deliberate exception to "hard delete takes everything", and
+ * it is load-bearing rather than an oversight — `tests/destroy.test.ts` names
+ * it as an exemption with this reason attached, so it cannot drift into one.
+ *
+ * The product has a one-click irreversible workspace delete. Deleting the
+ * workspace to destroy the record of what you did inside it is the canonical
+ * anti-forensics move, and an audit log the audited act erases cannot answer
+ * the single question it exists for. So the rows outlive the tenant.
+ *
+ * WHAT MAKES THAT DEFENSIBLE IS WHAT IS NOT IN HERE. No email, no display
+ * name, no connection credential, no customer record, no metric value, no free
+ * text from anybody. An opaque WorkOS id, an action name from a closed list, an
+ * opaque target id, and a `detail` blob carrying enum values and counts. It
+ * records THAT governance happened, never WHAT DATA existed — so what survives
+ * a deletion is our operational record of an act, not the customer's data.
+ *
+ * AND IT IS KEPT INDEFINITELY, which is deliberate and is the right answer for
+ * this table specifically. Eighteen action types, every one a human governance
+ * act behind a rank gate — a busy workspace writes a few hundred rows a year,
+ * so there is no storage argument for a cutoff, and `tests/retention-coverage`
+ * classifies it `bounded` (by deliberate human action) rather than pruned. The
+ * data-minimisation argument for a cutoff does not apply either, because the
+ * paragraph above is what makes it not apply: there is nothing in here to
+ * minimise. An audit trail that silently forgets the oldest thing it saw is
+ * worth less than one that does not, and "when did this person first become an
+ * admin" is a question asked years late or not at all.
+ *
+ * ONCE THE WORKOS USER IS GONE, `actor_id` IS ALREADY PSEUDONYMOUS. Account
+ * deletion removes the identity this id resolves through, so no scrub pass is
+ * needed and none exists — which is what lets the table be genuinely
+ * append-only. `tests/audit.test.ts` asserts no UPDATE and no non-prune DELETE
+ * reaches it anywhere in `src/`. An audit log an application can rewrite is a
+ * log an attacker with application access can rewrite.
+ *
+ * `org_id` AND `actor_id` ARE BOTH NULLABLE, for the same reason: account-level
+ * acts belong to no workspace, and a few acts (a referral attributed during
+ * signup) have no authenticated actor yet.
+ */
+export const auditLog = pgTable(
+  "audit_log",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    /** Null for account-level acts, which belong to no single workspace. */
+    orgId: text("org_id"),
+    /** The WorkOS user id that performed the act. Opaque; never an email. */
+    actorId: text("actor_id"),
+    /** One of AUDIT_ACTIONS in src/lib/audit.ts — a closed list, not free text. */
+    action: text("action").notNull(),
+    /** Opaque id of the thing acted on: a member, a connection, a rank. */
+    target: text("target"),
+    /**
+     * Enum values, counts and flags only. `recordAudit` is the only writer and
+     * it is typed to keep free text out; the schema cannot enforce that, so the
+     * rule is stated here and tested there.
+     */
+    detail: jsonb("detail").$type<Record<string, unknown>>().default({}).notNull(),
+    at: timestamp("at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  // The read is always "this workspace's recent acts, newest first". The actor
+  // index serves the other question an incident asks: everything one person did.
+  (t) => [index("audit_log_org_at_idx").on(t.orgId, t.at.desc()), index("audit_log_actor_at_idx").on(t.actorId, t.at.desc())],
+);

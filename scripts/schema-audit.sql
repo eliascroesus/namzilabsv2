@@ -21,11 +21,18 @@
 -- ============================================================================
 
 -- ---------------------------------------------------------------------------
--- QUERY 1 — tables and columns (29 tables, 262 columns).
+-- QUERY 1 — tables and columns (30 tables, 269 columns).
 -- This is the one to run. Self-contained; nothing above is needed.
 -- ---------------------------------------------------------------------------
 WITH expected (tbl, col) AS (
   VALUES
+    ('audit_log', 'id'),
+    ('audit_log', 'org_id'),
+    ('audit_log', 'actor_id'),
+    ('audit_log', 'action'),
+    ('audit_log', 'target'),
+    ('audit_log', 'detail'),
+    ('audit_log', 'at'),
     ('backfill_jobs', 'id'),
     ('backfill_jobs', 'org_id'),
     ('backfill_jobs', 'connection_id'),
@@ -312,12 +319,14 @@ ORDER BY
   col;
 
 -- ---------------------------------------------------------------------------
--- QUERY 2 (optional) — indexes (49 expected).
+-- QUERY 2 (optional) — indexes (51 expected).
 -- A missing index never breaks a query, it only makes it slow, so this is
 -- separate and can be ignored while chasing a real outage.
 -- ---------------------------------------------------------------------------
 WITH expected (tbl, idx) AS (
   VALUES
+    ('audit_log', 'audit_log_org_at_idx'),
+    ('audit_log', 'audit_log_actor_at_idx'),
     ('backfill_jobs', 'backfill_jobs_stream_target_uq'),
     ('backfill_jobs', 'backfill_jobs_status_progress_idx'),
     ('backfill_jobs', 'backfill_jobs_org_idx'),

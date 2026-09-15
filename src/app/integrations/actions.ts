@@ -23,6 +23,7 @@ import { getDb } from "@/db/client";
 import { CapError } from "@/lib/limits";
 import { replayRawEvent } from "@/ingestion/pipeline";
 import { setEventTime, type EventTimeChoice } from "@/lib/webhooks/event-time";
+import { recordAudit } from "@/lib/audit";
 
 /**
  * The rank gate, on every MUTATION in this file: connecting, removing, syncing
@@ -31,6 +32,20 @@ import { setEventTime, type EventTimeChoice } from "@/lib/webhooks/event-time";
  * Admins and rankless members resolve to allow-all inside effectiveAccess.
  */
 const RANK_BLOCKS_INTEGRATIONS = "Your role doesn't allow managing integrations.";
+
+/**
+ * FIVE OF THE ACTIONS IN THIS FILE ARE AUDITED, and the five are the ones that
+ * move CUSTODY OF A CREDENTIAL or destroy synced data: connect, reconnect,
+ * enable signing, disconnect, delete. A connection is an API key or an OAuth
+ * grant belonging to somebody's Calendly or Close account, and "when did this
+ * key get here, and who put it there" is a question with no other answer.
+ *
+ * The syncing actions — resync, import history, reprocess, replay, event-time —
+ * are NOT audited. They move data we already hold and already have permission
+ * to hold, they are the actions a busy workspace fires most often, and burying
+ * five credential events under a thousand syncs is how an audit log stops being
+ * read. The provider SLUG is recorded, never the credential or the name.
+ */
 
 async function blockedFromManagingIntegrations(ctx: Pick<OrgContext, "orgId" | "userId" | "role">): Promise<boolean> {
   const access = await effectiveAccess(getDb(), ctx);
@@ -78,6 +93,18 @@ export async function connectApiKeyAction(formData: FormData): Promise<void> {
     if (e instanceof CapError) redirect("/integrations?error=connection_limit");
     throw e;
   }
+
+  // `source` is a catalog slug and `authType` is one of four values — both
+  // enums, neither one anybody's data. The credential itself is already
+  // encrypted at rest and does not belong in a log at any strength.
+  await recordAudit(getDb(), {
+    action: "connection.create",
+    orgId,
+    actorId: ctx.userId,
+    target: conn.id,
+    detail: { source, authType: getConnector(source)?.authType ?? "apiKey" },
+  });
+
   redirect(`/connections/${conn.id}`);
 }
 
@@ -220,6 +247,9 @@ export async function enableSigningAction(formData: FormData): Promise<void> {
   const conn = await getConnection(orgId, id);
   if (!conn) throw new Error("connection not found");
   await enableWebhookSigning(orgId, id);
+  // One-way and un-undoable (see above), which is exactly the shape of act that
+  // needs a row: the only way back is a new connection.
+  await recordAudit(getDb(), { action: "connection.signing_enable", orgId, actorId: ctx.userId, target: id });
   revalidatePath(`/connections/${id}`);
   redirect(`/connections/${id}`);
 }
@@ -266,6 +296,7 @@ export async function disconnectAction(formData: FormData): Promise<void> {
   if (await blockedFromManagingIntegrations(ctx)) throw new Error(RANK_BLOCKS_INTEGRATIONS);
   const id = String(formData.get("id") ?? "");
   await disableConnection(orgId, id);
+  await recordAudit(getDb(), { action: "connection.disconnect", orgId, actorId: ctx.userId, target: id });
   redirect("/integrations");
 }
 
@@ -290,6 +321,10 @@ export async function deleteConnectionAction(formData: FormData): Promise<void> 
   // The name is checked by the delete itself, not here — it is part of that
   // contract, so no caller can skip it by forgetting to.
   await deleteConnectionPermanently(orgId, id, typed);
+  // After the delete, so the row records a destruction that happened rather
+  // than one that was attempted — `deleteConnectionPermanently` throws if the
+  // typed name does not match, and a rejected attempt is not an act.
+  await recordAudit(getDb(), { action: "connection.delete", orgId, actorId: ctx.userId, target: id });
   redirect("/integrations");
 }
 
@@ -304,5 +339,6 @@ export async function reconnectAction(formData: FormData): Promise<void> {
   if (await blockedFromManagingIntegrations(ctx)) throw new Error(RANK_BLOCKS_INTEGRATIONS);
   const id = String(formData.get("id") ?? "");
   await reconnectConnection(orgId, id);
+  await recordAudit(getDb(), { action: "connection.reconnect", orgId, actorId: ctx.userId, target: id });
   redirect("/integrations");
 }

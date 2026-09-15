@@ -29,6 +29,31 @@ function declared(): Array<{ name: string; cols: string[] }> {
  * to check. So the assertion that matters most is the boring one: every
  * tenant-scoped table is in the list.
  */
+/**
+ * THE ONE TENANT TABLE A DELETION DELIBERATELY DOES NOT TOUCH, with its reason
+ * attached — so it is a decision in a diff rather than a table somebody forgot.
+ *
+ * Every other entry in this file exists to prove that a workspace's data really
+ * goes. This is the exception, and it is the exception the feature requires:
+ * the product has a one-click irreversible workspace delete, and deleting the
+ * workspace to destroy the record of what was done inside it is the obvious
+ * move for anybody who has just done something they should not have. An audit
+ * log the audited act erases cannot answer the one question it exists for.
+ *
+ * WHAT MAKES IT DEFENSIBLE IS ENFORCED SEPARATELY, in `tests/audit.test.ts`:
+ * no email, no name, no credential, no customer record and no free text ever
+ * reaches `audit_log`, so what survives a deletion is our record of an ACT —
+ * opaque ids, an action name from a closed list, counts — and never the
+ * customer's data. If that invariant ever breaks, this exemption becomes
+ * indefensible, which is why the two are tested in the same suite run.
+ */
+const SURVIVES_DELETION: Record<string, string> = {
+  audit_log:
+    "the governance audit trail must outlive the workspace it describes, or deleting a workspace erases the " +
+    "record of who deleted it. Holds no personal data and no user content — see tests/audit.test.ts, which " +
+    "is what keeps that true.",
+};
+
 describe("a workspace deletion reaches every table", () => {
   it("covers every table in the schema that carries an org_id", () => {
     /**
@@ -41,12 +66,28 @@ describe("a workspace deletion reaches every table", () => {
       .filter((t) => t.cols.includes("orgId"))
       .map((t) => t.name)
       .sort();
-    const missing = orgScoped.filter((t) => !DESTROYED_ORG_TABLES.includes(t));
+    const missing = orgScoped.filter((t) => !DESTROYED_ORG_TABLES.includes(t) && !SURVIVES_DELETION[t]);
     expect(
       missing,
       `Tenant table(s) a workspace delete would leave behind: ${missing.join(", ")}. ` +
         `Add each to ORG_TABLES in src/lib/destroy.ts, in child-before-parent order.`,
     ).toEqual([]);
+  });
+
+  it("every table exempted from deletion states a real reason", () => {
+    /**
+     * The same guard `retention-coverage.test.ts` puts on its gap list, for the
+     * same reason: an exemption map with a one-word reason is a rubber stamp,
+     * and "this table survives a customer's deletion request" is the last
+     * sentence in this codebase that should be allowed to go unexplained.
+     */
+    for (const [table, reason] of Object.entries(SURVIVES_DELETION)) {
+      expect(declared().map((t) => t.name), `${table} is exempted but is not a table`).toContain(table);
+      expect(reason.trim().split(/\s+/).length, `${table}'s exemption needs a real reason`).toBeGreaterThan(12);
+      // An exemption for a table the sweep ALSO clears is a contradiction: one
+      // of the two is wrong and a reader cannot tell which.
+      expect(DESTROYED_ORG_TABLES, `${table} is both exempted and swept`).not.toContain(table);
+    }
   });
 
   it("names nothing that is not a table any more", () => {

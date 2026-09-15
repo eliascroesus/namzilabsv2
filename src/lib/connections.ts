@@ -6,7 +6,7 @@ import type { DB } from "@/db/types";
 import { backfillJobs, connections, rawEvents, sourceStreams } from "@/db/schema";
 import { effectiveEventTimeKey, eventTimeLive, readEventTime } from "@/lib/webhooks/event-time";
 import { CapError, connectionCap } from "@/lib/limits";
-import { encrypt, decrypt, getEncryptionKey } from "@/lib/crypto";
+import { encrypt, decryptStored, getEncryptionKey } from "@/lib/crypto";
 import { getConnector } from "@/connectors/registry";
 import type { Connector } from "@/connectors/types";
 import { catalogEntry } from "@/connectors/catalog";
@@ -405,7 +405,7 @@ export async function connectionRecordCounts(orgId: string): Promise<Record<stri
 export function getSigningSecret(conn: Connection): string | null {
   if (!conn.signingSecretEncrypted) return null;
   try {
-    return decrypt(conn.signingSecretEncrypted, getEncryptionKey());
+    return decryptStored(conn.signingSecretEncrypted);
   } catch {
     return null;
   }

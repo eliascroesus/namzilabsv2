@@ -11,6 +11,7 @@ import { rankAssignments, workspaceRanks } from "@/db/schema";
 import { requireOrg } from "@/lib/auth";
 import { invitationBelongsToOrg } from "@/lib/org-invites";
 import { PERMISSIONS, type RankRow, canManageRanks } from "@/lib/permissions";
+import { emailDomain, pseudonym, recordAudit } from "@/lib/audit";
 
 /**
  * Team invitations, riding entirely on WorkOS: `sendInvitation` sends the
@@ -26,6 +27,17 @@ import { PERMISSIONS, type RankRow, canManageRanks } from "@/lib/permissions";
  * Outcomes travel as query params (?invited= / ?invite_error=), the same
  * zero-client-JS pattern as /integrations?error= — the page renders the
  * banner and a plain Link dismisses it.
+ *
+ * EVERY ACT IN THIS FILE IS AUDITED, because every act in this file changes who
+ * can reach the workspace's data — which is the whole test for what belongs in
+ * `audit_log`. Invites and revocations move people in and out; the four rank
+ * actions move the permissions underneath them, and a rank quietly widened is
+ * the privilege escalation nobody notices. Rows are written only on the path
+ * where the act actually committed, never on a rejected attempt.
+ *
+ * NO NAMES AND NO EMAILS REACH THE ROWS. An invited address is stored as a
+ * truncated hash with its domain in the clear (see src/lib/audit.ts), and a
+ * rank is identified by its id rather than the name somebody typed.
  */
 
 const emailSchema = z.string().trim().toLowerCase().email();
@@ -51,6 +63,17 @@ export async function inviteMemberAction(formData: FormData): Promise<void> {
     const msg = e instanceof Error ? e.message : String(e);
     redirect(`/dashboard/settings?invite_error=${encodeURIComponent(msg.slice(0, 200))}`);
   }
+  // The address is the one audited subject that genuinely IS personal data, so
+  // it is hashed and only the domain is kept — enough to see an outsider being
+  // invited in, not enough to read addresses out of the table.
+  await recordAudit(getDb(), {
+    action: "member.invite",
+    orgId,
+    actorId: userId,
+    target: pseudonym(parsed.data),
+    detail: { domain: emailDomain(parsed.data) },
+  });
+
   revalidatePath("/dashboard/settings");
   redirect(`/dashboard/settings?invited=${encodeURIComponent(parsed.data)}`);
 }
@@ -77,6 +100,8 @@ export async function revokeInviteAction(formData: FormData): Promise<void> {
     const msg = e instanceof Error ? e.message : String(e);
     redirect(`/dashboard/settings?invite_error=${encodeURIComponent(msg.slice(0, 200))}`);
   }
+  await recordAudit(getDb(), { action: "member.invite_revoke", orgId, actorId: ctx.userId, target: invitationId });
+
   revalidatePath("/dashboard/settings");
   redirect("/dashboard/settings");
 }
@@ -128,6 +153,16 @@ export async function createRankAction(
   } catch (e) {
     return { ok: false, error: rankErrorMessage(e) };
   }
+  // The preset matters and the name does not: "an all-permissions role was
+  // created" is the security event.
+  await recordAudit(getDb(), {
+    action: "rank.create",
+    orgId,
+    actorId: ctx.userId,
+    target: id,
+    detail: { preset: preset ?? "none", allPermissions: preset === "admin" },
+  });
+
   revalidatePath("/dashboard/settings");
   return { ok: true, id };
 }
@@ -183,6 +218,29 @@ export async function updateRankAction(
     return { ok: false, error: rankErrorMessage(e) };
   }
   if (updated.length === 0) return { ok: false, error: "Role not found." };
+
+  /**
+   * WHAT WIDENED, not what it is called. The two master switches and the sizes
+   * of the three lists are the whole security content of a rank edit: a role
+   * going from four permissions to fourteen, or `allMetrics` flipping true, is
+   * a privilege escalation whether or not anybody renamed it. `renamed` is a
+   * flag rather than the string, so no user content enters the table.
+   */
+  await recordAudit(getDb(), {
+    action: "rank.update",
+    orgId,
+    actorId: ctx.userId,
+    target: rankId,
+    detail: {
+      renamed: patch.name !== undefined,
+      allPermissions: patch.allPermissions ?? null,
+      allMetrics: patch.allMetrics ?? null,
+      permissions: patch.permissions?.length ?? null,
+      metricKeys: patch.metricKeys?.length ?? null,
+      inherits: patch.inherits?.length ?? null,
+    },
+  });
+
   revalidatePath("/dashboard/settings");
   return { ok: true };
 }
@@ -216,6 +274,8 @@ export async function deleteRankAction(rankId: string): Promise<{ ok: true } | {
       .set({ inherits: other.inherits.filter((i) => i !== rankId) })
       .where(and(eq(workspaceRanks.id, other.id), eq(workspaceRanks.orgId, orgId)));
   }
+
+  await recordAudit(getDb(), { action: "rank.delete", orgId, actorId: ctx.userId, target: rankId });
 
   revalidatePath("/dashboard/settings");
   return { ok: true };
@@ -263,6 +323,18 @@ export async function assignRankAction(
         set: { rankId, assignedAt: new Date() },
       });
   }
+
+  // `target` is the member whose access changed; `rank` is what they now hold,
+  // with null meaning the no-rank default — which is FULL access here, so
+  // clearing a rank is a widening and needs to be as visible as setting one.
+  await recordAudit(getDb(), {
+    action: "member.rank_assign",
+    orgId,
+    actorId: ctx.userId,
+    target: memberUserId,
+    detail: { rank: rankId, cleared: rankId === null },
+  });
+
   revalidatePath("/dashboard/settings");
   return { ok: true };
 }

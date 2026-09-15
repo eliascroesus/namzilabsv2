@@ -8,6 +8,7 @@ import { getDb } from "@/db/client";
 import { workspaceOwners } from "@/db/schema";
 import { requireOrg } from "@/lib/auth";
 import { destroyUserData, destroyWorkspaceData } from "@/lib/destroy";
+import { recordAudit } from "@/lib/audit";
 
 /**
  * THE THREE IRREVERSIBLE ACTS: hand a workspace over, destroy a workspace,
@@ -32,6 +33,12 @@ import { destroyUserData, destroyWorkspaceData } from "@/lib/destroy";
  *    confirmation is part of the CONTRACT, so no path (a form, a script, a
  *    future admin tool) can destroy something without having established which
  *    thing. Exactly the rule `deleteConnectionData` already enforces.
+ *
+ * 5. ALL THREE ARE RECORDED. `recordAudit` writes one row per act to a table
+ *    that OUTLIVES the workspace, because deleting a workspace to destroy the
+ *    record of what happened inside it is the obvious move and an audit log the
+ *    audited act erases answers nothing. The row is written AFTER the act has
+ *    passed its gates and committed, never on the attempt.
  *
  * 4. OUR DATA GOES BEFORE WORKOS DOES. Every one of these ends in a WorkOS call
  *    that cannot be undone and cannot be retried against a user or org that no
@@ -85,6 +92,10 @@ export async function transferOwnershipAction(formData: FormData): Promise<void>
     .set({ userId: target })
     .where(and(eq(workspaceOwners.orgId, orgId), eq(workspaceOwners.userId, userId)));
 
+  // The target is a WorkOS user id, which is what belongs here: opaque, and
+  // resolvable by whoever is investigating without this table holding a name.
+  await recordAudit(getDb(), { action: "workspace.transfer", orgId, actorId: userId, target: target });
+
   revalidatePath("/", "layout");
   redirect("/dashboard/settings?danger_done=transferred");
 }
@@ -116,6 +127,20 @@ export async function deleteWorkspaceAction(formData: FormData): Promise<void> {
   // be deleted again; a deleted org leaves data nobody can reach.
   const result = await destroyWorkspaceData(getDb(), orgId);
   console.info("[destroy] workspace", orgId, JSON.stringify(result.rows));
+
+  /**
+   * LOGGED AFTER THE SWEEP AND BEFORE WORKOS, which is the only window where
+   * the statement is true either way: the data is already gone, so "a deletion
+   * happened" is not a guess, and the database is still reachable. Row counts
+   * go in `detail` because "how much was destroyed" is the first thing asked
+   * afterwards and a count is not somebody's data.
+   */
+  await recordAudit(getDb(), {
+    action: "workspace.delete",
+    orgId,
+    actorId: userId,
+    detail: { connections: result.connections, rows: Object.values(result.rows).reduce((a, b) => a + b, 0) },
+  });
 
   await workos.organizations.deleteOrganization(orgId);
 
@@ -169,6 +194,15 @@ export async function deleteAccountAction(formData: FormData): Promise<void> {
       // Theirs — it goes, and everybody in it loses access when the org does.
       const result = await destroyWorkspaceData(getDb(), m.organizationId);
       console.info("[destroy] owned workspace", m.organizationId, JSON.stringify(result.rows));
+      await recordAudit(getDb(), {
+        action: "workspace.delete",
+        orgId: m.organizationId,
+        actorId: userId,
+        // Distinguishes "the owner deleted this workspace" from "this
+        // workspace went because its owner closed their account", which are
+        // the same row with very different explanations.
+        detail: { cause: "account.delete", connections: result.connections },
+      });
       await workos.organizations.deleteOrganization(m.organizationId).catch((e) => {
         console.error("[destroy] org delete failed", m.organizationId, e);
       });
@@ -182,6 +216,18 @@ export async function deleteAccountAction(formData: FormData): Promise<void> {
 
   const rows = await destroyUserData(getDb(), userId);
   console.info("[destroy] account", userId, JSON.stringify(rows));
+
+  /**
+   * NO `orgId` — this act belongs to no workspace, which is why the column is
+   * nullable. `actorId` stays, and deleting the WorkOS user on the next line is
+   * what makes it pseudonymous: the id survives, the identity it resolved
+   * through does not, so there is no scrub pass to write and none exists.
+   */
+  await recordAudit(getDb(), {
+    action: "account.delete",
+    actorId: userId,
+    detail: { workspacesOwned: memberships.length, rows: Object.values(rows).reduce((a, b) => a + b, 0) },
+  });
 
   await workos.userManagement.deleteUser(userId);
   // The session's user is gone; ending it is the only correct next state.
