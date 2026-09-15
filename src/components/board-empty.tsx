@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { Database } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { GetStartedCard } from "@/components/get-started-card";
+import { GET_STARTED_CTA, GET_STARTED_NOTE, GetStartedCard } from "@/components/get-started-card";
+import { cn } from "@/lib/utils";
 import { ViewTemplatePicker, type CalendarOption } from "@/app/dashboard/view-template-picker";
 
 /**
@@ -109,17 +110,22 @@ export function EmptyBoard({
         steps={STEPS}
         className="w-full max-w-md"
       >
-        {/* THE ACT. It is `accent` rather than the `yellow` variant it used to
-            name: yellow is the primary now, so the hero is spelled as the
-            primary and the second name for it has gone. The 28px above it is
-            the export's gap from the last step. */}
+        {/* THE ACT, IN WHITE. It was `accent` — a #568CFF fill, which on the
+            card's own blue is a shape you have to hunt for. `GET_STARTED_CTA`
+            is spelled in the shell so this button and the builder's cannot
+            drift into two different buttons on the same card. */}
         {canCreate ? (
-          <Button onClick={() => setOpen(true)} variant="accent" size="lg" className="mt-7 w-full">
+          <Button
+            onClick={() => setOpen(true)}
+            variant="secondary"
+            size="lg"
+            className={cn("mt-7 w-full", GET_STARTED_CTA)}
+          >
             <Database />
             Get Started
           </Button>
         ) : (
-          <p className="mt-7 text-sm text-muted-foreground">
+          <p className={cn("mt-7 text-sm", GET_STARTED_NOTE)}>
             Nobody has set this workspace&rsquo;s dashboard up yet. Someone who can build metrics needs to add the first
             view.
           </p>

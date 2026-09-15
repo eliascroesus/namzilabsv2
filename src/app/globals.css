@@ -827,6 +827,20 @@
    * the place you would look for it.
    */
   --rail: #f3f3f3; /* node 35:5918 — the SAME value as the page, so the gutter's left edge draws nothing and the panel's corner is the only thing cutting into the rail */
+  /**
+   * THE LIGHT THAT RUNS ROUND THE INVITE CARD, and it is a TOKEN because it
+   * cannot be one colour.
+   *
+   * White is right on the dark rail: a white glint on a deep blue card, on a
+   * near-black column, reads as a light travelling an edge. On the LIGHT rail
+   * the column is #F3F3F3 — so the same glint arrives at the card's rim
+   * carrying the colour of the page just outside it, and the effect stops being
+   * a beam and becomes the card dissolving at the corner it happens to be
+   * passing. Reported exactly that way.
+   *
+   * `--color-brand-200` instead: light enough to be a highlight on the card's
+   * #16305E..#2B53AE, and unmistakably NOT the surface behind the card. */
+  --rail-beam: #c0d5ff;
   --rail-foreground: #2e2e2e; /* 12.24:1 on #F3F3F3 — node 35:5928 (the workspace name) and 35:5950 (the active row) */
   --rail-muted: #6b6b6b; /* 4.80:1 — the rail's rest labels. The Figma draws #8E8E8E, which is 2.95:1 here: fine for the caps label below, not for a row you are meant to read and click. */
   --rail-faint: #7e7e7e; /* 3.66:1 — the "Main Menu" caps label ONLY, never a sentence. Deliberately the mirror of the dark rail's 3.67:1. */
@@ -1039,6 +1053,9 @@
    * and that is the whole reason they exist separately.
    */
   --rail: #121212; /* the owner's value — the SAME as the page, so the gutter's left edge draws nothing */
+  /* White on the dark rail — see the light theme's note for why this is a
+     token at all. */
+  --rail-beam: #ffffff;
   --rail-foreground: #ffffff; /* 18.83:1 */
   --rail-muted: #7e7e7e; /* 4.62:1 — the rail's rest labels */
   --rail-faint: #6e6e6e; /* 3.68:1 — the "Main Menu" caps label ONLY, never a sentence */
@@ -1376,6 +1393,9 @@
  */
 .mix {
   --rail: #121212; /* the owner's value — the SAME as the page, so the gutter's left edge draws nothing */
+  /* White on the dark rail — see the light theme's note for why this is a
+     token at all. */
+  --rail-beam: #ffffff;
   --rail-foreground: #ffffff; /* 18.83:1 */
   --rail-muted: #7e7e7e; /* 4.62:1 — the rail's rest labels */
   --rail-faint: #6e6e6e; /* 3.68:1 — the "Main Menu" caps label ONLY, never a sentence */
@@ -2405,7 +2425,8 @@ html.mix {
      out before it reaches the pale foot, where a white grid would read as
      dirt rather than as structure. */
   .hero-sky::before,
-  .sky-card::before {
+  .sky-card::before,
+  .sky-panel::before {
     content: "";
     position: absolute;
     inset: 0;
@@ -2415,6 +2436,30 @@ html.mix {
       linear-gradient(to bottom, rgb(255 255 255 / 0.06) 1px, transparent 1px);
     background-size: 88px 88px;
     mask-image: linear-gradient(180deg, #000 0%, #000 54%, transparent 86%);
+  }
+
+  /**
+   * THE SKY AS A PANEL — for a card whose TEXT RUNS ALL THE WAY DOWN IT.
+   *
+   * `.sky-card` ends on #3F73E6, which is right for the invite board: its type
+   * sits in the top half and the bottom is a progress track. The get-started
+   * card is the opposite shape — an eyebrow, a heading and three numbered steps
+   * marching to the bottom edge — and white body copy on #3F73E6 measures
+   * 4.36:1, under the bar before the last step is even reached.
+   *
+   * So this one never opens up: #16305E to #2B53AE, where white is 7.1:1 and
+   * still clears 4.5 at the 75% opacity the step details use. Same family, same
+   * bloom, a third of the range — which is the whole reason it is a separate
+   * class rather than a tweak to the other one. Changing `.sky-card` to suit
+   * this card would have flattened the board the owner asked for.
+   */
+  .sky-panel {
+    position: relative;
+    isolation: isolate;
+    background:
+      radial-gradient(90% 70% at 88% -10%, rgb(255 255 255 / 0.22), transparent 62%),
+      radial-gradient(60% 50% at 0% 0%, rgb(143 178 255 / 0.22), transparent 70%),
+      linear-gradient(160deg, #16305e 0%, #22438f 52%, #2b53ae 100%);
   }
 
   /**
@@ -2459,7 +2504,7 @@ html.mix {
       from 0deg,
       transparent 0deg,
       transparent 300deg,
-      rgb(255 255 255 / 0.85) 340deg,
+      color-mix(in srgb, var(--rail-beam) 85%, transparent) 340deg,
       transparent 360deg
     );
     animation: rail-invite-spin 4s linear infinite;
@@ -2533,6 +2578,6 @@ html.mix {
      being asked for. */
   .rail-invite::before {
     animation: none !important;
-    background: rgb(255 255 255 / 0.25) !important;
+    background: color-mix(in srgb, var(--rail-beam) 30%, transparent) !important;
   }
 }

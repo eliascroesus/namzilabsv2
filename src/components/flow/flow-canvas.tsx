@@ -2,7 +2,7 @@
 
 import { Database, Plug, X } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { GetStartedCard } from "@/components/get-started-card";
+import { GET_STARTED_CTA, GetStartedCard } from "@/components/get-started-card";
 import { Modal, ModalTitle } from "@/components/ui/modal";
 import { Toast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
@@ -2395,7 +2395,7 @@ export function EmptyCanvas({ hasConnections, onStart }: { hasConnections: boole
              the `yellow` variant it used to name: yellow IS the primary now, so
              the hero is spelled as the primary and the second name for the same
              object has gone. */
-          <Button onClick={onStart} variant="accent" size="lg" className="mt-8 w-full">
+          <Button onClick={onStart} variant="secondary" size="lg" className={cn("mt-8 w-full", GET_STARTED_CTA)}>
             <Database />
             Start with Get data
           </Button>
