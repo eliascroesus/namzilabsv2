@@ -130,6 +130,45 @@ describe("Fathom: poll", () => {
     expect(urls[0]).not.toContain("updated_after");
   });
 
+  /** Answer with an arbitrary body, to test what the walk does with a shape it did not expect. */
+  function serveBody(body: unknown) {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        headers: { get: () => null },
+        json: async () => body,
+        text: async () => "",
+      })),
+    );
+  }
+
+  it("an EMPTY items array is a quiet zero — a legitimately empty account", async () => {
+    serveBody({ items: [], next_cursor: null });
+    const res = await fathomConnector.poll!({ connectionId: CONN, cursor: null, credentials: { apiKey: "k" } });
+    expect(res.records).toHaveLength(0);
+  });
+
+  it("a MISSING items array throws, naming the keys that did arrive", async () => {
+    /**
+     * THE DISTINCTION THAT MADE THIS CONNECTOR UNDEBUGGABLE. `page.items ?? []`
+     * turns "the provider sent a shape we do not parse" into "there is no
+     * data" — an identical, silent, believable zero. A real key produced
+     * exactly that on 15 Sep 2026 and nothing anywhere could say which of the
+     * two had happened.
+     *
+     * The keys go in the message because that string IS the diagnosis: it
+     * reaches `last_error` and the connection page, and it says either "the
+     * envelope moved" or "look at the key".
+     */
+    serveBody({ meetings: [], page: 1 });
+    await expect(
+      fathomConnector.poll!({ connectionId: CONN, cursor: null, credentials: { apiKey: "k" } }),
+    ).rejects.toThrow(/did not return an "items" array.*meetings, page/s);
+  });
+
   it("never asks for transcripts, which would move it to Fathom's heavy rate bucket", async () => {
     /**
      * THE ASSERTION THAT PROTECTS THE SYNC. `include_summary` or

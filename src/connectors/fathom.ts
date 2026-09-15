@@ -148,8 +148,38 @@ export const fathomConnector: Connector = {
           created_after: since.toISOString(),
           cursor: cont ?? undefined,
         });
+        /**
+         * AN ABSENT `items` IS A FAULT, NOT AN EMPTY ACCOUNT — and conflating
+         * the two is what made this connector undebuggable.
+         *
+         * The obvious spelling is `(page.items ?? []).map(...)`, which is what
+         * this was and what twenty-six other connectors still do. It turns
+         * "the provider sent a shape we do not parse" into "there is no data",
+         * and those two produce an identical, silent, entirely believable
+         * result: a green connection reporting zero records forever.
+         *
+         * That is exactly what a real key did on 15 Sep 2026 — zero rows, no
+         * error, nothing in any log to say whether Fathom had answered with an
+         * empty list or with something we failed to read. A day of work could
+         * not tell those apart from the outside.
+         *
+         * So an absent array throws, and the message NAMES THE KEYS THAT DID
+         * ARRIVE, because that one string is the whole diagnosis: it lands in
+         * `last_error`, shows on the connection page, and says either "the
+         * envelope moved" or "this is genuinely empty". An `items: []` is
+         * untouched — a legitimately empty account is a normal answer and must
+         * stay a quiet one.
+         */
+        if (!Array.isArray(page?.items)) {
+          const keys = Object.keys(asObject(page)).join(", ") || "(an empty body)";
+          throw new Error(
+            `Fathom's /meetings did not return an "items" array — the response carried: ${keys}. ` +
+              `Either the API's envelope changed or this key cannot read meetings. ` +
+              `Run \`FATHOM_API_KEY=… pnpm tsx scripts/verify-fathom.ts\` to see which.`,
+          );
+        }
         return {
-          rows: (page.items ?? []).map(asObject),
+          rows: page.items.map(asObject),
           next: page.next_cursor ?? null,
           rateLimit: api.rateLimit(),
         };
