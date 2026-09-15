@@ -50,10 +50,17 @@ export const CHARTS = [
      * A scorecard was being held to a chart's footprint for no reason left in
      * the code.
      *
-     * Measured in a browser at the current row unit: title 16px + figure 40px +
-     * delta 16px = 72px of content, which fits a 2-row box (80px) with room to
-     * spare. So the floor is 2x2 and a board can carry a strip of small
-     * numbers.
+     * IT WAS 2, AND 2 WAS THE PITCH MISTAKE. The re-measure said "72px of
+     * content, which fits a 2-row box (80px)" — but 80 is two ROW PITCHES, and
+     * a tile `h` rows tall measures `h * ROW_UNIT_PX - GRID_GAP_PX`, which is
+     * 64. `grid.ts` names that error in its own header: treating the pitch as
+     * the row inflates every box by a gap. So the floor was one gap short of
+     * its own reasoning, and a scorecard dragged to the bottom put its figure
+     * hard against the card's edge — which is how the owner found it.
+     *
+     * RE-MEASURED IN A BROWSER, at the current row unit, on a bare card: 56px
+     * of ink sitting on a 17px inset, so 90px is what it needs. Two rows give
+     * 64 and three give 104. The floor is 3.
      *
      * WHAT IT DOES NOT COVER is the two things a scorecard can be ASKED to draw
      * on top of that: a sparkline (128px) and a goal bar (124px), both of which
@@ -62,7 +69,7 @@ export const CHARTS = [
      * every plain number pays for an extra nobody switched on.
      */
     minW: 2,
-    minH: 2,
+    minH: 3,
   },
   {
     id: "line",
@@ -509,12 +516,21 @@ export function minSize(
   /**
    * A SPARKLINE OR A GOAL BAR IS A SECOND MARK IN THE SAME BOX, and each needs
    * roughly the height of the figure above it: measured at 128px and 124px of
-   * content against the bare card's 72px. Pricing them into the table would
-   * make every plain number tile carry two rows of air for something switched
-   * off; raising the floor only when the switch is on keeps both honest.
+   * content. Pricing them into the table would make every plain number tile
+   * carry rows of air for something switched off; raising the floor only when
+   * the switch is on keeps both honest.
+   *
+   * AN ABSOLUTE FLOOR, NOT AN INCREMENT, and the difference just bit. This was
+   * `minH + 2`, which was four rows only because the bare floor happened to be
+   * two — so when the bare floor was corrected to three, the same expression
+   * silently demanded FIVE for a measurement that has not moved. What was
+   * measured is "a spark needs 128px", and 144px (four rows) is the first box
+   * that holds it; `Math.max` says exactly that and survives the bare floor
+   * moving again.
    */
-  const extras = chart === "number" && (config?.showSpark || config?.showGoal) ? 2 : 0;
-  return { w: c.minW, h: c.minH + extras };
+  const EXTRA_ROWS = 4;
+  const needsExtra = chart === "number" && (config?.showSpark || config?.showGoal);
+  return { w: c.minW, h: needsExtra ? Math.max(c.minH, EXTRA_ROWS) : c.minH };
 }
 
 /**

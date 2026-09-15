@@ -226,18 +226,23 @@ describe("how small a chart may be made", () => {
 
   it("lets a bare scorecard be small, and grows it for what it is asked to draw", () => {
     /**
-     * THIS USED TO PIN 3x4 FOR BOTH, on the reasoning that "3x4 is what a tile
-     * on the groups board is". Two of that rule's premises had expired: the
-     * freshness marker it budgeted for was removed from the card, and
-     * `ROW_UNIT_PX` went 48 -> 40, so the floor was calibrated against a taller
-     * row and a component that no longer renders.
+     * THIS PINNED h=2, AND h=2 CAME FROM THE PITCH MISTAKE. The re-measure
+     * behind it read "72px of content, which fits a 2-row box (80px)" — but 80
+     * is two ROW PITCHES, and a tile `h` rows tall measures
+     * `h * ROW_UNIT_PX - GRID_GAP_PX`, which is 64. `grid.ts` warns about
+     * exactly that confusion in its own header, and this test recorded the
+     * wrong side of it, so it agreed with the bug for as long as both existed.
      *
-     * Re-measured in a browser: a bare scorecard is 72px of content (title 16 +
-     * figure 40 + delta 16) and fits a 2-row box. A sparkline needs 128px and a
-     * goal bar 124px — both four rows — so those RAISE the floor rather than
-     * being priced into every plain number that never switched them on.
+     * The owner found it by dragging a scorecard to its floor and watching the
+     * figure sit hard against the card's edge. RE-MEASURED in a browser on a
+     * bare card: 56px of ink on a 17px inset — 90px needed, where two rows give
+     * 64 and three give 104.
+     *
+     * A sparkline needs 128px and a goal bar 124px, both four rows, so those
+     * still RAISE the floor rather than being priced into every plain number
+     * that never switched them on.
      */
-    expect(minSize("number")).toEqual({ w: 2, h: 2 });
+    expect(minSize("number")).toEqual({ w: 2, h: 3 });
     expect(minSize("number", { showSpark: true })).toEqual({ w: 2, h: 4 });
     expect(minSize("number", { showGoal: true })).toEqual({ w: 2, h: 4 });
     // Progress ALWAYS draws its goal bar — it is the chart, not an extra — so

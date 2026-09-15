@@ -127,10 +127,31 @@ describe("Yesterday, which used to draw nothing at all", () => {
   });
 });
 
+/**
+ * THE FIRST HOUR OF THE DAY IS ITS OWN CASE, and these two cases used to fail
+ * in it — every night between 00:00 and 01:00 UTC, on nobody's change.
+ *
+ * `materializeFlow` refuses to store a one-point series ("ONE POINT IS NOT A
+ * TREND", materialize.ts), and before 01:00 Today HAS exactly one hourly
+ * bucket. So the slot carries no series, no `unit` and no `compare` — the guard
+ * working exactly as designed, asserted here as `undefined` rather than papered
+ * over with a skip. The file's header claimed these derived their expectations
+ * "from the same clock the materializer used"; they derived the bucket COUNT
+ * and forgot the guard.
+ */
+const HOURS_TODAY = new Date().getUTCHours() + 1;
+const ONE_BUCKET = HOURS_TODAY < 2;
+
 describe("Today, whose last hours have not happened yet", () => {
   it("stops at the hour in progress rather than plotting the rest of the day at zero", async () => {
     const { tile, now } = await seedHours([{ daysAgo: 0, hour: 0, n: 3 }]);
     const slot = tile.byRange?.["today"];
+    if (ONE_BUCKET) {
+      // Before 01:00 UTC there is one hour to plot, which is not a trend.
+      expect(slot?.series).toBeUndefined();
+      expect(slot?.unit).toBeUndefined();
+      return;
+    }
     expect(slot?.unit).toBe("hour");
     // Derived from the same clock the materializer read: hours 00..current.
     expect(slot?.series?.length).toBe(now.getUTCHours() + 1);
@@ -145,6 +166,11 @@ describe("Today, whose last hours have not happened yet", () => {
     // Today's previous window is Yesterday, a preset on the same board, so its
     // hours are already in the map — the comparison costs nothing to build.
     const compare = tile.byRange?.["today"]?.compare;
+    if (ONE_BUCKET) {
+      // No series to compare AGAINST, so no comparison is stored either.
+      expect(compare).toBeUndefined();
+      return;
+    }
     expect(compare?.length).toBe(24);
     expect(compare?.[0]?.value).toBe(9);
   });
