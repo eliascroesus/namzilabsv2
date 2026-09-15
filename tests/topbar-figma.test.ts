@@ -170,11 +170,26 @@ describe("the bars the frame draws", () => {
     expect(64 + 49).toBe(113);
   });
 
-  it("draws no rule under itself, because the board's row carries it", () => {
-    // Node 35:6027 has no border; node 35:6044 below it has
-    // `border-bottom: 1px solid #E1E1E1`. Two rules 57px apart is the
-    // double-seam this kit argues against everywhere else.
-    expect(topBar).not.toMatch(/border-b border-topbar-border/);
+  it("draws its rule only where the board's row is not going to", () => {
+    /**
+     * IT USED TO DRAW NONE AT ALL, and that was right for one route out of ten.
+     * Node 35:6027 has no border because node 35:6044 below it does
+     * (`border-bottom: 1px solid #E1E1E1`) — two rules 57px apart is the
+     * double seam this kit argues against. But that row is the BOARD's, and
+     * Activity, Apps and Settings have no such row, so the chrome ran into the
+     * page with no edge at all.
+     *
+     * So the rule is conditional on `ruled`, which `AppFrame` passes as
+     * `!band`: exactly one of the two draws a line, never both. Asserted as a
+     * GUARDED occurrence rather than a bare absence — a plain `not.toMatch`
+     * would now fail on a correct bar, and a plain `toMatch` would pass on a
+     * bar that drew the rule unconditionally, which is the double seam back.
+     */
+    expect(topBar).toMatch(/ruled && "border-b border-topbar-border"/);
+    expect(topBar).not.toMatch(/className="[^"]*border-b border-topbar-border/);
+    // …and the frame decides it from the band, so the two cannot both draw one.
+    const frame = readFileSync(join(__dirname, "..", "src/components/app-frame.tsx"), "utf8");
+    expect(frame).toMatch(/ruled=\{!band\}/);
   });
 
   it("sums to 113, which is where the board starts", () => {

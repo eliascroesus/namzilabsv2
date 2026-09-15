@@ -4,6 +4,7 @@ import { Bell, Link2, Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useEffect, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 /**
  * THE TOP BAR — ONE BAND OF 56px, WHICH IS ONE FEWER THAN YESTERDAY.
@@ -49,8 +50,25 @@ import { Button } from "@/components/ui/button";
 
 export function TopBar({
   menu,
+  ruled = false,
   unread = 1,
 }: {
+  /**
+   * DRAW THE HAIRLINE HERE, because nothing below is going to.
+   *
+   * The note above explains why this bar has no rule of its own on the board:
+   * the board's own controls row carries one 49px lower, and two rules that
+   * close together is the double seam the kit argues against. That reasoning
+   * only ever held where a band EXISTS. On Activity, Apps, Settings and every
+   * other route there is no band, so the chrome simply ran into the page with
+   * no edge at all — which is what the owner saw.
+   *
+   * `AppFrame` passes `!band`, so the rule appears exactly where the board's
+   * does not, and the two cases cannot both draw one. Same token as the band's
+   * (`border-topbar-border`), so the line is the same line in both themes
+   * rather than a second grey that happens to look close.
+   */
+  ruled?: boolean;
   /**
    * The phone's way into the navigation — `MobileDrawer`, built by `AppFrame`
    * and handed down as a node. It is the ONLY thing in this bar that is not
@@ -72,7 +90,12 @@ export function TopBar({
        The prose sits ABOVE the tag deliberately: tests/page-width.test.ts
        reads a bar's height by matching `<header className="…"`, and a comment
        between the two breaks it. */
-    <header className="flex h-16 shrink-0 items-center gap-2 bg-topbar px-6 py-4">
+    <header
+      className={cn(
+        "flex h-16 shrink-0 items-center gap-2 bg-topbar px-6 py-4",
+        ruled && "border-b border-topbar-border",
+      )}
+    >
       {menu}
 
       {/* THE TITLE CLUSTER'S SLOT — a row, not an <h1>, because the page now

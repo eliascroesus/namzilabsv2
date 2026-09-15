@@ -252,7 +252,14 @@ export function AppFrame({
               2026 (nodes 35:5931 and 35:6000), so the data goes only where it
               is drawn. The drawer stays a prop because it is built HERE, where
               the navigation data already is — the bar holds none of it. */}
-          <TopBar menu={<MobileDrawer hide={hide} views={views} workspace={workspace} account={account} />} />
+          {/* `ruled={!band}` — the hairline goes wherever the band is NOT. See
+              `TopBar`: the board's controls row draws its own rule 49px lower,
+              and two that close together is a double seam; a route with no band
+              had no edge under the chrome at all. */}
+          <TopBar
+            ruled={!band}
+            menu={<MobileDrawer hide={hide} views={views} workspace={workspace} account={account} />}
+          />
           {/* THE SECOND BAND, IF THE PAGE HAS ONE. `shrink-0` so it keeps its
               own height when the panel is short — without it a flex column
               hands the scroll region the space and this collapses. */}

@@ -2,6 +2,7 @@ import * as React from "react";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { TopBarTitle } from "@/components/topbar-slots";
 
 /**
  * THE PAGE SHAPE. Six container widths and three gutters existed for the
@@ -249,27 +250,36 @@ export type PageHeaderProps = {
 /**
  * THE TITLE BLOCK, SPELLED ONCE FOR BOTH LAYOUTS.
  *
- * The h1 recipe is "the ONLY page-title spelling in the product" per the doc
- * comment above — a claim `PageHeader` below used to make false by spelling
- * the h1 and its lede TWICE, once per branch, in near-identical JSX. One
- * `<h1>` and one lede `<p>` live here; each branch below supplies only the
- * wrapper alignment that actually differs between them (centred and stacked
- * in the three-zone row, left-aligned in the plain one) — see the note above
- * `PageHeader`'s `return` for why neither wrapper takes `min-w-0`.
+ * NO HEADING LIVES HERE ANY MORE. The page's name is the TOP BAR's — every
+ * route reads the way the board always has — so what is left is the lede, and
+ * this block exists for the same reason it did: one spelling of it, with each
+ * branch supplying only the wrapper alignment that differs between them
+ * (centred and stacked in the three-zone row, left-aligned in the plain one).
+ * See the note above `PageHeader`'s `return` for why neither wrapper takes
+ * `min-w-0`.
  */
-function HeaderTitle({
-  title,
-  lede,
-  className,
-}: {
-  title: React.ReactNode;
-  lede?: React.ReactNode;
-  className: string;
-}) {
+/**
+ * THE PAGE'S NAME NOW SITS IN THE TOP BAR, NOT ON THE PAGE.
+ *
+ * The board has read that way for weeks — "Overview" at 24/700 in the bar, the
+ * window beside it — while every other route drew its own 26px heading in the
+ * content, so the product had its title in two different places depending which
+ * page you were on. The owner's call: one place, and it is the bar.
+ *
+ * SO THIS PORTALS RATHER THAN RENDERS. `TopBarTitle` fills `#topbar-title`, the
+ * same slot the dashboard fills, which is what makes the two identical by
+ * construction instead of by two files agreeing on a type scale. Every route
+ * that draws a `PageHeader` is inside an `AppFrame` — the design gallery
+ * included — so there is always a bar to portal into.
+ *
+ * THE LEDE STAYS ON THE PAGE. It is a sentence naming the page's scope, not a
+ * heading: the bar's slot is one line of 24px type with a window beside it and
+ * has nowhere to put it, and a subtitle is content rather than chrome.
+ */
+function HeaderLede({ lede, className }: { lede: React.ReactNode; className: string }) {
   return (
     <div className={className}>
-      <h1 className="text-display-xs font-semibold tracking-[0.07px] text-heading">{title}</h1>
-      {lede && <p className="max-w-2xl text-sm font-normal leading-5 text-muted-foreground">{lede}</p>}
+      <p className="max-w-2xl text-sm font-normal leading-5 text-muted-foreground">{lede}</p>
     </div>
   );
 }
@@ -415,6 +425,13 @@ export function PageHeader({ title, lede, actions, tabs, back, band, className }
         className,
       )}
     >
+      {/* THE PAGE'S NAME GOES TO THE BAR — see `HeaderLede` above for why, and
+          `TopBarTitle` for where. It is rendered OUTSIDE both layout branches
+          on purpose: a portal draws nothing where it sits, so leaving it inside
+          the grid made an invisible child that the track count then had to know
+          about. */}
+      {title !== undefined && <TopBarTitle>{title}</TopBarTitle>}
+
       {back && (
         /**
          * AN 8px CONTROL, NOT A LINE OF TEXT. This was the one navigation
@@ -486,8 +503,16 @@ export function PageHeader({ title, lede, actions, tabs, back, band, className }
              * on purpose: the strip takes the slack, the actions take their
              * own width.
              */
+            /* THE TRACK COUNT FOLLOWS THE CELLS THAT RENDER, not the props
+               that were passed. It read `title ? 3 : 2`, which was the same
+               thing until the title moved into the top bar — after that a
+               header given a title still asked for three tracks while drawing
+               two children, and the ACTIONS landed in the middle `auto` track
+               with a `1fr` of dead space to their right. The lede is the only
+               thing that can occupy the centre now, so it is the lede that
+               decides. */
             "flex flex-col items-stretch gap-3 md:grid md:items-center md:gap-x-4",
-            title ? "md:grid-cols-[1fr_auto_1fr]" : "md:grid-cols-[1fr_auto]",
+            lede ? "md:grid-cols-[1fr_auto_1fr]" : "md:grid-cols-[1fr_auto]",
             back && "mt-3",
           )}
         >
@@ -524,14 +549,12 @@ export function PageHeader({ title, lede, actions, tabs, back, band, className }
               either side of it, centring is just a heading that has come loose
               from the page's own reading edge.
 
-              GUARDED, because the board no longer passes one (node 49:5399
-              puts the name on its tab). Rendering `HeaderTitle` with an
-              undefined title emits an EMPTY `<h1>` into the middle track — a
-              heading with no text is a landmark that announces nothing and a
-              grid cell that still claims its `auto` width. */}
-          {title !== undefined && (
-            <HeaderTitle
-              title={title}
+              GUARDED ON THE LEDE, WHICH IS WHAT SITS HERE NOW. The title went
+              to the top bar, so the middle track is the lede's or it is not
+              drawn at all — and the track count follows the same condition, or
+              the actions slide into a centre cell nothing occupies. */}
+          {lede !== undefined && (
+            <HeaderLede
               lede={lede}
               className="flex flex-col items-start gap-2 text-left md:items-center md:text-center"
             />
@@ -547,7 +570,7 @@ export function PageHeader({ title, lede, actions, tabs, back, band, className }
         </div>
       ) : (
         <div className={cn("flex flex-wrap items-center justify-between gap-x-4 gap-y-3", back && "mt-3")}>
-          <HeaderTitle title={title} lede={lede} className="flex flex-col items-start gap-2" />
+          {lede !== undefined && <HeaderLede lede={lede} className="flex flex-col items-start gap-2" />}
           {actions && <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">{actions}</div>}
         </div>
       )}

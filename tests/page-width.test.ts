@@ -210,10 +210,18 @@ describe("the page container and the skeleton that stands in for it", () => {
     };
     const topBar = read("src/components/top-bar.tsx");
 
-    // `[^"]*?` before the height: the bar's class list no longer opens with
-    // `flex` — it opens with the scoped `dark` that re-inks whatever the flow
-    // builder portals into it.
-    const bar = band(topBar, /<header className="[^"]*?\bh-(\S+) shrink-0/, "the top bar's height");
+    /**
+     * `className="…"` OR `className={cn("…"` — the bar takes a conditional rule
+     * now (it draws the hairline on routes with no band under it), so its class
+     * list goes through `cn` and the literal-only pattern stopped matching. It
+     * did not FAIL, it threw "could not find the top bar's height": a parse
+     * failure wearing the costume of a design failure, which is the exact
+     * hazard the note above this describes. Both spellings are accepted so the
+     * assertion keeps measuring the height rather than the syntax around it.
+     *
+     * `[^"]*?` before the height: the class list does not open with `flex`.
+     */
+    const bar = band(topBar, /<header\s+className=(?:"|\{cn\(\s*")[^"]*?\bh-(\S+) shrink-0/, "the top bar's height");
     // NO `border-b` IN THE PATTERN ANY MORE. The real bar dropped its rule to
     // the board's own row on 10 Sep 2026, so a mirror still matching on one
     // would find nothing and report NOT FOUND rather than a mismatch — the
