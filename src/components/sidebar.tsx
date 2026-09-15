@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
-import { ChevronDown, LayoutDashboard, Plug, Plus, Radio, Search, Settings, UserPlus, Workflow } from "lucide-react";
+import { ChevronDown, Gift, LayoutDashboard, Plug, Plus, Radio, Search, Settings, UserPlus, Workflow } from "lucide-react";
 import { Fragment, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -187,7 +187,7 @@ export function WorkspaceChip({ id, name, className }: { id?: string; name: stri
  * "+" in the foot — the column's one VERB. Spending the fill on the active row
  * as well would have been two filled objects saying different things.
  */
-function RailChip({ tone, children }: { tone: "rest" | "active"; children: ReactNode }) {
+function RailChip({ children }: { children: ReactNode }) {
   return (
     <span
       className={cn(
@@ -205,18 +205,24 @@ function RailChip({ tone, children }: { tone: "rest" | "active"; children: React
          * and an ink step — and neither of them is a hue anybody has to be
          * able to distinguish. `aria-current="page"` is unchanged.
          *
-         * `[&_svg]:fill-current` is the "completely filled" half: lucide draws
-         * these as outlines, and the export's active glyph is solid. Filling
-         * from the same `currentColor` keeps it one decision.
+         * THE GLYPH IS NOT FILLED, as of the owner's call on 15 Sep 2026. It was
+         * `[&_svg]:fill-current` — lucide draws these as outlines and the export
+         * drew the active one solid — and solid was wrong in a column of six:
+         * a filled 18px glyph is a blob at that size, the shapes stop telling
+         * each other apart, and the row already says it is selected twice over.
+         *
+         * Nothing is lost by dropping it. The two signals WCAG 1.4.1 asks for
+         * are the row's `--control` SURFACE and the label's step to full ink,
+         * neither of which is a hue; `aria-current="page"` is untouched. The
+         * fill was a third saying of the same thing, and the one that cost the
+         * icon its silhouette.
          *
          * NO HOVER FILL ON THE CHIP. It carried `group-hover:bg-accent` — a
          * 32px square lighting up under the pointer INSIDE a row that now
          * lights up as a whole. Two nested raises for one hover; the row's is
          * the one that survives (see `SLOT`'s own hover).
          */
-        tone === "active"
-          ? "text-rail-foreground [&_svg]:fill-current"
-          : "text-rail-foreground",
+        "text-rail-foreground",
       )}
     >
       {children}
@@ -898,7 +904,7 @@ export function RailContent({
                         className={cn(SLOT, active && "bg-rail-control")}
                       >
                         <span className={ICON_COL}>
-                          <RailChip tone={active ? "active" : "rest"}>
+                          <RailChip>
                             <Icon className="size-[18px]" />
                           </RailChip>
                         </span>
@@ -1018,6 +1024,43 @@ export function RailContent({
               takes at the head of the column, which is what makes the two read
               as the same kind of object — a thing you act on, not a
               destination you travel to. */}
+          {/* REFER NAMZILABS — the loudest thing in this column, at the owner's
+              ask, and the one place the rail's own "one filled object" rule is
+              knowingly bent.
+
+              THE RULE IT BENDS. The column has had exactly one filled object
+              since 8 Sep: the "+" New button, its one VERB. Everything else
+              rests on `--control` and raises its EDGE on hover, so that a
+              hovered row never looks more selected than the selected one. A
+              second fill is a second thing shouting.
+
+              WHY IT IS BENT ANYWAY, AND HOW FAR. "Incentivise heavily" is a
+              product decision, not a taste one — it is the owner's to make, and
+              this is what making it costs. So the card takes the brand WASH
+              (`--brand-soft`, a 10% tint) and a brand EDGE rather than the
+              brand fill: loud enough to be the second thing your eye reaches in
+              the column, quiet enough that the "+" underneath is still the only
+              solid object in it. The two are then distinguishable at a glance,
+              which a second solid brand rectangle 8px above the first would not
+              be.
+
+              IT SITS ABOVE INVITE MEMBERS deliberately: they are adjacent acts
+              ("bring somebody in") and the quieter of the two is the one that
+              should be further from the verb at the bottom. */}
+          <Link
+            href="/dashboard/refer"
+            className="flex w-full items-center gap-3 rounded-card border border-brand-soft-line bg-brand-soft px-3 py-2 transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:border-rail-accent"
+          >
+            <Gift className="size-4 shrink-0 text-rail-foreground" />
+            <span className="flex flex-col">
+              {/* Same two-line card shape as Invite Members below — 12px on
+                  both lines with weight as the only separator — so the pair
+                  reads as one stack rather than as two designs. */}
+              <span className="text-xs font-semibold leading-4 text-rail-foreground">Refer Namzilabs</span>
+              <span className="text-xs leading-4 text-rail-muted">Share your link, grow the product.</span>
+            </span>
+          </Link>
+
           <Link
             href="/dashboard/settings"
             /* THE HOVER RAISES THE EDGE, NOT THE FILL, and the column's own

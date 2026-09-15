@@ -1,6 +1,8 @@
 "use client";
 
-import { Bell, Link2, Moon, Sun } from "lucide-react";
+import { Link2, Moon, Sun } from "lucide-react";
+import { NotificationBell } from "@/components/notifications";
+import type { Notice } from "@/lib/notices";
 import { useTheme } from "next-themes";
 import { useEffect, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
@@ -51,7 +53,7 @@ import { cn } from "@/lib/utils";
 export function TopBar({
   menu,
   ruled = false,
-  unread = 1,
+  notices = [],
 }: {
   /**
    * DRAW THE HAIRLINE HERE, because nothing below is going to.
@@ -76,8 +78,17 @@ export function TopBar({
    * all, so without this there is no route to any of it.
    */
   menu?: ReactNode;
-  /** Unread notifications. Placeholder until notifications have a store. */
-  unread?: number;
+  /**
+   * WHAT IS BROKEN IN THIS WORKSPACE, read on the server by `AppShell` and
+   * handed straight through. It replaced `unread?: number`, which defaulted to
+   * `1` and was never passed by anybody — so the badge was a constant, not a
+   * count.
+   *
+   * DEFAULTS TO EMPTY, which is the opposite of what it replaced and the whole
+   * lesson: the failure mode of a notification count must be "says nothing",
+   * never "says one".
+   */
+  notices?: Notice[];
 }) {
   return (
     /* 64px = 16 above a 32px control row and 16 below it — SYMMETRIC, which
@@ -121,19 +132,12 @@ export function TopBar({
         <ShareLink />
         <ThemeToggle />
 
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label={unread > 0 ? `Notifications — ${unread} unread` : "Notifications"}
-          className="relative size-8 shrink-0 rounded-control text-topbar-foreground hover:bg-topbar-control active:bg-topbar-control [&_svg]:size-4"
-        >
-          <Bell />
-          {unread > 0 && (
-            <span className="absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full border border-topbar bg-primary text-2xs font-semibold leading-none text-primary-foreground">
-              {unread > 9 ? "9+" : unread}
-            </span>
-          )}
-        </Button>
+        {/* THE BELL MOVED OUT, AND IT NOW OPENS SOMETHING. It was a `Button`
+            with no handler and a badge fed by `unread = 1` — a DEFAULT nobody
+            ever passed, so every workspace carried a permanent blue "1" over a
+            control that did nothing. `NotificationBell` owns the button, the
+            count and the panel behind it; the bar just gives it the slot. */}
+        <NotificationBell notices={notices} />
       </div>
     </header>
   );

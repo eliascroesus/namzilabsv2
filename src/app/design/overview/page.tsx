@@ -221,6 +221,38 @@ export default async function OverviewLab({
        need the context from above it. See `dashboard/page.tsx`. */
     <BoardControls>
     <AppFrame
+      /**
+       * TWO NOTICES, SO THE BELL HAS SOMETHING TO OPEN ON A PUBLIC ROUTE.
+       *
+       * The bell is the one control in the chrome whose whole behaviour — a
+       * count, a panel, a list, an empty state — lives behind a database read
+       * that only exists inside a session. Without this the only assertion
+       * anybody could write about it is that the file contains the word
+       * `Sheet`, which is what `notices.test.ts` already does and is not the
+       * same as knowing it opens.
+       *
+       * One of each severity on purpose: the panel draws the two trios
+       * differently and orders errors above warnings, and a fixture with one
+       * row proves neither.
+       */
+      notices={[
+        {
+          id: "conn:demo",
+          kind: "connection",
+          severity: "error",
+          title: "Calendly",
+          detail: "The access token was revoked. Reconnect to start receiving records again.",
+          href: "/integrations",
+        },
+        {
+          id: "conn:paused",
+          kind: "connection",
+          severity: "warn",
+          title: "Close CRM",
+          detail: "Paused after repeated failures. It will retry on its own.",
+          href: "/integrations",
+        },
+      ]}
       /* THE BAND IS CHROME, SO THE HARNESS HANDS IT OVER TOO.
          It was rendered inside `PageContainer` here, which matched the real
          board while the band escaped the page's padding with `-m-6`. The band

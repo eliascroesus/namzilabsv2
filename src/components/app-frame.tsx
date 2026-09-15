@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Sidebar } from "./sidebar";
 import { TopBar } from "./top-bar";
+import type { Notice } from "@/lib/notices";
 import { MobileDrawer } from "./mobile-drawer";
 import { cn } from "@/lib/utils";
 import type { BoardView } from "@/lib/board/types";
@@ -72,10 +73,13 @@ export function AppFrame({
   band,
   surface,
   hide,
+  notices,
   ownsMain = false,
   children,
 }: {
   account?: { initials: string; avatarUrl?: string | null; panel: ReactNode };
+  /** What is broken in this workspace, read by `AppShell` and passed to the bell. */
+  notices?: Notice[];
   /** The workspace's own name — shown beside its avatar in the rail's own head block, not the top bar (see `Sidebar`). */
   workspace?: string;
   /**
@@ -258,6 +262,7 @@ export function AppFrame({
               had no edge under the chrome at all. */}
           <TopBar
             ruled={!band}
+            notices={notices}
             menu={<MobileDrawer hide={hide} views={views} workspace={workspace} account={account} />}
           />
           {/* THE SECOND BAND, IF THE PAGE HAS ONE. `shrink-0` so it keeps its

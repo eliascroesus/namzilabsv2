@@ -7,6 +7,7 @@ import { requestAccess } from "@/lib/auth";
 import { getProfile } from "@/lib/profile";
 import { workspaceCap } from "@/lib/limits";
 import { canManageRanks } from "@/lib/permissions";
+import { listNotices, type Notice } from "@/lib/notices";
 import { connections, flows, workspaceOwners } from "@/db/schema";
 import { AppFrame } from "./app-frame";
 import { navViewsOrNone } from "@/lib/board/nav-views";
@@ -165,6 +166,18 @@ export async function AppShell({
    * both cases — those are just different sides.
    */
   let canRename = false;
+  /**
+   * WHAT IS BROKEN, for the bell. Read here rather than in the bar because the
+   * bar is a client component and this is a database question — and read on
+   * every authenticated route, which is why `listNotices` is two capped,
+   * org-walled queries and nothing more.
+   *
+   * IT FAILS TO AN EMPTY LIST, and that is the whole lesson of what it
+   * replaced: the badge was fed by `unread = 1`, a default nobody ever passed,
+   * so every workspace wore a permanent "1" over a button that did nothing. A
+   * notification count's failure mode must be "says nothing", never "says one".
+   */
+  let notices: Notice[] = [];
   try {
     const role = memberships.find((m) => m.organizationId === orgId)?.roleSlug;
     // Same request-scoped resolution the page used — `cache()` makes this the
@@ -174,6 +187,11 @@ export async function AppShell({
     canRename = await canManageRanks(getDb(), { orgId, userId, role });
   } catch {
     // Full rail on failure — never a broken frame.
+  }
+  try {
+    notices = await listNotices(getDb(), orgId);
+  } catch {
+    // A bell that throws takes the frame with it. Silence is the safe answer.
   }
 
   /**
@@ -216,6 +234,7 @@ export async function AppShell({
     // the file that decided what colour the dashboard is.
     <AppFrame
       band={band}
+      notices={notices}
       surface={surface}
       ownsMain={ownsMain}
       hide={hide}

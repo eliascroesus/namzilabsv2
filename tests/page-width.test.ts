@@ -801,14 +801,20 @@ describe("the rail's re-dress — a workspace switcher, Main Menu, a search fiel
      * twice, which is why the chip (`RailChip`, above) carries no fill of
      * its own at all.
      *
-     * THE GLYPH IS WHITE AND FILLED NOW, not `text-marker`. It was the brand
-     * stroke, defended as WCAG 1.4.1's second signal; the row's own
+     * THE GLYPH IS WHITE AND OUTLINED, not `text-marker` and not solid. It was
+     * the brand stroke, defended as WCAG 1.4.1's second signal; the row's own
      * `--control` fill IS that signal, and it is a SURFACE change rather than
-     * a hue anyone has to be able to distinguish. The owner asked for white
-     * directly. See `RailChip`.
+     * a hue anyone has to be able to distinguish. The owner asked for white on
+     * 6 Sep and for the fill to come off on 15 Sep — solid at 18px is a blob,
+     * and six of them in a column stop telling each other apart. See
+     * `RailChip`, which no longer varies by tone at all.
      */
     expect(sidebar).toContain('className={cn(SLOT, active && "bg-rail-control")}');
-    expect(sidebar).toMatch(/tone === "active"\s*\n\s*\? "text-rail-foreground \[&_svg\]:fill-current"/);
+    /* COMMENTS STRIPPED, because the note in `RailChip` NAMES the class it
+       stopped using — an assertion that cannot tell a class from a sentence
+       about a class forbids explaining the decision. */
+    const bare = sidebar.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    expect(bare, "the glyph is an outline").not.toMatch(/\[&_svg\]:fill-current/);
     expect(sidebar, "the active glyph must not go back to the brand").not.toMatch(/\? "text-marker"/);
     expect(sidebar, "the fill must not land back on the chip").not.toMatch(/"bg-control text-marker"/);
     expect(sidebar, "the hover step must not come back as the active fill").not.toMatch(/"bg-accent text-marker"/);

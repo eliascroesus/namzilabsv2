@@ -42,38 +42,75 @@ describe("the rail wears one fill for both selected and hovered", () => {
     expect(rail).not.toMatch(/hover:bg-accent/);
   });
 
-  it("marks the active row in WHITE and filled, never in the brand", () => {
+  it("marks the active row in WHITE, and leaves the glyph an OUTLINE", () => {
     /**
-     * "when a like nav thing is active it shouldnt be blue it should be white
-     * and completely filled in color". The chip drew `text-marker` — the brand
-     * stroke — which the file's own long note defended as WCAG 1.4.1's second
-     * signal. The row's `--control` fill IS that second signal, and it is a
-     * surface change rather than a hue anyone has to distinguish.
+     * TWO OWNER CALLS, IN ORDER, AND THE SECOND ONE REVERSES HALF THE FIRST.
+     *
+     * 6 Sep: "when a like nav thing is active it shouldnt be blue it should be
+     * white and completely filled in color". The chip had been drawing
+     * `text-marker`, the brand stroke, which the file's long note defended as
+     * WCAG 1.4.1's second signal — it is not, because the row's `--control`
+     * fill is a SURFACE change rather than a hue anyone has to distinguish.
+     *
+     * 15 Sep: "dont make the like icons filled when selected". Solid at 18px is
+     * a blob — six of them in a column stop telling each other apart — and the
+     * row was already saying "selected" twice without it.
+     *
+     * WHAT SURVIVES BOTH is the half that is not a preference: the active glyph
+     * must never go back to the brand hue. That is the regression this test was
+     * written for, and it is asserted below either way.
      */
     const chip = code(sidebar).slice(code(sidebar).indexOf("function RailChip"));
-    expect(chip.slice(0, 600), "the active glyph is not the brand").not.toContain("text-marker");
-    expect(chip.slice(0, 600), "it is filled, not outlined").toContain("[&_svg]:fill-current");
+    expect(chip.slice(0, 900), "the active glyph is not the brand").not.toContain("text-marker");
+    expect(chip.slice(0, 900), "the glyph is an outline, not a fill").not.toContain("[&_svg]:fill-current");
+    // …and the row keeps the surface change that carries the state.
+    expect(sidebar).toContain('className={cn(SLOT, active && "bg-rail-control")}');
   });
 
-  it("keeps the present out of the rail's foot, where the bell also never went", () => {
+  it("keeps the deleted upsell out, and the bell where the bell lives", () => {
     /**
-     * THE GIFT MOVED UP ON 8 SEP 2026 AND WAS DELETED ON 10 SEP.
+     * WHAT THIS TEST WAS FOR, AND WHAT IT OVER-REACHED ON.
      *
-     * "Get Free Access" was a filled secondary button at the foot carrying a
-     * present rather than a bell — a bell being the top bar's glyph for real
-     * unread notifications, and spending it here put one picture on two
-     * unrelated things in one chrome. Node 51:5756 moved it into the bar; no
-     * 10 September frame draws it at all, so it is gone from the product
-     * rather than relocated again.
+     * "Get Free Access" was a filled secondary button at the rail's foot
+     * carrying a PRESENT rather than a bell — a bell being the top bar's glyph
+     * for notifications, and spending it here put one picture on two unrelated
+     * things in one chrome. Node 51:5756 moved it to the bar; no 10 September
+     * frame draws it at all, so it went from the product entirely.
      *
-     * The rule this asserts is unchanged and now has nothing to argue with:
-     * neither glyph belongs in this column.
+     * The test then banned `<Gift>` outright, which was the deleted feature's
+     * icon standing in for the deleted feature. Those are different things, and
+     * on 15 Sep 2026 the difference bit: the owner asked for a referral card in
+     * this column, a present is the conventional glyph for one, and nothing
+     * else in the chrome uses it — so the original objection ("one picture on
+     * two unrelated things") does not apply.
+     *
+     * SO THE RULE IS NARROWED TO WHAT IT ALWAYS MEANT: the withdrawn upsell
+     * stays withdrawn, and the bell stays a top-bar glyph. That second half is
+     * now load-bearing rather than decorative — the bell opens a real panel of
+     * real failures, so a second bell in the rail would be a second thing
+     * claiming to be notifications.
      */
     const c = code(sidebar);
-    expect(c).not.toMatch(/<Gift\b/);
     expect(c).not.toMatch(/Get Free Access/i);
-    const bar = read("src/components/top-bar.tsx");
-    expect(bar, "and it did not survive in the bar either").not.toMatch(/<Gift\b/);
+    expect(c, "the bell belongs to the bar").not.toMatch(/<Bell\b/);
+    /**
+     * The referral card that replaced the ban: a link out of the column, not a
+     * filled button in it. The rail has ONE solid object — the "+" in the foot,
+     * its one verb — and the card is asked to be loud without becoming a
+     * second one, so it takes the brand WASH inside a brand EDGE.
+     *
+     * A WINDOW AFTER THE HREF, not a slice between two of them. `bg-primary` is
+     * legitimately the workspace chip's fill two hundred lines above, so a
+     * file-wide `not.toMatch` failed on markup with nothing to do with this
+     * rule — and bounding the slice with the NEXT card's `/dashboard/settings`
+     * produced an empty string, because that path also appears in the `NAV`
+     * array near the top of the file and `indexOf` found that one first.
+     */
+    const at = c.indexOf('href="/dashboard/refer"');
+    expect(at, "the referral card is in the rail").toBeGreaterThan(-1);
+    const card = c.slice(at, at + 700);
+    expect(card, "it takes the brand WASH").toMatch(/bg-brand-soft/);
+    expect(card, "never the brand FILL — the + is the column's only solid object").not.toMatch(/bg-primary/);
   });
 });
 
