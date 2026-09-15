@@ -144,14 +144,20 @@ export function attributable(
  *     team; months need a flag. A scheme that cannot pay what it promised is
  *     worse than no scheme.
  */
-export type Milestone = { at: number; reward: string; blurb: string };
+/**
+ * `blurb` IS GONE, not merely unrendered. The cards under the track carried a
+ * sentence each and they came off at the owner's ask — and a field that nothing
+ * reads is worse than no field, because the next person to add a rung writes
+ * one and wonders why it never appears.
+ */
+export type Milestone = { at: number; reward: string };
 
 export const MILESTONES: Milestone[] = [
-  { at: 1, reward: "1 month free", blurb: "The first person you bring pays for your next month." },
-  { at: 3, reward: "3 months free", blurb: "Three is where most people stop. Do not." },
-  { at: 5, reward: "6 months free", blurb: "Half a year of Namzilabs, on us." },
-  { at: 10, reward: "1 year free", blurb: "Twelve months, and you stop paying for this entirely." },
-  { at: 25, reward: "Lifetime + revenue share", blurb: "Namzilabs free for good, and a cut of everyone you send after this." },
+  { at: 1, reward: "1 month free" },
+  { at: 3, reward: "3 months free" },
+  { at: 5, reward: "6 months free" },
+  { at: 10, reward: "1 year free" },
+  { at: 25, reward: "Lifetime + revenue share" },
 ];
 
 /** Where somebody is on the ladder, and how far to the next rung. */
@@ -166,26 +172,52 @@ export type Progress = {
   /**
    * 0–100 across the CURRENT RUNG's span, not across the whole ladder.
    *
-   * The bar measures the gap you are in — from the last rung you passed to the
-   * next one — so the first invite moves it to 100% of rung one rather than to
-   * 4% of twenty-five. A bar that barely twitches for a real achievement is a
-   * bar that teaches people the achievement was not real.
+   * The gap you are in — from the last rung you passed to the next one. Kept
+   * because it is what the "N more to go" copy is counting, but it is NOT what
+   * the bar draws; see `ladderPercent`.
    */
   percent: number;
+  /**
+   * 0–100 across the WHOLE LADDER, with every rung given an EQUAL share of the
+   * track rather than a share proportional to its size.
+   *
+   * This is what the bar actually draws, and the equal-share part is the whole
+   * idea. The rungs are 1, 3, 5, 10, 25 — laid out to scale, the first four
+   * would crowd into the left sixth of the bar and the run to 25 would be
+   * two-thirds of it, so the early wins that matter most would be invisible and
+   * the late game would look impossible. Five equal segments means every rung
+   * is a fifth of the journey, and one invite is always a visible step.
+   *
+   * It replaced `percent` on the bar because `percent` resets to zero the
+   * moment you EARN something: cross rung one and the bar you were filling
+   * empties. Correct about the next gap, and a terrible thing to watch happen
+   * right after an achievement.
+   */
+  ladderPercent: number;
 };
 
 export function progressFor(count: number): Progress {
-  const n = Math.max(0, Math.floor(count));
+  // `Math.floor(NaN)` is NaN and `Math.max(0, NaN)` is NaN, so the guard is the
+  // other way round: anything that is not a real number becomes zero. `percent`
+  // goes straight into a `style={{ width }}`, and a NaN there is an invisible
+  // bar on the one page this whole feature is about.
+  const n = Number.isFinite(count) ? Math.max(0, Math.floor(count)) : 0;
   const earned = [...MILESTONES].reverse().find((m) => n >= m.at) ?? null;
   const next = MILESTONES.find((m) => n < m.at) ?? null;
-  if (!next) return { count: n, earned, next: null, toGo: 0, percent: 100 };
+  if (!next) return { count: n, earned, next: null, toGo: 0, percent: 100, ladderPercent: 100 };
+
   const floor = earned?.at ?? 0;
   const span = next.at - floor;
+  const withinRung = (n - floor) / span;
+  // Which segment of the track we are in: rung 0 is the run to the first
+  // milestone, rung 1 the run from the first to the second, and so on.
+  const segment = MILESTONES.indexOf(next);
   return {
     count: n,
     earned,
     next,
     toGo: next.at - n,
-    percent: Math.min(100, Math.round(((n - floor) / span) * 100)),
+    percent: Math.min(100, Math.round(withinRung * 100)),
+    ladderPercent: Math.min(100, Math.round(((segment + withinRung) / MILESTONES.length) * 100)),
   };
 }

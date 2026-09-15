@@ -310,22 +310,60 @@ describe("the surfaces that advertise it", () => {
     expect(rail).toContain(MILESTONES[0].reward.toLowerCase().replace("1 month free", "1 month free"));
   });
 
-  it("puts the count first on the page, at the landing headline's size", () => {
+  it("puts the count first on the board, at the landing headline's size", () => {
     /**
      * A zero you can see is an invitation; a zero inside a sentence is nothing
-     * at all. `text-banner` is the landing page's one oversized step and this
-     * is the only place in the app that borrows it.
+     * at all. `text-banner` is the landing page's one oversized step and the
+     * board is the only place in the app that borrows it.
+     *
+     * READ FROM `refer-board.tsx`, NOT THE PAGE. The markup moved out so that
+     * `/design/refer` could render the SAME component on a public route — the
+     * design page used to draw a hand-built miniature, which is how the board
+     * passed every check while shipping with an invisible progress bar.
      */
-    const page = read("src/app/dashboard/refer/page.tsx");
-    expect(page).toMatch(/text-banner[^"]*">\{count\}/);
-    expect(page).toMatch(/role="progressbar"/);
-    expect(page).toMatch(/aria-valuenow=\{p\.percent\}/);
+    const board = read("src/components/refer-board.tsx");
+    expect(board).toMatch(/text-banner[^"]*">\{count\}/);
+    expect(board).toMatch(/role="progressbar"/);
+    // The bar draws the WHOLE-LADDER reading, not the rung-local one: `percent`
+    // resets to zero the moment you earn something, which is a terrible thing
+    // to watch happen right after an achievement.
+    expect(board).toMatch(/aria-valuenow=\{p\.ladderPercent\}/);
+    expect(board, "the rungs are pinned to the track itself").toMatch(/data-refer-pip=/);
   });
 
-  it("says plainly that claiming is not automatic", () => {
-    // Counting is; fulfilment is a person. Saying so is cheaper than being
-    // found out by the first customer who reaches a rung.
+  it("carries no description text on the board at all", () => {
+    /**
+     * The owner's standing rule, already applied to the tile settings and the
+     * flow builder's field picker: descriptions go behind an ⓘ and the surface
+     * keeps the thing itself. Asserted as an ABSENCE because that is what was
+     * asked for, and an absence is the one thing a source grep would otherwise
+     * have to guess at.
+     */
+    const board = read("src/components/refer-board.tsx");
+    const markup = code(board);
+    for (const gone of ["Counting is automatic", "remembered for 90 days", "Takes about ten seconds"]) {
+      expect(markup, gone).not.toContain(gone);
+    }
+    // The ladder's per-rung blurb is gone from the DATA too, not merely
+    // unrendered — a field nothing reads is worse than no field, because the
+    // next person to add a rung writes one and wonders why it never appears.
+    expect(code(read("src/lib/referral.ts"))).not.toMatch(/blurb/);
+    // …and the invite modal's two options lost theirs as well.
+    expect(code(read("src/components/invite-picker.tsx"))).not.toContain("They see these metrics");
+  });
+
+  it("keeps the caveats one hover away rather than deleting them", () => {
+    /**
+     * Moving the prose behind an ⓘ was the instruction; losing it was not.
+     * Three of these four lines are LIMITS on an offer and the fourth is that
+     * fulfilment is manual — a scheme that lets somebody believe a rung pays
+     * itself is one that gets found out by the first customer who reaches one.
+     */
     const page = read("src/app/dashboard/refer/page.tsx");
-    expect(page).toMatch(/Claiming is not yet/);
+    expect(page).toMatch(/<InfoTip/);
+    expect(page).toMatch(/90 days/);
+    expect(page).toMatch(/once per person/i);
+    expect(page).toMatch(/new account/i);
+    expect(page).toMatch(/claiming is not yet/i);
   });
 });

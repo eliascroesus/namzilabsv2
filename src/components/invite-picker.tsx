@@ -76,10 +76,17 @@ function ReferralPreview() {
   );
 }
 
-/** The card shape both options wear, so neither can drift into its own design. */
+/**
+ * The card shape both options wear, so neither can drift into its own design.
+ *
+ * NO BODY COPY, at the owner's ask. It carried a sentence explaining each
+ * choice, and the picture plus the title already carry it: one drawing is a
+ * shared board with three faces on it, the other is two separate boards and a
+ * bar filling. If the difference is not legible from those, another sentence
+ * was not going to be what fixed it.
+ */
 function Choice({
   title,
-  body,
   preview,
   onClick,
   href,
@@ -87,7 +94,6 @@ function Choice({
   loud,
 }: {
   title: string;
-  body: string;
   preview: React.ReactNode;
   onClick?: () => void;
   href?: string;
@@ -105,8 +111,7 @@ function Choice({
         {preview}
       </span>
       <span className="mt-4 block text-md font-semibold text-foreground">{title}</span>
-      <span className="mt-1 block text-sm leading-relaxed text-muted-foreground">{body}</span>
-      <span className="mt-4 flex items-center gap-1.5 text-sm font-semibold text-marker">
+      <span className="mt-3 flex items-center gap-1.5 text-sm font-semibold text-marker">
         {cta}
         <ArrowRight aria-hidden className="size-4" />
       </span>
@@ -137,13 +142,10 @@ function Choice({
 
 export function InvitePicker({
   link,
-  count,
   onClose,
 }: {
   /** The person's own referral link, already resolved on the server. */
   link: string;
-  /** How many they have brought — used to make the second card specific. */
-  count: number;
   onClose: () => void;
 }) {
   const [copied, setCopied] = useState(false);
@@ -165,27 +167,17 @@ export function InvitePicker({
   return (
     <Modal onClose={onClose} size="lg">
       <ModalTitle>Who are you inviting?</ModalTitle>
-      <p className="mt-1.5 text-sm text-muted-foreground">
-        Two different things, and it is worth getting right: one shares your numbers, the other sends somebody to build
-        their own.
-      </p>
 
       <div className="mt-5 grid items-start gap-4 sm:grid-cols-2">
         <Choice
           loud
           title="A friend, to start using Namzilabs"
-          body={
-            count > 0
-              ? `They get their own workspace. You get credit — that is ${count + 1} toward your next reward.`
-              : "They get their own workspace. You get credit toward free months of Namzilabs."
-          }
           preview={<ReferralPreview />}
           cta={copied ? "Link copied" : "Copy my link"}
           onClick={copy}
         />
         <Choice
           title="Someone into this workspace"
-          body="They see these metrics, this board and these connections. For people you already work with."
           preview={<WorkspacePreview />}
           cta="Open members"
           href="/dashboard/settings"
@@ -207,7 +199,7 @@ export function InvitePicker({
 }
 
 /** The button that opens it — used by the refer page and the rail's card. */
-export function InviteButton({ link, count, className }: { link: string; count: number; className?: string }) {
+export function InviteButton({ link, className }: { link: string; className?: string }) {
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -215,7 +207,7 @@ export function InviteButton({ link, count, className }: { link: string; count: 
         <Gift className="size-4" />
         Invite someone
       </Button>
-      {open && <InvitePicker link={link} count={count} onClose={() => setOpen(false)} />}
+      {open && <InvitePicker link={link} onClose={() => setOpen(false)} />}
     </>
   );
 }
