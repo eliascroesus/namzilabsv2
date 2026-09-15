@@ -117,7 +117,12 @@ export function NotificationBell({ notices }: { notices: Notice[] }) {
         className="gap-0 border-rail-border bg-rail p-0 sm:max-w-sm"
         aria-describedby={undefined}
       >
-        <SheetHeader className="gap-1 border-b border-rail-border p-4">
+        {/* `pr-14`, NOT `p-4`. `SheetContent` puts its close button at
+            `top-4 right-4` at `size-8`, so 48px of this header's own right
+            edge is already spoken for — the description wrapped to within a
+            few pixels of the X and read as though it were colliding with it.
+            56px clears the button and leaves a gutter beside it. */}
+        <SheetHeader className="gap-1 border-b border-rail-border p-4 pr-14">
           <SheetTitle className="text-md font-semibold text-rail-foreground">Needs attention</SheetTitle>
           <SheetDescription className="text-xs leading-4 text-rail-muted">
             {count > 0

@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { noticesFrom, NOTICE_LIMIT, type ConnectionRow, type MetricRow } from "@/lib/notices";
-import { referralCode, referralLink } from "@/lib/referral";
 
 const root = join(__dirname, "..");
 const read = (p: string) => readFileSync(join(root, p), "utf8");
@@ -199,48 +198,5 @@ describe("the bell that used to lie", () => {
     expect(NOTICE_LIMIT).toBeGreaterThan(0);
     expect(bell).toMatch(/hidden > 0/);
     expect(read("src/lib/notices.ts")).toMatch(/NOTICE_LIMIT \+ 1/);
-  });
-});
-
-describe("a referral link somebody can actually share", () => {
-  it("is stable for a user and different between users", () => {
-    // Stable forever is the property that makes a DERIVED code better than a
-    // minted one: links shared today still resolve when attribution lands, with
-    // no backfill.
-    expect(referralCode("user_01J")).toBe(referralCode("user_01J"));
-    expect(referralCode("user_01J")).not.toBe(referralCode("user_01K"));
-  });
-
-  it("does not leak the id it came from", () => {
-    const id = "user_01JQRSTUVWXYZ0123456789";
-    expect(referralCode(id)).not.toContain("01JQ");
-    expect(id).not.toContain(referralCode(id));
-  });
-
-  it("is eight characters a human can read down a phone line", () => {
-    // No I, L, O or U: the four that get misheard or retyped as 1/0.
-    for (const id of ["a", "user_01J", "x".repeat(100)]) {
-      const c = referralCode(id);
-      expect(c, id).toMatch(/^[0-9ABCDEFGHJKMNPQRSTVWXYZ]{8}$/);
-    }
-  });
-
-  it("refuses to build a link out of a missing base URL", () => {
-    // A link that says `localhost` in somebody's tweet is worse than no link,
-    // so an unset base yields a PATH and the page can tell.
-    expect(referralLink("ABC12345", undefined)).toBe("/?ref=ABC12345");
-    expect(referralLink("ABC12345", "https://app.namzilabs.com/")).toBe("https://app.namzilabs.com/?ref=ABC12345");
-  });
-
-  it("promises no reward, because there is no reward", () => {
-    /**
-     * The rail pushes this hard at the owner's ask. The page is what keeps that
-     * push honest: nothing counts a signup yet and nothing pays out, so the
-     * page says exactly that and names no percentage, no credit and no cash.
-     */
-    const page = read("src/app/dashboard/refer/page.tsx");
-    expect(page).toMatch(/Rewards are not switched on yet/);
-    expect(page).not.toMatch(/\d+%\s*(commission|of revenue|recurring)/i);
-    expect(page).not.toMatch(/\$\d/);
   });
 });

@@ -917,6 +917,55 @@ export const userProfiles = pgTable("user_profiles", {
 });
 
 /**
+ * THE REFERRAL SYSTEM — two tables, and the split between them is the design.
+ *
+ * `referral_codes` answers "whose link is this?" and nothing else. The code is
+ * DERIVED from the WorkOS user id (`lib/referral.ts`), so this table is not the
+ * source of truth for it — it is an INDEX, written the first time somebody
+ * could possibly have shared their link. That is what makes the scheme
+ * backfill-free: a link handed out before this table existed still resolves,
+ * because the derivation is deterministic and the row can be written at any
+ * later moment from the id alone.
+ *
+ * `referrals` is the ledger: who brought whom, once, forever. It is the table a
+ * payout would one day be computed from, which is why it records the code that
+ * was actually used rather than only the pair — if the derivation ever changes,
+ * the history still says which string was clicked.
+ *
+ * WHY `referred_user_id` IS UNIQUE AND NOT PART OF A COMPOSITE KEY. A person
+ * can be referred exactly once in their life. Without this, a returning visitor
+ * who clicks three different links before signing up credits three people, and
+ * every referral scheme that has ever been gamed was gamed through that gap.
+ * The constraint is the guard, not the application code around it.
+ */
+export const referralCodes = pgTable("referral_codes", {
+  /** The eight characters that travel in the URL. Lower-cased on the way in. */
+  code: text("code").primaryKey(),
+  /** Whose it is. Unique: one code per person, and one person per code. */
+  userId: text("user_id").notNull().unique(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const referrals = pgTable(
+  "referrals",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    /** The WorkOS user whose link was used. */
+    referrerUserId: text("referrer_user_id").notNull(),
+    /** The WorkOS user who signed up. One row per person, ever — see above. */
+    referredUserId: text("referred_user_id").notNull().unique(),
+    /** The string that was actually clicked, kept even if derivation changes. */
+    code: text("code").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    // The only question the product asks of this table on a page render:
+    // "how many has this person brought?" — counted, and listed newest first.
+    index("referrals_referrer_idx").on(t.referrerUserId, t.createdAt.desc()),
+  ],
+);
+
+/**
  * THE AI-ASSISTANT CONNECTION (MCP). Four tables, one feature. See
  * docs/superpowers/specs/2026-09-03-mcp-connection-design.md.
  *

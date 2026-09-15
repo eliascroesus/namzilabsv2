@@ -1056,8 +1056,14 @@ export function RailContent({
               {/* Same two-line card shape as Invite Members below — 12px on
                   both lines with weight as the only separator — so the pair
                   reads as one stack rather than as two designs. */}
-              <span className="text-xs font-semibold leading-4 text-rail-foreground">Refer Namzilabs</span>
-              <span className="text-xs leading-4 text-rail-muted">Share your link, grow the product.</span>
+              {/* THE OFFER, NOT THE FEATURE. "Share your link" describes a
+                  control; "1 month free" is a reason to press it. The number is
+                  the first rung of the ladder in `lib/referral.ts`, and the
+                  duplication is worth naming: this is the one place it is
+                  spelled by hand — a rail card cannot import a server module —
+                  so `tests/referral.test.ts` pins the two together. */}
+              <span className="text-xs font-semibold leading-4 text-rail-foreground">Invite &amp; earn</span>
+              <span className="text-xs leading-4 text-rail-muted">1 invite = 1 month free.</span>
             </span>
           </Link>
 

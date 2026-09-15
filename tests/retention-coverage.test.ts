@@ -128,6 +128,22 @@ const TABLES: Record<string, Classification> = {
     by: "at most one row per (org, tile) — the composite PK enforces it, and a drag is an upsert rather than an append. Placements outlive their tile ON PURPOSE (a republished flow gets its column back), so the ceiling is every tile the workspace has ever published rather than the tiles it has now; deleting the flow or metric clears them, and the write action caps the set",
   },
 
+  referral_codes: {
+    kind: "bounded",
+    by:
+      "at most one row per PERSON, and only for those who have opened the refer page — the user id " +
+      "is unique and the code is derived, so every write is an idempotent upsert. It grows with " +
+      "people who have looked at their own link, which is a subset of accounts.",
+  },
+  referrals: {
+    kind: "bounded",
+    by:
+      "at most one row per REFERRED PERSON, forever — `referred_user_id` is UNIQUE, which is the " +
+      "same constraint that stops repeat credit. It cannot grow faster than signups, and it is the " +
+      "ledger a payout would be computed from, so it is never pruned on purpose: deleting it would " +
+      "delete somebody's earned rewards.",
+  },
+
   // ── Known gaps ────────────────────────────────────────────────────────────
   raw_events: {
     kind: "gap",

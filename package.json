@@ -28,7 +28,8 @@
     "calendar": "node scripts/calendar-check.mjs",
     "shot:modes": "node scripts/shot-modes.mjs",
     "composed": "node scripts/composed-check.mjs",
-    "landing": "node scripts/landing-check.mjs"
+    "landing": "node scripts/landing-check.mjs",
+    "refer": "node scripts/refer-check.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.0.0",

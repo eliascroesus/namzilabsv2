@@ -21,7 +21,7 @@
 -- ============================================================================
 
 -- ---------------------------------------------------------------------------
--- QUERY 1 — tables and columns (27 tables, 254 columns).
+-- QUERY 1 — tables and columns (29 tables, 262 columns).
 -- This is the one to run. Self-contained; nothing above is needed.
 -- ---------------------------------------------------------------------------
 WITH expected (tbl, col) AS (
@@ -205,6 +205,14 @@ WITH expected (tbl, col) AS (
     ('raw_events', 'payload'),
     ('raw_events', 'signature_valid'),
     ('raw_events', 'received_at'),
+    ('referral_codes', 'code'),
+    ('referral_codes', 'user_id'),
+    ('referral_codes', 'created_at'),
+    ('referrals', 'id'),
+    ('referrals', 'referrer_user_id'),
+    ('referrals', 'referred_user_id'),
+    ('referrals', 'code'),
+    ('referrals', 'created_at'),
     ('source_streams', 'id'),
     ('source_streams', 'org_id'),
     ('source_streams', 'connection_id'),
@@ -304,7 +312,7 @@ ORDER BY
   col;
 
 -- ---------------------------------------------------------------------------
--- QUERY 2 (optional) — indexes (48 expected).
+-- QUERY 2 (optional) — indexes (49 expected).
 -- A missing index never breaks a query, it only makes it slow, so this is
 -- separate and can be ignored while chasing a real outage.
 -- ---------------------------------------------------------------------------
@@ -348,6 +356,7 @@ WITH expected (tbl, idx) AS (
     ('metrics', 'metrics_org_idx'),
     ('rank_assignments', 'rank_assignments_org_rank_idx'),
     ('raw_events', 'raw_events_conn_received_idx'),
+    ('referrals', 'referrals_referrer_idx'),
     ('source_streams', 'source_streams_conn_cfg_uq'),
     ('source_streams', 'source_streams_org_idx'),
     ('stream_fields', 'stream_fields_key_uq'),
