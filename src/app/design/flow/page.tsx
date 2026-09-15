@@ -54,6 +54,19 @@ const NODES: RawNode[] = [
   at("calcCC", "formula", "", { op: "count" }),
   at("aaA", "filter", "High ticket"), at("aaB", "filter", "Low ticket"),
   at("calcAA", "formula", "", { op: "count" }),
+  /**
+   * THE ONE STEP THAT OPENS A FIELD BROWSER. Every other card here configures
+   * itself from dropdowns; `calculate` is the only type whose panel offers the
+   * "Insert data" flyout, and that flyout's search had a bug nothing on this
+   * page could reach — it matched a column's label, path and sample and never
+   * the STEP's name, so typing "Booked" against a canvas full of steps called
+   * Booked calls / No-shows / Refunded returned "No fields match".
+   *
+   * A leaf on the Refunded branch: it adds one card to a 27-card fixture, so
+   * every geometry assertion above it is untouched, and it sits deep enough to
+   * see the named filter steps the search is now expected to find.
+   */
+  at("calcNum", "calculate", "", { mode: "compare", op: "percentage" }),
 ];
 
 const wire = (source: string, target: string, sourceHandle?: string) => ({ id: `e_${source}_${target}`, source, target, sourceHandle: sourceHandle ?? null });
@@ -69,7 +82,7 @@ const EDGES = [
   wire("hC", "cCa", "hC_p0"), wire("hC", "cCb", "hC_p1"),
   wire("aA", "hAA"), wire("aB", "calcB"), wire("bBb", "calcBB"), wire("cCb", "calcCC"),
   wire("hAA", "aaA", "hAA_p0"), wire("hAA", "aaB", "hAA_p1"),
-  wire("aaB", "calcAA"),
+  wire("aaB", "calcAA"), wire("bD", "calcNum"),
 ];
 
 export default function DesignFlowPage() {

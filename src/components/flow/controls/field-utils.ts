@@ -215,6 +215,36 @@ function matchesTypeFilter(type: string | undefined, filter: FieldTypeFilter): b
  * Only primitive samples participate; a container's stringified JSON would
  * make every query match the parent of its own answer.
  */
+/**
+ * THE SAME SEARCH, ASKED OF A WHOLE STEP — and the reason it had to exist.
+ *
+ * `filterFields` matches a column's label, its path and its sample value. On a
+ * Calculate's number picker every step offers exactly ONE column and it is
+ * called "Output number" on all of them, so typing the name of the step you
+ * want — "booking", with three steps called Booking rate — matched nothing and
+ * the flyout said "No fields match". The thing on screen the author is reading
+ * is the STEP's name, and it was the one string the search could not see.
+ *
+ * So a query that matches the step's own name keeps every column in it: you
+ * asked for that step, not for a column inside it. The type chip still applies,
+ * because that is a question about the column rather than about the step.
+ */
+export function fieldsForGroup(
+  group: { title: string; stepNo?: number },
+  fields: DataField[],
+  query: string,
+  typeFilter: FieldTypeFilter = "all",
+): DataField[] {
+  const q = canonical(query.trim());
+  const typed = typeFilter === "all" ? fields : fields.filter((f) => matchesTypeFilter(f.type, typeFilter));
+  if (!q) return typed;
+  // `9. Bookings by hour` — the number is on screen beside the name, so it is
+  // part of what somebody can reasonably type.
+  const name = canonical(`${group.stepNo != null ? `${group.stepNo} ` : ""}${group.title}`);
+  if (name.includes(q)) return typed;
+  return filterFields(typed, query, "all");
+}
+
 export function filterFields(fields: DataField[], query: string, typeFilter: FieldTypeFilter = "all"): DataField[] {
   const q = canonical(query.trim());
   const typed = typeFilter === "all" ? fields : fields.filter((f) => matchesTypeFilter(f.type, typeFilter));

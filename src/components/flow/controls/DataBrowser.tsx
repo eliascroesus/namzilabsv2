@@ -7,7 +7,8 @@ import { fieldClasses } from "@/components/ui/input";
 import { Popover } from "./Popover";
 import { SourceBadge } from "./Pill";
 import type { DataField, DataGroup, FieldRef } from "./types";
-import { childFields, filterFields, formatSample, makeFieldRef, FIELD_TYPE_FILTERS, type FieldTypeFilter } from "./field-utils";
+import { childFields, fieldsForGroup, filterFields, formatSample, makeFieldRef, FIELD_TYPE_FILTERS, type FieldTypeFilter } from "./field-utils";
+import { InfoTip } from "@/components/ui/info-tip";
 
 /** Remembered across opens within the session (persists a drag-resize). */
 let savedFlyoutWidth = 340;
@@ -189,7 +190,7 @@ export function DataBrowser({
               autoFocus
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Search names or values…"
+              placeholder="Search steps, names or values…"
               className={cn(fieldClasses, "min-w-0 flex-1 bg-muted/50 px-3 py-2 focus-visible:bg-card")}
             />
             {/* On a narrow viewport this flyout covers the config panel, so
@@ -208,7 +209,7 @@ export function DataBrowser({
           </div>
           {/* One kind of value at a time — "which date field?" shouldn't mean
               scrolling past forty text fields to compare three dates. */}
-          <div className="flex gap-1">
+          <div className="flex items-center gap-1">
             {FIELD_TYPE_FILTERS.map((t) => (
               <button
                 key={t.key}
@@ -221,6 +222,27 @@ export function DataBrowser({
                 {t.label}
               </button>
             ))}
+            {/**
+             * EVERY RULE THIS BROWSER OBEYS, IN ONE PLACE YOU CAN ASK.
+             *
+             * Three explanations used to be printed as prose: a sentence under
+             * each step that was withholding its columns, and a standing line
+             * along the bottom about filters adding none. Stacked, they turned
+             * a picker into a page of reading, and the per-step one was worst
+             * where it was longest — a paragraph beneath a list of one row.
+             *
+             * They say the same three things every time, so they are said once,
+             * on request. What is LOST is the specific count ("held 2,130
+             * records"); what replaces it is the count already beside every
+             * group header, which is the same fact without the sentence.
+             */}
+            <span className="ml-auto pr-0.5">
+              <InfoTip label="picking data">
+                Steps are listed newest last, each offering its Result or Output number. A step&rsquo;s own columns can be picked only when its
+                last test held exactly one record — to use them across records, add a Summarize step first. Filters and date windows add no
+                columns of their own.
+              </InfoTip>
+            </span>
           </div>
         </div>
 
@@ -294,19 +316,14 @@ export function DataBrowser({
           {!drill &&
             anyFields &&
             groups.map((g) => {
-              const fields = filterFields(g.fields, q, typeFilter);
+              const fields = fieldsForGroup(g, g.fields, q, typeFilter);
               // An active type chip behaves like a search: groups auto-expand
               // to their matches and empty ones step aside.
               const searching = q.trim().length > 0 || typeFilter !== "all";
-              /**
-               * A GROUP CARRYING A NOTE NEVER STEPS ASIDE. The note says why
-               * the columns a user came for are not in this list, so the one
-               * moment it is most needed is when they type one of those names
-               * — the very filter that empties the group. Dropping it there
-               * restores the silence the note exists to end; the price is a
-               * header with a 0 beside it, which is what actually matched.
-               */
-              if (searching && fields.length === 0 && !g.note) return null;
+              // Nothing matched in here, so the group steps aside. It used
+              // to stay for the sake of a note printed under its fields; the
+              // note is now one ⓘ at the top, which cannot be filtered away.
+              if (searching && fields.length === 0) return null;
               const isOpen = searching || soleGroup || expanded.has(g.stepId);
               return (
                 <div key={g.stepId} className="mb-1">
@@ -341,14 +358,6 @@ export function DataBrowser({
                           <FieldRow key={f.path} field={f} onPick={() => pick(g, f)} onDrill={() => setDrill({ groupId: g.stepId, trail: [f] })} />
                         ))}
                         {hidden > 0 && <ShowAllRow k={g.stepId} hidden={hidden} />}
-                        {/* A step that offers less than the user came for says
-                            why, right where the missing fields would be —
-                            same quiet register as the footer note below. The
-                            sentence is the caller's: this browser is handed
-                            groups and renders them, and teaching it which
-                            step types withhold what would put the rule in two
-                            places for the two to drift apart. */}
-                        {g.note && <p className="px-2.5 py-1 text-xs leading-snug text-muted-foreground">{g.note}</p>}
                       </div>
                     );
                   })()}
@@ -357,26 +366,13 @@ export function DataBrowser({
             })}
 
           {/* Search / type filter with no matches anywhere. */}
-          {!drill && anyFields && (q.trim() || typeFilter !== "all") && groups.every((g) => filterFields(g.fields, q, typeFilter).length === 0) && (
+          {!drill && anyFields && (q.trim() || typeFilter !== "all") && groups.every((g) => fieldsForGroup(g, g.fields, q, typeFilter).length === 0) && (
             <p className="px-2 py-4 text-center text-xs text-muted-foreground">
               {q.trim() ? <>No fields match “{q.trim()}”{typeFilter !== "all" ? " with that type" : ""}.</> : <>No fields of that type here.</>}
             </p>
           )}
         </div>
 
-        {/* WHY ISN'T MY FILTER / COMBINE STEP OFFERING ANY FIELDS?
-            Asked out loud the first time someone opened this after a Combine.
-            Because it adds none: it decides which records continue, and the
-            columns keep belonging to the Get data step that produced them.
-            Carefully worded — such a step IS usually listed here, carrying
-            its own "Output" and "Output number", and in the pickers that
-            hide those (Time between's "Match records by") it drops out of
-            the list entirely. Both readings have to survive this sentence. */}
-        {!drill && anyFields && groups.length > 0 && (
-          <p className="border-t border-border px-3 py-2 text-xs leading-snug text-muted-foreground">
-            Filters and date windows add no columns — a record&rsquo;s fields stay under the step that produced them.
-          </p>
-        )}
 
         {/* Free-typing escape hatch: commit the search text as a custom field path. */}
         {onCustom && !drill && q.trim() && (

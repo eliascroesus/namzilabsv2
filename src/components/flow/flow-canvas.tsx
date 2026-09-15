@@ -1406,59 +1406,15 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
           });
         }
       }
-      /**
-       * THE GATE ABOVE HAS TO SAY ITS NAME. Withholding a step's columns —
-       * the same columns a Summarize step's picker lists on the very same
-       * source — with no word about why was read as a bug and reported as
-       * one. The rule is right; only its silence was wrong. So the group
-       * carries the reason and the browser prints it where those columns
-       * would have been.
-       *
-       * The multi-record sentence is the ENGINE'S sentence, deliberately: the
-       * picker and the error a user would otherwise have hit name the same
-       * cause and the same two ways out, so meeting one after the other reads
-       * as one rule rather than two obstacles.
-       *
-       * Every sentence restates a fact this build already tested — a record
-       * count, or the absence of a successful test — because a picker that
-       * guessed at its own reason would be the same failure one level up. A
-       * one-record step whose schema is genuinely empty is owed no
-       * explanation and gets none: nothing was withheld from it.
-       *
-       * And every sentence stays in the PAST TENSE. The count is the one the
-       * last Test cached; nothing re-measures it to open this flyout, and the
-       * card behind the flyout is at that moment striking the same figure
-       * through. "Holds N" here would be this panel telling the user the
-       * opposite of what the canvas under it says.
-       */
-      let note: string | undefined;
-      if (!scalar && own.length === 0) {
-        // Edited since that test — by this session's `dirty` or by a
-        // fingerprint that no longer matches the graph — means the count
-        // answers for the previous version of the step, and the gate it
-        // explains may not survive a re-test.
-        const stale = n.data.dirty === true || supersededById.has(n.id);
-        const sinceEdit = stale ? " This step has changed since that test, so re-test it to see what it holds now." : "";
-        if (t?.status !== "ok") note = "Test this step to see whether one of its columns can be picked here.";
-        else if (t.recordsOut > 1) {
-          // A test that hit the read ceiling counted a prefix of the step, so
-          // its figure is a floor — the Result panel refuses to call the same
-          // number a total, and neither may this. The gate is unaffected:
-          // more than a ceiling is still more than one.
-          const held = `${t.truncated ? "more than " : ""}${t.recordsOut.toLocaleString("en-US")}`;
-          note = `This step held ${held} records on its last test, so there is no single value to take from a column. Add a Summarize step set to Sum to total one, or narrow this step to a single record.${sinceEdit}`;
-        } else if (t.recordsOut === 0) note = `This step held no records on its last test, so there were no columns to offer.${sinceEdit}`;
-      }
       return {
         stepId: n.id,
         stepNo: stepNoById.get(n.id),
         source: app ? String((app.data.config as { source?: unknown }).source ?? "") : undefined,
         title: nodeTitle(String(n.type) as NodeType, n.data),
         fields: [{ path: scalar ? `__result_${n.id}` : `__count_${n.id}`, label: scalar ? "Result" : "Output number", type: "number", sample }, ...own],
-        note,
       };
     });
-  }, [selected, nodes, edges, stepNoById, supersededById]);
+  }, [selected, nodes, edges, stepNoById]);
 
   /**
    * RE-MEASURE A PATHS HUB WHENEVER ITS LANES CHANGE.

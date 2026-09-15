@@ -166,6 +166,64 @@ check(runs.length >= 6, "the Split's branch edges all draw a horizontal run", `$
 check(stacked.length === 0, "no two branch edges share a horizontal line", stacked.join(", "));
 
 await page.screenshot({ path: OUT });
+
+/**
+ * THE NUMBER PICKER FINDS A STEP BY ITS NAME.
+ *
+ * Every step in this flyout offers exactly one pickable column and every one of
+ * them is called "Output number", so the ONLY string that tells "3. Booked
+ * calls" from "4. No-shows" is the step's own name — and it was the one string
+ * the search could not read. Typing "Booked" against a canvas full of named
+ * filter steps answered "No fields match".
+ *
+ * `tests/field-picker-search.test.ts` holds the rule; this holds the WIRING,
+ * which is the half a unit test cannot see: that `DataBrowser` is the component
+ * behind this flyout, that it is handed one group per earlier step, and that
+ * the group it is handed carries the title the canvas is showing. The bug lived
+ * entirely in that gap — the predicate was correct about the columns it was
+ * given, and nobody had given it the step.
+ */
+await page.locator('[data-testid="rf__node-calcNum"]').click();
+await page.waitForSelector("text=Compare two numbers", { timeout: 10000 });
+await page.getByRole("button", { name: "Pick a number from an earlier step" }).first().click();
+const search = page.getByPlaceholder(/Search steps/).first();
+await search.waitFor({ timeout: 10000 });
+
+/** Everything visible inside the flyout, flattened. */
+const flyout = () =>
+  page.evaluate(() => {
+    let n = document.querySelector("input[placeholder^='Search steps']");
+    while (n && !String(n.className).includes("rounded-surface")) n = n.parentElement;
+    return (n?.innerText ?? "").replace(/\s+/g, " ");
+  });
+
+await search.fill("Booked");
+await page.waitForTimeout(300);
+const hitStep = await flyout();
+check(hitStep.includes("Booked calls"), 'searching "Booked" finds the step called Booked calls', hitStep.slice(0, 120));
+check(!hitStep.includes("No-shows"), "…and only that step", hitStep.slice(0, 120));
+
+await search.fill("zzzz");
+await page.waitForTimeout(300);
+const none = await flyout();
+check(/No fields match/.test(none), "a query that matches nothing still matches nothing", none.slice(0, 120));
+
+/**
+ * AND THE PROSE IS GONE. Three explanations used to print inside this flyout —
+ * a sentence under every step withholding its columns, and a standing line
+ * along the bottom about filters adding none. They are one ⓘ beside the type
+ * chips now. Asserted as an ABSENCE because that is what was asked for, and an
+ * absence is the one thing a source grep would have to guess at.
+ */
+await search.fill("");
+await page.waitForTimeout(300);
+const full = await flyout();
+check(!/on its last test|Filters and date windows/.test(full), "no step prints a paragraph under its fields");
+check(
+  (await page.getByRole("button", { name: "About picking data" }).count()) === 1,
+  "the ⓘ beside the type chips carries the explanation instead",
+);
+
 console.log(`\nshot: ${OUT}`);
 await browser.close();
 
