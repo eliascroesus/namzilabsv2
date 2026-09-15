@@ -2,3 +2,34 @@ allowBuilds:
   esbuild: true
   protobufjs: true
   sharp: true
+
+# ── TRANSITIVE ADVISORIES, PINNED ────────────────────────────────────────────
+# Three HIGH advisories survive the Next upgrade, all of them reached only
+# through build and telemetry paths that no request touches:
+#
+#   brace-expansion  DoS via unbounded glob expansion, reached via
+#                    inngest > opentelemetry > gcp-metadata > rimraf > glob
+#   nanoid           an infinite loop for a custom generator with size 0,
+#                    reached via next > postcss at build time
+#
+# Neither is fed by user input, so neither is exploitable here — but "not
+# reachable today" is a property of the current call graph and not of the
+# package, and both have a patched version available. Pinning costs nothing and
+# removes the judgement call from the next person to read `pnpm audit`.
+#
+# `pnpm.overrides` in package.json is NO LONGER READ by pnpm 11 — it warns and
+# ignores the field, which is how the first attempt at this silently changed
+# nothing. This file is where they live now.
+overrides:
+  brace-expansion: ">=2.1.4"
+  nanoid: ">=3.3.18"
+  # Five MODERATE advisories remain and every one is dev-only — esbuild's dev
+  # server, postcss's source maps, vitest's mocker, a browser-data table. None
+  # ships to production and none is reachable by a request. Pinned anyway for
+  # the same reason as the two above: "dev-only" is a property of today's
+  # scripts, and a developer's machine holding production credentials is a
+  # target in its own right.
+  esbuild: ">=0.24.3"
+  postcss: ">=8.5.23"
+  baseline-browser-mapping: ">=2.11.0"
+

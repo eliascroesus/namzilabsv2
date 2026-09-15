@@ -48,6 +48,29 @@ export class PostgresDialect implements Dialect {
     return `"${name.replaceAll('"', '""')}"`;
   }
 
+  /**
+   * A JSON PATH INTO A LITERAL, AND THE ONE ASSUMPTION IT RESTS ON.
+   *
+   * This is the only place in the product where user text becomes SQL rather
+   * than a bound parameter: the flow builder's field picker lets somebody TYPE
+   * a path, and the result is inlined through `sql.raw` because a bound param
+   * would make the SELECT and GROUP BY expressions differ byte-wise and
+   * Postgres would reject the grouping.
+   *
+   * Doubling `'` is the correct and complete escape for a standard string
+   * literal — `;`, `--` and `||` inside one are inert text — WHILE
+   * `standard_conforming_strings` IS ON. With it off (the default before
+   * Postgres 9.1, and settable per session) a backslash escapes the following
+   * character, so `\'` would close the literal and the doubling could be
+   * walked out of.
+   *
+   * Every supported Postgres ships it on, Neon does not change it, and nothing
+   * in this codebase issues `SET standard_conforming_strings` — so this is a
+   * stated assumption rather than a hole. It is written HERE, beside the
+   * escaping, because the next person to read `replaceAll("'", "''")` should
+   * not have to work out whether it is unconditional. `tests/security.test.ts`
+   * asserts this note exists and exercises the escape with attack-shaped paths.
+   */
   jsonExtractText(column: string, path: string[]): string {
     if (path.length === 0) throw new Error("empty json path");
     const quoted = path.map((p) => `'${p.replaceAll("'", "''")}'`);

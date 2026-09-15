@@ -29,7 +29,10 @@
     "shot:modes": "node scripts/shot-modes.mjs",
     "composed": "node scripts/composed-check.mjs",
     "landing": "node scripts/landing-check.mjs",
-    "refer": "node scripts/refer-check.mjs"
+    "refer": "node scripts/refer-check.mjs",
+    "check:tenancy": "tsx scripts/check-tenancy.ts",
+    "headers": "node scripts/headers-check.mjs",
+    "check:deps": "pnpm audit --audit-level=high"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.0.0",
@@ -47,7 +50,7 @@
     "jose": "^5.10.0",
     "lucide-react": "^1.32.0",
     "mcp-handler": "^2.1.1",
-    "next": "^16.2.10",
+    "next": "^16.3.5",
     "next-themes": "^0.4.6",
     "radix-ui": "^1.6.7",
     "react": "^19.2.7",
@@ -69,6 +72,6 @@
     "tailwindcss": "^4.3.2",
     "tsx": "^4.23.1",
     "typescript": "^5.9.3",
-    "vitest": "^4.1.10"
+    "vitest": "^5.0.0"
   }
 }
