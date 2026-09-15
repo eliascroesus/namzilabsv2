@@ -1,8 +1,9 @@
 "use server";
 
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { getWorkOS, signOut, switchToOrganization, withAuth } from "@workos-inc/authkit-nextjs";
+import { getWorkOS, switchToOrganization, withAuth } from "@workos-inc/authkit-nextjs";
 import { and, eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { workspaceOwners } from "@/db/schema";
@@ -34,17 +35,17 @@ import { recordAudit } from "@/lib/audit";
  *    future admin tool) can destroy something without having established which
  *    thing. Exactly the rule `deleteConnectionData` already enforces.
  *
- * 5. ALL THREE ARE RECORDED. `recordAudit` writes one row per act to a table
- *    that OUTLIVES the workspace, because deleting a workspace to destroy the
- *    record of what happened inside it is the obvious move and an audit log the
- *    audited act erases answers nothing. The row is written AFTER the act has
- *    passed its gates and committed, never on the attempt.
- *
  * 4. OUR DATA GOES BEFORE WORKOS DOES. Every one of these ends in a WorkOS call
  *    that cannot be undone and cannot be retried against a user or org that no
  *    longer exists. If our sweep fails halfway, the workspace still exists and
  *    the customer can press the button again; if WorkOS went first, they would
  *    be locked out of a tenant still holding all their data.
+ *
+ * 5. ALL THREE ARE RECORDED. `recordAudit` writes one row per act to a table
+ *    that OUTLIVES the workspace, because deleting a workspace to destroy the
+ *    record of what happened inside it is the obvious move and an audit log the
+ *    audited act erases answers nothing. The row is written AFTER the act has
+ *    passed its gates and committed, never on the attempt.
  */
 
 /** Is this person the workspace's owner? The only authority in this file. */
@@ -230,6 +231,37 @@ export async function deleteAccountAction(formData: FormData): Promise<void> {
   });
 
   await workos.userManagement.deleteUser(userId);
-  // The session's user is gone; ending it is the only correct next state.
-  await signOut(process.env.APP_BASE_URL ? { returnTo: process.env.APP_BASE_URL } : undefined);
+
+  /**
+   * END THE SESSION OURSELVES RATHER THAN THROUGH WORKOS'S LOGOUT ENDPOINT.
+   *
+   * THE BUG THIS REPLACES, because the reason is not obvious and the symptom
+   * was awful: this used to call `signOut()`, which ends with
+   *
+   *     redirect(getWorkOS().userManagement.getLogoutUrl({ sessionId, returnTo }))
+   *
+   * — it sends the browser to `api.workos.com/user_management/sessions/logout`
+   * carrying the session id. But `deleteUser` on the line above REVOKES that
+   * session, so by the time the browser arrives the id resolves to nothing,
+   * WorkOS does not honour `return_to`, and the customer's last interaction
+   * with the product is a permanent blank white page. The deletion had fully
+   * succeeded; only the landing failed, which is the worst way for it to fail
+   * — it looks exactly like something broke mid-delete.
+   *
+   * THERE IS NOTHING LEFT TO LOG OUT OF. Deleting the user revoked every
+   * session server-side already, so the hosted logout round trip cannot
+   * accomplish anything and can only fail. What actually remains is our own
+   * cookie, and deleting it here is the whole of the work.
+   *
+   * WHY NOT JUST SIGN OUT FIRST. `signOut` redirects, and a redirect throws —
+   * calling it before `deleteUser` would abort the deletion it is supposed to
+   * conclude. The order is forced: destroy, then land.
+   *
+   * The cookie name matches authkit's own default resolution
+   * (`WORKOS_COOKIE_NAME` or `wos-session`) and `delete` by bare name is the
+   * same fallback authkit itself uses when the option-object form is rejected.
+   */
+  const jar = await cookies();
+  jar.delete(process.env.WORKOS_COOKIE_NAME || "wos-session");
+  redirect(process.env.APP_BASE_URL || "/");
 }

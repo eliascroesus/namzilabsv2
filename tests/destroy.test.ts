@@ -182,6 +182,39 @@ describe("who may destroy what", () => {
     }
   });
 
+  it("lands the deleted account somewhere real instead of WorkOS's logout", () => {
+    /**
+     * THE BUG THIS PINS, found by deleting a real account in production.
+     *
+     * `deleteAccountAction` used to end with `signOut()`, which redirects the
+     * browser to `api.workos.com/user_management/sessions/logout?session_id=…`.
+     * But `deleteUser` runs on the line before, and deleting a WorkOS user
+     * revokes their sessions — so the id in that URL resolves to nothing,
+     * `return_to` is not honoured, and the last thing the customer ever sees is
+     * a permanent blank white page.
+     *
+     * The deletion itself had fully succeeded. Only the landing failed, which
+     * is the worst available failure: indistinguishable from the destructive
+     * operation breaking halfway through.
+     *
+     * The fix is to clear our own cookie and redirect ourselves. Deleting the
+     * user already revoked the session server-side, so there is nothing left
+     * for the hosted logout to do.
+     */
+    const account = body("deleteAccountAction");
+    expect(account, "deleteUser must still be the last WorkOS call").toMatch(/deleteUser\(userId\)/);
+    expect(
+      account,
+      "signOut() redirects to a logout URL for a session deleteUser just revoked — blank page",
+    ).not.toMatch(/\bsignOut\s*\(/);
+    expect(account, "the session cookie must be cleared here instead").toMatch(/jar\.delete\(/);
+    expect(account, "and the browser sent somewhere that exists").toMatch(/redirect\(process\.env\.APP_BASE_URL/);
+
+    // The cookie clear has to happen AFTER the user is gone — the order is
+    // forced, because a redirect throws and would abort the deletion.
+    expect(account.indexOf("deleteUser(userId)")).toBeLessThan(account.indexOf("jar.delete("));
+  });
+
   it("requires the name typed back, on the server", () => {
     // Part of the CONTRACT, not a courtesy in the browser: no path — a form, a
     // script, a future admin tool — may destroy something without having
@@ -221,7 +254,76 @@ describe("who may destroy what", () => {
   });
 
   it("ends the session when the user behind it is gone", () => {
-    expect(body("deleteAccountAction")).toMatch(/signOut\(/);
+    /**
+     * This used to assert `signOut(`, and it passed while the feature was
+     * broken — see "lands the deleted account somewhere real" above. The
+     * session does still have to end; what changed is that ending it must not
+     * route through a WorkOS logout endpoint for a session `deleteUser`
+     * already revoked. So the assertion is now on the OUTCOME (no cookie, a
+     * real destination) rather than on the name of the helper.
+     */
+    const account = body("deleteAccountAction");
+    expect(account, "the local session cookie must go").toMatch(/jar\.delete\(/);
+    expect(account, "and the browser must land somewhere").toMatch(/redirect\(/);
+  });
+});
+
+describe("the orphaned-tenant cleanup", () => {
+  /**
+   * FOUND BY VERIFYING A REAL DELETION, and worth recording because the product
+   * code was not at fault. Three organizations were gone from WorkOS while
+   * still holding eight connections with live Google OAuth grants, 26,151
+   * events, and a webhook that had taken 104 deliveries that week into a tenant
+   * nobody could reach.
+   *
+   * Neither delete path can produce that — both sweep our rows BEFORE calling
+   * WorkOS. An org removed in the WorkOS dashboard bypasses our code entirely,
+   * and nothing was watching for the result.
+   */
+  const script = readFileSync(join(process.cwd(), "scripts/orphaned-tenants.ts"), "utf8");
+  const body = code(script);
+
+  it("destroys only on --live", () => {
+    expect(body).toContain('const LIVE = process.argv.includes("--live")');
+    /**
+     * THE GUARD MUST EXIST BEFORE ITS POSITION MEANS ANYTHING. Asserted
+     * separately because `indexOf` returns -1 when the string is absent, and
+     * `-1 < anything` is true — so an ordering check alone PASSES on a script
+     * with no guard at all, which is the exact failure it is meant to catch.
+     * (Confirmed: deleting the guard left this test green until this line.)
+     */
+    const guard = body.indexOf("if (!LIVE) continue;");
+    const destroy = body.indexOf("destroyWorkspaceData(db, orgId)");
+    expect(guard, "the --live guard is missing entirely").toBeGreaterThan(-1);
+    expect(destroy, "nothing destroys anything — this check would pass vacuously").toBeGreaterThan(-1);
+    expect(guard, "the guard must precede the destroy").toBeLessThan(destroy);
+  });
+
+  it("acts only on a definite 404, never on an error", () => {
+    /**
+     * The failure mode of getting this wrong is destroying a live customer's
+     * data because WorkOS timed out. `unknown` exists to make that impossible
+     * to express by accident.
+     */
+    expect(body).toMatch(/res\.status === 404.*return "gone"/s);
+    expect(body).toMatch(/return "unknown"/);
+    expect(body, "an unknown state must be skipped, not swept").toMatch(/state === "unknown"/);
+  });
+
+  it("reuses the audited deletion path rather than its own deletes", () => {
+    // destroyWorkspaceData revokes the provider grant and tears the webhook
+    // down before the encrypted row goes. A hand-rolled DELETE here would leave
+    // exactly the residue this script exists to find.
+    expect(body).toMatch(/destroyWorkspaceData\(db, orgId\)/);
+    expect(body, "no hand-rolled deletes").not.toMatch(/db\.delete\(/);
+  });
+
+  it("records the cleanup without inventing an actor", () => {
+    expect(body).toMatch(/action: "workspace\.delete"/);
+    expect(body).toMatch(/cause: "orphan-cleanup"/);
+    // Nobody pressed a button; attributing it to a person would be a false row.
+    const call = body.slice(body.indexOf("recordAudit(db,"));
+    expect(call.slice(0, call.indexOf("})")), "no actorId on an operator cleanup").not.toMatch(/actorId/);
   });
 });
 

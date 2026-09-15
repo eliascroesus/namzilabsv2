@@ -33,7 +33,8 @@
     "check:tenancy": "tsx scripts/check-tenancy.ts",
     "headers": "node scripts/headers-check.mjs",
     "check:deps": "pnpm audit --audit-level=high",
-    "rotate:key": "tsx scripts/rotate-encryption-key.ts"
+    "rotate:key": "tsx scripts/rotate-encryption-key.ts",
+    "orphans:tenants": "tsx scripts/orphaned-tenants.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.0.0",
