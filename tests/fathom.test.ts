@@ -206,6 +206,28 @@ describe("Fathom: poll", () => {
     ).rejects.toThrow(/but 2 with no date filter at all.*our bug, not your account/s);
   });
 
+  it("distinguishes a too-short window from a broken filter", async () => {
+    /**
+     * THE SAME SYMPTOM, THE OPPOSITE CAUSE, and the message has to say which.
+     * When everything the unfiltered call returns predates the window, the
+     * filter is working perfectly and the 30-day first sync is simply too
+     * short — telling somebody "this is our bug" there would send them, and
+     * me, looking in the wrong place.
+     */
+    serveSplit([], [meeting({ id: "old_1", created_at: "2020-01-01T00:00:00Z" })]);
+    await expect(
+      fathomConnector.poll!({ connectionId: CONN, cursor: null, credentials: { apiKey: "k" } }),
+    ).rejects.toThrow(/0 of them are newer.*predate the window.*too short/s);
+  });
+
+  it("reports the created_at range, which is what names the cause", async () => {
+    // Timestamps only — never a title, a transcript or an attendee.
+    serveSplit([], [meeting({ id: "a", created_at: "2026-09-01T11:30:00Z" }), meeting({ id: "b", created_at: "2026-09-10T08:00:00Z" })]);
+    await expect(
+      fathomConnector.poll!({ connectionId: CONN, cursor: null, credentials: { apiKey: "k" } }),
+    ).rejects.toThrow(/created_at runs 2026-09-01T11:30:00Z … 2026-09-10T08:00:00Z/);
+  });
+
   it("stays quiet when the account is genuinely empty", async () => {
     // Both empty: the key really does see no meetings. A correct, silent zero.
     const { urls } = serveSplit([], []);

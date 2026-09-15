@@ -230,9 +230,43 @@ export const fathomConnector: Connector = {
       const seen = Array.isArray(control?.items) ? control.items.length : 0;
       if (seen > 0) {
         const asked = new Date(Date.now() - DEFAULTS.firstSyncDays * 86_400_000).toISOString();
+        /**
+         * THE DATES ARE THE DIAGNOSIS, and the first version of this message
+         * left them out — which made it say "the filter is broken" without the
+         * one fact that says HOW.
+         *
+         * An ignored parameter returns every row; a parsed one that excludes
+         * returns none. We got none, so Fathom read the value and decided
+         * nothing matched. That leaves exactly two explanations, and the
+         * `created_at` of the rows it DID return tells them apart with no
+         * further requests:
+         *
+         *   all older than what we asked for  -> the account's meetings really
+         *                                        do predate the window; the
+         *                                        first-sync span is too short.
+         *   some newer than what we asked for -> Fathom is not filtering on the
+         *                                        field we think, or not reading
+         *                                        our format the way we mean it.
+         *
+         * Same response, no extra call. Timestamps only — never a title, a
+         * transcript or an attendee.
+         */
+        const stamps = (control?.items ?? [])
+          .map((r) => asObject(r))
+          .map((r) => ({ created: str(r["created_at"]) ?? null, start: str(r["scheduled_start_time"]) ?? null }))
+          .filter((d) => d.created || d.start);
+        const createdList = stamps.map((d) => d.created).filter(Boolean).sort() as string[];
+        const range = createdList.length
+          ? `their created_at runs ${createdList[0]} … ${createdList[createdList.length - 1]}`
+          : `none of them carried a created_at (fields seen: ${Object.keys(asObject((control?.items ?? [])[0])).join(", ") || "none"})`;
+        const newer = createdList.filter((c) => c > asked).length;
+
         throw new Error(
           `Fathom returned no meetings for created_after=${asked}, but ${seen} with no date filter at all — ` +
-            `the filter is excluding everything. This is our bug, not your account.`,
+            `${range}; ${newer} of them are newer than what we asked for. ` +
+            (newer > 0
+              ? `Rows inside the window were filtered out, so created_after is not doing what we think. This is our bug, not your account.`
+              : `All of them predate the window, so the 30-day first sync is simply too short to reach them.`),
         );
       }
     }
