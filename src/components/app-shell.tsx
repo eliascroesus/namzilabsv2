@@ -8,6 +8,7 @@ import { getProfile } from "@/lib/profile";
 import { workspaceCap } from "@/lib/limits";
 import { canManageRanks } from "@/lib/permissions";
 import { listNotices, type Notice } from "@/lib/notices";
+import { referralCode, referralLink } from "@/lib/referral";
 import { connections, flows, workspaceOwners } from "@/db/schema";
 import { AppFrame } from "./app-frame";
 import { navViewsOrNone } from "@/lib/board/nav-views";
@@ -235,6 +236,12 @@ export async function AppShell({
     <AppFrame
       band={band}
       notices={notices}
+      /* DERIVED, NOT READ. `referralCode` is a hash of the WorkOS user id, so
+         the bar's Share control gets a correct link with no query on any page
+         render. The row that makes it RESOLVE at signup is written by
+         `claimReferralCode` when somebody actually copies — see the note
+         there for why that is not done here. */
+      inviteLink={referralLink(referralCode(userId), process.env.APP_BASE_URL)}
       surface={surface}
       ownsMain={ownsMain}
       hide={hide}

@@ -235,6 +235,9 @@ export default async function OverviewLab({
        * differently and orders errors above warnings, and a fixture with one
        * row proves neither.
        */
+      /* A link, so the bar's Share control renders and can be driven. The real
+         one is derived from the session; this is the same shape. */
+      inviteLink="https://app.namzilabs.com/r/ABC12345"
       notices={[
         {
           id: "conn:demo",

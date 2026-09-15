@@ -74,12 +74,15 @@ export function AppFrame({
   surface,
   hide,
   notices,
+  inviteLink,
   ownsMain = false,
   children,
 }: {
   account?: { initials: string; avatarUrl?: string | null; panel: ReactNode };
   /** What is broken in this workspace, read by `AppShell` and passed to the bell. */
   notices?: Notice[];
+  /** This person's referral link, derived by `AppShell`, for the Share control. */
+  inviteLink?: string;
   /** The workspace's own name — shown beside its avatar in the rail's own head block, not the top bar (see `Sidebar`). */
   workspace?: string;
   /**
@@ -263,6 +266,7 @@ export function AppFrame({
           <TopBar
             ruled={!band}
             notices={notices}
+            inviteLink={inviteLink}
             menu={<MobileDrawer hide={hide} views={views} workspace={workspace} account={account} />}
           />
           {/* THE SECOND BAND, IF THE PAGE HAS ONE. `shrink-0` so it keeps its

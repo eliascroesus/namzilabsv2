@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowRight, Check, Copy, Gift } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Modal, ModalTitle } from "@/components/ui/modal";
+import { claimReferralCode } from "@/app/refer-actions";
 import { cn } from "@/lib/utils";
 
 /**
@@ -154,6 +155,21 @@ export function InvitePicker({
     try {
       await navigator.clipboard.writeText(link);
       setCopied(true);
+      /**
+       * MAKE THE LINK RESOLVE, now that it is out in the world.
+       *
+       * The code is derived, so the string just copied is already correct —
+       * but the reverse lookup at signup needs a row in `referral_codes`, and
+       * without one this link credits nobody. Writing that row on every page
+       * render would be an INSERT on every authenticated view in the product;
+       * writing it HERE costs one, at the only moment it can possibly matter.
+       *
+       * NOT AWAITED, and deliberately: the copy has already happened and the
+       * label has already changed. Holding either on a round trip would make
+       * the fast half of this wait for the slow half for no benefit — and the
+       * action swallows its own failures, so there is nothing to catch.
+       */
+      void claimReferralCode();
       // Long enough to read, short enough that the button is ready again by the
       // time somebody wants to paste it into a second place.
       setTimeout(() => setCopied(false), 2000);

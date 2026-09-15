@@ -1025,7 +1025,7 @@ export function RailContent({
               as the same kind of object — a thing you act on, not a
               destination you travel to. */}
           {/* INVITE & EARN — the loudest thing in this column, at the owner's
-              ask, and the one place the rail's "one filled object" rule is
+              ask, and the one place the rail's own "one filled object" rule is
               knowingly bent.
 
               THE RULE IT BENDS. The column has had exactly one filled object
@@ -1036,17 +1036,20 @@ export function RailContent({
               WHAT IT TAKES INSTEAD OF THE BRAND FILL. The refer board's own
               sky, shrunk — the same three blues, so pressing this and landing
               on that page is one object growing rather than two designs
-              meeting. It is a picture, not a fill: nothing else in the rail is
+              meeting. It is a PICTURE, not a fill: nothing else in the rail is
               an image, so it cannot be confused with the "+" underneath it even
               though both are now loud.
 
               AND A LIGHT RUNS ROUND THE EDGE. A 1px rim carrying a spinning
               conic gradient (`.rail-invite`, globals.css) — the one moving
-              thing in the chrome, which is what buys it the attention the
-              owner asked for without a second solid rectangle competing with
-              the verb below. It stops dead under `prefers-reduced-motion`,
-              where the global clamp would otherwise park the glint on a corner
-              forever. */}
+              thing in the chrome, which is what buys it the attention that was
+              asked for without a second solid rectangle competing with the verb
+              below. It stops dead under `prefers-reduced-motion`, where the
+              global clamp would otherwise park the glint on a corner forever.
+
+              IT SITS ABOVE INVITE MEMBERS deliberately: they are adjacent acts
+              ("bring somebody in") and the quieter of the two is the one that
+              should be further from the verb at the bottom. */}
           <Link href="/dashboard/refer" className="rail-invite block w-full rounded-card">
             <span className="rail-invite-face flex w-full items-center gap-3 rounded-[calc(var(--radius-card)-1px)] px-3 py-2.5">
               <span
@@ -1066,117 +1069,6 @@ export function RailContent({
                 <span className="truncate text-xs leading-4 text-white/75">1 invite = 1 month free</span>
               </span>
               <ArrowUpRight aria-hidden className="ml-auto size-4 shrink-0 text-white/70" />
-            </span>
-          </Link>
-
-          <Link
-            href="/dashboard/settings"
-            aria-label="Workspace settings"
-            className="flex size-8 items-center justify-center rounded-control text-rail-muted transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:bg-rail-control hover:text-rail-foreground"
-          >
-            <Settings aria-hidden className="size-[18px]" />
-          </Link>
-        </div>
-
-        {/* THE FOOT — what you can START, then what is waiting for you.
-            `mt-auto` rather than a `justify-between` on the column: the nav above
-            is the flexible child and it has to keep its own scroll, so the foot
-            is pinned by the space the nav gives back instead of by the column's
-            distribution.
-
-            THE THEME TOGGLE WAS HERE AND IS GONE, along with the preference it
-            expressed. It was the app's only control for a theme the app
-            actually shipped, and dropping it while two themes existed would
-            have left the light one reachable only by changing the operating
-            system's. There is one theme, so the control has nothing to say. */}
-        {/* `gap-4 pb-6` — the export's own 16px between the foot's two acts and
-            24px under them. It was 8 and 16, which stacked two filled buttons
-            close enough to read as one two-line control. */}
-        <div className={cn("flex shrink-0 flex-col gap-4 pb-6", GUTTER)}>
-          {/* THE "+" IS THE COLUMN'S ONE FILLED OBJECT, AND THAT IS WHY IT CAN
-              BE THE ONLY BRAND FILL IN THE RAIL.
-              It has been a yellow slab, then a white chip with a hairline, and
-              the argument each time was about how much brand a column could
-              carry. That argument resolves cleanly here: the workspace
-              switcher's square at the head of the column is its own flat
-              brand TINT (identity — see `Sidebar`'s head block above), the
-              active row is a brand GLYPH on the row's own neutral fill
-              (location — the chip itself carries no fill; see the note
-              above), and this is the single FILL (action). Three appearances of one
-              colour in three different shapes, each doing a different job,
-              rather than three fills competing to be the thing you press.
-
-              THE INK IS WHITE, NOT THE GROUND — and that it ever read
-              otherwise here is a tell for which era this comment was last
-              true. `--primary-foreground` is `#ffffff` in both themes: the
-              fill is `--primary` (the brand blue), and blue wants light ink
-              for contrast in light and dark alike. A DARK ink was the right
-              constant on the old YELLOW slab this replaced; it stayed
-              written down a full re-theme after the fill it described
-              actually went blue.
-
-              24px, ON THE `ICON_COL` AXIS. The chip is the same size as every
-              other picture in the column, so the rail's own vertical line
-              runs unbroken from the switcher's square to the Get Free Access
-              bell below — a DIFFERENT bell from the one the top bar carries
-              for notifications; this one is the rail's own upsell row. */}
-          {/* THE FOOT THE 8 SEPTEMBER FIGMA DRAWS — a card and an act, in that
-              order, and both of them changed hands.
-
-              INVITE MEMBERS STOPS BEING A GUEST. It used to appear here only
-              in the phone's drawer, because above `md` the top bar carried it
-              and two routes to one settings page a centimetre apart is worse
-              than either. Node 49:5734 moves it into the rail permanently and
-              takes it OUT of the bar, so there is still exactly one of it —
-              the `invite` prop that gated it has no second state left and is
-              gone with the arrangement that needed it.
-
-              It is a CARD rather than a row: two strings, a title and a line
-              of copy under it, which is not a shape the 36px nav slot can
-              hold. `--control` on the card is the same step the search field
-              takes at the head of the column, which is what makes the two read
-              as the same kind of object — a thing you act on, not a
-              destination you travel to. */}
-          {/* REFER NAMZILABS — the loudest thing in this column, at the owner's
-              ask, and the one place the rail's own "one filled object" rule is
-              knowingly bent.
-
-              THE RULE IT BENDS. The column has had exactly one filled object
-              since 8 Sep: the "+" New button, its one VERB. Everything else
-              rests on `--control` and raises its EDGE on hover, so that a
-              hovered row never looks more selected than the selected one. A
-              second fill is a second thing shouting.
-
-              WHY IT IS BENT ANYWAY, AND HOW FAR. "Incentivise heavily" is a
-              product decision, not a taste one — it is the owner's to make, and
-              this is what making it costs. So the card takes the brand WASH
-              (`--brand-soft`, a 10% tint) and a brand EDGE rather than the
-              brand fill: loud enough to be the second thing your eye reaches in
-              the column, quiet enough that the "+" underneath is still the only
-              solid object in it. The two are then distinguishable at a glance,
-              which a second solid brand rectangle 8px above the first would not
-              be.
-
-              IT SITS ABOVE INVITE MEMBERS deliberately: they are adjacent acts
-              ("bring somebody in") and the quieter of the two is the one that
-              should be further from the verb at the bottom. */}
-          <Link
-            href="/dashboard/refer"
-            className="flex w-full items-center gap-3 rounded-card border border-brand-soft-line bg-brand-soft px-3 py-2 transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:border-rail-accent"
-          >
-            <Gift className="size-4 shrink-0 text-rail-foreground" />
-            <span className="flex flex-col">
-              {/* Same two-line card shape as Invite Members below — 12px on
-                  both lines with weight as the only separator — so the pair
-                  reads as one stack rather than as two designs. */}
-              {/* THE OFFER, NOT THE FEATURE. "Share your link" describes a
-                  control; "1 month free" is a reason to press it. The number is
-                  the first rung of the ladder in `lib/referral.ts`, and the
-                  duplication is worth naming: this is the one place it is
-                  spelled by hand — a rail card cannot import a server module —
-                  so `tests/referral.test.ts` pins the two together. */}
-              <span className="text-xs font-semibold leading-4 text-rail-foreground">Invite &amp; earn</span>
-              <span className="text-xs leading-4 text-rail-muted">1 invite = 1 month free.</span>
             </span>
           </Link>
 

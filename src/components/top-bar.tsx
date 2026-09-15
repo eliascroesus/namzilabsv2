@@ -1,6 +1,7 @@
 "use client";
 
 import { Link2, Moon, Sun } from "lucide-react";
+import { InvitePicker } from "@/components/invite-picker";
 import { NotificationBell } from "@/components/notifications";
 import type { Notice } from "@/lib/notices";
 import { useTheme } from "next-themes";
@@ -54,6 +55,7 @@ export function TopBar({
   menu,
   ruled = false,
   notices = [],
+  inviteLink,
 }: {
   /**
    * DRAW THE HAIRLINE HERE, because nothing below is going to.
@@ -89,6 +91,12 @@ export function TopBar({
    * never "says one".
    */
   notices?: Notice[];
+  /**
+   * This person's own referral link, derived on the server. Absent means no
+   * session — the Share control simply does not render, rather than opening a
+   * dialog with an empty field in it.
+   */
+  inviteLink?: string;
 }) {
   return (
     /* 64px = 16 above a 32px control row and 16 below it — SYMMETRIC, which
@@ -129,7 +137,7 @@ export function TopBar({
             stays a slot rather than a string. */}
         <div id="topbar-status" className="flex shrink-0 items-center p-2 text-xs leading-4 text-topbar-muted empty:hidden" />
 
-        <ShareLink />
+        <ShareLink inviteLink={inviteLink} />
         <ThemeToggle />
 
         {/* THE BELL MOVED OUT, AND IT NOW OPENS SOMETHING. It was a `Button`
@@ -144,58 +152,54 @@ export function TopBar({
 }
 
 /**
- * SHARE — A CHAIN LINK, SO IT COPIES A LINK.
+ * SHARE — AND IT NOW SHARES SOMETHING.
  *
- * The Figma draws "Share" behind a chain glyph (node 49:5711). There is no
- * sharing FEATURE in the product — no permissions, no invited viewers, no
- * per-view ACL — and shipping a button that opens nothing would be worse than
- * the design not having one, so this does the thing the glyph actually
- * promises: it puts the current URL on the clipboard.
+ * The Figma draws "Share" behind a chain glyph (node 49:5711), and for months
+ * this put `window.location.href` on the clipboard because there was no sharing
+ * FEATURE to hang it off: no permissions, no invited viewers, no per-view ACL.
+ * Honest, and not much use — the URL it copied is one an unauthenticated
+ * stranger cannot open.
  *
- * That is honest and complete on its own terms. The day view-sharing exists,
- * this is the control it hangs off.
+ * There is a real answer now, and it is the same one the refer page reaches
+ * for: bringing somebody in. So Share opens `InvitePicker`, which is where the
+ * two kinds of "bring somebody in" are already told apart — a referral link for
+ * a person who should get their OWN workspace, or the members page for somebody
+ * who needs to see THIS one. Pressing Share and being asked which is the whole
+ * point: the two have opposite consequences and the bar cannot know which was
+ * meant.
  *
- * The confirmation is the LABEL, not a toast. A toast for a clipboard write is
- * a notification about something the person just did on purpose; swapping the
- * word for two seconds says the same thing where they are already looking.
+ * THE LINK IS DERIVED ON THE SERVER AND HANDED DOWN. `AppShell` computes it
+ * from the WorkOS user id with no database touch at all; the row that makes it
+ * RESOLVE is written by `claimReferralCode` when somebody actually copies.
  */
-function ShareLink() {
-  const [copied, setCopied] = useState(false);
+function ShareLink({ inviteLink }: { inviteLink?: string }) {
+  const [open, setOpen] = useState(false);
 
-  useEffect(() => {
-    if (!copied) return;
-    const t = setTimeout(() => setCopied(false), 2000);
-    return () => clearTimeout(t);
-  }, [copied]);
+  // No link means no session to derive one from — a signed-out shell, or a
+  // harness. A control that opens an empty dialog is worse than one that is not
+  // there, which is the rule `ViewTab` already states.
+  if (!inviteLink) return null;
 
   return (
-    <Button
-      variant="ghost"
-      onClick={() => {
-        navigator.clipboard?.writeText(window.location.href).then(
-          () => setCopied(true),
-          // A denied clipboard permission is not an error worth a dialog; the
-          // label simply does not change, which reads as "that did nothing".
-          () => {},
-        );
-      }}
-      /* THE KIT'S BUTTON, STRIPPED TO A LABEL. `check:ui` bans a raw <button>
-         here and is right to — a hand-rolled control is how the app grew two
-         primaries — but the Figma draws this as a glyph and a word sitting on
-         the bar with no box. `h-auto px-0` takes the rung's height and padding
-         off while keeping the variant's states, its focus ring and its
-         disabled handling, which is the half that actually matters. */
-      /* NO `font-normal` AND NO `leading-5` ANY MORE — both were overrides of
-         a base that has come round to the frame's own values. Share is
-         13/16/400 at node 35:6039, which is now exactly what `text-button`
-         means, so spelling either here would be a call site re-stating the
-         rung it already stands on. */
-      className="hidden h-auto shrink-0 gap-1.5 rounded-control p-2 text-button text-topbar-foreground hover:bg-topbar-control active:bg-topbar-control md:inline-flex [&_svg]:size-3.5"
-    >
-      <Link2 aria-hidden />
-      {/* `aria-live` so the change is announced rather than only seen. */}
-      <span aria-live="polite">{copied ? "Copied" : "Share"}</span>
-    </Button>
+    <>
+      <Button
+        variant="ghost"
+        onClick={() => setOpen(true)}
+        /* THE KIT'S BUTTON, STRIPPED TO A LABEL. `check:ui` bans a raw <button>
+           here and is right to — a hand-rolled control is how the app grew two
+           primaries — but the Figma draws this as a glyph and a word sitting on
+           the bar with no box. `h-auto px-0` takes the rung's height and padding
+           off while keeping the variant's states, its focus ring and its
+           disabled handling, which is the half that actually matters.
+           NO `font-normal` AND NO `leading-5`: Share is 13/16/400 at node
+           35:6039, which is now exactly what `text-button` means. */
+        className="hidden h-auto shrink-0 gap-1.5 rounded-control p-2 text-button text-topbar-foreground hover:bg-topbar-control active:bg-topbar-control md:inline-flex [&_svg]:size-3.5"
+      >
+        <Link2 aria-hidden />
+        Share
+      </Button>
+      {open && <InvitePicker link={inviteLink} onClose={() => setOpen(false)} />}
+    </>
   );
 }
 

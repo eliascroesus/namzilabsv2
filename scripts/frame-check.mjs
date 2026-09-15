@@ -198,6 +198,62 @@ for (const s of SIZES) {
     check(invite.w > 180, "at the rail's full width", `${invite.w}px`);
   }
 
+  /**
+   * NOTHING IN THE RAIL APPEARS TWICE.
+   *
+   * A slice that took its END anchor from a string appearing EARLIER in the
+   * file than its start emitted the whole tail a second time — two invite
+   * cards, two account gears, two Invite Members cards — and typecheck, the
+   * kit check and 3,635 tests all passed on it, because duplicated valid JSX is
+   * still valid JSX. Counting rendered elements is the only thing that would
+   * have caught it, so it is counted here now.
+   */
+  const rail = await page.evaluate(() => {
+    const aside = document.querySelector("aside");
+    const n = (sel) => aside?.querySelectorAll(sel).length ?? 0;
+    const aside2 = document.querySelector("aside");
+    return {
+      invite: n('a[href="/dashboard/refer"]'),
+      settings: [...(aside2?.querySelectorAll('a[href="/dashboard/settings"]') ?? [])].map(
+        (a) => (a.getAttribute("aria-label") || a.textContent || "").replace(/\s+/g, " ").trim().slice(0, 24),
+      ),
+    };
+  });
+  check(rail.invite === 1, "exactly one invite card in the rail", `${rail.invite}`);
+  /**
+   * THREE settings links is CORRECT, and they are listed rather than counted so
+   * that this is not "fixed" to a smaller number later: the nav row, the
+   * account row's gear, and the Invite Members card. The first count written
+   * here said two, from reading the source — and missed that `NAV` renders one
+   * of them, which is the whole reason to ask the page instead.
+   */
+  check(
+    rail.settings.length === 3,
+    "the nav row, the account gear and Invite Members — no more",
+    rail.settings.join(" | "),
+  );
+
+  /**
+   * SHARE OPENS THE INVITE PICKER. It put `window.location.href` on the
+   * clipboard for months — a URL an unauthenticated stranger cannot open — and
+   * now asks the one question the bar cannot answer for somebody: which KIND of
+   * invite, since the two have opposite consequences.
+   */
+  const share = page.locator("header").getByRole("button", { name: "Share" });
+  check((await share.count()) === 1, "the bar carries a Share control", `${await share.count()}`);
+  await share.click();
+  await page.waitForTimeout(400);
+  const picker = page.locator("[role='dialog']");
+  check((await picker.count()) === 1, "and it opens the invite picker");
+  if (await picker.count()) {
+    const text = (await picker.innerText()).replace(/\s+/g, " ");
+    check(/Who are you inviting\?/.test(text), "asking which kind of invite");
+    check(/r\/ABC12345/.test(text), "with the person's own link in it", text.slice(0, 120));
+  }
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(350);
+  check((await page.locator("[role='dialog']").count()) === 0, "and Escape closes it");
+
   check(errors.length === 0, "no page errors from the bell", errors.join(" · "));
   await ctx.close();
   if (fails.length) bad++;
