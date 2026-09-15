@@ -270,15 +270,20 @@ describe("who may destroy what", () => {
 
 describe("the orphaned-tenant cleanup", () => {
   /**
-   * FOUND BY VERIFYING A REAL DELETION, and worth recording because the product
-   * code was not at fault. Three organizations were gone from WorkOS while
-   * still holding eight connections with live Google OAuth grants, 26,151
-   * events, and a webhook that had taken 104 deliveries that week into a tenant
-   * nobody could reach.
+   * An org deleted OUTSIDE the product (the WorkOS dashboard, a support action)
+   * takes none of our rows with it — neither delete path runs at all — so it
+   * leaves a tenant holding live credentials that no human can reach. This
+   * finds those.
    *
-   * Neither delete path can produce that — both sweep our rows BEFORE calling
-   * WorkOS. An org removed in the WorkOS dashboard bypasses our code entirely,
-   * and nothing was watching for the result.
+   * ITS FIRST RUN REPORTED THREE LIVE WORKSPACES AS ABANDONED, which is why
+   * most of what is tested here is the refusal rather than the detection.
+   * `.env.local` pairs a `sk_test_` WorkOS key with a production
+   * `DATABASE_URL`; every real org id 404s against the TEST environment, and
+   * the script believed it. A `--live` run would have destroyed three working
+   * workspaces and revoked their Google grants.
+   *
+   * So a 404 is only evidence of deletion once most other orgs have been found
+   * ALIVE. The mismatch guard is the load-bearing part of this script.
    */
   const script = readFileSync(join(process.cwd(), "scripts/orphaned-tenants.ts"), "utf8");
   const body = code(script);
@@ -297,6 +302,31 @@ describe("the orphaned-tenant cleanup", () => {
     expect(guard, "the --live guard is missing entirely").toBeGreaterThan(-1);
     expect(destroy, "nothing destroys anything — this check would pass vacuously").toBeGreaterThan(-1);
     expect(guard, "the guard must precede the destroy").toBeLessThan(destroy);
+  });
+
+  it("refuses to believe a database where most orgs look deleted", () => {
+    /**
+     * THE GUARD THAT WOULD HAVE PREVENTED THE FIRST RUN'S ANSWER. A genuine
+     * orphan is rare and a small minority; a majority of them means the
+     * question went to the wrong WorkOS environment. The ratio is evidence
+     * about the KEY, not about the data.
+     *
+     * No override flag, deliberately: an operator with a genuinely
+     * majority-orphaned database needs to look at it by hand rather than be
+     * handed a bulk delete.
+     */
+    expect(body, "must stop when nothing at all is found alive").toMatch(/exists === 0/);
+    expect(body, "must stop when the missing outnumber the living").toMatch(/orphans\.length > exists/);
+    expect(body, "and stopping means exiting, not warning").toMatch(/process\.exit\(2\)/);
+    expect(body, "no flag may override the mismatch guard").not.toMatch(/--force|--yes-really|--i-know/);
+  });
+
+  it("says which WorkOS environment it is asking", () => {
+    // An org id exists only in the environment it was created in, and this
+    // script cannot tell which one owns the database. Printing the key's
+    // environment is what lets a human catch the mismatch the guard estimates.
+    expect(body).toMatch(/sk_live_/);
+    expect(body).toMatch(/sk_test_/);
   });
 
   it("acts only on a definite 404, never on an error", () => {

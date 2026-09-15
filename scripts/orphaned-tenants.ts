@@ -2,24 +2,35 @@
  * FIND — AND OPTIONALLY DESTROY — DATA BELONGING TO WORKSPACES THAT NO LONGER
  * EXIST.
  *
- * WHY THIS EXISTS. Verifying an account deletion on 15 Sep 2026 turned up three
- * organizations that were gone from WorkOS while still holding rows here: eight
- * connections, 26,151 events, and — the part that matters — **live OAuth grants
- * against real Google accounts and a webhook still taking deliveries**. One of
- * the three had received 104 deliveries in the previous seven days, ingesting
- * into a tenant no human being could reach.
- *
- * THE DELETION PATH IN THE PRODUCT CANNOT PRODUCE THIS. Both
- * `deleteWorkspaceAction` and `deleteAccountAction` sweep our rows BEFORE
+ * WHY THIS EXISTS. An organization removed OUTSIDE the product — in the WorkOS
+ * dashboard, by a support action, by a script — takes none of our rows with it.
+ * Both `deleteWorkspaceAction` and `deleteAccountAction` sweep our data BEFORE
  * calling WorkOS, precisely so a half-finished delete leaves a workspace you can
- * delete again rather than data nobody can reach. Residue in this shape means
- * the organization was removed by something that never ran our code — deleting
- * it in the WorkOS dashboard does exactly that, and so would a support action or
- * a script.
+ * delete again rather than data nobody can reach; but neither runs at all when
+ * the org is deleted somewhere else. What is left is a tenant with live
+ * credentials, possibly a live webhook, and no human who can reach it. Nothing
+ * was watching for that state.
  *
- * So this is not a bug to fix in the delete path. It is a STATE NOBODY WAS
- * WATCHING FOR, and the two things it needed were a way to notice and a way to
- * clean up. Read-only by default; `--live` destroys.
+ * ═══ READ THIS BEFORE BELIEVING ANY OUTPUT ═══
+ *
+ * THE FIRST TIME THIS RAN IT WAS COMPLETELY WRONG, and the way it was wrong is
+ * the most important thing in this file. It reported three organizations as
+ * abandoned — eight connections, 26,151 events, live Google OAuth grants, a
+ * webhook still taking deliveries. Every number was real. The conclusion was
+ * nonsense: those were the operator's three LIVE workspaces.
+ *
+ * The cause was that `.env.local` pairs a `sk_test_` WorkOS key with a
+ * `DATABASE_URL` pointing at the real database. Production org ids were checked
+ * against the TEST environment, which has never heard of them, so all of them
+ * answered 404. A `--live` run would have destroyed three working workspaces and
+ * revoked their Google grants.
+ *
+ * Hence the environment banner and the mismatch guard below. An org id exists
+ * only in the environment it was created in, this script cannot tell which
+ * environment owns the database it is pointed at, and a 404 is therefore only
+ * evidence of deletion once most of the other orgs have been found alive.
+ *
+ * Read-only by default; `--live` destroys.
  *
  * ═══ WHAT IT IS AND IS NOT SAFE ABOUT ═══
  *
@@ -91,17 +102,62 @@ async function main(): Promise<void> {
 
   console.log(`${orgIds.length} organization(s) have rows in this database.\n`);
 
+  /**
+   * WHICH WORKOS ARE WE EVEN ASKING? Printed first, and loudly, because getting
+   * this wrong is how this script nearly destroyed three live workspaces the
+   * first time it ran.
+   *
+   * `.env.local` holds a `sk_test_` key — the WorkOS TEST environment — while
+   * `DATABASE_URL` in that same file points at the real database. Every
+   * production org id was therefore checked against an environment that has
+   * never heard of it, all of them answered 404, and the script confidently
+   * reported the customer's three live workspaces as abandoned data to be
+   * swept. The output was completely wrong and completely plausible.
+   */
+  const keyEnv = apiKey.startsWith("sk_live_") ? "LIVE" : apiKey.startsWith("sk_test_") ? "TEST" : "UNRECOGNISED";
+  console.log(`Asking the WorkOS ${keyEnv} environment (key prefix ${apiKey.slice(0, 8)}…).`);
+  console.log("An org id only exists in the environment it was created in — a key from the");
+  console.log("wrong one makes every organization look deleted.\n");
+
   const orphans: string[] = [];
   let unknown = 0;
+  let exists = 0;
   for (const orgId of orgIds) {
     const state = await orgState(orgId, apiKey);
-    if (state === "exists") continue;
+    if (state === "exists") {
+      exists++;
+      continue;
+    }
     if (state === "unknown") {
       unknown++;
       console.log(`  ? ${orgId} — WorkOS could not be asked. Skipped; run again.`);
       continue;
     }
     orphans.push(orgId);
+  }
+
+  /**
+   * THE MISMATCH GUARD. A genuine orphan is a workspace somebody deleted
+   * outside the product — rare, and a small minority of a real database. If
+   * MOST of the organizations holding data appear to be gone, the overwhelmingly
+   * likelier explanation is that the question was put to the wrong WorkOS
+   * environment, and acting on that answer destroys live customers.
+   *
+   * So the ratio is treated as evidence about the KEY rather than about the
+   * data, and the script stops rather than reporting. There is no override
+   * flag: an operator with a genuinely majority-orphaned database needs to look
+   * at it by hand, not to be handed a bulk delete.
+   */
+  if (orphans.length > 0 && exists === 0) {
+    console.error(`STOPPING. Not one of the ${orgIds.length} organization(s) exists in the WorkOS ${keyEnv} environment.`);
+    console.error("That is a key/database mismatch, not a database full of orphans.");
+    console.error("Point WORKOS_API_KEY at the environment that owns this database and run again.");
+    process.exit(2);
+  }
+  if (orphans.length > exists) {
+    console.error(`STOPPING. ${orphans.length} of ${orphans.length + exists} organization(s) appear deleted, which is too many to believe.`);
+    console.error(`Almost certainly the wrong WorkOS environment (currently ${keyEnv}). Check the key before trusting this.`);
+    process.exit(2);
   }
 
   if (orphans.length === 0) {
