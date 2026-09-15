@@ -30,7 +30,21 @@ import { authkit, handleAuthkitHeaders } from "@workos-inc/authkit-nextjs";
  * tool in the repo that can see a colour resolving to nothing, and buys
  * hiding a style guide.
  */
-const PROTECTED_PAGE_PREFIXES = ["/dashboard", "/onboarding", "/integrations", "/connections"];
+/**
+ * `/admin` IS HERE, and this layer is the weaker of its two walls.
+ *
+ * All this does is require A session — it cannot tell staff from a customer,
+ * because that decision needs the verified email and the allowlist, which live
+ * in `src/lib/admin/access.ts`. What it buys is that an anonymous request never
+ * reaches the admin code at all, and that the 404 a non-staff visitor gets is
+ * produced after authentication rather than being the only thing standing
+ * between the internet and a fleet-wide read.
+ *
+ * The real gate is `requireStaff()`, called in the admin layout AND in every
+ * function that queries. See that file for why it returns a 404 rather than a
+ * 403 — a route that answers "forbidden" has confirmed it exists.
+ */
+const PROTECTED_PAGE_PREFIXES = ["/dashboard", "/onboarding", "/integrations", "/connections", "/admin"];
 const PROTECTED_API_PREFIXES = ["/api/replay", "/api/results-version", "/api/oauth"];
 
 function isProtected(pathname: string): boolean {
