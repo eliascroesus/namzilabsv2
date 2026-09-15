@@ -137,7 +137,7 @@ export const fathomConnector: Connector = {
 
   async poll(args: PollArgs): Promise<PollResult> {
     const api = client(args.credentials);
-    return windowedWalk<Record<string, unknown>>({
+    const result = await windowedWalk<Record<string, unknown>>({
       cursor: args.cursor,
       budget: args.budget,
       windowFloor: args.windowFloor,
@@ -194,6 +194,49 @@ export const fathomConnector: Connector = {
       happenedAt: (r) => isoOrNull(r["scheduled_start_time"]) ?? isoOrNull(r["created_at"]),
       map: (r) => toCanonical(r, args.connectionId),
     });
+
+    /**
+     * THE CONTROL — run only on the one occasion the answer is unknowable.
+     *
+     * A first sync that comes back empty has two causes that look identical
+     * from here and need opposite fixes: this key genuinely sees no meetings,
+     * or `created_after` is excluding everything. The Calendly and Close
+     * probers exist because an accepted-and-ignored parameter is
+     * indistinguishable from a working one in isolation — the only way to tell
+     * them apart is to ask the same question WITHOUT it.
+     *
+     * A customer hit exactly this on 15 Sep 2026: an account with meetings
+     * recorded that day, a key owned by the person who recorded them, and a
+     * connection sitting green and empty with nothing anywhere able to say
+     * which of the two it was.
+     *
+     * ONE extra request, and only when the cursor is null (a first sync) AND
+     * nothing came back. A healthy connection never pays for it; an empty
+     * account pays once and then has a cursor.
+     *
+     * IF THE UNFILTERED CALL IS ALSO EMPTY that is a real answer and a quiet
+     * one — the key sees no meetings, which is what a user-scoped key does
+     * when its holder recorded none and none were shared to their Team. The
+     * walk's empty result stands and nothing is raised.
+     *
+     * IF IT RETURNS MEETINGS, our request is wrong and the sync is broken, so
+     * it throws with the count. That message reaches `last_error` and the
+     * connection page — the difference between "0 records, no idea" and a bug
+     * report that names itself.
+     */
+    if (result.records.length === 0 && !args.cursor) {
+      // A failed control must never fail the sync: it is a diagnostic.
+      const control = await api.get<{ items?: unknown[] }>("/meetings", LIST_PARAMS).catch(() => null);
+      const seen = Array.isArray(control?.items) ? control.items.length : 0;
+      if (seen > 0) {
+        const asked = new Date(Date.now() - DEFAULTS.firstSyncDays * 86_400_000).toISOString();
+        throw new Error(
+          `Fathom returned no meetings for created_after=${asked}, but ${seen} with no date filter at all — ` +
+            `the filter is excluding everything. This is our bug, not your account.`,
+        );
+      }
+    }
+    return result;
   },
 
   async testFetchLatest(n: number, args: PollArgs): Promise<CanonicalEvent[]> {

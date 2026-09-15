@@ -169,6 +169,76 @@ describe("Fathom: poll", () => {
     ).rejects.toThrow(/did not return an "items" array.*meetings, page/s);
   });
 
+  /**
+   * Answer the FILTERED request (the one carrying `created_after`) and the
+   * unfiltered CONTROL differently, which is the whole point of the control.
+   */
+  function serveSplit(filtered: Array<Record<string, unknown>>, unfiltered: Array<Record<string, unknown>>) {
+    const urls: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        urls.push(String(url));
+        const isControl = !String(url).includes("created_after");
+        return {
+          ok: true,
+          status: 200,
+          statusText: "OK",
+          headers: { get: () => null },
+          json: async () => ({ items: isControl ? unfiltered : filtered, next_cursor: null }),
+          text: async () => "",
+        };
+      }),
+    );
+    return { urls };
+  }
+
+  it("throws when the date filter is what empties the result", async () => {
+    /**
+     * THE CASE THE CONTROL EXISTS FOR. Nothing inside the window, meetings
+     * outside it — which means `created_after` is excluding everything and the
+     * sync is broken. Silent zero would be indistinguishable from an empty
+     * account; the throw reaches `last_error` and says which.
+     */
+    serveSplit([], [meeting({ id: "mtg_1" }), meeting({ id: "mtg_2" })]);
+    await expect(
+      fathomConnector.poll!({ connectionId: CONN, cursor: null, credentials: { apiKey: "k" } }),
+    ).rejects.toThrow(/but 2 with no date filter at all.*our bug, not your account/s);
+  });
+
+  it("stays quiet when the account is genuinely empty", async () => {
+    // Both empty: the key really does see no meetings. A correct, silent zero.
+    const { urls } = serveSplit([], []);
+    const res = await fathomConnector.poll!({ connectionId: CONN, cursor: null, credentials: { apiKey: "k" } });
+    expect(res.records).toHaveLength(0);
+    expect(urls.some((u) => !u.includes("created_after")), "the control should have run").toBe(true);
+  });
+
+  it("does not spend the control request when the walk found rows", async () => {
+    // A healthy connection must never pay for the diagnostic.
+    const { urls } = serveSplit([meeting({ id: "mtg_1" })], [meeting({ id: "mtg_1" })]);
+    const res = await fathomConnector.poll!({ connectionId: CONN, cursor: null, credentials: { apiKey: "k" } });
+    expect(res.records).toHaveLength(1);
+    expect(urls.every((u) => u.includes("created_after")), "no unfiltered request should be made").toBe(true);
+  });
+
+  it("does not run the control on a resumed sync", async () => {
+    /**
+     * Only a FIRST sync is ambiguous. Once a cursor exists the window is
+     * deliberately narrow and an empty page is the normal, expected answer —
+     * running the control there would add a request to every quiet poll of
+     * every Fathom connection forever.
+     */
+    const { urls } = serveSplit([], [meeting({ id: "mtg_1" })]);
+    const res = await fathomConnector.poll!({
+      connectionId: CONN,
+      cursor: "2026-09-01T00:00:00.000Z",
+      credentials: { apiKey: "k" },
+    });
+    expect(res.records).toHaveLength(0);
+    expect(urls.every((u) => u.includes("created_after")), "no control on a resumed sync").toBe(true);
+  });
+
   it("never asks for transcripts, which would move it to Fathom's heavy rate bucket", async () => {
     /**
      * THE ASSERTION THAT PROTECTS THE SYNC. `include_summary` or
