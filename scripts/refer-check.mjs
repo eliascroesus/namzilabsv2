@@ -65,7 +65,19 @@ const at = (n) => boards.find((b) => b.count === n);
 
 check(at(0)?.trackW > 400, "the track is a real width", `${at(0)?.trackW}px`);
 check(at(0)?.trackH >= 16, "and tall enough to read as a bar", `${at(0)?.trackH}px`);
-check(at(0)?.pips === 5, "every rung is pinned to the track itself", `${at(0)?.pips} pips`);
+
+/**
+ * THE LADDER'S LENGTH IS READ, NOT WRITTEN.
+ *
+ * Every expectation below used to name five rungs, and the ladder is edited in
+ * one array — the day the lifetime tier came off at the owner's ask, this file
+ * failed seven assertions about a shape nothing was claiming any more. A check
+ * that has to be edited alongside the thing it checks is a check that will
+ * eventually be edited to match a bug.
+ */
+const RUNGS = at(0)?.pips ?? 0;
+check(RUNGS >= 3, "the rungs are pinned to the track itself", `${RUNGS} pips`);
+const TOP = Math.max(...boards.map((b) => b.count));
 
 /**
  * THE BAR MUST BE VISIBLE AGAINST ITS OWN TROUGH. This is the assertion the
@@ -96,13 +108,29 @@ const sampled = await page.evaluate(
         const g = c.getContext("2d", { willReadFrequently: true });
         g.drawImage(img, 0, 0);
         const track = document.querySelector("[data-refer-case='2'] [data-refer-track]");
+        const fill = document.querySelector("[data-refer-case='2'] [data-refer-fill]");
         const r = track.getBoundingClientRect();
         const k = img.width / innerWidth;
         const px = (fx) => {
           const d = g.getImageData(Math.round((r.left + r.width * fx) * k), Math.round((r.top + r.height / 2 + scrollY) * k), 1, 1).data;
           return [d[0], d[1], d[2]];
         };
-        res({ fill: px(0.1), trough: px(0.5) });
+        /**
+         * BOTH SAMPLES DODGE THE PIPS, and this is not fussiness — the trough
+         * sample was a fixed 50%, which sat harmlessly between pips at five
+         * rungs and landed exactly ON one at four. It read the pip's own grey
+         * (168,173,184) and reported 2.25:1 for a trough that is near-black.
+         *
+         * The pips sit at (i+1)/N. A midpoint between two of them is always
+         * clear of both, so: the first midpoint comfortably past the fill for
+         * the trough, and the first one before it for the fill.
+         */
+        const n = document.querySelectorAll("[data-refer-case='2'] [data-refer-pip]").length;
+        const filled = fill.getBoundingClientRect().width / r.width;
+        const mids = Array.from({ length: n }, (_, i) => (i + 0.5) / n);
+        const clear = mids.find((m) => m > filled + 0.06) ?? mids[mids.length - 1];
+        const inside = [...mids].reverse().find((m) => m < filled - 0.04) ?? 0.03;
+        res({ fill: px(inside), trough: px(clear) });
       };
       img.src = `data:image/png;base64,${b64}`;
     }),
@@ -122,17 +150,29 @@ check(
  */
 check(at(0)?.valuenow === "0", "nothing yet reads as zero", at(0)?.valuenow);
 check(at(0)?.ratio === 0, "and paints nothing");
-// Two invites: past rung one (1/5 of the track) and halfway through the 1→3
-// gap, so 1.5 fifths = 30%.
-check(at(2)?.valuenow === "30", "two invites is 30% of the ladder", at(2)?.valuenow);
-check(at(2) && Math.abs(at(2).ratio - 0.3) < 0.02, "and paints it", at(2) ? `${(at(2).ratio * 100).toFixed(1)}%` : "—");
+
+/* Two invites: past the first rung (one segment) and halfway through the run to
+   the second, so one and a half segments of however many there are. */
+const twoExpected = Math.round((1.5 / RUNGS) * 100);
+check(at(2)?.valuenow === String(twoExpected), `two invites is ${twoExpected}% of the ladder`, at(2)?.valuenow);
+check(
+  at(2) && Math.abs(at(2).ratio - twoExpected / 100) < 0.02,
+  "and paints it",
+  at(2) ? `${(at(2).ratio * 100).toFixed(1)}%` : "—",
+);
+
 /* CROSSING A RUNG MOVES THE BAR FORWARD, never backwards. The rung-local
-   reading resets to zero the moment you earn something, which is correct about
-   the next gap and a terrible thing to watch right after an achievement. */
-check(at(3)?.valuenow === "40", "earning a rung advances the bar rather than resetting it", at(3)?.valuenow);
+   reading resets to zero the moment you earn something — correct about the next
+   gap, and a terrible thing to watch right after an achievement. */
+const threeExpected = Math.round((2 / RUNGS) * 100);
+check(
+  at(3)?.valuenow === String(threeExpected),
+  "earning a rung advances the bar rather than resetting it",
+  at(3)?.valuenow,
+);
 check(at(3) && at(3).ratio > at(2).ratio, "strictly further than the count below it");
-check(at(25)?.valuenow === "100", "a finished ladder is full", at(25)?.valuenow);
-check(at(25)?.done === 5, "with every pip marked done", `${at(25)?.done}/5`);
+check(at(TOP)?.valuenow === "100", "a finished ladder is full", at(TOP)?.valuenow);
+check(at(TOP)?.done === RUNGS, "with every pip marked done", `${at(TOP)?.done}/${RUNGS}`);
 
 // ── no prose ─────────────────────────────────────────────────────────────────
 console.log("\nthe board carries no description text");

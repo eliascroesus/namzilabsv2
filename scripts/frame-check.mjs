@@ -164,9 +164,75 @@ for (const s of SIZES) {
   const solid = glyphs.filter((f) => f !== "none");
   check(solid.length === 0, "every rail icon is an outline, not a solid", solid.join(", "));
 
+  /**
+   * THE RAIL'S INVITE CARD WEARS THE REFER BOARD'S SKY, AND ITS EDGE MOVES.
+   *
+   * Both halves are invisible to a source check. `className="rail-invite"` is
+   * true whether or not globals.css still defines the class — and a rule that
+   * quietly stops matching leaves a transparent card with white text on the
+   * rail's near-black, which looks deliberate and is not. The sweep is worse:
+   * an animation name in a stylesheet proves nothing about whether anything
+   * moves.
+   */
+  const invite = await page.evaluate(() => {
+    const link = document.querySelector('aside a[href="/dashboard/refer"]');
+    const face = link?.querySelector(".rail-invite-face");
+    if (!link || !face) return null;
+    const anim = link.getAnimations ? [] : [];
+    return {
+      // A gradient, not a flat colour — `backgroundImage` is `none` if the rule
+      // did not match, whatever the class attribute says.
+      faceImage: getComputedStyle(face).backgroundImage.slice(0, 24),
+      rim: getComputedStyle(link, "::before").animationName,
+      duration: getComputedStyle(link, "::before").animationDuration,
+      w: Math.round(link.getBoundingClientRect().width),
+      anim: anim.length,
+    };
+  });
+  check(invite !== null, "the rail carries an invite card");
+  if (invite) {
+    check(invite.faceImage.startsWith("radial-gradient") || invite.faceImage.startsWith("linear-gradient"),
+      "it paints the board's sky rather than a flat fill", invite.faceImage || "(none)");
+    check(invite.rim === "rail-invite-spin", "and a light runs round its edge", invite.rim);
+    check(invite.duration !== "0s" && invite.duration !== "0.01ms", "which is actually moving", invite.duration);
+    check(invite.w > 180, "at the rail's full width", `${invite.w}px`);
+  }
+
   check(errors.length === 0, "no page errors from the bell", errors.join(" · "));
   await ctx.close();
   if (fails.length) bad++;
+}
+
+/**
+ * …AND IT STOPS DEAD FOR SOMEBODY WHO ASKED FOR LESS MOTION. The global reduce
+ * block clamps every animation to 0.01ms with one iteration, which for a
+ * spinning sweep means "jump to the end and stay there" — a bright arc parked
+ * on one corner forever, which is not less motion, it is a permanent artefact.
+ */
+{
+  console.log("\nreduced motion");
+  const fails2 = [];
+  const check2 = (ok, what, detail = "") => {
+    console.log(`  ${ok ? "ok  " : "FAIL"}  ${what}${ok || !detail ? "" : ` — ${detail}`}`);
+    if (!ok) fails2.push(what);
+  };
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: "reduce" });
+  const page = await ctx.newPage();
+  await page.goto(`${BASE}/design/overview`, { waitUntil: "networkidle" });
+  await page.waitForTimeout(400);
+  const rim = await page.evaluate(() => {
+    const link = document.querySelector('aside a[href="/dashboard/refer"]');
+    if (!link) return null;
+    const cs = getComputedStyle(link, "::before");
+    return { name: cs.animationName, image: cs.backgroundImage };
+  });
+  check2(rim !== null, "the card is still there");
+  if (rim) {
+    check2(rim.name === "none", "the sweep is off, not frozen mid-turn", rim.name);
+    check2(rim.image === "none", "and the conic gradient is replaced by a plain edge", rim.image.slice(0, 30));
+  }
+  await ctx.close();
+  if (fails2.length) bad++;
 }
 
 await browser.close();

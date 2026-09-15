@@ -143,6 +143,11 @@ export function attributable(
  *     Namzilabs, not cash. Cash needs a payout rail, tax handling and a fraud
  *     team; months need a flag. A scheme that cannot pay what it promised is
  *     worse than no scheme.
+ *   - IT STOPS AT A YEAR. A fifth rung offered lifetime access plus revenue
+ *     share and came off at the owner's ask, which is the right call twice
+ *     over: revenue share is the cash problem above wearing a different word,
+ *     and a permanent giveaway is the one reward that cannot be withdrawn if
+ *     the scheme turns out to cost more than it earns.
  */
 /**
  * `blurb` IS GONE, not merely unrendered. The cards under the track carried a
@@ -157,7 +162,6 @@ export const MILESTONES: Milestone[] = [
   { at: 3, reward: "3 months free" },
   { at: 5, reward: "6 months free" },
   { at: 10, reward: "1 year free" },
-  { at: 25, reward: "Lifetime + revenue share" },
 ];
 
 /** Where somebody is on the ladder, and how far to the next rung. */

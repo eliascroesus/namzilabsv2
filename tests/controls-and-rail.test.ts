@@ -108,9 +108,27 @@ describe("the rail wears one fill for both selected and hovered", () => {
      */
     const at = c.indexOf('href="/dashboard/refer"');
     expect(at, "the referral card is in the rail").toBeGreaterThan(-1);
-    const card = c.slice(at, at + 700);
-    expect(card, "it takes the brand WASH").toMatch(/bg-brand-soft/);
+    const card = c.slice(at, at + 900);
+    /**
+     * IT WEARS THE REFER BOARD'S SKY, not a brand tint. This asserted
+     * `bg-brand-soft` while the card was a 10% wash; the owner liked the refer
+     * board and asked for this to be the same thing shrunk, so it is
+     * `.rail-invite-face` — the board's own three blues — inside a `.rail-invite`
+     * rim with a light running round it.
+     *
+     * WHAT THE ASSERTION WAS ALWAYS ABOUT SURVIVES THE CHANGE: not the brand
+     * FILL. The rail has one solid object, the "+" in the foot, and a second
+     * `bg-primary` rectangle eight pixels above it would be two things claiming
+     * to be the column's verb. A picture is not a fill, which is what makes
+     * this loud without competing.
+     */
+    expect(card, "it wears the board's sky").toMatch(/rail-invite-face/);
+    expect(card, "inside a rim that can carry the sweep").toMatch(/className="rail-invite /);
     expect(card, "never the brand FILL — the + is the column's only solid object").not.toMatch(/bg-primary/);
+    // The gradient and the sweep are CSS, so their absence is invisible here —
+    // `pnpm frame` reads the computed background and animation instead.
+    expect(read("src/app/globals.css")).toMatch(/\.rail-invite::before \{/);
+    expect(read("src/app/globals.css")).toMatch(/@keyframes rail-invite-spin/);
   });
 });
 

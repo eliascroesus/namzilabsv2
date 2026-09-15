@@ -126,8 +126,19 @@ export function ReferBoard({ link, code, count }: { link: string; code: string; 
           </div>
 
           {/* The prize under each pip, so the track reads left to right as one
-              sentence: this many people, this reward. */}
-          <div className="mt-4 grid grid-cols-5 gap-1 text-center">
+              sentence: this many people, this reward.
+
+              THE COLUMN COUNT IS DERIVED, not written. It was `grid-cols-5`
+              beside a five-rung ladder, and the day a rung came off — the
+              lifetime tier, withdrawn at the owner's ask — the labels would
+              have stayed on a five-column grid under four pips, each one
+              a fifth of the way out of line with the pip above it. A ladder
+              that can be edited in one array has to be laid out from that
+              array's length. */}
+          <div
+            className="mt-4 grid gap-1 text-center"
+            style={{ gridTemplateColumns: `repeat(${MILESTONES.length}, minmax(0, 1fr))` }}
+          >
             {MILESTONES.map((m) => (
               <span
                 key={m.at}
@@ -148,7 +159,11 @@ export function ReferBoard({ link, code, count }: { link: string; code: string; 
           The reward is the HEADLINE and the count is the caption, which is the
           way round somebody reads them: you are shopping for the prize and then
           asking what it costs. The blurb under each one is gone. */}
-      <ul className="mt-6 grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      {/* FLEX-WRAP, NOT A COLUMN COUNT. `lg:grid-cols-5` beside a five-rung
+          ladder is a number that has to be edited in two places, and the day
+          the lifetime tier came off it would have left a fifth empty cell. A
+          row of cards with a minimum width lays itself out for any ladder. */}
+      <ul className="mt-6 flex flex-wrap gap-3">
         {MILESTONES.map((m) => {
           const done = count >= m.at;
           const current = p.next?.at === m.at;
@@ -156,7 +171,7 @@ export function ReferBoard({ link, code, count }: { link: string; code: string; 
             <li
               key={m.at}
               className={cn(
-                "flex flex-col gap-3 rounded-card border p-4 transition-colors",
+                "flex min-w-[13rem] flex-1 flex-col gap-3 rounded-card border p-4 transition-colors",
                 done
                   ? "border-success/40 bg-success-soft"
                   : current

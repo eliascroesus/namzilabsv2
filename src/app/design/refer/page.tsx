@@ -1,5 +1,6 @@
 import { PageContainer, SectionHeading } from "@/components/ui/page";
 import { ReferBoard } from "@/components/refer-board";
+import { MILESTONES } from "@/lib/referral";
 
 /**
  * THE INVITE BOARD, ON A PUBLIC ROUTE.
@@ -18,7 +19,14 @@ import { ReferBoard } from "@/components/refer-board";
  */
 export const dynamic = "force-dynamic";
 
-const CASES = [0, 2, 3, 25];
+/**
+ * Four counts with edges on them: nothing yet, mid-rung, a rung exactly
+ * reached, and the ladder finished. The last one is read FROM the ladder
+ * rather than typed, because it was `25` until the lifetime tier came off and
+ * a fixture pinned to a rung that no longer exists is a fixture testing the
+ * wrong end of the scale.
+ */
+const CASES = [0, 2, 3, MILESTONES[MILESTONES.length - 1].at];
 
 export default function DesignReferPage() {
   return (
