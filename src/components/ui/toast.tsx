@@ -55,17 +55,42 @@ export function Toast({ children, action, className }: ToastProps) {
           <button
             type="button"
             onClick={action.onClick}
-            // NO RING OVERRIDE. This carried `focus-ring-light`, because the
-            // shared outline was the marker's violet at 2.86:1 on the toast's
-            // charcoal — under the 3:1 a focus indicator owes, on the single
-            // most important indicator in the product. `--ring` is the brand
-            // green now and measures 8.5:1 on this surface, so the white twin is
-            // retired and the product's one ring is the correct one here.
-            //
-            // The label is the sheet's micro voice — the same ALL CAPS as a chip
-            // — because at this size on this surface it is a control, not a word
-            // in the sentence beside it.
-            className="shrink-0 rounded-control px-2.5 py-1 text-xs font-medium uppercase tracking-label text-white/90 transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:bg-white/15 hover:text-white"
+            /**
+             * IT IS NOT WHITE ANY MORE, AND THAT WAS A REAL BUG.
+             *
+             * `text-white/90` with a `hover:bg-white/15` is left over from when
+             * this surface was dark in BOTH themes — the long note at the top of
+             * this file is the history of three tokens spent keeping it that
+             * way. It is `bg-accent` now, which follows the theme, and `--accent`
+             * on light is #ECECEC: white ink on it measures about 1.1:1. So the
+             * one control on the product's only toast — the UNDO after deleting
+             * a step — was invisible to every light-theme user, and the message
+             * beside it was legible the whole time because IT had been converted
+             * to `text-foreground` and this had not.
+             *
+             * `--accent-foreground`, THE SURFACE'S OWN PAIR — and the first
+             * attempt at this was `text-muted-foreground`, which fixed light
+             * (4.51:1) and broke dark: muted ink on `--accent`'s #3A3A3A
+             * measures 2.96:1. Trading one unreadable theme for the other is
+             * not a fix, and only measuring both caught it. The designated pair
+             * is the one colour that clears the bar on both surfaces, which is
+             * what a `-foreground` token is FOR.
+             *
+             * It gives up being quieter than the message at rest. That is the
+             * right trade at 12px: the point of this control is that somebody
+             * who just deleted a step can find it.
+             *
+             * NO RING OVERRIDE. This carried `focus-ring-light`, because the
+             * shared outline was the marker's violet at 2.86:1 on the toast's
+             * old charcoal — under the 3:1 a focus indicator owes, on the single
+             * most important indicator in the product. `--ring` measures 8.5:1
+             * here, so the product's one ring is the correct one.
+             *
+             * The label is the sheet's micro voice — the same ALL CAPS as a chip
+             * — because at this size on this surface it is a control, not a word
+             * in the sentence beside it.
+             */
+            className="shrink-0 rounded-control px-2.5 py-1 text-xs font-medium uppercase tracking-label text-accent-foreground transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:bg-foreground/10"
           >
             {action.label}
           </button>

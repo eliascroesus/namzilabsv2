@@ -2485,7 +2485,32 @@ html.mix {
   .rail-invite {
     position: relative;
     overflow: hidden;
-    padding: 1px;
+    /* 2px, NOT 1. At one pixel the sweep was a hairline carrying a 40-degree
+       arc — perhaps a tenth of the perimeter lit at any instant, on a rim a
+       single device pixel wide. Sampling the top edge in both themes returned
+       the SAME colours, which is the tell: what was visible there was the
+       card's own gradient showing through, and the beam was never really on
+       screen. Two pixels is the difference between an effect and a rumour. */
+    padding: 2px;
+    /**
+     * THE RIM HAS ITS OWN GROUND, and this is what the light theme was
+     * actually missing.
+     *
+     * The sweep is a conic gradient that is TRANSPARENT for most of its turn —
+     * so wherever the light is not, whatever sits behind the card shows
+     * through. On the dark rail that is #121212 and the rim reads as a dark
+     * edge with a light running along it. On the light rail it is #F3F3F3, and
+     * the measured rim came back 243,243,243 with the beam peaking at
+     * 218,228,248: twenty-five units of difference, which is not a beam, it is
+     * a slightly blue smudge on the page.
+     *
+     * Two goes at the beam's COLOUR could never have fixed that, because the
+     * problem was the absence of anything behind it. The card's own deepest
+     * blue as the rim's base gives the light something to travel along, and the
+     * effect is then identical in both themes by construction rather than by
+     * two colours tuned to two backgrounds.
+     */
+    background: #16305e;
   }
 
   .rail-invite::before {
@@ -2500,11 +2525,17 @@ html.mix {
        HIGHLIGHT rather than as a rotating pinwheel: at 8% of the sweep it is a
        glint crossing an edge, and at 50% it would be two spotlights chasing
        each other round a rectangle. */
+    /* A WIDER ARC WITH A SOFT RISE. It was one hard 40-degree wedge, which on a
+       rounded rectangle spends most of its travel hidden behind a corner. The
+       ramp — dim, bright, dim over 110 degrees — is what makes the light read
+       as sweeping ALONG the edge rather than blinking at one side of it. */
     background: conic-gradient(
       from 0deg,
       transparent 0deg,
-      transparent 300deg,
-      color-mix(in srgb, var(--rail-beam) 85%, transparent) 340deg,
+      transparent 250deg,
+      color-mix(in srgb, var(--rail-beam) 25%, transparent) 300deg,
+      var(--rail-beam) 335deg,
+      color-mix(in srgb, var(--rail-beam) 25%, transparent) 350deg,
       transparent 360deg
     );
     animation: rail-invite-spin 4s linear infinite;

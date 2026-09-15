@@ -291,6 +291,159 @@ for (const s of SIZES) {
   if (fails2.length) bad++;
 }
 
+/**
+ * THE RIM AND THE TOAST, IN BOTH THEMES — two bugs that were each visible in
+ * exactly one of them, which is why they both shipped.
+ *
+ * THE RIM had no ground of its own: the sweep is transparent for most of its
+ * turn, so whatever is behind the card shows through. On the dark rail that is
+ * #121212 and the beam reads as a light on a dark edge; on the light rail it is
+ * #F3F3F3, and the measured rim came back 243,243,243 with the beam peaking at
+ * 218,228,248 — a slightly blue smudge on the page. Two attempts to fix it by
+ * changing the beam's COLOUR could not have worked, because the problem was the
+ * absence of anything behind it.
+ *
+ * THE TOAST's Undo was `text-white/90`, left from when that surface was dark in
+ * both themes. It is `bg-accent` now, which follows the theme, so on light the
+ * one control on the product's only toast measured about 1.1:1. The first fix
+ * — `text-muted-foreground` — cleared light at 4.51 and broke dark at 2.96,
+ * which is why both are measured here rather than the one that was reported.
+ */
+{
+  console.log("\nboth themes: the invite rim and the toast");
+  const fails3 = [];
+  const check3 = (ok, what, detail = "") => {
+    console.log(`  ${ok ? "ok  " : "FAIL"}  ${what}${ok || !detail ? "" : ` — ${detail}`}`);
+    if (!ok) fails3.push(what);
+  };
+  const lum = ([r, g, b]) => {
+    const f = (c) => ((c /= 255) <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+    return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+  };
+  const ratio = (a, b) => {
+    const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m);
+    return (x + 0.05) / (y + 0.05);
+  };
+  const rgb = (css) => css.match(/\d+/g).slice(0, 3).map(Number);
+
+  for (const scheme of ["light", "dark"]) {
+    const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, colorScheme: scheme });
+    const page = await ctx.newPage();
+    await page.goto(`${BASE}/design/overview`, { waitUntil: "networkidle" });
+    await page.waitForTimeout(400);
+
+    /**
+     * THE BEAM MUST STAND OUT AGAINST THE RIM IT TRAVELS — which is the
+     * invariant, and not the one this first asserted.
+     *
+     * The first version compared the rim to the PAGE and demanded they differ.
+     * That is true on light and false on dark by design: #16305E against
+     * #121212 is 1.4:1, and it does not matter, because on a dark page a dark
+     * rim is invisible in exactly the way an unlit edge should be. What has to
+     * be true in BOTH themes is that the light is brighter than the edge it is
+     * running along — which is what the rim's own ground was added to
+     * guarantee, after the light rail showed through and left the beam at
+     * 218,228,248 on a 243,243,243 page.
+     */
+    const beam = await page.evaluate(() => {
+      const link = document.querySelector('aside a[href="/dashboard/refer"]');
+      const probe = document.createElement("span");
+      probe.style.color = "var(--rail-beam)";
+      link.appendChild(probe);
+      const lit = getComputedStyle(probe).color;
+      probe.remove();
+      return { lit, rim: getComputedStyle(link).backgroundColor };
+    });
+    const r = ratio(rgb(beam.lit), rgb(beam.rim));
+    check3(r >= 3, `${scheme}: the beam stands out against the rim it runs along`, `${r.toFixed(2)}:1 — ${beam.lit} on ${beam.rim}`);
+
+    await ctx.close();
+  }
+
+  /* THE TOAST, on the gallery where it is rendered behind a switch. */
+  for (const scheme of ["light", "dark"]) {
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, colorScheme: scheme });
+    const page = await ctx.newPage();
+    await page.goto(`${BASE}/design`, { waitUntil: "networkidle" });
+    await page.waitForTimeout(400);
+    const toggle = page.getByRole("button", { name: /toast/i }).first();
+    if (await toggle.count()) {
+      await toggle.click();
+      await page.waitForTimeout(400);
+    }
+    /**
+     * MEASURED FROM PIXELS, and this is the THIRD check in this repo to learn
+     * it the hard way. `getComputedStyle(el).color` for a `text-white/90`
+     * comes back as `oklab(0.999994 … / 0.9)` — whose numbers are not colour
+     * channels — so a naive rgb parse produced garbage that happened to pass.
+     * Reinstating the original `text-white/90` bug left this GREEN until the
+     * label was read off the screen instead.
+     *
+     * So: photograph the toast, hide the label, photograph it again, and take
+     * the pixel inside the label's box that differs most between the two. That
+     * pixel is the middle of a glyph, and the one under it is the surface.
+     */
+    const box = await page.evaluate(() => {
+      const el = document.querySelector("[role='status']");
+      const act = el?.querySelector("button");
+      if (!act) return null;
+      const r = act.getBoundingClientRect();
+      return { x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) };
+    });
+    check3(box != null, `${scheme}: the toast and its action are on the page`);
+    if (box) {
+      const withInk = (await page.screenshot({ clip: { x: 0, y: 0, width: 1280, height: 900 } })).toString("base64");
+      await page.addStyleTag({ content: "[role='status'] button{color:transparent!important}" });
+      await page.waitForTimeout(200);
+      const noInk = (await page.screenshot({ clip: { x: 0, y: 0, width: 1280, height: 900 } })).toString("base64");
+      const m = await page.evaluate(
+        async ({ a, c, box }) => {
+          const load = (s) =>
+            new Promise((res) => {
+              const i = new Image();
+              i.onload = () => res(i);
+              i.src = `data:image/png;base64,${s}`;
+            });
+          const [A, B] = await Promise.all([load(a), load(c)]);
+          const g2 = (img) => {
+            const cv = document.createElement("canvas");
+            cv.width = img.width;
+            cv.height = img.height;
+            const g = cv.getContext("2d", { willReadFrequently: true });
+            g.drawImage(img, 0, 0);
+            return g;
+          };
+          const ga = g2(A);
+          const gb = g2(B);
+          const k = A.width / innerWidth;
+          const da = ga.getImageData(Math.round(box.x * k), Math.round(box.y * k), Math.round(box.w * k), Math.round(box.h * k)).data;
+          const db = gb.getImageData(Math.round(box.x * k), Math.round(box.y * k), Math.round(box.w * k), Math.round(box.h * k)).data;
+          let best = -1;
+          let ink = null;
+          let ground = null;
+          for (let i = 0; i < da.length; i += 4) {
+            const d = Math.abs(da[i] - db[i]) + Math.abs(da[i + 1] - db[i + 1]) + Math.abs(da[i + 2] - db[i + 2]);
+            if (d > best) {
+              best = d;
+              ink = [da[i], da[i + 1], da[i + 2]];
+              ground = [db[i], db[i + 1], db[i + 2]];
+            }
+          }
+          return { ink, ground, delta: best };
+        },
+        { a: withInk, c: noInk, box },
+      );
+      check3(m.delta > 25, `${scheme}: the Undo label was measurable`, `only Δ${m.delta} between frames`);
+      if (m.delta > 25) {
+        const r = ratio(m.ink, m.ground);
+        check3(r >= 4.5, `${scheme}: the toast's Undo is legible`, `${r.toFixed(2)}:1 — rgb(${m.ink}) on rgb(${m.ground})`);
+      }
+    }
+    await ctx.close();
+  }
+  if (fails3.length) bad++;
+}
+
 await browser.close();
 console.log(bad === 0 ? "\n✓ the frame holds at every size" : `\n✗ ${bad} size(s) wrong`);
 process.exit(bad === 0 ? 0 : 1);

@@ -1051,7 +1051,7 @@ export function RailContent({
               ("bring somebody in") and the quieter of the two is the one that
               should be further from the verb at the bottom. */}
           <Link href="/dashboard/refer" className="rail-invite block w-full rounded-card">
-            <span className="rail-invite-face flex w-full items-center gap-3 rounded-[calc(var(--radius-card)-1px)] px-3 py-2.5">
+            <span className="rail-invite-face flex w-full items-center gap-3 rounded-[calc(var(--radius-card)-2px)] px-3 py-2.5">
               <span
                 aria-hidden
                 className="flex size-7 shrink-0 items-center justify-center rounded-control bg-white/15 text-white [&_svg]:size-4"
