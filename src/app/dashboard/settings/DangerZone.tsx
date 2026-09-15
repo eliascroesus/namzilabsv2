@@ -52,20 +52,26 @@ export function DangerZone({
       </header>
 
       <div className="divide-y divide-destructive/20 border-t border-destructive/25">
-        {/* ── HAND IT OVER ──────────────────────────────────────────────── */}
-        <details className="group px-4 py-4">
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-4 [&::-webkit-details-marker]:hidden">
-            <span className="min-w-0">
-              <span className="block text-sm font-semibold text-foreground">Transfer ownership</span>
-              <span className="block text-xs text-muted-foreground">
-                {members.length > 0
-                  ? "The new owner gets these controls. You stay a member."
-                  : "Invite somebody first — a workspace can only be handed to an active member."}
+        {/* ── HAND IT OVER ──────────────────────────────────────────────────
+            NOT RENDERED AT ALL IN A WORKSPACE OF ONE, at the owner's ask, and
+            it is the better call than the sentence that used to sit here
+            explaining why the control was inert. A workspace can only be handed
+            to an ACTIVE MEMBER — `transferOwnershipAction` checks that against
+            WorkOS and refuses otherwise — so with nobody else in it there is no
+            version of this act that can succeed. A disabled control advertising
+            something the product will refuse is the pattern `ViewTab` already
+            rules out. */}
+        {members.length > 0 && (
+          <details className="group px-4 py-4">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-4 [&::-webkit-details-marker]:hidden">
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold text-foreground">Transfer ownership</span>
+                <span className="block text-xs text-muted-foreground">
+                  The new owner gets these controls. You stay a member.
+                </span>
               </span>
-            </span>
-            <span className="shrink-0 text-xs font-semibold text-muted-foreground group-open:hidden">Change</span>
-          </summary>
-          {members.length > 0 && (
+              <span className="shrink-0 text-xs font-semibold text-muted-foreground group-open:hidden">Change</span>
+            </summary>
             <form action={transferOwnershipAction} className="mt-4 flex flex-wrap items-end gap-2">
               <label className="min-w-0 flex-1">
                 <span className="mb-1.5 block text-xs font-medium text-muted-foreground">New owner</span>
@@ -86,8 +92,8 @@ export function DangerZone({
                 Transfer
               </SubmitButton>
             </form>
-          )}
-        </details>
+          </details>
+        )}
 
         {/* ── END IT ────────────────────────────────────────────────────── */}
         <details className="group px-4 py-4">

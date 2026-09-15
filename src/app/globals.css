@@ -2482,55 +2482,52 @@ html.mix {
    * gradient border with `background-clip` needs `@property` to interpolate an
    * angle, which is a second mechanism for the same picture.
    */
+  /**
+   * THE LIT EDGE — a 1px rim with a light running round it, and a glow that
+   * escapes the card.
+   *
+   * HOW IT USED TO WORK, AND WHY THAT HAD TO GO. A square twice the card's
+   * width carrying a conic gradient, SPINNING, with `overflow: hidden` cutting
+   * it down to a rim. That works and it is a cage: everything the effect does
+   * has to happen inside the card's own box, so the light can never be brighter
+   * than a hairline and can never spill. At the 1px rim that was asked for, a
+   * clipped hairline is close to nothing.
+   *
+   * WHAT IT DOES NOW: `@property` registers the sweep's ANGLE as a real
+   * animatable type, so the gradient itself turns and the element does not.
+   * Nothing rotates, so nothing needs clipping — which is what lets `::after`
+   * sit OUTSIDE the card as a blurred halo. Two layers, one angle:
+   *
+   *   ::before  the rim, exactly the card's box, sharp.
+   *   ::after   4px larger and blurred, so the brightest part of the sweep
+   *             bleeds past the edge onto the rail.
+   *
+   * WITHOUT `@property` (a browser that does not register it) `from var(--…)`
+   * simply does not animate and the sweep sits at 0deg — a static glint on one
+   * corner rather than a broken card. That is the right way to lose.
+   */
   .rail-invite {
     position: relative;
-    overflow: hidden;
-    /* 2px, NOT 1. At one pixel the sweep was a hairline carrying a 40-degree
-       arc — perhaps a tenth of the perimeter lit at any instant, on a rim a
-       single device pixel wide. Sampling the top edge in both themes returned
-       the SAME colours, which is the tell: what was visible there was the
-       card's own gradient showing through, and the beam was never really on
-       screen. Two pixels is the difference between an effect and a rumour. */
-    padding: 2px;
-    /**
-     * THE RIM HAS ITS OWN GROUND, and this is what the light theme was
-     * actually missing.
-     *
-     * The sweep is a conic gradient that is TRANSPARENT for most of its turn —
-     * so wherever the light is not, whatever sits behind the card shows
-     * through. On the dark rail that is #121212 and the rim reads as a dark
-     * edge with a light running along it. On the light rail it is #F3F3F3, and
-     * the measured rim came back 243,243,243 with the beam peaking at
-     * 218,228,248: twenty-five units of difference, which is not a beam, it is
-     * a slightly blue smudge on the page.
-     *
-     * Two goes at the beam's COLOUR could never have fixed that, because the
-     * problem was the absence of anything behind it. The card's own deepest
-     * blue as the rim's base gives the light something to travel along, and the
-     * effect is then identical in both themes by construction rather than by
-     * two colours tuned to two backgrounds.
-     */
+    isolation: isolate;
+    /* 1px, at the owner's ask. The rim carries its own ground so the light has
+       something to travel along — see the note on `background` below, which is
+       what the light theme was actually missing. */
+    padding: 1px;
     background: #16305e;
   }
 
-  .rail-invite::before {
+  .rail-invite::before,
+  .rail-invite::after {
     content: "";
     position: absolute;
-    left: 50%;
-    top: 50%;
-    width: 220%;
-    aspect-ratio: 1;
-    translate: -50% -50%;
-    /* One bright arc and a long dark run, so the light READS AS A TRAVELLING
-       HIGHLIGHT rather than as a rotating pinwheel: at 8% of the sweep it is a
-       glint crossing an edge, and at 50% it would be two spotlights chasing
-       each other round a rectangle. */
-    /* A WIDER ARC WITH A SOFT RISE. It was one hard 40-degree wedge, which on a
-       rounded rectangle spends most of its travel hidden behind a corner. The
-       ramp — dim, bright, dim over 110 degrees — is what makes the light read
-       as sweeping ALONG the edge rather than blinking at one side of it. */
+    z-index: -1;
+    border-radius: inherit;
+    /* ONE BRIGHT ARC WITH A SOFT RISE, over 110 degrees. A single hard wedge
+       spends most of its travel hidden behind a corner; the ramp is what makes
+       the light read as sweeping ALONG the edge rather than blinking at one
+       side of it. */
     background: conic-gradient(
-      from 0deg,
+      from var(--nz-beam) at 50% 50%,
       transparent 0deg,
       transparent 250deg,
       color-mix(in srgb, var(--rail-beam) 25%, transparent) 300deg,
@@ -2541,7 +2538,30 @@ html.mix {
     animation: rail-invite-spin 4s linear infinite;
   }
 
-  /* The card's own face, which is what hides all but the rim. */
+  /* The rim: the card's own box, sharp, with the face covering the middle. */
+  .rail-invite::before {
+    inset: 0;
+  }
+
+  /* The halo: outside the card, blurred, and dimmer — it is a spill, not a
+     second border. `z-index: -2` keeps it under the rim so the two do not
+     brighten each other into a smear at the corners. */
+  .rail-invite::after {
+    inset: -4px;
+    z-index: -2;
+    filter: blur(5px);
+    opacity: 0.7;
+  }
+
+  /**
+   * THE CARD'S OWN FACE — an opaque child inset by the rim's 1px, which is what
+   * hides all but the edge of the sweep behind it.
+   *
+   * The refer board's sky, shrunk: the same three blues, so pressing this card
+   * and landing on that page is one object growing rather than two designs
+   * meeting. `position: relative` puts it above the two `z-index: -1`/`-2`
+   * pseudo-elements without needing a z-index of its own.
+   */
   .rail-invite-face {
     position: relative;
     background:
@@ -2578,9 +2598,26 @@ html.mix {
   }
 }
 
+/**
+ * THE SWEEP'S ANGLE, REGISTERED SO IT CAN BE ANIMATED AT ALL.
+ *
+ * A bare custom property is a string to the animation engine — it would jump
+ * from 0deg to 360deg at the halfway mark rather than turning. `@property`
+ * gives it a type, and an `<angle>` interpolates.
+ *
+ * This is what replaced rotating the element inside `overflow: hidden`, and the
+ * difference is that nothing moves any more: the gradient turns in place, so the
+ * effect no longer has to be confined to the box to look right.
+ */
+@property --nz-beam {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
 @keyframes rail-invite-spin {
   to {
-    rotate: 1turn;
+    --nz-beam: 360deg;
   }
 }
 
@@ -2610,5 +2647,10 @@ html.mix {
   .rail-invite::before {
     animation: none !important;
     background: color-mix(in srgb, var(--rail-beam) 30%, transparent) !important;
+  }
+  /* The halo goes entirely rather than freezing: a static blur around a card is
+     a smudge, and the point of the spill was the movement. */
+  .rail-invite::after {
+    display: none !important;
   }
 }

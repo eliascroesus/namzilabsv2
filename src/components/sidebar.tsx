@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
-import { ArrowUpRight, ChevronDown, Gift, LayoutDashboard, Plug, Plus, Radio, Search, Settings, UserPlus, Workflow } from "lucide-react";
+import { ArrowUpRight, ChevronDown, Gift, LayoutDashboard, Plug, Plus, Radio, Search, Settings, Workflow } from "lucide-react";
 import { Fragment, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -1007,23 +1007,6 @@ export function RailContent({
               runs unbroken from the switcher's square to the Get Free Access
               bell below — a DIFFERENT bell from the one the top bar carries
               for notifications; this one is the rail's own upsell row. */}
-          {/* THE FOOT THE 8 SEPTEMBER FIGMA DRAWS — a card and an act, in that
-              order, and both of them changed hands.
-
-              INVITE MEMBERS STOPS BEING A GUEST. It used to appear here only
-              in the phone's drawer, because above `md` the top bar carried it
-              and two routes to one settings page a centimetre apart is worse
-              than either. Node 49:5734 moves it into the rail permanently and
-              takes it OUT of the bar, so there is still exactly one of it —
-              the `invite` prop that gated it has no second state left and is
-              gone with the arrangement that needed it.
-
-              It is a CARD rather than a row: two strings, a title and a line
-              of copy under it, which is not a shape the 36px nav slot can
-              hold. `--control` on the card is the same step the search field
-              takes at the head of the column, which is what makes the two read
-              as the same kind of object — a thing you act on, not a
-              destination you travel to. */}
           {/* INVITE & EARN — the loudest thing in this column, at the owner's
               ask, and the one place the rail's own "one filled object" rule is
               knowingly bent.
@@ -1040,18 +1023,14 @@ export function RailContent({
               an image, so it cannot be confused with the "+" underneath it even
               though both are now loud.
 
-              AND A LIGHT RUNS ROUND THE EDGE. A 1px rim carrying a spinning
-              conic gradient (`.rail-invite`, globals.css) — the one moving
-              thing in the chrome, which is what buys it the attention that was
-              asked for without a second solid rectangle competing with the verb
-              below. It stops dead under `prefers-reduced-motion`, where the
-              global clamp would otherwise park the glint on a corner forever.
-
-              IT SITS ABOVE INVITE MEMBERS deliberately: they are adjacent acts
-              ("bring somebody in") and the quieter of the two is the one that
-              should be further from the verb at the bottom. */}
+              AND A LIGHT RUNS ROUND THE EDGE. A 1px rim carrying a conic
+              gradient whose ANGLE animates (`.rail-invite`, globals.css), plus
+              a blurred halo that spills past the card onto the rail — the one
+              moving thing in the chrome, which is what buys it the attention
+              that was asked for without a second solid rectangle competing with
+              the verb below. It stops dead under `prefers-reduced-motion`. */}
           <Link href="/dashboard/refer" className="rail-invite block w-full rounded-card">
-            <span className="rail-invite-face flex w-full items-center gap-3 rounded-[calc(var(--radius-card)-2px)] px-3 py-2.5">
+            <span className="rail-invite-face flex w-full items-center gap-3 rounded-[calc(var(--radius-card)-1px)] px-3 py-2.5">
               <span
                 aria-hidden
                 className="flex size-7 shrink-0 items-center justify-center rounded-control bg-white/15 text-white [&_svg]:size-4"
@@ -1072,33 +1051,23 @@ export function RailContent({
             </span>
           </Link>
 
-          <Link
-            href="/dashboard/settings"
-            /* THE HOVER RAISES THE EDGE, NOT THE FILL, and the column's own
-               rule is why. The rail has ONE raise — `--control` under the
-               active row — and a second one (`--accent`) made a hovered row
-               look more selected than the selected one, which is what
-               controls-and-rail.test.ts pins. This card RESTS on `--control`,
-               so it has nowhere to raise to that is not that mistake. Its
-               border brightens instead: feedback that costs no fill. */
-            className="flex w-full items-center gap-3 rounded-card border border-rail-border bg-rail-control px-3 py-2 transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:border-rail-accent"
-          >
-            <UserPlus className="size-4 shrink-0 text-rail-foreground" />
-            {/* NO GAP, and the rail's spacing rule is why. Every column in this
-                file stacks on 8 or 16 (pinned by page-width.test.ts), and the
-                Figma's 2px here is neither — it is the slack between two 16px
-                leadings rather than a gap anyone chose. `leading-4` on both
-                lines produces it without spending an off-scale number. */}
-            <span className="flex flex-col">
-              {/* 12px BOTH, and the weight is the only thing separating them.
-                  The Figma sets the title at 600 and the line under it at 400
-                  on the same size, which is what keeps a two-line card from
-                  reading as a heading with a caption — they are one object. */}
-              <span className="text-xs font-semibold leading-4 text-rail-foreground">Invite Members</span>
-              <span className="text-xs leading-4 text-rail-muted">Collaborate with your team.</span>
-            </span>
-          </Link>
+          {/* INVITE MEMBERS IS GONE FROM HERE, and it is a withdrawal rather
+              than a move. Node 49:5734 put it in the rail permanently and took
+              it out of the top bar, on the argument that two routes to one
+              settings page a centimetre apart is worse than either.
 
+              What changed is that the foot now carries INVITE & EARN, and the
+              two were adjacent cards saying nearly the same word for opposite
+              acts: one brings somebody into YOUR workspace and costs a seat,
+              the other sends them to build their own. That ambiguity is the
+              whole reason `InvitePicker` exists, and it is reachable from the
+              card above and from the bar's Share — so the members page has two
+              routes to it already and does not need a third card competing
+              with the column's one verb.
+
+              Removed at the owner's ask, with the note kept so the next person
+              to reach for a second card here knows what happened to the
+              first. */}
           {/* "NEW", NOT "NEW FLOW", AND IT IS A BUTTON THE WHOLE TIME.
               The old row spent three blocks of classes becoming a button on
               hover, on focus-within and on pinned — a chip that swapped for a

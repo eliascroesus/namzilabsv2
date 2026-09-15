@@ -221,15 +221,18 @@ for (const s of SIZES) {
   });
   check(rail.invite === 1, "exactly one invite card in the rail", `${rail.invite}`);
   /**
-   * THREE settings links is CORRECT, and they are listed rather than counted so
-   * that this is not "fixed" to a smaller number later: the nav row, the
-   * account row's gear, and the Invite Members card. The first count written
-   * here said two, from reading the source — and missed that `NAV` renders one
-   * of them, which is the whole reason to ask the page instead.
+   * TWO settings links, and they are LISTED rather than counted so the number
+   * cannot be quietly "fixed" in either direction: the nav row and the account
+   * row's gear.
+   *
+   * It said three until 15 Sep, when the Invite Members card — the third — was
+   * withdrawn from the foot. And the version before THAT said two, written by
+   * reading the source, which missed that `NAV` renders one of them: the whole
+   * reason this asks the page instead of the file.
    */
   check(
-    rail.settings.length === 3,
-    "the nav row, the account gear and Invite Members — no more",
+    rail.settings.length === 2,
+    "the nav row and the account gear — no more",
     rail.settings.join(" | "),
   );
 
@@ -356,6 +359,49 @@ for (const s of SIZES) {
     });
     const r = ratio(rgb(beam.lit), rgb(beam.rim));
     check3(r >= 3, `${scheme}: the beam stands out against the rim it runs along`, `${r.toFixed(2)}:1 — ${beam.lit} on ${beam.rim}`);
+
+    /**
+     * AND THE LIGHT ESCAPES THE CARD. The sweep used to be a spinning square cut
+     * down by `overflow: hidden`, which meant every pixel of the effect had to
+     * live inside the card's own box — at the 1px rim that was asked for, a
+     * clipped hairline is close to nothing. It is an angle-animated gradient
+     * now, so nothing rotates, nothing needs clipping, and a blurred `::after`
+     * can sit 4px OUTSIDE.
+     *
+     * Asserted by MOVEMENT IN THE BAND OUTSIDE THE CARD — a 6px strip above its
+     * top edge, holding none of the card itself. Two frames a second apart: if
+     * the halo is clipped away, or the `@property` angle is not interpolating,
+     * nothing in that strip can change.
+     *
+     * The first version of this sampled a box 8px LARGER than the card, which
+     * included the whole card interior — so re-clipping the sweep still left
+     * thousands of changed pixels on the dark rail and the check passed. A
+     * region that contains the thing being ruled out cannot rule it out.
+     */
+    const box = await page.evaluate(() => {
+      const r2 = document.querySelector('aside a[href="/dashboard/refer"]').getBoundingClientRect();
+      return { x: Math.round(r2.left) + 12, y: Math.round(r2.top) - 6, width: Math.round(r2.width) - 24, height: 6 };
+    });
+    const frame = async () => (await page.screenshot({ clip: box })).toString("base64");
+    const f1 = await frame();
+    await page.waitForTimeout(1100);
+    const f2 = await frame();
+    const moved = await page.evaluate(
+      async ({ a, c }) => {
+        const load = (x) => new Promise((res) => { const i = new Image(); i.onload = () => res(i); i.src = `data:image/png;base64,${x}`; });
+        const [A, B] = await Promise.all([load(a), load(c)]);
+        const px = (img) => { const cv = document.createElement("canvas"); cv.width = img.width; cv.height = img.height; const g = cv.getContext("2d", { willReadFrequently: true }); g.drawImage(img, 0, 0); return g.getImageData(0, 0, img.width, img.height).data; };
+        const da = px(A);
+        const db = px(B);
+        let n = 0;
+        for (let i = 0; i < da.length; i += 4) {
+          if (Math.abs(da[i] - db[i]) + Math.abs(da[i + 1] - db[i + 1]) + Math.abs(da[i + 2] - db[i + 2]) > 12) n++;
+        }
+        return n;
+      },
+      { a: f1, c: f2 },
+    );
+    check3(moved > 20, `${scheme}: the light spills past the card and moves`, `${moved} pixels changed outside it in a second`);
 
     await ctx.close();
   }

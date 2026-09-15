@@ -136,13 +136,22 @@ describe("the drawer", () => {
     /**
      * The bar used to carry "Invite members" and "New flow" above `md` and
      * hand them to the drawer's foot below it — which is why the drawer set
-     * `invite` and the rail did not. Both now live in the rail's own foot at
+     * `invite` and the rail did not. Both moved into the rail's own foot at
      * every width (nodes 49:5734 and 49:5744), so the drawer gets them by
      * rendering `RailContent` like everything else, and the conditional that
      * used to gate one of them is gone.
+     *
+     * THE CARD IT NAMED IS NOT THE RULE IT MEANT. This asserted the literal
+     * string "Invite Members", and that card was withdrawn on 15 Sep: the foot
+     * carries INVITE & EARN now, and two adjacent cards saying nearly the same
+     * word for opposite acts — bring somebody into YOUR workspace, versus send
+     * them to build their own — is the ambiguity `InvitePicker` exists to
+     * settle. What this test is actually for is that the foot carries an invite
+     * affordance UNCONDITIONALLY and the act under it, which is asserted
+     * against the card that is there.
      */
     expect(code(sidebar), "the invite card is unconditional now").not.toMatch(/\{invite && \(/);
-    expect(code(sidebar)).toContain("Invite Members");
+    expect(code(sidebar), "the foot carries an invite card").toContain('href="/dashboard/refer"');
     expect(code(sidebar), "and the act under it").toMatch(/>New</);
   });
 });
