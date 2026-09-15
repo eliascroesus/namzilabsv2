@@ -27,7 +27,7 @@
 import { chromium } from "playwright";
 
 const BASE = process.env.SHOT_BASE ?? "http://localhost:3000";
-const URL = `${BASE}/design/tour`;
+const PAGE = `${BASE}/design/tour`;
 
 let failures = 0;
 const check = (name, ok, observed) => {
@@ -55,9 +55,9 @@ async function patch(page, x, y) {
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
 
-console.log(`\n${"─".repeat(72)}\nFirst-run tour — ${URL}\n${"─".repeat(72)}`);
+console.log(`\n${"─".repeat(72)}\nFirst-run tour — ${PAGE}\n${"─".repeat(72)}`);
 
-await page.goto(URL, { waitUntil: "networkidle" });
+await page.goto(PAGE, { waitUntil: "networkidle" });
 await page.waitForSelector(".tour-scrim", { timeout: 10_000 });
 await page.waitForTimeout(400);
 
@@ -114,7 +114,7 @@ const total = await page.evaluate(() => {
   return label ? Number(label[2]) : 0;
 });
 for (let i = 1; i < total; i++) {
-  await page.locator('[role="dialog"]').getByRole("button", { name: /^(Next|Done)$/ }).click();
+  await page.locator('[role="dialog"]').getByRole("button", { name: /^Next$/ }).click();
   await page.waitForTimeout(150);
 }
 const lastGeom = await page.evaluate(() => {
@@ -133,11 +133,50 @@ if (!lastGeom) {
   );
 }
 
-// ── 5. Finishing closes it ─────────────────────────────────────────────────
-await page.locator('[role="dialog"]').getByRole("button", { name: "Done", exact: true }).click();
-await page.waitForTimeout(200);
-const stillOpen = await page.evaluate(() => Boolean(document.querySelector(".tour-scrim")));
-check("Done closes the tour", !stillOpen, stillOpen ? "the spotlight is still in the document" : "gone");
+// ── 5. The last step ASKS FOR SOMETHING, and doing it goes there ───────────
+/**
+ * A tour that ends on "Done" leaves somebody exactly where it found them.
+ * The last step's button carries the destination, so what is checked is that
+ * the label is the call to action and that pressing it both closes the tour
+ * AND navigates — a close without the navigation would be the regression that
+ * looks fine in a screenshot.
+ */
+const finalLabel = await page
+  .locator('[role="dialog"]')
+  .locator("button")
+  .last()
+  .textContent();
+check(
+  "the final button asks for the next step rather than saying Done",
+  Boolean(finalLabel) && !/^done$/i.test(finalLabel.trim()),
+  `"${finalLabel?.trim()}"`,
+);
+
+/**
+ * IT MUST ATTEMPT THE NAVIGATION, and that is what is checkable from here.
+ *
+ * The destination is auth-gated, so off this public design route the outcome
+ * is a bounce to sign-in rather than a landing on /integrations — and whether
+ * that bounce completes depends on the auth proxy, not on the tour. Asserting
+ * the final URL made this check a test of the redirect chain; it failed for a
+ * reason that had nothing to do with the button.
+ *
+ * So the observable fact is the REQUEST. If the app asks for /integrations,
+ * the button did its job. That the step aims there at all is asserted against
+ * the step itself in `tests/tour.test.ts`.
+ */
+const asked = page
+  .waitForRequest((r) => new globalThis.URL(r.url()).pathname.startsWith("/integrations"), { timeout: 5000 })
+  .then(() => true)
+  .catch(() => false);
+
+await page.locator('[role="dialog"]').getByRole("button", { name: finalLabel.trim(), exact: true }).click();
+const navigated = await asked;
+check("pressing it asks for the app-connecting page", navigated, navigated ? "requested /integrations" : "no request for /integrations in 5s");
+
+await page.waitForLoadState("domcontentloaded").catch(() => {});
+const stillOpen = await page.evaluate(() => Boolean(document.querySelector(".tour-scrim"))).catch(() => false);
+check("and closes the tour", !stillOpen, stillOpen ? "the spotlight is still in the document" : "gone");
 
 await browser.close();
 console.log(`\n${"═".repeat(72)}`);
@@ -145,4 +184,4 @@ if (failures > 0) {
   console.log(`FAILED — ${failures} check(s)\n`);
   process.exit(1);
 }
-console.log("PASS — the spotlight dims, the bubble lands beside its anchor, and Done closes it.\n");
+console.log("PASS — the spotlight dims, the bubble lands beside its anchor, and the last step hands over to Apps.\n");

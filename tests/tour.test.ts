@@ -77,6 +77,23 @@ describe("the steps", () => {
     }
   });
 
+  it("ends on the step that asks for something", () => {
+    /**
+     * The order walks the rail as the product works and finishes on the only
+     * step that is blocking — nothing else does anything until data is coming
+     * in. A tour that ends on "Done" has told somebody five things and left
+     * them where it found them.
+     */
+    const lastStep = TOUR_STEPS[TOUR_STEPS.length - 1];
+    expect(lastStep.id).toBe("apps");
+    expect(lastStep.href, "the last step must go somewhere").toBe("/integrations");
+    expect(lastStep.cta, "and its button must say so").toBeTruthy();
+    // Only the last one. A mid-tour step that navigated would abandon the rest.
+    for (const s of TOUR_STEPS.slice(0, -1)) {
+      expect(s.href, `${s.id} must not navigate mid-tour`).toBeUndefined();
+    }
+  });
+
   it("has stable, unique ids and anchors", () => {
     expect(new Set(TOUR_STEPS.map((s) => s.id)).size).toBe(TOUR_STEPS.length);
     expect(new Set(TOUR_STEPS.map((s) => s.anchor)).size).toBe(TOUR_STEPS.length);
@@ -99,7 +116,9 @@ describe("steps with no anchor on screen are dropped, not rendered", () => {
      */
     const present = (a: string) => a === "nav-apps" || a === "top-bell";
     const kept = visibleSteps(present);
-    expect(kept.map((s) => s.anchor)).toEqual(["nav-apps", "top-bell"]);
+    // Declared order, not the order asked for — alerts sits before Apps now
+    // that Apps is the closing step.
+    expect(kept.map((s) => s.anchor)).toEqual(["top-bell", "nav-apps"]);
   });
 
   it("returns nothing when the page has none of them", () => {

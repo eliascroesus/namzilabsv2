@@ -5,18 +5,23 @@
  * browser. The rendering lives in `src/components/tour.tsx`; everything here is
  * a value.
  *
- * ═══ IT ORIENTS, IT DOES NOT INSTRUCT ═══
+ * ═══ IT ORIENTS, THEN IT ASKS FOR ONE THING ═══
  *
  * `OnboardingChecklist` already tells a new workspace WHAT to do — connect,
  * build, publish — and ticks each step off real state, so it doubles as a
- * progress readout. Repeating that in a tour would be two systems saying the
- * same thing in different words, and the tour would be the one that goes stale.
+ * progress readout. Repeating all of that here would be two systems saying the
+ * same thing in different words, and the tour would be the one that went stale.
  *
- * So this answers the other question: WHERE things are. Five pointers at the
- * chrome, ending by handing over to the checklist that is already on screen.
- * One line each — the product's standing rule is that explanation belongs
- * behind an ⓘ rather than on the surface, and a tour is the one place a
- * sentence is the point, so it gets exactly one.
+ * So four steps answer the other question — WHERE things are — walking the rail
+ * in the order the product works: here is your board, here is what fills it,
+ * here is how to find things, here is how you learn something broke. One line
+ * each, because the standing rule is that explanation lives behind an ⓘ and a
+ * tour is the one surface where a sentence IS the point.
+ *
+ * Then the fifth step stops describing and asks. Nothing else in the product
+ * does anything until data is coming in, so the tour ends on Apps with a button
+ * that goes there. A walkthrough that finishes on "Done" has told somebody five
+ * things and left them exactly where it found them.
  *
  * ═══ WHEN IT RUNS, AND WHY THAT NEEDED NO MIGRATION ═══
  *
@@ -42,6 +47,16 @@ export type TourStep = {
   body: string;
   /** Which side of the anchor the bubble prefers. Flipped at the viewport edge. */
   placement: "right" | "bottom" | "left";
+  /**
+   * Where the FINAL step sends you, and the label on the button that does it.
+   *
+   * A tour that ends on "Done" leaves somebody exactly where it found them,
+   * having been told five things and asked for nothing. The last step is the
+   * one that should cost a click, so it carries the destination and the button
+   * goes there instead of just closing.
+   */
+  href?: string;
+  cta?: string;
 };
 
 /**
@@ -49,29 +64,29 @@ export type TourStep = {
  * who dismissed the old one. Not done lightly: a version bump is a decision to
  * interrupt everybody who is still empty, so it is for a tour that now says
  * something different, never for a copy tweak.
+ *
+ * v1 → v2: the order was reversed to end on Apps, and the last step gained a
+ * button that navigates. Anybody who dismissed v1 saw a tour that pointed at
+ * Apps first and then wandered off; this one asks them to do something. That
+ * is a different tour, so it earns the bump — and v1 only ever reached people
+ * whose dashboard had tiles, because of the mount bug, so the set being
+ * re-interrupted is close to empty anyway.
  */
-export const TOUR_KEY = "nz_tour_v1";
+export const TOUR_KEY = "nz_tour_v2";
 
 export const TOUR_STEPS: readonly TourStep[] = [
   {
-    id: "apps",
-    anchor: "nav-apps",
-    title: "Start here",
-    body: "Connect the tools your data already lives in.",
+    id: "dashboard",
+    anchor: "nav-dashboard",
+    title: "This is your board",
+    body: "Every metric you publish lands here and keeps itself up to date.",
     placement: "right",
   },
   {
     id: "flows",
     anchor: "nav-flows",
-    title: "Flows",
-    body: "Turn that data into a number — filter, group, and test it on real records.",
-    placement: "right",
-  },
-  {
-    id: "dashboard",
-    anchor: "nav-dashboard",
-    title: "Your board",
-    body: "Published numbers land here and keep themselves up to date.",
+    title: "Flows make the numbers",
+    body: "Pick data, filter and group it, then publish it to the board.",
     placement: "right",
   },
   {
@@ -85,8 +100,25 @@ export const TOUR_STEPS: readonly TourStep[] = [
     id: "alerts",
     anchor: "top-bell",
     title: "Alerts",
-    body: "If a connection or flow breaks, it shows up here.",
+    body: "If a connection or a flow breaks, it shows up here.",
     placement: "bottom",
+  },
+  /**
+   * APPS IS LAST, AND IT IS THE ONE WITH SOMETHING TO DO.
+   *
+   * The order walks the rail the way the product works — here is your board,
+   * here is what fills it, here is how to find things — and finishes on the
+   * only step that is actually blocking: none of the rest does anything until
+   * data is coming in. So this one ends the tour by taking you there.
+   */
+  {
+    id: "apps",
+    anchor: "nav-apps",
+    title: "Start here",
+    body: "Connect the tools your data already lives in — that is the first step.",
+    placement: "right",
+    href: "/integrations",
+    cta: "Connect an app",
   },
 ] as const;
 

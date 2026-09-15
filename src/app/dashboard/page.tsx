@@ -1382,6 +1382,18 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       {/* G.4: refresh the server-rendered tiles when the org's results move.
           C16: seeded so a change before the first poll is never missed. */}
       <FreshnessPoller initialVersion={initialResultsVersion} />
+      {/* THE FIRST-RUN TOUR, ABOVE THE EMPTY/BOARD SPLIT — and that placement
+          is the whole bug it was shipped with.
+          It sat beside `OnboardingChecklist` in the `!hasTiles` branch, which
+          reads like the right place and is not: a BRAND-NEW workspace takes
+          the `emptyWorkspace` ternary a few lines down and renders
+          `EmptyBoard` instead, so the tour never mounted for the only people
+          it exists for. It was tested, screenshotted and green, on a route
+          that could not reach it.
+          Here it renders on both branches and decides for itself: it opens
+          only while a workspace has no connections and no flows, and only if
+          its anchors are on screen. */}
+      <Tour hasConnection={connCount > 0} hasFlow={flowCount > 0} />
       <PageContainer width="full">
         {/* ── NOTHING HERE YET ──────────────────────────────────────────────
             A whole page shape rather than the usual one with holes in it. The
@@ -1689,15 +1701,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             wrong place for onboarding advice. */}
         {!hasTiles && !loadError && activeKind !== "calendar" && (
           <OnboardingChecklist hasConnection={connCount > 0} hasFlow={flowCount > 0} hasPublished={flowTiles.length > 0} />
-        )}
-        {/* THE FIRST-RUN TOUR, mounted beside the checklist and driven by the
-            same two facts. The checklist says WHAT to do; the tour says WHERE
-            things are, once, and then never again — `shouldOfferTour` is false
-            the moment either of these turns true, so it cannot nag. It renders
-            nothing at all when the anchors are absent (the rail is a drawer on
-            a narrow viewport). */}
-        {!hasTiles && !loadError && activeKind !== "calendar" && (
-          <Tour hasConnection={connCount > 0} hasFlow={flowCount > 0} />
         )}
         </>
         )}

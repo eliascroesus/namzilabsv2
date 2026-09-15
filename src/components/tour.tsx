@@ -2,13 +2,14 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { TOUR_KEY, TOUR_STEPS, clampStep, shouldOfferTour, visibleSteps, type TourStep } from "@/lib/tour";
 import { cn } from "@/lib/utils";
 
 /**
  * THE FIRST-RUN WALKTHROUGH — a spotlight on a real element, a bubble beside
- * it, and five steps.
+ * it, and a last step that goes somewhere.
  *
  * ═══ HAND-ROLLED, AND THAT IS THE CHEAPER OPTION HERE ═══
  *
@@ -24,8 +25,14 @@ import { cn } from "@/lib/utils";
  * that have to agree at the corners. A single element the size of the target
  * carrying `box-shadow: 0 0 0 9999px <dim>` dims everything OUTSIDE itself in
  * one paint, needs no maths, and cannot develop seams. `pointer-events: none`
- * on it keeps the highlighted control CLICKABLE, which matters: the first step
- * points at Apps and the obvious thing to do is click it.
+ * on it keeps the highlighted control CLICKABLE, which matters throughout: the
+ * obvious response to a spotlight on a nav item is to click the nav item.
+ *
+ * The ring and the dim are ONE declaration in `.tour-scrim`, and that is not
+ * tidiness. They were a `ring-2` utility and a class, both writing
+ * `box-shadow`; the utility layer won and the ring silently erased the dim, so
+ * the tour highlighted perfectly and dimmed nothing while every check stayed
+ * green. `pnpm tour` measures the painted pixel now.
  *
  * ═══ WHAT IT REFUSES TO DO ═══
  *
@@ -83,6 +90,7 @@ export function Tour({ hasConnection, hasFlow }: { hasConnection: boolean; hasFl
   const [rect, setRect] = useState<Rect | null>(null);
   const [viewport, setViewport] = useState({ w: 0, h: 0 });
   const bubbleRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
 
   const dismiss = useCallback(() => {
     setOpen(false);
@@ -204,11 +212,25 @@ export function Tour({ hasConnection, hasFlow }: { hasConnection: boolean; hasFl
                 Skip
               </Button>
             )}
+            {/*
+              THE LAST STEP GOES SOMEWHERE. Nothing in this product does
+              anything until data is coming in, so the tour finishes by taking
+              you to Apps rather than closing on "Done". Dismissal happens
+              first either way — navigating away must not leave the tour armed
+              to reappear on the next empty page.
+            */}
             <Button
               size="sm"
-              onClick={() => (last ? dismiss() : setIndex((i) => clampStep(i + 1, steps.length)))}
+              onClick={() => {
+                if (!last) {
+                  setIndex((i) => clampStep(i + 1, steps.length));
+                  return;
+                }
+                dismiss();
+                if (step.href) router.push(step.href);
+              }}
             >
-              {last ? "Done" : "Next"}
+              {last ? (step.cta ?? "Done") : "Next"}
             </Button>
           </div>
         </div>
