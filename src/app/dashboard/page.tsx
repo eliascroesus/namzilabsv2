@@ -17,6 +17,7 @@ import { FreshnessPoller } from "@/components/freshness-poller";
 import { FunnelView } from "@/components/funnel-view";
 import { FlowTile, tileValueForRange, type FlowResultRow } from "@/components/flow-tile";
 import { OnboardingChecklist } from "@/components/onboarding-checklist";
+import { Tour } from "@/components/tour";
 import { BoardControls, RangeMenu, TileArea, ViewStrip } from "./board-controls";
 import { BoardLayout } from "./board-layout";
 import { CustomBoard, type CanvasTile } from "./custom-board";
@@ -1688,6 +1689,15 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             wrong place for onboarding advice. */}
         {!hasTiles && !loadError && activeKind !== "calendar" && (
           <OnboardingChecklist hasConnection={connCount > 0} hasFlow={flowCount > 0} hasPublished={flowTiles.length > 0} />
+        )}
+        {/* THE FIRST-RUN TOUR, mounted beside the checklist and driven by the
+            same two facts. The checklist says WHAT to do; the tour says WHERE
+            things are, once, and then never again — `shouldOfferTour` is false
+            the moment either of these turns true, so it cannot nag. It renders
+            nothing at all when the anchors are absent (the rail is a drawer on
+            a narrow viewport). */}
+        {!hasTiles && !loadError && activeKind !== "calendar" && (
+          <Tour hasConnection={connCount > 0} hasFlow={flowCount > 0} />
         )}
         </>
         )}

@@ -2506,6 +2506,39 @@ html.mix {
    * simply does not animate and the sweep sits at 0deg — a static glint on one
    * corner rather than a broken card. That is the right way to lose.
    */
+  /**
+   * THE FIRST-RUN TOUR'S SPOTLIGHT.
+   *
+   * One element the size of the highlighted control, dimming everything
+   * OUTSIDE itself with a single enormous shadow spread. The alternative — a
+   * full-screen overlay with a hole cut in it — is either an SVG mask or four
+   * rectangles that have to agree at the corners, and both develop seams.
+   *
+   * The colour lives here rather than inline in the component for the same
+   * reason every other surface's does: a scrim is a design decision, and the
+   * one place to change it should be the file that owns the palette. It
+   * matches the dialog overlay's `bg-neutral-950/40` so the tour dims the page
+   * exactly as much as a modal does.
+   */
+  .tour-scrim {
+    /**
+     * THE RING AND THE DIM ARE ONE DECLARATION, and they have to be.
+     *
+     * The first version set the dim here and wore `ring-2 ring-marker` as a
+     * utility. Both write `box-shadow`, the utility layer wins, and the ring
+     * silently erased the scrim — a spotlight that highlighted correctly and
+     * dimmed nothing. It looked deliberate, and no source check could see it;
+     * it took a screenshot and a `getComputedStyle` to find the ring's stack
+     * sitting where the dim should have been.
+     *
+     * Two rules fighting over one property is the bug. One rule owning both
+     * layers of a single visual object is the fix.
+     */
+    box-shadow:
+      0 0 0 2px var(--marker),
+      0 0 0 9999px color-mix(in srgb, var(--color-neutral-950) 40%, transparent);
+  }
+
   .rail-invite {
     position: relative;
     isolation: isolate;
@@ -2530,9 +2563,9 @@ html.mix {
       from var(--nz-beam) at 50% 50%,
       transparent 0deg,
       transparent 250deg,
-      color-mix(in srgb, var(--rail-beam) 25%, transparent) 300deg,
-      var(--rail-beam) 335deg,
-      color-mix(in srgb, var(--rail-beam) 25%, transparent) 350deg,
+      color-mix(in srgb, var(--rail-beam) 12%, transparent) 300deg,
+      color-mix(in srgb, var(--rail-beam) 62%, transparent) 335deg,
+      color-mix(in srgb, var(--rail-beam) 12%, transparent) 350deg,
       transparent 360deg
     );
     animation: rail-invite-spin 4s linear infinite;
@@ -2549,8 +2582,23 @@ html.mix {
   .rail-invite::after {
     inset: -4px;
     z-index: -2;
-    filter: blur(5px);
-    opacity: 0.7;
+    filter: blur(6px);
+    /**
+     * SOFTENED, NOT REMOVED — and the first attempt at this crossed that line.
+     *
+     * Dropping to 0.4 with the inset pulled in to -3px took the light-theme
+     * spill under `frame-check`'s floor: 18 changed pixels in a second against
+     * a threshold of 20, which is the check's way of saying the glow had
+     * stopped being visible outside the card at all. Light theme has the
+     * smaller margin here, because `--rail-beam` is `#c0d5ff` against a pale
+     * rail rather than white against near-black.
+     *
+     * So the softening lives in the ARC's peak (62%, up the file) where it
+     * reads as intensity, and the halo keeps enough opacity to still be a
+     * visible spill. More blur than before over slightly less opacity: softer
+     * edge, same presence.
+     */
+    opacity: 0.58;
   }
 
   /**

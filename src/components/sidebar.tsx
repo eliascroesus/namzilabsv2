@@ -783,7 +783,10 @@ export function RailContent({
               and spelling the hex here would give the two dark modes a white
               field with white-on-white text — the exact bug `variant="white"`
               shipped in the board's own header. */}
-          <div className="flex h-9 w-full shrink-0 items-center gap-2.5 rounded-control border border-rail-border bg-rail-control pr-3">
+          <div
+            data-tour="rail-search"
+            className="flex h-9 w-full shrink-0 items-center gap-2.5 rounded-control border border-rail-border bg-rail-control pr-3"
+          >
             <span className={ICON_COL}>
               <Search aria-hidden className="size-[18px] shrink-0 text-rail-muted" />
             </span>
@@ -901,6 +904,11 @@ export function RailContent({
                       <Link
                         href={href}
                         aria-current={active ? "page" : undefined}
+                        /* The first-run tour's spotlight looks for these. Derived from
+                           the label rather than written out, so renaming an item cannot
+                           leave the tour pointing at an anchor that no longer exists —
+                           it simply stops matching and `visibleSteps` drops the step. */
+                        data-tour={`nav-${label.toLowerCase()}`}
                         className={cn(SLOT, active && "bg-rail-control")}
                       >
                         <span className={ICON_COL}>

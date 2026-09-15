@@ -98,6 +98,8 @@ export function NotificationBell({ notices }: { notices: Notice[] }) {
         size="icon"
         onClick={() => setOpen(true)}
         aria-label={count > 0 ? `Notifications — ${count} needing attention` : "Notifications — nothing needs attention"}
+        /* The first-run tour's last step spotlights this. */
+        data-tour="top-bell"
         className="relative size-8 shrink-0 rounded-control text-topbar-foreground hover:bg-topbar-control active:bg-topbar-control [&_svg]:size-4"
       >
         <Bell />

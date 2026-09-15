@@ -34,7 +34,8 @@
     "headers": "node scripts/headers-check.mjs",
     "check:deps": "pnpm audit --audit-level=high",
     "rotate:key": "tsx scripts/rotate-encryption-key.ts",
-    "orphans:tenants": "tsx scripts/orphaned-tenants.ts"
+    "orphans:tenants": "tsx scripts/orphaned-tenants.ts",
+    "tour": "node scripts/tour-check.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.0.0",
