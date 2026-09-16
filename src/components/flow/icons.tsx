@@ -14,7 +14,7 @@ import {
   Timer,
   type LucideIcon,
 } from "lucide-react";
-import { sourceStyle } from "./controls/source-style";
+import { logoColor, sourceStyle } from "./controls/source-style";
 import { SOURCE_LOGOS } from "@/connectors/logos";
 import { NODE_ACCENT, glyphInk, nodeAccent } from "./node-accent";
 
@@ -91,32 +91,47 @@ export function NodeIcon({ type, source, variant, size = 34 }: { type: string; s
   // failed image rather than a step.
   if (type === "app" && source) {
     const s = sourceStyle(source);
+    const logo = SOURCE_LOGOS[source];
+    /**
+     * A CONNECTED STEP WEARS ITS APP'S REAL LOGO, BARE — no tile, brand colour,
+     * the full size the tile used to take.
+     *
+     * This drew the step's green square with the app's two letters knocked out
+     * of it, and the comment defending that said the short label "still says
+     * which app it is". It does; a logo says it without being read. Losing the
+     * green costs less than it looks: a Get-data step is already the only node
+     * on the canvas that names an account, and the picker's own unconnected
+     * "Get data" entry keeps the green square below.
+     */
+    if (logo) {
+      return (
+        <svg
+          viewBox="0 0 24 24"
+          width={size}
+          height={size}
+          fill={logoColor(s.color)}
+          className="inline-block shrink-0"
+          role="img"
+          aria-label={s.label}
+          focusable="false"
+        >
+          <title>{s.label}</title>
+          <path d={logo} />
+        </svg>
+      );
+    }
     return (
       <span
         className="inline-flex shrink-0 items-center justify-center font-semibold leading-none"
-        /* The STEP's green, not the vendor's. The picker draws Get data in
-           NODE_ACCENT.app and the canvas drew the connected one in Google's
-           own brand green — the same step in two colours, one row apart. The
-           short label still says which app it is. */
+        /* The STEP's green, not the vendor's — for the twenty-one connectors
+           with no published mark. The picker draws Get data in NODE_ACCENT.app
+           and the canvas drew the connected one in Google's own brand green:
+           the same step in two colours, one row apart. */
         style={{ background: NODE_ACCENT.app, color: glyphInk(NODE_ACCENT.app), width: size, height: size, borderRadius: radius, fontSize: Math.round(size * 0.42) }}
         title={s.label}
         aria-hidden
       >
-        {/*
-          THE VENDOR'S GLYPH WHERE ONE EXISTS, the two letters where it does
-          not — on the STEP's green either way, which is the decision above and
-          is unchanged. The comment there already said the short label "still
-          says which app it is"; a mark says it faster, and the thirteen
-          connectors with one now read at a glance on a canvas where every
-          Get-data step is otherwise the same green square.
-        */}
-        {SOURCE_LOGOS[source] ? (
-          <svg viewBox="0 0 24 24" width={Math.round(size * 0.56)} height={Math.round(size * 0.56)} fill="currentColor" focusable="false" aria-hidden>
-            <path d={SOURCE_LOGOS[source]} />
-          </svg>
-        ) : (
-          s.short
-        )}
+        {s.short}
       </span>
     );
   }

@@ -1,4 +1,4 @@
-import { brandNeedsDarkInk, glyphNeedsDarkInk, sourceStyle } from "@/components/flow/controls/source-style";
+import { brandNeedsDarkInk, logoColor, sourceStyle } from "@/components/flow/controls/source-style";
 import { SOURCE_LOGOS } from "@/connectors/logos";
 
 /**
@@ -14,24 +14,22 @@ import { SOURCE_LOGOS } from "@/connectors/logos";
  * without pulling the builder's client-side `NodeIcon` (and its whole icon set)
  * into the page's bundle.
  *
- * ═══ THE GLYPH WHERE THERE IS ONE, THE INITIALS WHERE THERE IS NOT ═══
+ * ═══ TWO SHAPES, AND WHICH ONE DEPENDS ON WHETHER A MARK EXISTS ═══
  *
- * Thirteen of the catalogue's connectors have a real mark (Simple Icons,
- * CC0-1.0, committed by `scripts/fetch-logos.mjs`); the rest are not published
- * anywhere redistributable and keep their two letters. Both wear the SAME
- * brand-coloured tile at the same radius, so a grid of thirty-one apps reads as
- * one set rather than as two designs — which is the whole reason the glyph is
- * drawn in `currentColor` on the tile instead of as a full-colour logo on
- * white.
+ * Ten of the catalogue's connectors have a real logo (Simple Icons, CC0-1.0,
+ * committed by `scripts/fetch-logos.mjs`). Those are drawn BARE, at full size,
+ * in the brand's own colour — the thing a person recognises before reading any
+ * label. The other twenty-one have no redistributable mark and keep the
+ * brand-coloured tile with two letters, because a glyph carries its own
+ * silhouette and an abbreviation does not.
  *
- * ═══ THE INK IS COMPUTED, AND IT USED NOT TO BE ═══
+ * ═══ THE INK ON THAT TILE IS COMPUTED, AND IT USED NOT TO BE ═══
  *
  * This said `text-white` unconditionally. `brandNeedsDarkInk` has existed the
- * whole time — with a threshold derived as the exact luminance where white and
- * black are equally legible — but only the two MARKETING components called it.
- * So Mailchimp's `#FFE01B` tile rendered white on yellow at 1.26:1 inside the
- * product: a blank yellow dot that reads as a loading state. Now the same rule
- * decides the ink everywhere, and it covers the glyph as well as the letters.
+ * whole time — its threshold the exact luminance where white and black are
+ * equally legible — and only the two MARKETING components ever called it. So
+ * Mailchimp's `#FFE01B` tile rendered white on yellow at 1.26:1 inside the
+ * product: a blank yellow dot that reads as a failed image.
  */
 export function SourceMark({
   source,
@@ -56,16 +54,41 @@ export function SourceMark({
   const s = sourceStyle(source);
   const logo = source ? SOURCE_LOGOS[source] : undefined;
   /**
-   * THE LETTERS AND THE GLYPH ASK DIFFERENT QUESTIONS.
+   * A LOGO IS DRAWN BARE, IN THE BRAND'S OWN COLOUR. The tile is for letters.
    *
-   * Two letters are small TEXT, so they take the 4.5:1 bar and its crossover
-   * threshold. A logo is a graphical object, whose floor is 3:1 — which white
-   * clears on twenty-five of the thirty-one tiles, including Shopify and the
-   * two Google marks that everyone recognises as white on their own colour.
-   * Using the text rule for both is what turned half the grid black.
+   * The mark used to be a brand-coloured square with a white glyph knocked out
+   * of it, which made every app the same object in a different colour. A real
+   * logo IS the recognisable thing — Calendly's blue C is recognised before any
+   * label is read — so it gets the space the square was taking and the colour
+   * the square was wearing.
+   *
+   * THE TWO LETTERS KEEP THEIR TILE, and that is not an inconsistency left by
+   * accident. A glyph carries its own silhouette; two letters floating on a
+   * page are just small text, and the twenty-one connectors with no published
+   * mark would go from a recognisable chip to an unreadable abbreviation. The
+   * tile is what makes them a mark at all.
    */
-  const dark = logo ? glyphNeedsDarkInk(s.color) : brandNeedsDarkInk(s.color);
-  const ink = dark ? "text-neutral-950" : "text-white";
+  if (logo) {
+    return (
+      <svg
+        viewBox="0 0 24 24"
+        width={size}
+        height={size}
+        // Their colour, darkened only where their own would be invisible on a
+        // light page — see `logoColor`.
+        fill={logoColor(s.color)}
+        className={`inline-block shrink-0${className ? ` ${className}` : ""}`}
+        role="img"
+        aria-label={s.label}
+        focusable="false"
+      >
+        <title>{s.label}</title>
+        <path d={logo} />
+      </svg>
+    );
+  }
+
+  const ink = brandNeedsDarkInk(s.color) ? "text-neutral-950" : "text-white";
   return (
     <span
       aria-hidden
@@ -81,26 +104,7 @@ export function SourceMark({
         fontSize: Math.max(9, Math.round(size * 0.42)),
       }}
     >
-      {logo ? (
-        /*
-          58% of the tile. A brand glyph drawn edge to edge inside a rounded
-          square looks crowded next to a two-letter mark that has its own
-          sidebearings, and the two have to sit in the same grid — so the
-          optical weight is matched rather than the box.
-        */
-        <svg
-          viewBox="0 0 24 24"
-          width={Math.round(size * 0.58)}
-          height={Math.round(size * 0.58)}
-          fill="currentColor"
-          focusable="false"
-          aria-hidden
-        >
-          <path d={logo} />
-        </svg>
-      ) : (
-        s.short
-      )}
+      {s.short}
     </span>
   );
 }

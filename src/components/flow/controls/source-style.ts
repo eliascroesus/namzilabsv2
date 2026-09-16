@@ -50,32 +50,53 @@ export function brandNeedsDarkInk(color: string): boolean {
 }
 
 /**
- * THE SAME QUESTION FOR A LOGO, WHICH HAS A DIFFERENT ANSWER.
+ * THE COLOUR A BARE LOGO IS DRAWN IN — the brand's own, darkened only when its
+ * own is invisible.
  *
- * `brandNeedsDarkInk` above is about TWO LETTERS — small text, so the bar is
- * WCAG's 4.5:1 and the threshold is the crossover where white and black are
- * equally legible (0.179). That is the right rule for type and the wrong one
- * for a glyph: it turns fourteen of thirty-one tiles dark, including Shopify,
- * Google Calendar and Google Sheets, whose marks everyone recognises as white
- * on their own colour.
+ * The marks used to sit on a tile of the brand's colour, which gave them a
+ * guaranteed ground. Drawn bare on the page they inherit whatever surface they
+ * land on, and measured against this product's light surface five of the ten
+ * fail WCAG's 3:1 floor for a graphical object — Mailchimp at 1.19:1 and
+ * Paddle at 1.22:1 are not "low contrast", they are a yellow smudge on white.
  *
- * A LOGO IS NOT TEXT. WCAG's floor for a graphical object is 3:1, and white
- * clears that on every tile up to a luminance of 0.30 — measured across the
- * whole catalogue, that is twenty-five of them. The six that genuinely cannot
- * take white are Whop (2.97:1), Aircall (2.69), ThriveCart (2.03), Airtable
- * (1.80), Paddle (1.35) and Mailchimp (1.32), and those are the pale ones
- * anybody would expect to be an exception.
+ * SO THE HUE IS KEPT AND THE LIGHTNESS IS SPENT. Each channel is scaled toward
+ * black until the colour clears 3:1 on the light surface, which leaves
+ * Mailchimp unmistakably Mailchimp-yellow and merely darker. Six of the ten
+ * are untouched because they already pass.
  *
- * So: white unless white would fall below 3:1. Derived, not chosen —
- * `1.05 / (L + 0.05) >= 3` solves to `L <= 0.30`.
+ * ONE VALUE FOR BOTH THEMES, deliberately. Darkening raises contrast on a
+ * light ground and lowers it on a dark one, so the question is whether the
+ * adjusted colour still clears 3:1 on near-black — and it does, comfortably:
+ * a colour at the light-surface threshold sits around 0.30 luminance, which is
+ * better than 6:1 against `#121212`. A second per-theme value would buy
+ * nothing and would have to be right on the `mix` theme, where the rail is
+ * dark and the board is light at the same time.
  */
-export function glyphNeedsDarkInk(color: string): boolean {
+export function logoColor(color: string): string {
   const hex = color.replace("#", "");
-  if (hex.length !== 6 || !/^[0-9a-fA-F]{6}$/.test(hex)) return false;
-  const channel = (i: number) => {
-    const c = parseInt(hex.slice(i, i + 2), 16) / 255;
-    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  if (hex.length !== 6 || !/^[0-9a-fA-F]{6}$/.test(hex)) return color;
+  const rgb = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  const lin = (c: number) => {
+    const v = c / 255;
+    return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
   };
-  const luminance = 0.2126 * channel(0) + 0.7152 * channel(2) + 0.0722 * channel(4);
-  return luminance > 0.3;
+  const lumOf = (c: number[]) => 0.2126 * lin(c[0]) + 0.7152 * lin(c[1]) + 0.0722 * lin(c[2]);
+  /** The product's light working surface. */
+  const SURFACE = lin(0xf3) * 0.2126 + lin(0xf3) * 0.7152 + lin(0xf3) * 0.0722;
+  const contrast = (l: number) => (Math.max(l, SURFACE) + 0.05) / (Math.min(l, SURFACE) + 0.05);
+
+  if (contrast(lumOf(rgb)) >= 3) return color;
+  /**
+   * Scale toward black in small steps rather than solving for it: the transfer
+   * curve is not linear, and stepping stops at the FIRST value that clears the
+   * bar, which is the least the brand's colour has to be changed.
+   */
+  for (let k = 0.95; k > 0; k -= 0.05) {
+    const scaled = rgb.map((c) => Math.round(c * k));
+    if (contrast(lumOf(scaled)) >= 3) {
+      return `#${scaled.map((c) => c.toString(16).padStart(2, "0")).join("")}`;
+    }
+  }
+  return "#000000";
 }
+
