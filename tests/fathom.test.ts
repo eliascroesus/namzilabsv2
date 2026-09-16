@@ -193,39 +193,62 @@ describe("Fathom: poll", () => {
     return { urls };
   }
 
-  it("throws when the date filter is what empties the result", async () => {
+  it("recovers the records when the date filter is what empties the result", async () => {
     /**
-     * THE CASE THE CONTROL EXISTS FOR. Nothing inside the window, meetings
-     * outside it — which means `created_after` is excluding everything and the
-     * sync is broken. Silent zero would be indistinguishable from an empty
-     * account; the throw reaches `last_error` and says which.
+     * THE BUG, AND NOW THE RECOVERY. A real account held nine meetings created
+     * between 9 and 15 Sep; asking for `created_after` a month earlier — a
+     * bound all nine are newer than — returned zero, while the same request
+     * with no date filter returned all nine.
+     *
+     * An IGNORED parameter returns every row. A PARSED one that excludes
+     * returns none. Getting none is how we know Fathom read the value and
+     * decided nothing matched, which is what a NULL bound does in SQL.
+     *
+     * This used to throw, which was right while the cause was unknown. Now the
+     * connector proves the filter is dropping real rows and re-walks without
+     * it, applying the window itself — so the customer's meetings arrive.
      */
-    serveSplit([], [meeting({ id: "mtg_1" }), meeting({ id: "mtg_2" })]);
-    await expect(
-      fathomConnector.poll!({ connectionId: CONN, cursor: null, credentials: { apiKey: "k" } }),
-    ).rejects.toThrow(/but 2 with no date filter at all.*our bug, not your account/s);
+    const { urls } = serveSplit([], [meeting({ id: "mtg_1" }), meeting({ id: "mtg_2" })]);
+    const res = await fathomConnector.poll!({ connectionId: CONN, cursor: null, credentials: { apiKey: "k" } });
+
+    expect(res.records, "the meetings the filter was hiding must come back").toHaveLength(2);
+    // The recovery re-walks WITHOUT the bound; that second walk is what
+    // produced the records.
+    expect(urls.some((u) => !u.includes("created_after")), "no unfiltered walk was made").toBe(true);
   });
 
-  it("distinguishes a too-short window from a broken filter", async () => {
+  it("stays empty and quiet when the account's meetings genuinely predate the window", async () => {
     /**
-     * THE SAME SYMPTOM, THE OPPOSITE CAUSE, and the message has to say which.
-     * When everything the unfiltered call returns predates the window, the
-     * filter is working perfectly and the 30-day first sync is simply too
-     * short — telling somebody "this is our bug" there would send them, and
-     * me, looking in the wrong place.
+     * THE SAME SYMPTOM, THE OPPOSITE CAUSE. When everything the unfiltered
+     * call returns is OLDER than the window, the filter is working perfectly
+     * and there is nothing to recover — the account simply has no recent
+     * meetings. Falling back here would fetch every page of history to
+     * discover the same zero.
      */
     serveSplit([], [meeting({ id: "old_1", created_at: "2020-01-01T00:00:00Z" })]);
-    await expect(
-      fathomConnector.poll!({ connectionId: CONN, cursor: null, credentials: { apiKey: "k" } }),
-    ).rejects.toThrow(/0 of them are newer.*predate the window.*too short/s);
+    const res = await fathomConnector.poll!({ connectionId: CONN, cursor: null, credentials: { apiKey: "k" } });
+    expect(res.records).toHaveLength(0);
   });
 
-  it("reports the created_at range, which is what names the cause", async () => {
-    // Timestamps only — never a title, a transcript or an attendee.
-    serveSplit([], [meeting({ id: "a", created_at: "2026-09-01T11:30:00Z" }), meeting({ id: "b", created_at: "2026-09-10T08:00:00Z" })]);
-    await expect(
-      fathomConnector.poll!({ connectionId: CONN, cursor: null, credentials: { apiKey: "k" } }),
-    ).rejects.toThrow(/created_at runs 2026-09-01T11:30:00Z … 2026-09-10T08:00:00Z/);
+  it("sends created_after with seconds, never milliseconds", async () => {
+    /**
+     * THE ACTUAL FIX. `Date.toISOString()` always emits three fractional
+     * digits (`…20.203Z`); Fathom documents `created_after` with the example
+     * `2025-01-01T00:00:00Z` and returns `created_at` the same way — no
+     * fractional part anywhere in their API.
+     *
+     * Sending milliseconds is the difference between a filter that works and
+     * one that silently matches nothing, so the shape of the value we send is
+     * worth pinning rather than trusting.
+     */
+    const { urls } = serveSplit([meeting({ id: "m" })], [meeting({ id: "m" })]);
+    await fathomConnector.poll!({ connectionId: CONN, cursor: null, credentials: { apiKey: "k" } });
+
+    const filtered = urls.find((u) => u.includes("created_after"));
+    expect(filtered, "no filtered request was made").toBeTruthy();
+    const value = decodeURIComponent(new URL(filtered!).searchParams.get("created_after")!);
+    expect(value, `created_after was ${value}`).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
+    expect(value, "milliseconds must not be sent").not.toMatch(/\.\d/);
   });
 
   it("stays quiet when the account is genuinely empty", async () => {

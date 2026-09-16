@@ -60,6 +60,34 @@ const DEFAULTS = { pagesPerPoll: 3, maxPagesPerPoll: 20, firstSyncDays: 30, over
  */
 const LIST_PARAMS = { include_summary: false, include_transcript: false } as const;
 
+/**
+ * `2026-08-17T03:30:20Z` — SECONDS, NO MILLISECONDS, and this is the fix for a
+ * connection that silently returned nothing for a day.
+ *
+ * `Date.prototype.toISOString()` always emits three fractional digits
+ * (`…20.203Z`). Fathom's reference documents `created_after` with the example
+ * `2025-01-01T00:00:00Z`, and its own `created_at` responses are shaped the
+ * same way — no fractional part anywhere in their API surface.
+ *
+ * WHAT WE MEASURED AGAINST A REAL ACCOUNT. Nine meetings existed with
+ * `created_at` between 2026-09-09 and 2026-09-15. Asking for
+ * `created_after=2026-08-17T03:30:20.203Z` — a bound every one of them is
+ * comfortably newer than — returned ZERO. The same request with no date filter
+ * returned all nine.
+ *
+ * So the parameter was being READ and then excluding everything, which is the
+ * signature of a value that parsed to nothing: a NULL bound in SQL makes
+ * `created_at > NULL` match no rows at all, and the endpoint answers 200 with
+ * an empty list rather than complaining. An IGNORED parameter would have
+ * returned all nine instead; that is how we know it was parsed.
+ *
+ * This cannot be proven from outside their API without a key, so the walk below
+ * ALSO carries a fallback that works whatever the real cause turns out to be.
+ */
+function fathomTimestamp(d: Date): string {
+  return d.toISOString().replace(/\.\d{3}Z$/, "Z");
+}
+
 function client(credentials?: Record<string, unknown> | null) {
   return headerKeyClient(API, KEY_HEADER, requireCredential(credentials, "apiKey", "Fathom"), "Fathom");
 }
@@ -137,7 +165,22 @@ export const fathomConnector: Connector = {
 
   async poll(args: PollArgs): Promise<PollResult> {
     const api = client(args.credentials);
-    const result = await windowedWalk<Record<string, unknown>>({
+    /**
+     * WHEN TRUE, THE WALK STOPS SENDING `created_after` AND FILTERS HERE.
+     *
+     * Set by the control below, after it has PROVEN the parameter is dropping
+     * rows that exist — never speculatively. Fathom's meeting counts are
+     * small (a busy team records tens per week, not millions), so paging the
+     * window and filtering in memory is affordable; a customer's metric
+     * silently reading zero is not.
+     *
+     * The correct fix is the timestamp format above. This is the belt: if the
+     * cause turns out to be something else about their filter, the connector
+     * still syncs instead of pausing every ten minutes forever.
+     */
+    let filterLocally = false;
+
+    const walk = () => windowedWalk<Record<string, unknown>>({
       cursor: args.cursor,
       budget: args.budget,
       windowFloor: args.windowFloor,
@@ -145,7 +188,9 @@ export const fathomConnector: Connector = {
       fetchPage: async ({ since, cont }) => {
         const page = await api.get<{ items?: unknown[]; next_cursor?: string | null }>("/meetings", {
           ...LIST_PARAMS,
-          created_after: since.toISOString(),
+          // Omitted entirely once the control has proven the filter drops real
+          // rows — `undefined` is dropped from the query string by the client.
+          created_after: filterLocally ? undefined : fathomTimestamp(since),
           cursor: cont ?? undefined,
         });
         /**
@@ -178,8 +223,18 @@ export const fathomConnector: Connector = {
               `Run \`FATHOM_API_KEY=… pnpm tsx scripts/verify-fathom.ts\` to see which.`,
           );
         }
+        const rows = page.items.map(asObject);
         return {
-          rows: page.items.map(asObject),
+          // The same bound the request would have carried, applied here. A row
+          // with no readable `created_at` is KEPT rather than dropped: the
+          // window is an optimisation, and discarding a record because its
+          // timestamp is unparseable would lose data the provider has.
+          rows: filterLocally
+            ? rows.filter((r) => {
+                const at = Date.parse(str(r["created_at"]) ?? "");
+                return Number.isFinite(at) ? at >= since.getTime() : true;
+              })
+            : rows,
           next: page.next_cursor ?? null,
           rateLimit: api.rateLimit(),
         };
@@ -194,6 +249,8 @@ export const fathomConnector: Connector = {
       happenedAt: (r) => isoOrNull(r["scheduled_start_time"]) ?? isoOrNull(r["created_at"]),
       map: (r) => toCanonical(r, args.connectionId),
     });
+
+    let result = await walk();
 
     /**
      * THE CONTROL — run only on the one occasion the answer is unknowable.
@@ -219,17 +276,24 @@ export const fathomConnector: Connector = {
      * when its holder recorded none and none were shared to their Team. The
      * walk's empty result stands and nothing is raised.
      *
-     * IF IT RETURNS MEETINGS, our request is wrong and the sync is broken, so
-     * it throws with the count. That message reaches `last_error` and the
-     * connection page — the difference between "0 records, no idea" and a bug
-     * report that names itself.
+     * IF IT RETURNS MEETINGS THAT ARE INSIDE THE WINDOW, the filter is
+     * dropping real records — so the walk is re-run with the bound omitted and
+     * the window applied here instead. That is a fallback, not the fix: the
+     * fix is `fathomTimestamp` sending seconds rather than milliseconds. This
+     * exists so a provider quirk can never again leave a connection green,
+     * empty and silent.
      */
     if (result.records.length === 0 && !args.cursor) {
       // A failed control must never fail the sync: it is a diagnostic.
       const control = await api.get<{ items?: unknown[] }>("/meetings", LIST_PARAMS).catch(() => null);
       const seen = Array.isArray(control?.items) ? control.items.length : 0;
       if (seen > 0) {
-        const asked = new Date(Date.now() - DEFAULTS.firstSyncDays * 86_400_000).toISOString();
+        /**
+         * Compared as INSTANTS, not as strings. The previous version sorted and
+         * compared ISO text, which happens to work for same-shape UTC stamps
+         * and silently stops the moment an offset like `+02:00` appears.
+         */
+        const sinceMs = Date.now() - DEFAULTS.firstSyncDays * 86_400_000;
         /**
          * THE DATES ARE THE DIAGNOSIS, and the first version of this message
          * left them out — which made it say "the filter is broken" without the
@@ -253,21 +317,39 @@ export const fathomConnector: Connector = {
          */
         const stamps = (control?.items ?? [])
           .map((r) => asObject(r))
-          .map((r) => ({ created: str(r["created_at"]) ?? null, start: str(r["scheduled_start_time"]) ?? null }))
-          .filter((d) => d.created || d.start);
-        const createdList = stamps.map((d) => d.created).filter(Boolean).sort() as string[];
-        const range = createdList.length
-          ? `their created_at runs ${createdList[0]} … ${createdList[createdList.length - 1]}`
-          : `none of them carried a created_at (fields seen: ${Object.keys(asObject((control?.items ?? [])[0])).join(", ") || "none"})`;
-        const newer = createdList.filter((c) => c > asked).length;
+          .map((r) => str(r["created_at"]) ?? null)
+          .filter(Boolean) as string[];
+        const createdList = [...stamps].sort();
+        const newer = createdList.filter((c) => Date.parse(c) >= sinceMs).length;
 
-        throw new Error(
-          `Fathom returned no meetings for created_after=${asked}, but ${seen} with no date filter at all — ` +
-            `${range}; ${newer} of them are newer than what we asked for. ` +
-            (newer > 0
-              ? `Rows inside the window were filtered out, so created_after is not doing what we think. This is our bug, not your account.`
-              : `All of them predate the window, so the 30-day first sync is simply too short to reach them.`),
-        );
+        if (newer > 0) {
+          /**
+           * PROVEN: rows INSIDE the window came back once the filter was gone.
+           * So `created_after` is dropping records that exist, and the sync is
+           * broken for as long as we keep sending it.
+           *
+           * This used to throw here, which was right when nobody knew why —
+           * the message named the cause and the connection paused loudly. Now
+           * the cause is known, and pausing a customer's sync every ten minutes
+           * over a provider's date filter is the wrong trade: we can do the
+           * filtering ourselves.
+           *
+           * So the walk runs AGAIN with the bound omitted and the window
+           * applied to the rows in memory. It costs the pages the filter would
+           * have skipped, which for an account that records tens of meetings a
+           * week is nothing, and it produces the same records.
+           */
+          filterLocally = true;
+          console.warn(
+            `[fathom] created_after excluded ${newer} meeting(s) that are inside the window ` +
+              `(their created_at runs ${createdList[0]} … ${createdList[createdList.length - 1]}). ` +
+              `Falling back to fetching unfiltered and applying the window locally.`,
+          );
+          result = await walk();
+        }
+        // `newer === 0` needs no action and is not a fault: every meeting the
+        // account has genuinely predates the window, so an empty result is the
+        // correct answer and the next sync widens nothing.
       }
     }
     return result;
