@@ -1,0 +1,143 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   NAMZILABS — AuthKit custom CSS
+   Paste into: WorkOS Dashboard → Branding → AuthKit → Custom CSS
+
+   SET THE COLOURS IN THE DASHBOARD FIELDS FIRST, not here. Branding has real
+   inputs for page background, button background, button text, link colour,
+   corner radius and font, each with separate light and dark values, and a value
+   set in a field is one AuthKit understands — it feeds the hover and pressed
+   states, the focus ring and the disabled styles for free. CSS that fights
+   those fields is how a sign-in page ends up with a brand-blue button and a
+   default-blue focus ring around it.
+
+   So this file is only the things a field cannot reach: the card surface, the
+   hairline, the heading weight, and the split panel.
+
+   ── THE VALUES, so the two surfaces cannot drift ──────────────────────────
+                        LIGHT       DARK
+     page               #F3F3F3     #121214
+     card               #FFFFFF     #151515
+     text               #121214     #FFFFFF
+     hairline           #E1E1E1     #343434
+     button / link      #568CFF     #568CFF    (the fill does not change with the theme)
+     button pressed     #3F73E6     #3F73E6
+     corner radius      8px controls · 10px cards
+     font               Inter
+
+   ── ON THE SELECTORS ──────────────────────────────────────────────────────
+   `.ak-Background`, `.ak-Header`, `.ak-Heading`, `.ak-PrimaryButton` and
+   `.ak-AuthButton` are the class names WorkOS documents, and `data-hak-page` /
+   `data-method` are its documented attribute hooks. The dashboard's CSS editor
+   autocompletes the rest — type a period to see them — so if something below
+   does not bite, check the real class name there rather than guessing at it.
+
+   `light-dark()` is AuthKit's own recommendation for theming, and it is why
+   there is no duplicated dark block: one declaration carries both values.
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* THE CARD, matching the product's own surface: white on the light page,
+   #151515 on the dark one, with the same hairline the app draws everywhere and
+   the same 10px corner every card in the board uses. No shadow — the app's
+   cards sit on a hairline, not a drop shadow, and a shadow here would make the
+   first screen a customer sees the one screen that is not the product. */
+.ak-Card,
+[data-hak-card] {
+  background: light-dark(#ffffff, #151515);
+  border: 1px solid light-dark(#e1e1e1, #343434);
+  border-radius: 10px;
+  box-shadow: none;
+}
+
+/* The page behind it. Set this in the dashboard field too; it is repeated here
+   because the field paints the viewport and this paints the panel's own ground
+   on the split layout. */
+.ak-Background {
+  background: light-dark(#f3f3f3, #121214);
+}
+
+/* "Quiet chrome, loud numbers" is the product's rule and it holds here: the
+   heading is the only thing on the page that should carry weight, and 600 is
+   the heaviest step the kit uses — `font-bold` is banned in the app and this
+   is the same judgement one surface over. */
+.ak-Heading {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: light-dark(#121214, #ffffff);
+}
+
+/* THE SIGN-UP PAGE ASKS FOR MORE, so its heading gets to be bigger. This is
+   the documented page hook; the same attribute takes `sign-in`,
+   `sign-in/password`, `reset-password`, `invite` and the rest. */
+[data-hak-page="sign-up"] .ak-Heading {
+  font-size: 1.75rem;
+}
+
+/* GOOGLE FIRST. A returning customer who signed up with Google looks for the
+   button they used last time, and scanning past an email field to find it is
+   the whole of that friction. `order` works because the provider buttons are a
+   flex list — and it is scoped to the method rather than to a position, so
+   adding Microsoft later does not silently reshuffle this. */
+.ak-AuthButton[data-method="google"] {
+  order: -1;
+}
+
+.ak-AuthButton {
+  border-radius: 8px;
+  border: 1px solid light-dark(#e1e1e1, #343434);
+}
+
+/* The primary action. The fill and its text come from the dashboard fields;
+   what is here is the corner, which the radius field rounds globally, and the
+   pressed step, which no field exposes. */
+.ak-PrimaryButton {
+  border-radius: 8px;
+}
+.ak-PrimaryButton:active {
+  background: #3f73e6;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   THE SPLIT PANEL — only if "two-column" is chosen as the page layout.
+
+   Worth choosing. A centred card on an empty page is a form; a split page is a
+   product with a form on it, and this is the first screen anybody sees.
+
+   Put the HTML in Branding → AuthKit → Page layout → content panel. Something
+   as plain as a line of copy over the brand gradient reads better than a stock
+   illustration, and it cannot go stale:
+
+     <div class="nz-panel">
+       <p class="nz-quote">Every number on your dashboard, traced back to the
+       record it came from.</p>
+     </div>
+   ───────────────────────────────────────────────────────────────────────── */
+.nz-panel {
+  display: flex;
+  align-items: flex-end;
+  height: 100%;
+  padding: 48px;
+  /* The brand, stepped down to its pressed value — the same two colours the
+     app's own accent uses, in the order the invite card uses them. */
+  background: linear-gradient(160deg, #3f73e6 0%, #568cff 100%);
+}
+
+.nz-quote {
+  margin: 0;
+  max-width: 22ch;
+  font-size: 1.5rem;
+  line-height: 1.3;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  /* White on #568CFF is 3.18:1 — fine for this size, which is display type and
+     not body copy. Do not reuse this pairing for a sentence. */
+  color: #ffffff;
+}
+
+/* The panel is decoration, and decoration is the first thing to go when the
+   viewport cannot afford it. AuthKit collapses to one column on small screens
+   on its own; this is belt and braces for the in-between widths. */
+@media (max-width: 900px) {
+  .nz-panel {
+    display: none;
+  }
+}
