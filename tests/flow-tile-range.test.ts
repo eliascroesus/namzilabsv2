@@ -293,6 +293,40 @@ describe("a range whose answer is already being computed", () => {
     expect(html).toContain("motion-reduce:animate-none");
   });
 
+  it("does not print the em-dash above it", () => {
+    /**
+     * THE OWNER'S SECOND REPORT, IN ONE ASSERTION: "why is there a - above as
+     * well". `MetricCard` prints an em-dash for a NULL headline, which is the
+     * right answer for "this period has no number" and the wrong one while a
+     * number is being computed — the card was making both claims at once. The
+     * fix hands the card `undefined` instead, which is already its documented
+     * "no headline row at all" value.
+     *
+     * Reachable, and therefore falsifiable: the same dash is asserted present
+     * on the non-computing path in the first block of this file.
+     */
+    const html = render(row(), "2026-08-03..2026-08-14", true);
+    expect(html, "a dash says the period has no answer; a computation has not said that").not.toContain("—");
+  });
+
+  it("stands in the numeral's own box, so the card does not resize when the number lands", () => {
+    /**
+     * `h-9` IS `leading-9` — the 36px the figure occupies, which metric-card's
+     * own header calls load-bearing for its card arithmetic. The indicator used
+     * to ADD a row instead of taking the number's: 36 (dash) + 10 (mt-2.5) + 16
+     * (a 13px line), so every tile on the board jumped 26px the moment its
+     * number arrived. `size-7` is 28px — `--text-display-md`, the size of the
+     * digits it replaces — which is the owner's "make the loading thing big".
+     *
+     * Measured as well as pinned: /design/overview renders this state beside a
+     * settled tile and both cards measure 104px.
+     */
+    const html = render(row(), "2026-08-03..2026-08-14", true);
+    expect(html, "the numeral's box, held open").toContain("h-9");
+    expect(html, "as big as the digits it stands in for").toContain("size-7");
+    expect(html, "a live region, so a screen reader hears the number arrive").toContain('role="status"');
+  });
+
   it("keeps the sentence when nothing is coming", () => {
     // The default. A spinner here would spin forever.
     const html = render(row(), "2026-08-03..2026-08-14");

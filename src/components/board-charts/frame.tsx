@@ -126,6 +126,24 @@ export function ChartFrame({
   children: ReactNode;
 }) {
   const blocked = unavailable ?? emptyReason;
+  /**
+   * AN ANSWER IS ON ITS WAY — see `FlowTile`, which draws the same state on the
+   * classic board and had the same two faults.
+   *
+   * An errored row is excluded here as well as by the caller: a recompute of an
+   * errored flow reproduces the error, so a spinner over one is a promise
+   * nothing can keep.
+   */
+  const inFlight = Boolean(unavailable) && Boolean(computing) && status !== "error";
+  /**
+   * IT STANDS IN FOR THE NUMBER ONLY WHERE THERE IS ONE.
+   *
+   * A funnel, a pipeline and a table head no figure at all (`headline` is
+   * `undefined`), so there is no numeral box to hold open and the indicator
+   * stands in for the MARK instead — filling the body and centring, because
+   * that is the object it is replacing on those cards.
+   */
+  const standsInForNumeral = inFlight && headline !== undefined;
   return (
     // `data-tile-card` marks the chrome a BLOCK must not have. The harness and
     // `tests/board-blocks.test.ts` both used to look for the literal classes
@@ -277,7 +295,7 @@ export function ChartFrame({
           three-column tile at 1440px is ~265px and cannot. Wrapping is what
           makes the narrow case degrade instead of truncate — the chip drops to
           its own line under the number rather than being cut in half. */}
-      {headline !== undefined && (
+      {headline !== undefined && !inFlight && (
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
           {/* NO `leading-none`. The step's own line-height is 40px
               (`--text-display-md--line-height`) and that is exactly what the
@@ -319,8 +337,13 @@ export function ChartFrame({
           since 12 Sep no title either — they were 12px of nothing on top of the
           header's own 16px pad, which is the white band the owner measured at
           "29px when it should be 16". */}
-      <div className={cn("flex min-h-0 flex-1 flex-col", (headline !== undefined || !hideTitle) && "mt-3")}>
-        {unavailable && computing && status !== "error" ? (
+      {/* THE 12px COMES OFF when the indicator is taking the numeral's place.
+          That gap exists to separate the mark from the figure above it; with
+          the figure's row gone there is nothing to separate, and leaving it
+          would sit the loader 12px below where the number was and jump the card
+          when the number lands. */}
+      <div className={cn("flex min-h-0 flex-1 flex-col", !standsInForNumeral && (headline !== undefined || !hideTitle) && "mt-3")}>
+        {inFlight ? (
           /* AN ANSWER IS COMING, SO SAY THAT AND NOTHING ELSE. The sentence
              here was the same one a tile shows when nothing is coming, which
              reads as a fault; a moving indicator reads as work.
@@ -332,11 +355,23 @@ export function ChartFrame({
              errored flow reproduces the error, so a spinner over one is a
              promise nothing can keep — and it would cover the reason with it.
              The page already filters those out, but this branch has shipped a
-             calm placeholder over a failing flow once before. */
-          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Loader2 aria-hidden className="size-3 shrink-0 animate-spin motion-reduce:animate-none" />
-            Recomputing…
-          </p>
+             calm placeholder over a failing flow once before.
+             `h-10` IS `--text-display-md--line-height` — the 40px box the
+             numeral occupies on THIS card. The metric card overrides it to 36
+             (`leading-9`), so the two spell their own height rather than
+             sharing a constant that would be wrong on one of them. `size-7` is
+             28px, the numeral's own size: the loader is as big as the digits it
+             replaces rather than a hint beside them. */
+          <div
+            role="status"
+            className={cn(
+              "flex items-center gap-2.5 text-sm font-medium text-muted-foreground",
+              standsInForNumeral ? "h-10" : "flex-1 justify-center",
+            )}
+          >
+            <Loader2 aria-hidden className="size-7 shrink-0 animate-spin motion-reduce:animate-none" />
+            <span className="min-w-0 truncate">Recomputing…</span>
+          </div>
         ) : blocked ? (
           <p className="text-xs text-muted-foreground" title={blocked}>
             {blocked.length > 160 ? `${blocked.slice(0, 160)}…` : blocked}

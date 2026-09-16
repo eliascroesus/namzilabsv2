@@ -167,6 +167,17 @@ export function FlowTile({
         ? "Not computed for this range — the last run of this flow failed."
         : "Not computed yet for this range — Refresh to compute it."
       : undefined);
+  /**
+   * AN ANSWER IS ON ITS WAY — the one state that takes the number away without
+   * making a claim about it.
+   *
+   * It matters because of what goes to `MetricCard`: `null` prints an em-dash,
+   * and a dash is a SENTENCE — "this period has no answer". A computation in
+   * flight has not said that yet. The card was printing the dash AND a spinner
+   * underneath it, which says both at once, and the owner read the pair
+   * exactly as it reads: broken.
+   */
+  const inFlight = Boolean(unavailable) && computing && row.status !== "error";
   const t: Tile = windowed && !unavailable ? { ...stored, value: windowed.value, series: windowed.series, groups: windowed.groups } : stored;
 
   /**
@@ -211,7 +222,11 @@ export function FlowTile({
          claims about whether a number can be trusted, not about how recently it
          refreshed. */
       marker={row.status === "fresh" ? null : <Freshness status={row.status} />}
-      headline={unavailable ? null : fmt(t.value, t)}
+      /* `undefined` — NO HEADLINE ROW AT ALL — while it computes. That is
+         already this prop's documented third value (see metric-card.tsx), so
+         the indicator below can stand in the box the number will occupy
+         instead of hanging beneath a dash. */
+      headline={inFlight ? undefined : unavailable ? null : fmt(t.value, t)}
       provenance={
         row.computedAt ? (
           // NO "Updated " PREFIX. At three columns the footline has room for a
@@ -266,7 +281,7 @@ export function FlowTile({
           tile, whose series and target are the flow's OWN all-time figures —
           drawing them under a range that has no answer is the all-time-number-
           under-the-Today-pill fallback wearing bars. */}
-      {unavailable && computing && row.status !== "error" ? (
+      {inFlight ? (
         /* AN ANSWER IS COMING, SO SAY THAT AND NOTHING ELSE.
            This printed the same sentence as a tile that will never fill in —
            "Not computed yet for this range — Refresh to compute it." — which is
@@ -275,16 +290,27 @@ export function FlowTile({
            moving indicator reads as work.
            RECOMPUTING rather than Loading, because that is what is happening:
            the number for this window is being derived, not fetched.
-           AN ERRORED ROW IS EXCLUDED HERE and not only by the caller. The page
+           AN ERRORED ROW IS EXCLUDED and not only by the caller. The page
            already filters those out of `pendingCustomFlows`, but a recompute of
            an errored flow reproduces the error — so a spinner over one is a
            promise nothing can keep, and it would hide the reason underneath it.
            "Should never happen" is how that branch shipped a calm em-dash over
-           a failing flow the last time it was touched. */
-        <p className="mt-2.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-          <Loader2 aria-hidden className="size-3 shrink-0 animate-spin motion-reduce:animate-none" />
-          Recomputing…
-        </p>
+           a failing flow the last time it was touched.
+
+           IT STANDS IN THE NUMERAL'S OWN BOX, and that is the whole geometry.
+           `h-9` IS `leading-9` — the 36px the figure occupies, which the card's
+           own header calls load-bearing for its 108px arithmetic — so the tile
+           is the same height computing as it is when the number lands and
+           nothing moves under the cursor. It used to ADD a row: 36 (the dash)
+           + 10 (mt-2.5) + 16 (a 13px line) = 62px against 36px settled, so
+           every tile on the board shifted 26px when its number arrived.
+           `size-7` is 28px, which is `--text-display-md` — the loader is the
+           SIZE OF THE DIGITS it stands in for rather than a hint beside them.
+           That is the owner's "just make the loading thing big". */
+        <div role="status" className="flex h-9 items-center gap-2.5 text-sm font-medium text-muted-foreground">
+          <Loader2 aria-hidden className="size-7 shrink-0 animate-spin motion-reduce:animate-none" />
+          <span className="min-w-0 truncate">Recomputing…</span>
+        </div>
       ) : unavailable ? (
         <p className="mt-2.5 text-xs text-muted-foreground" title={unavailable}>
           {unavailable.length > 160 ? `${unavailable.slice(0, 160)}…` : unavailable}

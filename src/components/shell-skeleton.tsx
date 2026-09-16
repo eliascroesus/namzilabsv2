@@ -24,10 +24,31 @@ import { Skeleton } from "@/components/ui/skeleton";
  */
 export function ShellSkeleton({
   width = "default",
+  title = true,
   children,
 }: {
-  /** Mirrors PageContainer's own prop — connections/[id] is a narrow page. */
-  width?: "default" | "narrow";
+  /**
+   * Mirrors PageContainer's own prop — connections/[id] is a narrow page, and
+   * the BOARD is uncapped.
+   *
+   * `full` was missing here while the page had it, so the one page in the
+   * product that runs edge to edge was mirrored by a skeleton capped at
+   * `max-w-6xl`: measured at 1920, the fallback's column is x=510 w=1152 and
+   * the settled `<main>` is x=261 w=1650. The board jumped 249px left and grew
+   * 498px wider the instant it arrived — the exact failure this mirror exists
+   * to prevent, on the product's home page.
+   */
+  width?: "default" | "narrow" | "full";
+  /**
+   * WHETHER THE PAGE HAS A HEADING IN ITS BODY.
+   *
+   * Most do. The dashboard does NOT any more — its title portals into the top
+   * bar (`TopBarTitle`) — so shimmering one here reserved 32px of space for
+   * something that never lands, and the board started that much too low. A
+   * flag rather than a deletion: /integrations, /connections and
+   * /dashboard/activity still render a body h1 and would inherit the jump.
+   */
+  title?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -73,8 +94,13 @@ export function ShellSkeleton({
           <div className="h-[49px] shrink-0 border-b border-topbar-border bg-topbar" />
           <div className="min-h-0 flex-1 overflow-y-auto bg-panel">
             {/* Not <main>: PageContainer renders the page's one main landmark. */}
-            <div className={`mx-auto w-full p-6 ${width === "narrow" ? "max-w-3xl" : "max-w-6xl"}`}>
-              <Skeleton className="h-8 w-48" />
+            {/* THE PAGE'S OWN TERNARY, SPELLED THE PAGE'S OWN WAY. Copied
+                character-for-character from `PageContainer` rather than
+                written as an equivalent, because `tests/page-width.test.ts`
+                asserts the pair against ONE literal — which is what stops the
+                two drifting apart a third time. */}
+            <div className={`mx-auto w-full p-6 ${width === "narrow" ? "max-w-3xl" : width === "full" ? "" : "max-w-6xl"}`}>
+              {title && <Skeleton className="h-8 w-48" />}
               {children}
             </div>
           </div>

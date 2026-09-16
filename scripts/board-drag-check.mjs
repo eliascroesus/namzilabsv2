@@ -372,6 +372,43 @@ console.log("\nthe board's own controls share one row, above the columns");
   check(row?.aboveColumns === true, "and the row is above the columns");
 }
 
+/**
+ * ═══ THE TABS FOLLOW THE WINDOW — the regression this file exists for ═══
+ *
+ * The owner reported the same thing three times: draw a two-week window on one
+ * view, press another tab, land back on "Last 7 days". Two fixes went to the
+ * wrong layer, because every href the SERVER built was correct — `boardHref`
+ * carried the range, the page's `qs()` merged it, the rail read it live.
+ *
+ * The strip was the one that did not. It held the tab OBJECTS in state and
+ * re-synced them on a signature of `key:pos`, which is stable across exactly
+ * the change that matters: a range press rewrites every `href` and touches
+ * neither. So the tabs kept the links they were first rendered with, and the
+ * drawn window was dropped the instant one was pressed.
+ *
+ * It shipped green because the real board is behind WorkOS and the runner has
+ * no DOM — the precise class this page was built for. Measured here: press a
+ * range link (a client-side navigation on the same route, which is what the
+ * product's pill does, and which does NOT remount the strip) and read the tabs'
+ * own hrefs. Before the fix this was 0 of 6.
+ */
+{
+  const tabHrefs = () => page.$$eval("[data-view-tab] a[href]", (as) => as.map((a) => a.getAttribute("href")));
+
+  await page.goto(`${URL}?range=7d`, { waitUntil: "networkidle" });
+  const before = await tabHrefs();
+  check(before.length > 1 && before.every((h) => h?.includes("range=7d")), "the tabs start on the window the page was opened with", JSON.stringify(before));
+
+  await page.click('[data-range-link="custom"]');
+  await page
+    .waitForFunction(() => document.querySelector("[data-current-range]")?.getAttribute("data-current-range") === "2026-09-01..2026-09-16", { timeout: 10_000 })
+    .catch(() => {});
+  const after = await tabHrefs();
+  const carried = after.filter((h) => h?.includes("range=2026-09-01..2026-09-16")).length;
+  // EVERY tab, not "some": one stale tab is one way to lose the window.
+  check(after.length > 1 && carried === after.length, "and every tab carries a window drawn after the strip mounted", `${carried}/${after.length} — ${JSON.stringify(after)}`);
+}
+
 check(errors.length === 0, "no uncaught page errors", JSON.stringify(errors));
 
 await browser.close();

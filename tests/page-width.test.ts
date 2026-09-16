@@ -97,16 +97,29 @@ describe("the page container and the skeleton that stands in for it", () => {
      * page's classes (it cannot render PageContainer — that is `<main
      * id="main">` and carries `rise-in`), and it has drifted from it twice.
      */
-    // `full` is the board's own exception — a grid of fixed-size cards gains
-    // COLUMNS as the window grows, which is the one page where chasing the
-    // viewport is right. The two capped widths are unchanged.
-    expect(page).toContain('width === "narrow" ? "max-w-3xl" : width === "full" ? "" : "max-w-6xl"');
-    expect(skeleton).toContain('width === "narrow" ? "max-w-3xl" : "max-w-6xl"');
+    /**
+     * ONE LITERAL, ASSERTED ON BOTH SIDES — and it has to be one, because the
+     * previous spelling is how a 249px jump shipped green.
+     *
+     * `full` was added to the page and the assertion was updated on the page's
+     * side only: the skeleton's line went on pinning the two-way ternary, and a
+     * third line explicitly FORBADE the mirror ever gaining the uncapped
+     * branch. So this file — whose whole purpose is that the shimmer stands
+     * where the page will — certified a mirror capped at `max-w-6xl` in front
+     * of an uncapped board, and broke on contact with the fix. Measured at
+     * 1920: fallback column x=510 w=1152, settled `<main>` x=261 w=1650.
+     *
+     * A width the PAGE can take is a width the MIRROR must be able to take.
+     * Asserting the same string against both is the only shape of this test
+     * that cannot drift onto one side again.
+     */
+    const widths = 'width === "narrow" ? "max-w-3xl" : width === "full" ? "" : "max-w-6xl"';
+    expect(page).toContain(widths);
+    expect(skeleton, "the mirror must spell the page's ternary character-for-character").toContain(widths);
 
     // The uncapped spelling. Its return means the fill is back and the pair is
     // out of step with the kit again.
     expect(page).not.toMatch(/width === "narrow" && "max-w-3xl"/);
-    expect(skeleton).not.toContain('"max-w-3xl" : ""');
   });
 
   it("reserve the SAME width for the sidebar", () => {

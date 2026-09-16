@@ -1,5 +1,6 @@
 import { BoardLayout } from "@/app/dashboard/board-layout";
 import { BoardControls, TileArea, ViewStrip, ViewTitle } from "@/app/dashboard/board-controls";
+import Link from "next/link";
 import { PageContainer, PageHeader } from "@/components/ui/page";
 import { FlowTile } from "@/components/flow-tile";
 import { FlowNameField } from "@/components/flow/FlowToolbar";
@@ -66,7 +67,28 @@ const PLACEMENTS: TilePlacement[] = [
   { tileKey: TILES[4].key, groupId: "g3", pos: "i" },
 ];
 
-export default function BoardLab() {
+export default async function BoardLab({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  /**
+   * THE WINDOW THIS HARNESS IS STANDING ON — and it is a query param rather
+   * than a constant for one specific regression.
+   *
+   * The strip is a client component that holds the tab order. It used to hold
+   * the whole tab OBJECTS, re-synced on a signature of `key:pos` — which does
+   * not move when a date range rewrites every `href`. So the tabs kept the
+   * links they were first rendered with, and the owner's drawn window was
+   * silently dropped the moment he pressed another tab. Every href the server
+   * built was correct; nobody was re-rendering them.
+   *
+   * That is exactly the class this page was made for: the real board is behind
+   * WorkOS and the runner has no DOM, so it shipped green. Building the hrefs
+   * from `?range=` lets `board-drag-check` press one link and assert the TABS
+   * changed with it — the owner's journey, on a public route.
+   */
+  const sp = await searchParams;
+  const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
+  const range = one(sp.range) ?? "7d";
+  const tabHref = (view: string) => `/design/board?range=${encodeURIComponent(range)}&view=${view}`;
+
   /* THE REAL TABS, not a drawing of them — the whole point of this page.
      Enough of them to show the strip wrapping rather than scrolling, with
      the active one wearing its kebab.
@@ -84,16 +106,16 @@ export default function BoardLab() {
         /* The DEFAULT view first, named as the real strip names it.
            `id: null` — it has no row until it is adopted, which is
            also why it is the one tab here that will not drag. */
-        { key: "default", id: null, name: "Dashboard", href: "#", pos: "a1" },
-        { key: "v2", id: "v2", name: "Pipeline health", href: "#", pos: "a2" },
-        { key: "v3", id: "v3", name: "Revenue", href: "#", pos: "a3" },
-        { key: "v4", id: "v4", name: "Team", href: "#", pos: "a4" },
-        { key: "v5", id: "v5", name: "Weekly review", href: "#", pos: "a5" },
-        { key: "v6", id: "v6", name: "Ops", href: "#", pos: "a6" },
+        { key: "default", id: null, name: "Dashboard", href: tabHref("default"), pos: "a1" },
+        { key: "v2", id: "v2", name: "Pipeline health", href: tabHref("v2"), pos: "a2" },
+        { key: "v3", id: "v3", name: "Revenue", href: tabHref("v3"), pos: "a3" },
+        { key: "v4", id: "v4", name: "Team", href: tabHref("v4"), pos: "a4" },
+        { key: "v5", id: "v5", name: "Weekly review", href: tabHref("v5"), pos: "a5" },
+        { key: "v6", id: "v6", name: "Ops", href: tabHref("v6"), pos: "a6" },
       ]}
       activeView="v6"
       canEdit
-      defaultHref="#"
+      defaultHref={tabHref("default")}
     />
   );
 
@@ -113,6 +135,23 @@ export default function BoardLab() {
               `tabs={viewStrip}` for the same reason as the dashboard: the strip
               lives in the header's own zone now, not inside `BoardLayout`. */}
           <PageHeader tabs={viewStrip} title={<ViewTitle viewId="v-demo" name="Dashboard" canEdit />} />
+          {/* THE RANGE PRESS, AS A PLAIN LINK — the second half of the repro
+              above. Pressing one is a client-side navigation on this same
+              route, which is what the product's range pill does: the page
+              re-renders with new tab hrefs WITHOUT remounting the strip. If the
+              strip is holding stale tabs, the links below change and the tabs
+              above do not, which is the whole bug in one screen.
+              `data-range-link` and `data-current-range` are what
+              `board-drag-check` reads; nothing else on the page needs them. */}
+          <div data-current-range={range} className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
+            <span>Window: {range}</span>
+            <Link data-range-link="7d" href="/design/board?range=7d" className="underline">
+              7d
+            </Link>
+            <Link data-range-link="custom" href="/design/board?range=2026-09-01..2026-09-16" className="underline">
+              1–16 Sep
+            </Link>
+          </div>
           {/* The builder's flow-name field, on the same public route and for the
               same reason: its box was judged from class names and shipped at the
               wrong width twice. Rendered on the bar's own near-black so the

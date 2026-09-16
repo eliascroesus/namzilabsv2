@@ -20,6 +20,7 @@ import { Popover as Anchored, PopoverContent, PopoverTrigger } from "@/component
 import { COLUMN_W, LANE_GAP } from "./board-shape";
 import { canvasCells, type GridBox } from "@/lib/board/grid";
 import { keyBetween } from "@/lib/board/order";
+import { orderViews, stripSignature } from "@/lib/board/strip-order";
 
 /**
  * THE BOARD'S FILTERS, ANSWERING IMMEDIATELY.
@@ -334,21 +335,34 @@ export function ViewStrip({
      through to nothing. */
   const { go } = useBoard();
   const router = useRouter();
-  const [order, setOrder] = useState(views);
-
   /**
-   * THE SIGNATURE, NOT THE ARRAY — and this is one of the two bugs that made a
-   * reorder look like it snapped back.
+   * KEYS, NOT TABS — and that distinction is the whole of a bug the owner
+   * reported three times.
    *
-   * `views` is built by the parent with `.map()`, so it is a NEW array on every
-   * render. `useEffect(…, [views])` therefore fired constantly and reset the
-   * local order to the server's — including on the very renders a drag caused,
-   * so the tabs jumped home the moment you let go. Keyed on the ids and
-   * positions instead, the effect fires when the server's ANSWER changes, which
-   * is what it was always meant to mean.
+   * This held the tab OBJECTS. The effect below re-syncs them on a signature of
+   * `key:pos`, which is a statement about which views exist and in what order,
+   * and is therefore stable across exactly the change that matters most:
+   * picking a window rewrites every tab's `href` and touches neither key nor
+   * pos. So the effect did not fire, this state kept the tabs captured on first
+   * load, and every anchor in the strip went on pointing at the window the page
+   * was opened with.
+   *
+   * It read as the range being thrown away. Draw two weeks on Overview — the
+   * pill updates, the title updates, the numbers update, because all three are
+   * rendered fresh — then press "Calls" and land back on Last 7 days, because
+   * that tab's frozen href had no `range=` in it. Every href the SERVER built
+   * was correct the entire time; nobody was re-rendering them.
+   *
+   * Widening the signature to cover `href` would have fixed it by making the
+   * strip snap home mid-drag on any navigation — the very bug the signature was
+   * narrowed to avoid. So the state holds the one thing a drag may change, and
+   * `orderViews` resolves it against the live prop on every render. Nothing but
+   * the order is remembered, so nothing but the order can go stale.
    */
-  const signature = views.map((v) => `${v.key}:${v.pos}`).join("|");
-  useEffect(() => setOrder(views), [signature]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [order, setOrder] = useState(() => views.map((v) => v.key));
+  const signature = stripSignature(views);
+  useEffect(() => setOrder(views.map((v) => v.key)), [signature]); // eslint-disable-line react-hooks/exhaustive-deps
+  const ordered = orderViews(order, views);
 
   /**
    * A MIRROR OF `order`, because the commit happens in a pointer handler and
@@ -359,8 +373,8 @@ export function ViewStrip({
    * because a no-op looks exactly like a successful reorder that the refresh
    * then undoes.
    */
-  const live = useRef(order);
-  live.current = order;
+  const live = useRef(ordered);
+  live.current = ordered;
 
   const strip = useRef<HTMLDivElement>(null);
   const drag = useRef<{ key: string; startX: number; moved: boolean } | null>(null);
@@ -380,7 +394,7 @@ export function ViewStrip({
     void setViewPositionsAction([{ id: moved.id, pos }]).then((r) => {
       // A refusal (a rank block, a key that could not be minted) puts the
       // server's order back rather than leaving the strip lying about itself.
-      if (!r.ok) setOrder(views);
+      if (!r.ok) setOrder(views.map((v) => v.key));
       // The rail's nested list is server-rendered from the same `pos` column,
       // so this is what reorders it — without the refresh the strip and the
       // rail disagree until the next navigation.
@@ -406,7 +420,7 @@ export function ViewStrip({
          The room has to be inside the scrolling box, not inside its child. */
       className="-mx-1 flex flex-nowrap items-center gap-2 px-1 md:flex-wrap"
     >
-      {order.map((v) => (
+      {ordered.map((v) => (
         <div
           key={v.key}
           data-view-tab={v.key}
@@ -466,8 +480,8 @@ export function ViewStrip({
             const toKey = over?.getAttribute("data-view-tab");
             if (!toKey || toKey === d.key) return;
             setOrder((cur) => {
-              const from = cur.findIndex((x) => x.key === d.key);
-              const to = cur.findIndex((x) => x.key === toKey);
+              const from = cur.indexOf(d.key);
+              const to = cur.indexOf(toKey);
               if (from < 0 || to < 0 || from === to) return cur;
               const next = cur.slice();
               next.splice(to, 0, next.splice(from, 1)[0]);
@@ -507,7 +521,7 @@ export function ViewStrip({
           onPointerCancel={() => {
             drag.current = null;
             setDragging(null);
-            setOrder(views);
+            setOrder(views.map((v) => v.key));
           }}
           // A drag that ends on a tab must not also follow its link.
           onClickCapture={(e) => {
