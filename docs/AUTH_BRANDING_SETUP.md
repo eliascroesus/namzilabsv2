@@ -36,9 +36,14 @@ there, not from anything written down here** — it is derived from your
 environment.
 
 **2. In Google Cloud Console**, using the **same project** that backs Calendar,
-Sheets and Analytics:
+Sheets and Analytics.
 
-- **APIs & Services → Credentials → Create client**
+⚠ **"APIs & Services → OAuth consent screen" no longer exists.** Google replaced
+it with **Google Auth Platform**, split into *Branding*, *Audience*, *Data
+Access*, *Clients* and *Verification Center*. Looking for the old menu item is
+the single most common way people get stuck here.
+
+- **APIs & Services → Google Auth Platform → Clients → Create client**
 - Application type: **Web application**
 - Name it something that is *not* "Namzilabs" — Google surfaces the OAuth client
   name in places, and two things with the same name are miserable to debug
@@ -51,9 +56,10 @@ Sheets and Analytics:
 **3. Back in WorkOS** → same Google dialog → **Your app's credentials** → paste
 both → Save.
 
-**4. Publish** → Google Console → **OAuth consent screen → Audience → Publish
-app**. While it says Testing, only listed test users can sign in — a real
-customer pressing "Continue with Google" is simply refused.
+**4. Publish** → **Google Auth Platform → Audience → Publish app**. While it
+says *Testing*, only the accounts listed under *Test users* on that same page
+can sign in — a real customer pressing "Continue with Google" is simply
+refused.
 
 **No scopes to add.** WorkOS requests basic identity itself, and it is not
 sensitive — so Google *login* needs no review. Do not confuse this with the

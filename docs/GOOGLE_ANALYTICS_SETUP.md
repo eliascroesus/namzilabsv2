@@ -47,8 +47,13 @@ year later. There is no UA support in this connector on purpose.
 
 ## 2. Add the scope (5 minutes)
 
-1. <https://console.cloud.google.com/apis/credentials/consent> → **Data Access**
-   (older consoles call it **Scopes**) → **ADD OR REMOVE SCOPES**.
+1. **APIs & Services → Google Auth Platform → Data Access** → **ADD OR REMOVE
+   SCOPES**.
+
+   ⚠ Google replaced "OAuth consent screen" with **Google Auth Platform**
+   (tabs: *Branding*, *Audience*, *Data Access*, *Clients*, *Verification
+   Center*). Older guides — including most screenshots online — still say
+   "OAuth consent screen → Scopes", which no longer exists.
 2. Paste into the filter box, exactly:
    ```
    https://www.googleapis.com/auth/analytics.readonly
@@ -92,7 +97,7 @@ needs verification, **not** a CASA third-party security assessment. The
 this project is on the heavier track already and Analytics rides along on it —
 worth confirming the project's current verification state before submitting.
 
-While waiting: add yourself under **OAuth consent screen → Audience → Test
+While waiting: add yourself under **Google Auth Platform → Audience → Test
 users**.
 
 ---
