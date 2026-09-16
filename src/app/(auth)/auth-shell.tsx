@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useActionState } from "react";
 import { Input } from "@/components/ui/input";
-import { FieldLabel } from "@/components/ui/field";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -20,6 +19,40 @@ import type { AuthResult } from "./actions";
  * same components, and "close" is exactly what a customer notices.
  */
 
+/**
+ * THE CONTROL HEIGHT ON THIS SCREEN IS THE KIT'S `lg`, NOT ITS DEFAULT.
+ *
+ * Everything else in the product stands at 32px, which is the console's rung:
+ * right for a dense table, mean for the first screen anybody sees. The ladder
+ * already has the answer — `lg` exists, in its own words, "for the landing's
+ * hero and for a form that genuinely wants air", which is exactly this.
+ *
+ * 40 AND NOT 44, deliberately. The button's own note argues against a 44 rung
+ * ("a lone rung nobody stands on is how the ladder grew a sixth step last
+ * time"), and inventing one here for two screens would prove it right.
+ *
+ * The input follows the button, which is the rule `Input` already documents:
+ * a field and the submit beneath it four pixels apart reads as a rendering
+ * fault rather than a hierarchy.
+ */
+const CONTROL = "h-10 text-sm";
+
+/**
+ * A QUIETER LABEL THAN THE CONSOLE'S.
+ *
+ * `FieldLabel` is 12px semibold CAPS — correct in a settings panel, where a
+ * label has to survive being one of thirty on a page. Here there are two, they
+ * are the only labels on the screen, and shouting them put more visual weight
+ * on the word "EMAIL" than on the heading above it.
+ *
+ * It is the same size and colour as the rest of the kit's field furniture; what
+ * it drops is the caps and a weight step, which is the whole difference between
+ * a dense form and a front door.
+ */
+function AuthLabel({ className, ...props }: React.ComponentProps<"label">) {
+  return <label className={cn("mb-1.5 block text-sm font-medium text-foreground", className)} {...props} />;
+}
+
 /** One card, centred, on the app's own ground. */
 export function AuthCard({
   title,
@@ -33,11 +66,14 @@ export function AuthCard({
   footer?: React.ReactNode;
 }) {
   return (
-    <main id="main" className="mx-auto flex min-h-dvh w-full max-w-sm flex-col justify-center px-6 py-16">
-      <h1 className="text-display-xs font-semibold text-heading">{title}</h1>
-      {subtitle && <p className="mt-2 text-sm text-muted-foreground">{subtitle}</p>}
-      <div className="mt-6">{children}</div>
-      {footer && <div className="mt-6 text-center text-sm text-muted-foreground">{footer}</div>}
+    <main id="main" className="mx-auto flex min-h-dvh w-full max-w-[380px] flex-col justify-center px-6 py-16">
+      {/* CENTRED, because there is nothing else on the page to align to. The
+          left-aligned version read as the top-left corner of a form that had
+          lost its card. */}
+      <h1 className="text-center text-display-xs font-semibold text-heading">{title}</h1>
+      {subtitle && <p className="mt-2 text-center text-sm text-muted-foreground">{subtitle}</p>}
+      <div className="mt-8">{children}</div>
+      {footer && <div className="mt-8 text-center text-sm text-muted-foreground">{footer}</div>}
     </main>
   );
 }
@@ -67,12 +103,12 @@ function GoogleButton({ next }: { next: string }) {
   return (
     <a
       href={`/auth/google?next=${encodeURIComponent(next)}`}
-      className={cn(buttonVariants({ variant: "secondary" }), "w-full gap-2.5")}
+      className={cn(buttonVariants({ variant: "secondary", size: "lg" }), "w-full gap-2.5")}
     >
       {/* Google's own four colours. Their brand guidelines are explicit that
           the mark is not recoloured, and this is the same rule the connector
           logos follow. */}
-      <svg aria-hidden width="16" height="16" viewBox="0 0 48 48" className="shrink-0">
+      <svg aria-hidden width="18" height="18" viewBox="0 0 48 48" className="shrink-0">
         <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
         <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
         <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
@@ -118,14 +154,23 @@ export function CredentialsForm({
     <>
       <GoogleButton next={next} />
       <Divider />
-      <form action={formAction} className="space-y-4">
+      <form action={formAction} className="space-y-3.5">
         <input type="hidden" name="next" value={next} />
         <div className="space-y-1.5">
-          <FieldLabel htmlFor="email">Email</FieldLabel>
-          <Input id="email" name="email" type="email" autoComplete="email" required autoFocus placeholder="you@company.com" />
+          <AuthLabel htmlFor="email">Email</AuthLabel>
+          <Input
+            id="email"
+            name="email"
+            type="email"
+            autoComplete="email"
+            required
+            autoFocus
+            placeholder="you@company.com"
+            className={CONTROL}
+          />
         </div>
         <div className="space-y-1.5">
-          <FieldLabel htmlFor="password">Password</FieldLabel>
+          <AuthLabel htmlFor="password">Password</AuthLabel>
           <Input
             id="password"
             name="password"
@@ -134,12 +179,17 @@ export function CredentialsForm({
                to GENERATE one rather than autofill the last one it saw. */
             autoComplete={mode === "sign-up" ? "new-password" : "current-password"}
             required
+            /* THE 8-CHARACTER FLOOR IS ENFORCED AND NO LONGER ANNOUNCED. The
+               line under the field explained a rule almost nobody was about to
+               break, on the screen with the least room for prose; the browser
+               says it at the moment it matters instead, which is the only
+               moment it is useful. */
             minLength={mode === "sign-up" ? 8 : undefined}
+            className={CONTROL}
           />
-          {mode === "sign-up" && <p className="text-xs text-muted-foreground">At least 8 characters.</p>}
         </div>
         <ErrorLine error={state.error} />
-        <SubmitButton className="w-full" pendingLabel={pendingLabel}>
+        <SubmitButton size="lg" className="w-full" pendingLabel={pendingLabel}>
           {submitLabel}
         </SubmitButton>
         {extra}
@@ -161,7 +211,7 @@ export function VerifyForm({
     <form action={formAction} className="space-y-4">
       <input type="hidden" name="next" value={next} />
       <div className="space-y-1.5">
-        <FieldLabel htmlFor="code">Verification code</FieldLabel>
+        <AuthLabel htmlFor="code">Verification code</AuthLabel>
         <Input
           id="code"
           name="code"
@@ -172,10 +222,11 @@ export function VerifyForm({
           required
           autoFocus
           placeholder="123456"
+          className={CONTROL}
         />
       </div>
       <ErrorLine error={state.error} />
-      <SubmitButton className="w-full" pendingLabel="Verifying…">
+      <SubmitButton size="lg" className="w-full" pendingLabel="Verifying…">
         Verify email
       </SubmitButton>
     </form>

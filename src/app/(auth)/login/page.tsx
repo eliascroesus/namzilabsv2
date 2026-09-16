@@ -24,8 +24,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
 
   return (
     <AuthCard
-      title="Sign in"
-      subtitle="Welcome back."
+      title="Welcome back"
       footer={<>New here? <AuthFooterLink href="/signup">Create an account</AuthFooterLink></>}
     >
       <CredentialsForm action={signInAction} next={next} mode="sign-in" submitLabel="Sign in" pendingLabel="Signing in…" />

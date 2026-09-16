@@ -27,8 +27,13 @@ export default async function SignUpPage({
 
   return (
     <AuthCard
+      /* NO SUBTITLE. It carried the product's pitch — "every number on your
+         dashboard, traced back to the record it came from" — to somebody who
+         has already decided to sign up. They came here to type an email, and
+         two lines of marketing above the field is the thing standing between
+         them and that. The pitch belongs on the landing page, which is where
+         they read it before clicking through. */
       title="Create your account"
-      subtitle="Every number on your dashboard, traced back to the record it came from."
       footer={
         <>
           Already have an account? <AuthFooterLink href="/login">Sign in</AuthFooterLink>
@@ -42,9 +47,13 @@ export default async function SignUpPage({
         submitLabel="Create account"
         pendingLabel="Creating…"
         extra={
-          <p className="text-xs text-muted-foreground">
-            By creating an account you agree to our <AuthFooterLink href="/terms">Terms</AuthFooterLink> and{" "}
-            <AuthFooterLink href="/privacy">Privacy Policy</AuthFooterLink>.
+          /* Two words shorter, and it now reads as one line rather than
+             wrapping onto two under the button. The links are the part that has
+             to be there — they are also what Google's OAuth verification
+             fetches. */
+          <p className="pt-1 text-center text-xs text-muted-foreground">
+            By continuing you agree to our <AuthFooterLink href="/terms">Terms</AuthFooterLink> and{" "}
+            <AuthFooterLink href="/privacy">Privacy</AuthFooterLink>.
           </p>
         }
       />
