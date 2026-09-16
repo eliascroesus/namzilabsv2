@@ -51,7 +51,11 @@ export default async function SignUpPage({
              wrapping onto two under the button. The links are the part that has
              to be there — they are also what Google's OAuth verification
              fetches. */
-          <p className="pt-1 text-center text-xs text-muted-foreground">
+          /* `text-muted-foreground` is a NEUTRAL token — a grey tuned for the
+             app's card, which on this blue came out at barely 2:1. And /70 is
+             not enough either: this line sits at the card's FOOT, where the
+             gradient is lightest, and it measured 4.37 there. /80 is 5.22. */
+          <p className="pt-1 text-center text-xs text-white/80">
             By continuing you agree to our <AuthFooterLink href="/terms">Terms</AuthFooterLink> and{" "}
             <AuthFooterLink href="/privacy">Privacy</AuthFooterLink>.
           </p>

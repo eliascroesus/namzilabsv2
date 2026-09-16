@@ -38,6 +38,32 @@ import type { AuthResult } from "./actions";
 const CONTROL = "h-10 text-sm";
 
 /**
+ * THE FIELDS, ON BLUE.
+ *
+ * `Input`'s own recipe is built for a neutral card — `bg-control`, a
+ * `border-input` hairline, `text-foreground`. Every one of those is wrong on a
+ * deep blue ground: the control fill is a near-white that reads as a hole
+ * punched in the card, and the hairline disappears entirely.
+ *
+ * Translucent white instead, so the field is the card lit from within rather
+ * than a separate object sitting on it. The ring stays white too — the kit's
+ * `--ring` is the brand blue, which on this ground is invisible, and a focus
+ * ring nobody can see is a keyboard user with no idea where they are.
+ *
+ * MEASURED ACROSS THE GRADIENT, not at one point. `.sky-panel` runs #16305E to
+ * #2B53AE, so every alpha here has a best case and a worst case and only the
+ * worst one matters. Typed white text in the field is 9.6:1 at the top and
+ * 5.65:1 at the foot. The placeholder started at white/60, which measured 3.68
+ * where the fields actually sit and 3.13 at the foot — so it is /75, which puts
+ * it at 4.81 in place. A placeholder is the one piece of type people are most
+ * often told to stop worrying about, and it is the one a person squints at
+ * hardest when they cannot remember which field they are in.
+ */
+const SKY_FIELD =
+  "border-white/25 bg-white/10 text-white placeholder:text-white/75 hover:border-white/40 " +
+  "focus-visible:border-white/70 focus-visible:ring-white/30";
+
+/**
  * A QUIETER LABEL THAN THE CONSOLE'S.
  *
  * `FieldLabel` is 12px semibold CAPS — correct in a settings panel, where a
@@ -50,7 +76,7 @@ const CONTROL = "h-10 text-sm";
  * a dense form and a front door.
  */
 function AuthLabel({ className, ...props }: React.ComponentProps<"label">) {
-  return <label className={cn("mb-1.5 block text-sm font-medium text-foreground", className)} {...props} />;
+  return <label className={cn("mb-1.5 block text-sm font-medium text-white/85", className)} {...props} />;
 }
 
 /** One card, centred, on the app's own ground. */
@@ -66,14 +92,30 @@ export function AuthCard({
   footer?: React.ReactNode;
 }) {
   return (
-    <main id="main" className="mx-auto flex min-h-dvh w-full max-w-[380px] flex-col justify-center px-6 py-16">
-      {/* CENTRED, because there is nothing else on the page to align to. The
-          left-aligned version read as the top-left corner of a form that had
-          lost its card. */}
-      <h1 className="text-center text-display-xs font-semibold text-heading">{title}</h1>
-      {subtitle && <p className="mt-2 text-center text-sm text-muted-foreground">{subtitle}</p>}
-      <div className="mt-8">{children}</div>
-      {footer && <div className="mt-8 text-center text-sm text-muted-foreground">{footer}</div>}
+    <main id="main" className="mx-auto flex min-h-dvh w-full max-w-[420px] flex-col justify-center px-5 py-16">
+      {/**
+       * `.sky-panel`, WHICH IS THE INVITE CARD'S FAMILY AND NOT ITS EXACT
+       * CLASS — and the difference is the reason the class exists.
+       *
+       * `.sky-card` is the refer board's, and it opens up to #3F73E6 at the
+       * foot because its type all sits in the top half. This card is the shape
+       * `.sky-panel` was written for: copy running from the heading to the last
+       * line of legal text. Its own note says so — white measures 4.36:1 on
+       * `.sky-card`'s foot and 7.1:1 on this one, and half the text here lands
+       * exactly where the first of those would fail.
+       *
+       * `overflow-hidden` because the sky paints a ruled grid through
+       * `::before` that would otherwise square off the rounded corners.
+       */}
+      <div className="sky-panel overflow-hidden rounded-3xl px-7 py-9 shadow-card sm:px-8">
+        <h1 className="text-center text-display-xs font-semibold text-white">{title}</h1>
+        {subtitle && <p className="mt-2 text-center text-sm text-white/75">{subtitle}</p>}
+        <div className="mt-7">{children}</div>
+        {/* /80, not /70: the footer is the LAST line on the card, which is
+            where the gradient is lightest and contrast is worst — 4.37 at /70,
+            5.22 at /80. The same arithmetic as the terms line above it. */}
+        {footer && <div className="mt-7 text-center text-sm text-white/80">{footer}</div>}
+      </div>
     </main>
   );
 }
@@ -86,7 +128,10 @@ export function AuthCard({
 function ErrorLine({ error }: { error: string | null }) {
   if (!error) return null;
   return (
-    <p role="alert" className="rounded-control bg-danger-soft px-3 py-2 text-sm text-danger-ink">
+    /* NOT `bg-danger-soft`: that is a pale wash for a light card, and on this
+       ground it is a bright slab that outshouts the form. A deep red at the
+       same transparency as the fields keeps the error part of the card. */
+    <p role="alert" className="rounded-control border border-white/20 bg-neutral-950/35 px-3 py-2 text-sm text-white">
       {error}
     </p>
   );
@@ -103,7 +148,15 @@ function GoogleButton({ next }: { next: string }) {
   return (
     <a
       href={`/auth/google?next=${encodeURIComponent(next)}`}
-      className={cn(buttonVariants({ variant: "secondary", size: "lg" }), "w-full gap-2.5")}
+      /* TRANSLUCENT, WHERE THE SUBMIT IS SOLID WHITE. Both cannot be the loud
+         one: on this ground white IS the emphasis, so spending it twice would
+         leave the page with two primaries and no order to read them in. Google
+         keeps its own four-colour mark — their terms require that, and it
+         carries perfectly well on a dark surface. */
+      className={cn(
+        buttonVariants({ variant: "secondary", size: "lg" }),
+        "w-full gap-2.5 border-white/25 bg-white/10 text-white hover:border-white/40 hover:bg-white/15 active:bg-white/20",
+      )}
     >
       {/* Google's own four colours. Their brand guidelines are explicit that
           the mark is not recoloured, and this is the same rule the connector
@@ -122,9 +175,9 @@ function GoogleButton({ next }: { next: string }) {
 function Divider() {
   return (
     <div className="my-5 flex items-center gap-3">
-      <span className="h-px flex-1 bg-border" />
-      <span className="text-xs text-muted-foreground">or</span>
-      <span className="h-px flex-1 bg-border" />
+      <span className="h-px flex-1 bg-white/20" />
+      <span className="text-xs text-white/75">or</span>
+      <span className="h-px flex-1 bg-white/20" />
     </div>
   );
 }
@@ -166,7 +219,7 @@ export function CredentialsForm({
             required
             autoFocus
             placeholder="you@company.com"
-            className={CONTROL}
+            className={cn(CONTROL, SKY_FIELD)}
           />
         </div>
         <div className="space-y-1.5">
@@ -185,11 +238,30 @@ export function CredentialsForm({
                says it at the moment it matters instead, which is the only
                moment it is useful. */
             minLength={mode === "sign-up" ? 8 : undefined}
-            className={CONTROL}
+            className={cn(CONTROL, SKY_FIELD)}
           />
         </div>
         <ErrorLine error={state.error} />
-        <SubmitButton size="lg" className="w-full" pendingLabel={pendingLabel}>
+        {/**
+          * WHITE, NOT THE BRAND FILL — the call `ReferBoard` already makes on
+          * this exact ground, in its words: "a #568CFF button on a deep blue
+          * ground is a shape you have to hunt for."
+          *
+          * AND `bg-white` SPELLED OUT, not `variant="white"`. That variant is
+          * no longer literally white — its own comment says "THE NAME `white`
+          * SURVIVES ITS OWN LITERAL" — it is `bg-secondary`, which follows the
+          * theme and resolves to #151515 on dark. This card does NOT follow the
+          * theme: `.sky-panel` is three fixed blues in both. So a theme-
+          * following fill on a fixed ground gave a black button on blue with
+          * black text, invisible, which is exactly what shipped to the
+          * screenshot before this comment existed. The same override
+          * `ReferBoard` uses, for the same reason.
+          */}
+        <SubmitButton
+          size="lg"
+          className="w-full border-transparent bg-white text-neutral-950 shadow-xs hover:bg-brand-50 active:bg-brand-50"
+          pendingLabel={pendingLabel}
+        >
           {submitLabel}
         </SubmitButton>
         {extra}
@@ -222,11 +294,16 @@ export function VerifyForm({
           required
           autoFocus
           placeholder="123456"
-          className={CONTROL}
+          className={cn(CONTROL, SKY_FIELD)}
         />
       </div>
       <ErrorLine error={state.error} />
-      <SubmitButton size="lg" className="w-full" pendingLabel="Verifying…">
+      {/* `bg-white` spelled out — see the note in `CredentialsForm`. */}
+      <SubmitButton
+        size="lg"
+        className="w-full border-transparent bg-white text-neutral-950 shadow-xs hover:bg-brand-50 active:bg-brand-50"
+        pendingLabel="Verifying…"
+      >
         Verify email
       </SubmitButton>
     </form>
@@ -235,7 +312,9 @@ export function VerifyForm({
 
 export function AuthFooterLink({ href, children }: { href: string; children: React.ReactNode }) {
   return (
-    <Link href={href} className="font-medium text-primary underline-offset-4 hover:underline">
+    /* White, not `text-primary`. The brand blue on a blue card is the same
+       "shape you have to hunt for" the refer board's CTA note describes. */
+    <Link href={href} className="font-medium text-white underline underline-offset-4 decoration-white/40 hover:decoration-white">
       {children}
     </Link>
   );
