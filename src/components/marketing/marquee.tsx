@@ -1,6 +1,5 @@
 import { CONNECTOR_CATALOG } from "@/connectors/catalog";
-import { brandNeedsDarkInk, sourceStyle } from "@/components/flow/controls/source-style";
-import { cn } from "@/lib/utils";
+import { SourceMark } from "@/components/source-mark";
 
 /**
  * THE TICKER OF TOOLS — this page's answer to the reference's logo wall.
@@ -42,12 +41,6 @@ export function ToolMarquee() {
     <div aria-hidden className="marquee-track w-full overflow-hidden">
       <div className="marquee gap-2.5 py-1">
         {LOOP.map((entry, i) => {
-          /* `brand` is OPTIONAL on a catalogue entry, and `sourceStyle` is the
-             one place that already knows what an entry without one looks
-             like — a neutral chip built from its key. Reading `entry.brand`
-             directly here would be a second answer to that question, and the
-             second answer is always the one that goes stale. */
-          const brand = sourceStyle(entry.source);
           return (
           <span
             /* The second lap is the same connectors, so `source` alone is not
@@ -62,17 +55,11 @@ export function ToolMarquee() {
                gradient stop. */
             className="flex shrink-0 items-center gap-2 rounded-full border border-white/20 bg-neutral-950/25 py-1.5 pl-1.5 pr-4"
           >
-            <span
-              /* Four of the thirty-one marks are yellow, where white initials
-                 measure about 1.3:1 and the circle reads as empty. */
-              className={cn(
-                "stat-numeral flex size-6 shrink-0 items-center justify-center rounded-full text-xs",
-                brandNeedsDarkInk(brand.color) ? "text-neutral-950" : "text-white",
-              )}
-              style={{ background: brand.color }}
-            >
-              {brand.short}
-            </span>
+            {/* THE PRODUCT'S OWN MARK, drawn as a pill. This kept its own copy
+                of the tile and its own contrast rule, so the marquee showed two
+                letters while the app showed logos — and the yellow-mark caveat
+                had to be remembered here separately. */}
+            <SourceMark source={entry.source} size={24} radius="9999px" className="stat-numeral" />
             <span className="whitespace-nowrap text-sm font-medium text-white">{entry.name}</span>
           </span>
           );

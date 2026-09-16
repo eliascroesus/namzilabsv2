@@ -350,6 +350,31 @@ export const fathomConnector: Connector = {
         // `newer === 0` needs no action and is not a fault: every meeting the
         // account has genuinely predates the window, so an empty result is the
         // correct answer and the next sync widens nothing.
+      } else {
+        /**
+         * NOTHING AT ALL, EVEN UNFILTERED — logged, and deliberately NOT an
+         * error.
+         *
+         * `/meetings` answered 200 with an empty list for a key valid enough
+         * not to 401. Two things do that and neither is a bug here: Fathom's
+         * Public API is a PAID feature (their pricing lists it on Premium and
+         * above, not on Free), and their keys are user-scoped, so one minted by
+         * a teammate who records nothing sees nothing.
+         *
+         * Throwing was tried and is wrong. A paid customer who has simply not
+         * recorded a meeting yet would get an alarming error on a perfectly
+         * good connection, and "no meetings yet" is the correct state for a
+         * brand-new account. Breaking the right case to explain the ambiguous
+         * one is a bad trade.
+         *
+         * So the explanation lives where it PREVENTS the confusion instead —
+         * on the key's own setup step in the catalogue, read before anybody
+         * pastes anything. This line is for whoever is reading logs later.
+         */
+        console.info(
+          "[fathom] the key is accepted but sees no meetings at all. Fathom's Public API is a paid " +
+            "feature (Premium and above), and keys only reach meetings recorded by their owner or shared to their Team.",
+        );
       }
     }
     return result;

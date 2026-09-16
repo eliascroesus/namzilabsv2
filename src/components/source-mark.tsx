@@ -1,4 +1,4 @@
-import { brandNeedsDarkInk, sourceStyle } from "@/components/flow/controls/source-style";
+import { brandNeedsDarkInk, glyphNeedsDarkInk, sourceStyle } from "@/components/flow/controls/source-style";
 import { SOURCE_LOGOS } from "@/connectors/logos";
 
 /**
@@ -36,16 +36,36 @@ import { SOURCE_LOGOS } from "@/connectors/logos";
 export function SourceMark({
   source,
   size = 20,
+  radius,
   className,
 }: {
   source?: string | null;
   size?: number;
-  /** Layout only — the mark's own colour, radius and type are not the caller's. */
+  /**
+   * Corner, for the one caller that needs a circle.
+   *
+   * The landing marquee draws these as pills and the rest of the product draws
+   * them as squircles — the same mark in two frames. Everything else about the
+   * tile stays this component's business; opening the radius is what let the
+   * marketing pages stop keeping their own copy of it.
+   */
+  radius?: number | string;
+  /** Layout only — the mark's own colour and type are not the caller's. */
   className?: string;
 }) {
   const s = sourceStyle(source);
   const logo = source ? SOURCE_LOGOS[source] : undefined;
-  const ink = brandNeedsDarkInk(s.color) ? "text-neutral-950" : "text-white";
+  /**
+   * THE LETTERS AND THE GLYPH ASK DIFFERENT QUESTIONS.
+   *
+   * Two letters are small TEXT, so they take the 4.5:1 bar and its crossover
+   * threshold. A logo is a graphical object, whose floor is 3:1 — which white
+   * clears on twenty-five of the thirty-one tiles, including Shopify and the
+   * two Google marks that everyone recognises as white on their own colour.
+   * Using the text rule for both is what turned half the grid black.
+   */
+  const dark = logo ? glyphNeedsDarkInk(s.color) : brandNeedsDarkInk(s.color);
+  const ink = dark ? "text-neutral-950" : "text-white";
   return (
     <span
       aria-hidden
@@ -56,7 +76,7 @@ export function SourceMark({
         height: size,
         // The same proportional corner the builder's NodeIcon uses, so one
         // connector wears the same mark at every size in the product.
-        borderRadius: Math.max(4, Math.round(size * 0.3)),
+        borderRadius: radius ?? Math.max(4, Math.round(size * 0.3)),
         backgroundColor: s.color,
         fontSize: Math.max(9, Math.round(size * 0.42)),
       }}

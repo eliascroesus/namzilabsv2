@@ -1,6 +1,6 @@
 import { CONNECTOR_CATALOG } from "@/connectors/catalog";
-import { brandNeedsDarkInk, sourceStyle } from "@/components/flow/controls/source-style";
-import { cn } from "@/lib/utils";
+import { sourceStyle } from "@/components/flow/controls/source-style";
+import { SourceMark } from "@/components/source-mark";
 
 /**
  * THE PROBLEM, DRAWN AS THE THING IT ACTUALLY LOOKS LIKE.
@@ -38,16 +38,11 @@ function Fragment({ source, metric, value, note }: (typeof FRAGMENTS)[number]) {
   return (
     <li className="flex min-w-0 flex-col gap-3 rounded-card border border-border bg-background p-5">
       <span className="flex min-w-0 items-center gap-2.5">
-        <span
-          aria-hidden
-          className={cn(
-            "stat-numeral flex size-7 shrink-0 items-center justify-center rounded-control text-xs",
-            brandNeedsDarkInk(brand.color) ? "text-neutral-950" : "text-white",
-          )}
-          style={{ background: brand.color }}
-        >
-          {brand.short}
-        </span>
+        {/* THE PRODUCT'S OWN MARK, not a second copy of it. This drew the two
+            letters and computed its own ink, which meant the landing page kept
+            showing initials after the app started showing logos — and that the
+            contrast rule had to be remembered in three files. */}
+        <SourceMark source={source} size={28} className="stat-numeral" />
         <span className="min-w-0 truncate text-sm font-semibold text-foreground">{entry?.name ?? brand.label}</span>
       </span>
       <span className="flex items-baseline justify-between gap-3">

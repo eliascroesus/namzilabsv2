@@ -48,3 +48,34 @@ export function brandNeedsDarkInk(color: string): boolean {
   const luminance = 0.2126 * channel(0) + 0.7152 * channel(2) + 0.0722 * channel(4);
   return luminance > 0.179;
 }
+
+/**
+ * THE SAME QUESTION FOR A LOGO, WHICH HAS A DIFFERENT ANSWER.
+ *
+ * `brandNeedsDarkInk` above is about TWO LETTERS — small text, so the bar is
+ * WCAG's 4.5:1 and the threshold is the crossover where white and black are
+ * equally legible (0.179). That is the right rule for type and the wrong one
+ * for a glyph: it turns fourteen of thirty-one tiles dark, including Shopify,
+ * Google Calendar and Google Sheets, whose marks everyone recognises as white
+ * on their own colour.
+ *
+ * A LOGO IS NOT TEXT. WCAG's floor for a graphical object is 3:1, and white
+ * clears that on every tile up to a luminance of 0.30 — measured across the
+ * whole catalogue, that is twenty-five of them. The six that genuinely cannot
+ * take white are Whop (2.97:1), Aircall (2.69), ThriveCart (2.03), Airtable
+ * (1.80), Paddle (1.35) and Mailchimp (1.32), and those are the pale ones
+ * anybody would expect to be an exception.
+ *
+ * So: white unless white would fall below 3:1. Derived, not chosen —
+ * `1.05 / (L + 0.05) >= 3` solves to `L <= 0.30`.
+ */
+export function glyphNeedsDarkInk(color: string): boolean {
+  const hex = color.replace("#", "");
+  if (hex.length !== 6 || !/^[0-9a-fA-F]{6}$/.test(hex)) return false;
+  const channel = (i: number) => {
+    const c = parseInt(hex.slice(i, i + 2), 16) / 255;
+    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  const luminance = 0.2126 * channel(0) + 0.7152 * channel(2) + 0.0722 * channel(4);
+  return luminance > 0.3;
+}

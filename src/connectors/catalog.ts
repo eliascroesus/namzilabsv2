@@ -2121,6 +2121,13 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
           key: "apiKey",
           title: "An API key from your Fathom account",
           steps: [
+            // FIRST, because it is the one that wastes an afternoon. Fathom's
+            // pricing lists "Public API & MCP" under Admin, Integrations &
+            // Security on Premium, Team, Business and Enterprise — and NOT on
+            // Free. A free-plan key is ACCEPTED and then returns an empty list
+            // rather than being refused, so the connection sits green and
+            // silent and looks exactly like an account with no meetings.
+            "Check your Fathom plan first — their Public API is on Premium and above, not Free.",
             "Open Fathom and go to Settings.",
             "Open API Access and create a key.",
             "Copy it and paste it here.",
