@@ -61,8 +61,37 @@ says *Testing*, only the accounts listed under *Test users* on that same page
 can sign in — a real customer pressing "Continue with Google" is simply
 refused.
 
-**No scopes to add.** WorkOS requests basic identity itself, and it is not
-sensitive — so Google *login* needs no review. Do not confuse this with the
+**No scopes to add.** The dialog already lists `userinfo.email` and
+`userinfo.profile`, which is all login needs. Leave **"Return Google OAuth
+tokens"** unchecked — that hands Google access tokens back to us, and the login
+flow has no use for them (the connectors do their own OAuth separately).
+
+### What the Google consent screen actually shows
+
+This is the part worth understanding before you judge the result.
+
+- **Unverified:** Google shows the *domain*, not your name or logo. With the
+  default WorkOS redirect URI that domain is `auth.workos.com` — so it reads as
+  somebody else's product.
+- **Verified:** Google shows your **app name and logo** from *Google Auth
+  Platform → Branding*. This is free and is the fix.
+
+So the branding lever is **verification**, not the redirect URI. You need
+verification anyway for the Analytics scope, and it is the same submission.
+
+⚠ **One line will still say `auth.workos.com`.** WorkOS's own docs are explicit
+that the "continue to …" domain only becomes yours once you configure a custom
+**auth API** domain — the $99/mo add-on. So the earlier claim in this file that
+$99 buys "only the hostname of the hosted page" was incomplete: it also buys
+that line on Google's consent screen. Name and logo are free; that one line is
+not.
+
+### If Google refuses the redirect URI
+
+Google's rule is that "all domains used in your project, whether in the branding
+page or client configuration pages, must be pre-registered" under **Branding →
+Authorized domains**. If it rejects the WorkOS URI on that basis, add
+`workos.com` there. Remove it again if you ever move to a custom auth domain. Do not confuse this with the
 Analytics *connector*, which does (see `GOOGLE_ANALYTICS_SETUP.md`; same
 project, so worth doing in one sitting since that review takes days).
 
