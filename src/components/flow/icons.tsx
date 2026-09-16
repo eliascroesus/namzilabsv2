@@ -15,6 +15,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { sourceStyle } from "./controls/source-style";
+import { SOURCE_LOGOS } from "@/connectors/logos";
 import { NODE_ACCENT, glyphInk, nodeAccent } from "./node-accent";
 
 /**
@@ -101,7 +102,21 @@ export function NodeIcon({ type, source, variant, size = 34 }: { type: string; s
         title={s.label}
         aria-hidden
       >
-        {s.short}
+        {/*
+          THE VENDOR'S GLYPH WHERE ONE EXISTS, the two letters where it does
+          not — on the STEP's green either way, which is the decision above and
+          is unchanged. The comment there already said the short label "still
+          says which app it is"; a mark says it faster, and the thirteen
+          connectors with one now read at a glance on a canvas where every
+          Get-data step is otherwise the same green square.
+        */}
+        {SOURCE_LOGOS[source] ? (
+          <svg viewBox="0 0 24 24" width={Math.round(size * 0.56)} height={Math.round(size * 0.56)} fill="currentColor" focusable="false" aria-hidden>
+            <path d={SOURCE_LOGOS[source]} />
+          </svg>
+        ) : (
+          s.short
+        )}
       </span>
     );
   }
