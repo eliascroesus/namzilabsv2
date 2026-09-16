@@ -17,7 +17,6 @@ import { Input, NativeSelect } from "@/components/ui/input";
 import { FieldLabel } from "@/components/ui/field";
 import { BOARD_GRID, SectionHeading } from "@/components/ui/page";
 import { SourceMark } from "@/components/source-mark";
-import { sourceStyle } from "@/components/flow/controls/source-style";
 import { formatMetricValue } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -423,33 +422,33 @@ export function ConnectionRow({
 }
 
 /**
- * THE CONNECTOR'S MARK ON A CHIP OF ITS OWN COLOUR — the flows board's pattern
- * (FlowRow), so a Close row looks like the same object on every screen that
- * lists one.
+ * THE CONNECTOR'S MARK, AT FULL SIZE, ON NOTHING.
  *
- * The wash is `color-mix`ed from the vendor's own hex at 14% against
- * TRANSPARENT rather than white, so it composites onto whatever surface is
- * behind it — a dark card in the dark theme, the danger wash on a row being
- * deleted. A hex here would fail the kit gate, and rightly: the value belongs
- * to the vendor's map.
+ * It used to sit at 0.6x inside a rounded square washed with the vendor's own
+ * hex at 14%, and the owner's instruction was to "remove the like background
+ * blend color thing and just make the logos be bigger ... the entire size of
+ * the previous back opacity blend color thing".
+ *
+ * He is right, and the reason is that the wash was solving a problem the marks
+ * no longer have. It existed when every logo was a flat monochrome silhouette:
+ * a tinted block gave the glyph a field to sit in so a row scanned as a row of
+ * objects rather than a row of smudges. Now that these are the vendors' own
+ * marks — Google Calendar in four colours, Shopify's bag in Shopify green —
+ * each one already has a silhouette and a palette of its own, and the wash
+ * only muddied it with a second, weaker tint of the same hue.
+ *
+ * The span stays, sized, so the row's rhythm does not change: every chip
+ * reserves the same box whether it holds a 40px mark or the two-letter tile
+ * that the twenty-one markless connectors still wear.
  */
 function ConnectorChip({ source, size = 40, className }: { source: string; size?: number; className?: string }) {
   return (
     <span
       aria-hidden
-      className={cn("flex shrink-0 items-center justify-center rounded-card", className)}
-      // Sized by style rather than by a `size-10` class because the chip now
-      // appears at three scales — 40 in a row, 44 on a catalogue card, 44 in the
-      // connect dialog — and the mark inside has to step WITH the block. One
-      // ratio (0.6) keeps the stamp centred in the same amount of colour at every
-      // size; two hand-picked pairs would drift the first time one of them moved.
-      style={{
-        width: size,
-        height: size,
-        backgroundColor: `color-mix(in srgb, ${sourceStyle(source).color} 14%, transparent)`,
-      }}
+      className={cn("flex shrink-0 items-center justify-center", className)}
+      style={{ width: size, height: size }}
     >
-      <SourceMark source={source} size={Math.round(size * 0.6)} />
+      <SourceMark source={source} size={size} />
     </span>
   );
 }

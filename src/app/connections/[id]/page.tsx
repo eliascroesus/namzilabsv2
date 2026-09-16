@@ -28,7 +28,6 @@ import { StatusPill } from "@/components/ui/badge";
 import { Table, TableShell, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SourceMark } from "@/components/source-mark";
-import { sourceStyle } from "@/components/flow/controls/source-style";
 import { formatDate, formatDateTime, formatTime } from "@/lib/format";
 import { History, RefreshCw, RotateCcw, Wand2, type LucideIcon } from "lucide-react";
 
@@ -95,12 +94,9 @@ export default async function ConnectionPage({
              tool it belongs to until you read the lede under it. */
           title={
             <span className="flex items-center gap-3">
-              <span
-                aria-hidden
-                className="flex size-11 shrink-0 items-center justify-center rounded-card"
-                style={{ backgroundColor: `color-mix(in srgb, ${sourceStyle(conn.source).color} 14%, transparent)` }}
-              >
-                <SourceMark source={conn.source} size={26} />
+              {/* NO WASH — see `ConnectorChip` in integrations/ConnectionRow.tsx. */}
+              <span aria-hidden className="flex size-11 shrink-0 items-center justify-center">
+                <SourceMark source={conn.source} size={44} />
               </span>
               <span className="min-w-0 truncate">{conn.name}</span>
             </span>

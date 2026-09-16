@@ -11,7 +11,6 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { SourceMark } from "@/components/source-mark";
-import { sourceStyle } from "@/components/flow/controls/source-style";
 import { formatDate, formatTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { deleteFlowAction, duplicateFlowAction, setFlowEnabledAction } from "./actions";
@@ -231,11 +230,6 @@ function Row({ flow }: { flow: FlowListItem }) {
   const [pending, startTransition] = useTransition();
   const router = useRouter();
   const meta = STATE_META[state];
-  // The connector's own brand colour, from the same pure lookup `SourceMark`
-  // reads. Taken here so the WASH behind the mark can be mixed from it — a
-  // hex in this file would fail the kit gate, and rightly: the value belongs
-  // to the vendor's map, not to a row.
-  const brand = sourceStyle(flow.source).color;
   const edited = new Date(flow.updatedAt);
 
   const toggle = () => {
@@ -301,12 +295,13 @@ function Row({ flow }: { flow: FlowListItem }) {
             `color-mix` against `transparent` (not against white) so the tint
             composites onto whatever surface is behind it, including the violet
             hover and the dark theme's card. */}
-        <span
-          aria-hidden
-          className="flex size-10 shrink-0 items-center justify-center rounded-card"
-          style={{ backgroundColor: `color-mix(in srgb, ${brand} 14%, transparent)` }}
-        >
-          <SourceMark source={flow.source} size={26} />
+        {/* NO WASH, AND THE MARK TAKES THE WHOLE BOX — see `ConnectorChip` in
+            integrations/ConnectionRow.tsx, which is the same decision and
+            carries the argument. The tint gave a flat silhouette a field to sit
+            in; the vendors' own marks bring their own. The box keeps its size so
+            the row's rhythm is unchanged. */}
+        <span aria-hidden className="flex size-10 shrink-0 items-center justify-center">
+          <SourceMark source={flow.source} size={40} />
         </span>
         <div className="min-w-0 flex-1">
           {/* THE WHOLE ROW IS THE LINK. `after:inset-0` stretches this anchor

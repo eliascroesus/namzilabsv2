@@ -5,6 +5,7 @@ import { closeConnector } from "./close";
 import { instantlyConnector } from "./instantly";
 import { whopConnector } from "./whop";
 import { googleSheetsConnector } from "./google-sheets";
+import { googleAnalyticsConnector } from "./google-analytics";
 import { googleCalendarConnector } from "./google-calendar";
 import { stripeConnector } from "./stripe";
 import { calcomConnector } from "./calcom";
@@ -53,6 +54,7 @@ for (const connector of [
   instantlyConnector,
   whopConnector,
   googleSheetsConnector,
+  googleAnalyticsConnector,
   googleCalendarConnector,
   stripeConnector,
   calcomConnector,

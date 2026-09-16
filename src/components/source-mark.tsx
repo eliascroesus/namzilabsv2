@@ -1,4 +1,5 @@
-import { brandNeedsDarkInk, logoColor, sourceStyle } from "@/components/flow/controls/source-style";
+import { brandNeedsDarkInk, sourceStyle } from "@/components/flow/controls/source-style";
+import { BrandLogo } from "@/components/brand-logo";
 import { SOURCE_LOGOS } from "@/connectors/logos";
 
 /**
@@ -68,25 +69,7 @@ export function SourceMark({
    * mark would go from a recognisable chip to an unreadable abbreviation. The
    * tile is what makes them a mark at all.
    */
-  if (logo) {
-    return (
-      <svg
-        viewBox="0 0 24 24"
-        width={size}
-        height={size}
-        // Their colour, darkened only where their own would be invisible on a
-        // light page — see `logoColor`.
-        fill={logoColor(s.color)}
-        className={`inline-block shrink-0${className ? ` ${className}` : ""}`}
-        role="img"
-        aria-label={s.label}
-        focusable="false"
-      >
-        <title>{s.label}</title>
-        <path d={logo} />
-      </svg>
-    );
-  }
+  if (logo) return <BrandLogo source={source} size={size} className={className} />;
 
   const ink = brandNeedsDarkInk(s.color) ? "text-neutral-950" : "text-white";
   return (

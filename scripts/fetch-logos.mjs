@@ -43,6 +43,32 @@
 import { writeFileSync } from "node:fs";
 
 /**
+ * ═══ SUPERSEDED, AND IT REFUSES TO RUN — 16 Sep 2026 ═══
+ *
+ * `src/connectors/logos.ts` is CURATED now, not generated. It holds official
+ * multi-colour vendor art (Google Calendar's four-colour frame, Airtable's
+ * three slabs) alongside these monochrome silhouettes, in a richer shape: a
+ * per-mark viewBox and a LIST of paths each with its own fill.
+ *
+ * This script still emits the old one-path-per-brand format, so running it
+ * would silently overwrite every official mark with a flat silhouette — which
+ * is exactly the bug the curation fixed. It refuses rather than warns, because
+ * a warning printed above a successful write is not a refusal.
+ *
+ * It is kept for the PROVENANCE in the header above: which brands Simple Icons
+ * does and does not publish, and why three published ones were left out. To add
+ * a mark now, use `node scripts/svg-to-logo.mjs <source-key> <file.svg>`.
+ */
+if (!process.env.I_UNDERSTAND_THIS_OVERWRITES_OFFICIAL_MARKS) {
+  console.error(
+    "REFUSING: src/connectors/logos.ts is curated and holds official multi-colour art.\n" +
+      "This generator emits the old single-path format and would flatten it.\n" +
+      "To add a mark: node scripts/svg-to-logo.mjs <source-key> <file.svg>",
+  );
+  process.exit(1);
+}
+
+/**
  * `source` → Simple Icons slug. Written out rather than derived: `gsheets` is
  * `googlesheets` and `calcom` is `caldotcom`, and a guessed slug that happens
  * to resolve is how the wrong company's logo ships.

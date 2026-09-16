@@ -37,6 +37,19 @@ export type OAuthProvider = {
 const GOOGLE_SCOPES: Record<string, string[]> = {
   gsheets: ["https://www.googleapis.com/auth/spreadsheets.readonly", "https://www.googleapis.com/auth/drive.readonly"],
   gcal: ["https://www.googleapis.com/auth/calendar.readonly"],
+  /**
+   * ONE SCOPE COVERS BOTH GA4 APIS — the Data API's reporting and the Admin
+   * API's property discovery are both listed under `analytics.readonly`, so
+   * asking for more would only make verification harder. The wider
+   * `auth/analytics` grants WRITE access this connector never uses, and
+   * Google's review asks for the narrowest scope that does the job.
+   *
+   * It is SENSITIVE, not restricted: it needs app verification (days), not a
+   * CASA security assessment (paid, annual). Note the `drive.readonly` above
+   * IS restricted, so this project is already on the heavier track and
+   * Analytics rides along on it.
+   */
+  ganalytics: ["https://www.googleapis.com/auth/analytics.readonly"],
 };
 
 function emailFromIdToken(idToken: unknown): string | undefined {

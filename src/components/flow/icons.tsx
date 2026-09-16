@@ -14,8 +14,9 @@ import {
   Timer,
   type LucideIcon,
 } from "lucide-react";
-import { logoColor, sourceStyle } from "./controls/source-style";
+import { sourceStyle } from "./controls/source-style";
 import { SOURCE_LOGOS } from "@/connectors/logos";
+import { BrandLogo } from "@/components/brand-logo";
 import { NODE_ACCENT, glyphInk, nodeAccent } from "./node-accent";
 
 /**
@@ -103,23 +104,11 @@ export function NodeIcon({ type, source, variant, size = 34 }: { type: string; s
      * on the canvas that names an account, and the picker's own unconnected
      * "Get data" entry keeps the green square below.
      */
-    if (logo) {
-      return (
-        <svg
-          viewBox="0 0 24 24"
-          width={size}
-          height={size}
-          fill={logoColor(s.color)}
-          className="inline-block shrink-0"
-          role="img"
-          aria-label={s.label}
-          focusable="false"
-        >
-          <title>{s.label}</title>
-          <path d={logo} />
-        </svg>
-      );
-    }
+    // One implementation, in `BrandLogo`. This was a second copy of the same
+    // svg — same hard-coded 24×24, same single fill — which meant the
+    // multi-colour change would have had to be made twice and the two would
+    // have drifted the first time only one of them moved.
+    if (logo) return <BrandLogo source={source} size={size} />;
     return (
       <span
         className="inline-flex shrink-0 items-center justify-center font-semibold leading-none"

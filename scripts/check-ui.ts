@@ -409,6 +409,12 @@ const RULES: Rule[] = [
       "src/components/flow/node-accent.ts": "the step-identity palette — the one sanctioned hex map",
       "src/components/flow/controls/source-style.ts": "connector brand colours are the vendors', not ours",
       "src/connectors/catalog.ts": "connector brand colours are the vendors', not ours — the same exception source-style.ts had before brand moved here",
+      // The vendors' own ART, which is a stronger version of the same
+      // exception: these are not colours we chose for a brand, they are the
+      // fills inside Google's and Airtable's published marks. Changing one to
+      // a token would not make it theme-aware, it would make it the wrong
+      // logo — which is the bug this file was rewritten to fix.
+      "src/connectors/logos.ts": "official marks carry the fills they shipped with; a token here would redraw somebody else's logo",
       "src/app/design/page.tsx": "the kit page prints hex VALUES as documentation labels",
       "src/app/design/brand-sheet.tsx": "the same kit page, split out — it prints the brand sheet's own hex values as labels",
       // Next emits <meta name="theme-color"> from a build-time literal, so it

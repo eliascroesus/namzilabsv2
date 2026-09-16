@@ -837,6 +837,64 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
     ],
   },
   {
+    source: "ganalytics",
+    name: "Google Analytics",
+    brand: { color: "#E37400", short: "GA" },
+    description: "Sessions, users and conversions from a GA4 property.",
+    connect: "google",
+    /**
+     * GA4 HAS NO OUTBOUND WEBHOOK FOR REPORT DATA, so this is poll-only and
+     * not by omission: the Data API aggregates over a warehouse that keeps
+     * revising itself, and nothing pushes when a number changes.
+     */
+    instant: false,
+    poll: true,
+    docs: {
+      url: "https://developers.google.com/analytics/devguides/reporting/data/v1/rest/v1beta/properties/runReport",
+      readOn: "2026-09-16",
+    },
+    /**
+     * NOT PROBED AGAINST A LIVE PROPERTY YET. `null` is the honest value: the
+     * shape here was written from Google's published reference, and nobody has
+     * watched a real GA4 property answer it. Run `scripts/verify-ganalytics.ts`
+     * against a connected account and date this.
+     */
+    verified: { live: null },
+    /**
+     * THE BINDING LIMIT IS NOT REQUESTS, IT IS TOKENS — and Google does not
+     * price a token per call: the cost scales with rows, dimensions, metrics,
+     * cardinality and the length of the date range, so no static
+     * requests-per-minute figure can be correct. These are a conservative
+     * floor that keeps the scheduler honest; the real control is
+     * `returnPropertyQuota: true` on every call, which the connector sends and
+     * logs. The ceiling that actually binds is ~14,000 tokens per project per
+     * property per hour — OUR project's share of any ONE customer's property.
+     */
+    fleetLimits: { "properties.runReport": { requestsPerMinute: 600 }, "accountSummaries.list": { requestsPerMinute: 600 } },
+    rateLimits: { "properties.runReport": { requestsPerMinute: 60 }, "accountSummaries.list": { requestsPerMinute: 60 } },
+    autoWebhook: false,
+    credentialFields: [],
+    flowFields: [
+      { key: "propertyId", label: "Property", required: true, dynamic: true, placeholder: "properties/123456789", hint: "Pick a GA4 property you can read." },
+      {
+        key: "dimensions",
+        label: "Group by",
+        placeholder: "date, sessionDefaultChannelGroup",
+        hint: "GA4 dimension names, comma separated. `date` is required for a row to have a place on the timeline.",
+      },
+      {
+        key: "metrics",
+        label: "Measure",
+        placeholder: "sessions, engagedSessions, totalUsers",
+        hint: "GA4 metric names, comma separated.",
+      },
+    ],
+    hiddenFields: [
+      "source", //             always "ganalytics"
+      "properties.timeZone", // the property's zone — carried so a row can be re-dated, not read
+    ],
+  },
+  {
     source: "gcal",
     name: "Google Calendar",
     brand: { color: "#4285F4", short: "GC" },
