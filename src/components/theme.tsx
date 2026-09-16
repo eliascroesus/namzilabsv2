@@ -42,13 +42,30 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
      * is what makes the third mode real.
      *
      * `system` STILL RESOLVES TO TWO. The OS reports light or dark and has no
-     * opinion about a rail, so following the system can only ever land on one
-     * of those; `mix` is reachable by choosing it, which is the honest
-     * arrangement — see the note on `CHOICES`.
+     * opinion about a rail, so CHOOSING to follow the system can only ever land
+     * on one of those — which is exactly why `mix` is the default below rather
+     * than something you have to go looking for. See the note on `CHOICES`.
+     */
+    /**
+     * `mix` IS WHAT A DEVICE SEES BEFORE IT HAS CHOSEN — the owner's call, and
+     * it is the product's own look rather than a guess at the machine's.
+     *
+     * This was `system`, which follows the OS and can only ever resolve to
+     * light or dark. Since the rail is dark in `mix` and the board is light,
+     * the OS has no opinion that maps onto it, so following the system meant
+     * nobody ever arrived on the arrangement the product was designed around
+     * unless they went looking for it.
+     *
+     * WHAT THIS DOES AND DOES NOT MEAN, because the storage is per DEVICE and
+     * not per account: it is the default for any browser with nothing stored,
+     * which covers every new account on its first visit and also an existing
+     * customer opening the product on a new laptop. Anybody who has actually
+     * picked a theme keeps it — `defaultTheme` is only consulted when the key
+     * is absent. `System` stays in the list and stays selectable.
      */
     <NextThemes
       attribute="class"
-      defaultTheme="system"
+      defaultTheme="mix"
       enableSystem
       themes={["light", "mix", "dark", "system"]}
       disableTransitionOnChange
