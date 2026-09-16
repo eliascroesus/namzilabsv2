@@ -104,10 +104,21 @@ describe("every logo belongs to a connector", () => {
   });
 
   it("does not carry the wordmarks that are unreadable at list size", () => {
-    // Cal.com, Typeform and WooCommerce publish their NAME set in type inside
-    // the 24px box. At `SourceMark`'s 20px default each is a grey smudge, and
-    // two clear letters beat an illegible logo — the same judgement
-    // `brandNeedsDarkInk` encodes about contrast.
+    /**
+     * Cal.com, Typeform and WooCommerce publish their NAME set in type inside
+     * the box. At `SourceMark`'s 20px default each is a grey smudge, and two
+     * clear letters beat an illegible logo — the same judgement
+     * `brandNeedsDarkInk` encodes about contrast.
+     *
+     * RE-CHECKED 16 Sep 2026, because the owner supplied official files for
+     * Cal.com and WooCommerce and it would have been easy to just take them.
+     * Both were extracted and rendered at 64px, at the real 20px, and on a dark
+     * card before deciding: Cal.com is a dark disc whose "Cal" is unreadable at
+     * product size and which nearly vanishes on `#151515`, and WooCommerce's
+     * "WOO COMMERCE" is a grey bar. Five of the seven marks he sent that day
+     * WERE taken — Close, Pipedrive, Attio, JustCall and Customer.io — so this
+     * is a measurement, not a policy.
+     */
     for (const source of ["calcom", "typeform", "woocommerce"]) {
       expect(SOURCE_LOGOS[source], `${source} is a wordmark and should keep its letters`).toBeUndefined();
     }

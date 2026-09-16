@@ -56,6 +56,14 @@ if (!viewBox) {
 }
 
 /** `.st0{fill:#FFFFFF}` → { st0: "#FFFFFF" }. Illustrator's default export. */
+/**
+ * `style="fill:#292929"` — Cal.com's circle paints itself this way, and reading
+ * only the `fill` ATTRIBUTE reported it as unpainted, which silently turned a
+ * dark disc into `currentColor`. The presentation attribute and the style
+ * property are two spellings of one thing and both have to be read.
+ */
+const styleFill = (attrs) => attrs.match(/style="[^"]*\bfill\s*:\s*([^;"]+)/)?.[1]?.trim();
+
 const classFills = {};
 for (const block of svg.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)) {
   for (const rule of block[1].matchAll(/\.([\w-]+)\s*\{([^}]*)\}/g)) {
@@ -67,26 +75,107 @@ for (const block of svg.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)) {
 const blockers = [];
 if (/<(linearGradient|radialGradient)/.test(svg)) blockers.push("a gradient");
 if (/<mask[\s>]/.test(svg)) blockers.push("a mask");
-if (/<clipPath[\s>]/.test(svg)) blockers.push("a clipPath");
-if (/<(circle|rect|ellipse|polygon|polyline|line)[\s>]/.test(svg)) blockers.push("a non-path shape (circle/rect/polygon)");
+/**
+ * A clipPath whose shape is the WHOLE canvas clips nothing — exporters emit
+ * one routinely — so it is not a blocker. One that is smaller genuinely cuts
+ * the art and cannot be expressed as a fill list.
+ */
+if (/<clipPath[\s>]/.test(svg)) {
+  const clipped = [...svg.matchAll(/<clipPath[^>]*>([\s\S]*?)<\/clipPath>/g)].map((m) => m[1]);
+  const vb = viewBox.split(/[\s,]+/).map(Number);
+  const coversAll = clipped.every((inner) => {
+    const w = Number(inner.match(/width="([\d.]+)"/)?.[1] ?? 0);
+    const h = Number(inner.match(/height="([\d.]+)"/)?.[1] ?? 0);
+    if (w >= vb[2] && h >= vb[3]) return true;
+    /**
+     * The same full-canvas clip written as a PATH — `M0 0h600v600H0z` — which
+     * is what several exporters emit and what a width/height check misses
+     * entirely. Close's file is exactly this, and reading it as a real crop
+     * flagged a perfectly faithful mark as unusable.
+     */
+    const nums = (inner.match(/[\d.]+/g) ?? []).map(Number);
+    return nums.includes(vb[2]) && nums.includes(vb[3]);
+  });
+  if (!coversAll) blockers.push("a clipPath that actually crops the art");
+}
+if (/<(ellipse|polygon|polyline|line)[\s>]/.test(svg)) blockers.push("a non-path shape (ellipse/polygon/polyline)");
+
+/**
+ * `<circle>` AND `<rect>` ARE CONVERTED, NOT REFUSED.
+ *
+ * Both are exactly expressible as a path — a circle is two arcs, a rounded
+ * rectangle is four lines and four arcs — so converting loses nothing, which
+ * is the bar for touching a vendor's art at all. It matters because real
+ * brand files use them constantly: Google Analytics' third bar is a `<circle>`,
+ * Pipedrive's tile is a `<rect rx>`, and refusing those would mean hand-writing
+ * path data, which is the one thing this script exists to prevent.
+ *
+ * ORDER IS PRESERVED. A background rect is drawn FIRST in the source and must
+ * stay first, or the tile paints over the glyph it sits behind.
+ */
+const shapeToPath = (tag, a) => {
+  const num = (n, d = 0) => Number(a.match(new RegExp(`\\s${n}="([-\\d.]+)"`))?.[1] ?? d);
+  if (tag === "circle") {
+    const [cx, cy, r] = [num("cx"), num("cy"), num("r")];
+    if (!r) return null;
+    return `M${cx - r},${cy}A${r},${r} 0 1 0 ${cx + r},${cy}A${r},${r} 0 1 0 ${cx - r},${cy}Z`;
+  }
+  const [x, y, w, h] = [num("x"), num("y"), num("width"), num("height")];
+  if (!w || !h) return null;
+  const rx = Math.min(num("rx", num("ry")), w / 2);
+  const ry = Math.min(num("ry", rx), h / 2);
+  if (!rx && !ry) return `M${x},${y}H${x + w}V${y + h}H${x}Z`;
+  return (
+    `M${x + rx},${y}H${x + w - rx}A${rx},${ry} 0 0 1 ${x + w},${y + ry}` +
+    `V${y + h - ry}A${rx},${ry} 0 0 1 ${x + w - rx},${y + h}` +
+    `H${x + rx}A${rx},${ry} 0 0 1 ${x},${y + h - ry}` +
+    `V${y + ry}A${rx},${ry} 0 0 1 ${x + rx},${y}Z`
+  );
+};
 
 const paths = [];
-for (const m of svg.matchAll(/<path\b([^>]*)>/g)) {
-  const attrs = m[1];
+// Walk paths, circles and rects in DOCUMENT order, so paint order survives.
+for (const m of svg.matchAll(/<(path|circle|rect)\b([^>]*)>/g)) {
+  const tag = m[1];
+  if (tag !== "path") {
+    const attrs = m[2];
+    // `fill="none"` is a spacer, not art — exporters emit one to pin the box.
+    const own = attrs.match(/\sfill="([^"]*)"/)?.[1];
+    const cls = attrs.match(/class="([^"]*)"/)?.[1];
+    const fill = own ?? styleFill(attrs) ?? (cls ? classFills[cls.trim().split(/\s+/)[0]] : undefined) ?? "currentColor";
+    if (fill === "none") continue;
+    // A rect inside <defs>/<clipPath> is a clip shape, not a drawn one.
+    const before = svg.slice(0, m.index ?? 0);
+    const inDefs = (before.match(/<defs[\s>]/g) ?? []).length > (before.match(/<\/defs>/g) ?? []).length;
+    const inClip = (before.match(/<clipPath[\s>]/g) ?? []).length > (before.match(/<\/clipPath>/g) ?? []).length;
+    if (inDefs || inClip) continue;
+    const d = shapeToPath(tag, attrs);
+    if (d) paths.push({ d, fill: fill.trim(), converted: tag });
+    continue;
+  }
+  const attrs = m[2];
   const d = attrs.match(/\sd="([^"]*)"/s)?.[1];
   if (!d) continue;
+  {
+    const before = svg.slice(0, m.index ?? 0);
+    const inDefs = (before.match(/<defs[\s>]/g) ?? []).length > (before.match(/<\/defs>/g) ?? []).length;
+    const inClip = (before.match(/<clipPath[\s>]/g) ?? []).length > (before.match(/<\/clipPath>/g) ?? []).length;
+    // Close's clip is a white full-canvas path; emitted as art it paints over
+    // the entire logo. The skip existed only for circle/rect.
+    if (inDefs || inClip) continue;
+  }
   const cls = attrs.match(/class="([^"]*)"/)?.[1];
   const own = attrs.match(/\sfill="([^"]*)"/)?.[1];
   // Precedence as the browser applies it: a presentation attribute on the
   // element beats the class rule it inherits.
-  const fill = own ?? (cls ? classFills[cls.trim().split(/\s+/)[0]] : undefined) ?? "currentColor";
+  const fill = own ?? styleFill(attrs) ?? (cls ? classFills[cls.trim().split(/\s+/)[0]] : undefined) ?? "currentColor";
   // Collapse the exporter's line wrapping. `d` is whitespace-insensitive
   // between tokens, so this changes the string and not the shape.
   paths.push({ d: d.replace(/\s+/g, " ").trim(), fill: fill.trim() });
 }
 
 if (paths.length === 0) {
-  console.error("! no <path> elements found.");
+  console.error("! nothing drawable found (no path, circle or rect).");
   process.exit(1);
 }
 
@@ -95,6 +184,12 @@ const allWhite = fills.every((f) => f === "#ffffff" || f === "#fff" || f === "wh
 const mono = fills.length === 1;
 
 console.log(`\n// ${source} — ${paths.length} path(s), viewBox ${viewBox}, fills: ${fills.join(", ")}`);
+const converted = paths.filter((p) => p.converted);
+if (converted.length) {
+  // Said out loud, because a conversion is the one place this script changes
+  // the vendor's file rather than just reading it.
+  console.log(`// Converted to paths (exactly, no loss): ${converted.map((p) => p.converted).join(", ")}`);
+}
 if (blockers.length) {
   console.log(`// !! CONTAINS ${blockers.join(" and ")} — this entry is NOT faithful.`);
   console.log(`//    Solid fills cannot express it. Get a flattened symbol-only file,`);
