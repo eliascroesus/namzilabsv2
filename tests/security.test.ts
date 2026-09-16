@@ -55,6 +55,24 @@ describe("every server action is gated", () => {
   const UNGATED_BY_DESIGN: Record<string, string> = {
     switchOrgAction: "WorkOS refuses an org the refresh token is not entitled to; ensureSignedIn covers no session",
     signOutAction: "ending a session you do not have is a no-op",
+    /**
+     * THE THREE THAT CREATE A SESSION. Requiring one first is a contradiction:
+     * nobody arriving at `/login` has a session, and that is the point of the
+     * page.
+     *
+     * They are not therefore unguarded. Each forwards a credential to WorkOS
+     * and does nothing at all with the answer except seal whatever WorkOS
+     * returned — no password is compared here, no token is minted here, and no
+     * tenant is read from the form. WorkOS owns the rate limiting (fed the real
+     * client IP, see `requestOrigin`), the breach checks and the lockout.
+     *
+     * The thing that WOULD be ours to get wrong is where they send somebody
+     * afterwards, and that is `safeNext` — pinned separately, and hard, in
+     * `tests/auth-routes.test.ts`.
+     */
+    signInAction: "creates the session; a session gate would be circular. Credentials are forwarded to WorkOS, never judged here",
+    signUpAction: "same — it creates the account, then delegates to signInAction",
+    verifyEmailAction: "finishes a sign-in with a WorkOS pending token held in an httpOnly cookie; there is no session yet by definition",
   };
 
   it("has no action that skips both gates", () => {

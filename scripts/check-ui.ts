@@ -415,6 +415,10 @@ const RULES: Rule[] = [
       // a token would not make it theme-aware, it would make it the wrong
       // logo — which is the bug this file was rewritten to fix.
       "src/connectors/logos.ts": "official marks carry the fills they shipped with; a token here would redraw somebody else's logo",
+      // The Google "G" on the sign-in button, for the same reason: Google's
+      // brand terms require the mark in its own four colours, and a token here
+      // would be us redrawing it. Every other colour on that screen is a token.
+      "src/app/(auth)/auth-shell.tsx": "Google's own mark on the sign-in button; their brand terms forbid recolouring it",
       "src/app/design/page.tsx": "the kit page prints hex VALUES as documentation labels",
       "src/app/design/brand-sheet.tsx": "the same kit page, split out — it prints the brand sheet's own hex values as labels",
       // Next emits <meta name="theme-color"> from a build-time literal, so it

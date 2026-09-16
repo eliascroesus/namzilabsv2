@@ -54,7 +54,7 @@ function isProtected(pathname: string): boolean {
 }
 
 export default async function proxy(request: NextRequest) {
-  const { session, headers, authorizationUrl } = await authkit(request);
+  const { session, headers } = await authkit(request);
   const { pathname } = request.nextUrl;
 
   if (isProtected(pathname) && !session.user) {
@@ -62,9 +62,20 @@ export default async function proxy(request: NextRequest) {
     if (pathname.startsWith("/api/")) {
       return NextResponse.json({ error: "unauthorized" }, { status: 401 });
     }
-    if (authorizationUrl) {
-      return handleAuthkitHeaders(request, headers, { redirect: authorizationUrl });
-    }
+    /**
+     * TO OUR OWN FORM, NOT TO WORKOS. `authorizationUrl` is the hosted page,
+     * which is what this used to send people to; the form lives at `/login` on
+     * our domain now.
+     *
+     * The path they were trying to reach rides along so they land there rather
+     * than on the dashboard — `search` included, because a link into the board
+     * carries its range and view in the query string and dropping it would send
+     * somebody to a different screen than the one they clicked.
+     */
+    const next = `${pathname}${request.nextUrl.search}`;
+    const to = new URL("/login", request.nextUrl);
+    if (next !== "/dashboard") to.searchParams.set("next", next);
+    return handleAuthkitHeaders(request, headers, { redirect: to.toString() });
   }
 
   return handleAuthkitHeaders(request, headers);
