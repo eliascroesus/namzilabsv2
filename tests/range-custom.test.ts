@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { join as pathJoin } from "node:path";
 import {
   CUSTOM_RANGE_MAX_DAYS,
   customRangeKey,
@@ -230,5 +232,54 @@ describe("which windows a tile can answer without a flow run", () => {
     // than a confident number nobody computed.
     const row = { tile: { facts: { kind: "ratio" }, byDay: days("2026-08-03", 3, 5) } };
     expect(withDerivedRange(row, KEY, NOW)).toBe(row);
+  });
+});
+
+/**
+ * THE DERIVED ANSWER HAS TO SURVIVE THE REST OF THE PAGE — 16 Sep 2026.
+ *
+ * The dashboard derives the drawn window into its rows, then decorates those
+ * rows twice more: an "unpublished" marker and an import badge. Both joins are
+ * board-wide and both rebuild the list. The import one rebuilt it from the
+ * ORIGINAL query rows, which threw the derivation away on the ordinary path
+ * where that join succeeds — so every tile that already had its answer in hand
+ * went back to saying "not computed for this range" and was sent to the server
+ * for a full recompute it did not need. On a drawn window that is every count
+ * metric on the board, on every range change, for nothing.
+ *
+ * Two tests, because the bug had two halves: the mechanism (a pure function
+ * whose answer lives only in its return value) and the call site that dropped
+ * that return value on the floor.
+ */
+describe("the derived window survives the joins layered on top of it", () => {
+  // Its own three days rather than the helper one describe up, so this block
+  // still stands if either is moved.
+  const WINDOW = "2026-08-03..2026-08-05";
+  const BY_DAY = { "2026-08-03": { value: 5 }, "2026-08-04": { value: 5 }, "2026-08-05": { value: 5 } };
+
+  it("does not write the answer back into the row it was given", () => {
+    // The reason re-mapping from the query rows loses it. Were this ever to
+    // become a mutation the page bug would hide itself, so it is pinned.
+    const tile = { facts: { kind: "count" }, byDay: BY_DAY };
+    const row = { flowId: "f1", tile };
+    const out = withDerivedRange(row, WINDOW, NOW) as typeof row & {
+      tile: { byRange?: Record<string, { value: number }> };
+    };
+    expect(out.tile.byRange?.[WINDOW]?.value, "the copy must carry the answer, or this proves nothing").toBe(15);
+    expect(out, "a new row, not the one passed in").not.toBe(row);
+    expect((row.tile as { byRange?: unknown }).byRange, "the original must stay untouched").toBeUndefined();
+    expect(row.tile, "and keep the day map the copy dropped").toBe(tile);
+  });
+
+  it("decorates the derived rows rather than rebuilding from the query", () => {
+    // Asserted on the source because the page is a server component fed by four
+    // awaited queries. What is checkable — and what actually broke — is which
+    // list the import-progress join maps over.
+    const page = readFileSync(pathJoin(process.cwd(), "src/app/dashboard/page.tsx"), "utf8");
+    const block = page.match(/if \(progressResult\.status === "fulfilled"\) \{[\s\S]*?\n {4}\}/)?.[0];
+    expect(block, "the import-progress join has moved — this test needs rewriting").toBeTruthy();
+    expect(block, "rebuilding from `rows` drops the range derived above it; map over `flowTiles`").toMatch(
+      /flowTiles = flowTiles\.map\(/,
+    );
   });
 });

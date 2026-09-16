@@ -302,6 +302,7 @@ export function CustomTile({
   source,
   config: rawConfig = {},
   cols = 6,
+  computing = false,
 }: {
   chart: string;
   title: string;
@@ -312,6 +313,12 @@ export function CustomTile({
   config?: TileConfig;
   /** The tile's width in grid columns — only the pie's legend side reads it. */
   cols?: number;
+  /**
+   * An answer for this window is on its way for this tile's flow. `ChartFrame`
+   * owns what that looks like; the page is what knows it, because the page is
+   * what hands the flow to `CustomRangeCompute`.
+   */
+  computing?: boolean;
 }) {
   const chart = asChartId(rawChart);
   /**
@@ -776,6 +783,7 @@ export function CustomTile({
       }
       status={source.kind === "flow" ? source.status : undefined}
       unavailable={w.unavailable}
+      computing={computing}
       emptyReason={emptyReason}
       error={source.kind === "flow" ? source.error : undefined}
       flowId={source.kind === "flow" ? source.flowId : undefined}

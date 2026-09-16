@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { PencilLine } from "lucide-react";
+import { Loader2, PencilLine } from "lucide-react";
 import { formatDateTime, formatMetricValue, relativeTime } from "@/lib/format";
 import { MetricCard } from "@/components/metric-card";
 import { StatusPill, type StatusPillProps } from "@/components/ui/badge";
@@ -107,7 +107,26 @@ export function tileValueForRange(tile: unknown, rangeKey?: string): number | nu
 }
 
 /** Renders one materialized flow Output as a dashboard tile. */
-export function FlowTile({ row, rangeKey }: { row: FlowResultRow; rangeKey?: string }) {
+export function FlowTile({
+  row,
+  rangeKey,
+  computing = false,
+}: {
+  row: FlowResultRow;
+  rangeKey?: string;
+  /**
+   * The page has handed this flow to `CustomRangeCompute` and an answer for the
+   * window is on its way.
+   *
+   * A DIFFERENT FACT FROM "no answer", which is why it is a prop rather than
+   * something the tile could work out for itself. A tile with no slot for the
+   * window looks identical whether a computation is in flight or whether the
+   * flow errored and none is coming — and a spinner over the second spins
+   * forever. The page knows which is which (`pendingCustomFlows` is exactly the
+   * fresh flows with no slot), so the page is what says so.
+   */
+  computing?: boolean;
+}) {
   const stored = (row.tile ?? {}) as Tile;
   /**
    * The dashboard's range, applied. Every range was derived from the run the
@@ -247,10 +266,29 @@ export function FlowTile({ row, rangeKey }: { row: FlowResultRow; rangeKey?: str
           tile, whose series and target are the flow's OWN all-time figures —
           drawing them under a range that has no answer is the all-time-number-
           under-the-Today-pill fallback wearing bars. */}
-      {unavailable ? (
-          <p className="mt-2.5 text-xs text-muted-foreground" title={unavailable}>
-            {unavailable.length > 160 ? `${unavailable.slice(0, 160)}…` : unavailable}
-          </p>
+      {unavailable && computing && row.status !== "error" ? (
+        /* AN ANSWER IS COMING, SO SAY THAT AND NOTHING ELSE.
+           This printed the same sentence as a tile that will never fill in —
+           "Not computed yet for this range — Refresh to compute it." — which is
+           wrong twice while a request is in flight: nobody needs to press
+           anything, and a paragraph of explanation reads as a fault where a
+           moving indicator reads as work.
+           RECOMPUTING rather than Loading, because that is what is happening:
+           the number for this window is being derived, not fetched.
+           AN ERRORED ROW IS EXCLUDED HERE and not only by the caller. The page
+           already filters those out of `pendingCustomFlows`, but a recompute of
+           an errored flow reproduces the error — so a spinner over one is a
+           promise nothing can keep, and it would hide the reason underneath it.
+           "Should never happen" is how that branch shipped a calm em-dash over
+           a failing flow the last time it was touched. */
+        <p className="mt-2.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Loader2 aria-hidden className="size-3 shrink-0 animate-spin motion-reduce:animate-none" />
+          Recomputing…
+        </p>
+      ) : unavailable ? (
+        <p className="mt-2.5 text-xs text-muted-foreground" title={unavailable}>
+          {unavailable.length > 160 ? `${unavailable.slice(0, 160)}…` : unavailable}
+        </p>
       ) : t.series && t.series.length > 0 && drawsItsSeries(windowed?.assembled === true, stored, t) ? (
         <Sparkbars series={t.series} format={t} />
       ) : t.groups && t.groups.length > 0 ? (

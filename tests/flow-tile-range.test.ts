@@ -49,7 +49,8 @@ const row = (over: Partial<FlowResultRow> = {}): FlowResultRow => ({
   ...over,
 });
 
-const render = (r: FlowResultRow, rangeKey?: string) => renderToStaticMarkup(createElement(FlowTile, { row: r, rangeKey }));
+const render = (r: FlowResultRow, rangeKey?: string, computing?: boolean) =>
+  renderToStaticMarkup(createElement(FlowTile, { row: r, rangeKey, computing }));
 
 describe("a range the stored tile has no entry for", () => {
   it("says it was never computed, rather than reporting an empty period", () => {
@@ -259,5 +260,59 @@ describe("the value the board sorts on", () => {
     // The bug this whole file exists for, asked of the sort instead of the card.
     expect(tileValueForRange(row().tile, "today")).toBe(3);
     expect(tileValueForRange(row().tile, undefined)).toBe(12);
+  });
+});
+
+
+/**
+ * AND WHAT IT SAYS WHILE AN ANSWER IS ON ITS WAY — 16 Sep 2026.
+ *
+ * The board answers a drawn window three ways: a stored slot, a sum of the
+ * tile's own days, or a computation on the server. Only the third takes time,
+ * and while it ran the tile printed the SAME sentence as a tile that will never
+ * fill in — "Not computed yet for this range — Refresh to compute it." That is
+ * wrong twice over: nobody needs to press anything, because the request is
+ * already in flight, and a paragraph of explanation reads as a fault where a
+ * moving indicator reads as work. The owner's words were that it made the
+ * product "feel slow".
+ *
+ * The fact cannot be inferred from the row — a tile with no slot looks the same
+ * whether a computation is coming or the flow errored and none is — so the page
+ * passes it down. These pin both halves of that.
+ */
+describe("a range whose answer is already being computed", () => {
+  it("shows a spinner and the word, not the sentence", () => {
+    const html = render(row(), "2026-08-03..2026-08-14", true);
+
+    expect(html).toContain("Recomputing");
+    expect(html, "telling someone to press Refresh for a request already in flight").not.toContain("Refresh to compute it");
+    // The animation IS the message. Without it this is just quieter text.
+    expect(html).toContain("animate-spin");
+    // Honoured rather than assumed: a spinner is motion, and some people have
+    // asked their system not to show any.
+    expect(html).toContain("motion-reduce:animate-none");
+  });
+
+  it("keeps the sentence when nothing is coming", () => {
+    // The default. A spinner here would spin forever.
+    const html = render(row(), "2026-08-03..2026-08-14");
+
+    expect(html).toContain("Not computed yet");
+    expect(html).not.toContain("Recomputing");
+    expect(html).not.toContain("animate-spin");
+  });
+
+  it("still shows a failed run's reason rather than a spinner over a dead end", () => {
+    /**
+     * `pendingCustomFlows` excludes rows that are not fresh, so this pairing
+     * should never reach a tile — but "should never happen" is how the errored
+     * flow ended up wearing a calm em-dash the last time this branch was
+     * touched. A recompute of an errored flow reproduces the error, so a
+     * spinner over it is a promise nothing can keep.
+     */
+    const html = render(row({ status: "error", error: "Connector returned 401" }), "2026-08-03..2026-08-14", true);
+
+    expect(html).toContain("the last run of this flow failed");
+    expect(html).not.toContain("animate-spin");
   });
 });

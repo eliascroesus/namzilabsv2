@@ -143,6 +143,32 @@ const DERIVED_ROW = withDerivedRange(
   DERIVED_KEY,
 );
 
+/**
+ * THE SAME WINDOW THE TILE CANNOT ANSWER, WITH AN ANSWER ON ITS WAY.
+ *
+ * A RATE rather than a count, so `withDerivedRange` declines it — a ratio may
+ * not be folded across days — which is exactly the case that reaches
+ * `CustomRangeCompute`. The card beside it is the one that CAN be summed; the
+ * pair is the whole difference between "this costs nothing" and "the server is
+ * working on it", and until now both wore the same sentence.
+ */
+const RECOMPUTING_ROW = row("Pickup Rate (Mohamed)", 0, {
+  tile: {
+    name: "Pickup Rate (Mohamed)",
+    viz: "number",
+    format: "percent",
+    precision: 1,
+    value: 0.282,
+    facts: { kind: "ratio", shape: "scalar" },
+    /**
+     * PRESET SLOTS AND NO SLOT FOR THE DRAWN WINDOW — which is what `missing`
+     * actually means. A tile with NO `byRange` at all is not missing anything;
+     * it is a row that predates ranges, and it keeps showing its stored number.
+     */
+    byRange: { today: { value: 0.282 }, "7d": { value: 0.31 } },
+  },
+});
+
 
 const SERIES = [
   { bucket: "Aug 26", value: 4 },
@@ -396,6 +422,12 @@ export default async function OverviewLab({
               the tile's own stored days, with no database and no flow run. */}
           <div style={{ gridColumn: "span 3", gridRow: "span 3" }}>
             <FlowTile row={DERIVED_ROW} rangeKey={DERIVED_KEY} />
+          </div>
+          {/* AND THE ONE IT CANNOT — a rate, handed to the server. The sentence
+              that used to sit here told the reader to press Refresh for a
+              request that was already in flight. */}
+          <div style={{ gridColumn: "span 3", gridRow: "span 3" }}>
+            <FlowTile row={RECOMPUTING_ROW} rangeKey={DERIVED_KEY} computing />
           </div>
         </div>
       </PageContainer>

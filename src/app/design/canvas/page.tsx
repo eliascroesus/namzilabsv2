@@ -449,7 +449,13 @@ const GALLERY_CHARTS = [
   { id: "table" as const, label: "Table", source: rich(), config: {}, h: 6 },
 ];
 
-const GALLERY_STATES: Array<{ label: string; chart: ChartId; source: CustomTileSource | null }> = [
+const GALLERY_STATES: Array<{
+  label: string;
+  chart: ChartId;
+  source: CustomTileSource | null;
+  /** The page has a computation in flight for this tile's flow. */
+  computing?: boolean;
+}> = [
   { label: "Fine", chart: "bar", source: rich() },
   { label: "Stale — a refresh is on its way", chart: "bar", source: { ...rich(), status: "stale" } },
   {
@@ -459,6 +465,28 @@ const GALLERY_STATES: Array<{ label: string; chart: ChartId; source: CustomTileS
       kind: "flow",
       status: "fresh",
       tile: { format: "number", precision: 0, byRange: { today: { unavailable: "Division by zero — check the second number." } } },
+    },
+  },
+  {
+    /**
+     * THE SAME EMPTY CARD, WITH AN ANSWER ON ITS WAY — and the pair is here
+     * because they were once indistinguishable.
+     *
+     * A tile with no slot for the window looked identical whether a computation
+     * was in flight or whether the flow had errored and none was coming: both
+     * printed "Not computed yet for this period — Refresh to compute it." One
+     * of those asks the reader to press something that is already happening;
+     * the other is a dead end. A spinner over the second would spin forever,
+     * which is why `computing` is passed down from the page rather than guessed
+     * at here.
+     */
+    label: "Recomputing this period",
+    chart: "bar",
+    computing: true,
+    source: {
+      kind: "flow",
+      status: "fresh",
+      tile: { format: "number", precision: 0, byRange: { today: { unavailable: "Not computed yet for this period." } } },
     },
   },
   {
@@ -651,9 +679,9 @@ export default function CanvasSpecimen() {
           qualifies it are different promises — these are both.
         </p>
         <div className={`mt-4 ${BOARD_GRID}`}>
-          {GALLERY_STATES.map(({ label, chart, source }) => (
+          {GALLERY_STATES.map(({ label, chart, source, computing }) => (
             <div key={label} style={{ height: `${6 * ROW_UNIT_PX}px` }}>
-              <CustomTile chart={chart} title={label} rangeKey="today" source={source} cols={4} />
+              <CustomTile chart={chart} title={label} rangeKey="today" source={source} cols={4} computing={computing} />
             </div>
           ))}
         </div>

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ImportProgress } from "@/components/charts";
@@ -41,6 +42,7 @@ export function ChartFrame({
   delta,
   status,
   unavailable,
+  computing,
   emptyReason,
   error,
   flowId,
@@ -103,6 +105,16 @@ export function ChartFrame({
   status?: string;
   /** The period could not be answered. Replaces the mark. */
   unavailable?: string;
+  /**
+   * An answer for this window is already being computed for this tile.
+   *
+   * SEPARATE FROM `unavailable`, which only says there is no number. The two
+   * look identical on a card and mean opposite things: one is work in flight,
+   * the other a dead end on an errored flow. A spinner over the second spins
+   * forever, so the page — which knows exactly which flows it handed to
+   * `CustomRangeCompute` — is what decides.
+   */
+  computing?: boolean;
   /** The chart is legal and this period is simply empty. Replaces the mark. */
   emptyReason?: string;
   error?: string | null;
@@ -308,7 +320,24 @@ export function ChartFrame({
           header's own 16px pad, which is the white band the owner measured at
           "29px when it should be 16". */}
       <div className={cn("flex min-h-0 flex-1 flex-col", (headline !== undefined || !hideTitle) && "mt-3")}>
-        {blocked ? (
+        {unavailable && computing && status !== "error" ? (
+          /* AN ANSWER IS COMING, SO SAY THAT AND NOTHING ELSE. The sentence
+             here was the same one a tile shows when nothing is coming, which
+             reads as a fault; a moving indicator reads as work.
+             GATED ON `unavailable`, NOT `blocked` — `blocked` also covers
+             `emptyReason`, a period that genuinely holds nothing. That is an
+             answer, and replacing an answer with a spinner would claim the tile
+             is still working when it has already finished.
+             AN ERRORED ROW IS EXCLUDED for the same reason: a recompute of an
+             errored flow reproduces the error, so a spinner over one is a
+             promise nothing can keep — and it would cover the reason with it.
+             The page already filters those out, but this branch has shipped a
+             calm placeholder over a failing flow once before. */
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Loader2 aria-hidden className="size-3 shrink-0 animate-spin motion-reduce:animate-none" />
+            Recomputing…
+          </p>
+        ) : blocked ? (
           <p className="text-xs text-muted-foreground" title={blocked}>
             {blocked.length > 160 ? `${blocked.slice(0, 160)}…` : blocked}
           </p>

@@ -159,6 +159,7 @@ export function CustomBoard({
   tiles,
   options,
   rangeKey,
+  computingFlows = [],
   canEdit,
   layoutFrozen = false,
   actions: actionOverrides,
@@ -171,6 +172,15 @@ export function CustomBoard({
   options: CustomTileOption[];
   /** The board's active range — the tiles window their own data with it. */
   rangeKey: string;
+  /**
+   * Flow ids the page has handed to `CustomRangeCompute` — an answer for the
+   * active window is in flight for each.
+   *
+   * AN ARRAY RATHER THAN A SET because this crosses the server/client boundary,
+   * which a `Set` does not survive. It becomes one below, since every tile asks
+   * the same question and a board can hold fifty.
+   */
+  computingFlows?: string[];
   canEdit: boolean;
   /**
    * THIS VIEW HOLDS A ROW THIS VIEWER CANNOT SEE, so nobody may rearrange it
@@ -200,6 +210,8 @@ export function CustomBoard({
    */
   slotId?: string;
 }) {
+  /** One lookup per tile rather than a scan of the list per tile. */
+  const computing = new Set(computingFlows);
   const router = useRouter();
   const act: CanvasActions = {
     addTile: addCustomTileAction,
@@ -808,6 +820,7 @@ export function CustomBoard({
                     source={t.data}
                     config={t.config}
                     cols={tile.w}
+                    computing={t.data?.kind === "flow" && t.data.flowId != null && computing.has(t.data.flowId)}
                   />
                 );
               })()}

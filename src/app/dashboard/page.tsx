@@ -423,7 +423,21 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   );
 
   // Published-flow tiles come from stored (materialized) results — no live recompute.
-  let flowTiles: FlowResultRow[] = [];
+  /**
+   * THE QUERY'S ROW, not the tile component's prop.
+   *
+   * These carry `provenance`, which the import join below reads and which
+   * `FlowResultRow` has no business knowing about — that type is a rendering
+   * contract. Typing the list as the narrower one is what let that join quietly
+   * map over the RAW query rows instead of the decorated list: reaching for
+   * `provenance` only typechecked against `rows`, so going back to the source
+   * looked like the only option, and the work above it was dropped every time.
+   */
+  type BoardFlowRow = NonNullable<Awaited<typeof flowRowsP>>[number] & {
+    importing?: ImportCoverage;
+    unpublished?: boolean;
+  };
+  let flowTiles: BoardFlowRow[] = [];
   try {
     // Started before the board reads — see `flowRowsP`. `null` is the read
     // having failed, which the catch below already knew how to answer.
@@ -504,18 +518,35 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       if (unpublished.size > 0) flowTiles = flowTiles.map((r) => (unpublished.has(r.flowId) ? { ...r, unpublished: true } : r));
     }
 
+    /**
+     * DECORATES THE LIST AS IT STANDS — `flowTiles`, NOT the query rows.
+     *
+     * This mapped over `rows`, which silently undid the two steps above it. The
+     * unpublished marker was at least re-applied by hand; THE DRAWN WINDOW WAS
+     * NOT, and `withDerivedRange` is pure — its answer lives only in the row it
+     * returns. So on the ordinary path, where this join succeeds, every tile
+     * that had just summed the customer's window out of its own stored days
+     * went back to carrying no slot for it. The board then said "not computed
+     * for this range" across metrics it had already answered, and
+     * `pendingCustomFlows` below sent every one of them to the server for a
+     * full recompute. On a drawn window that is every count metric on the
+     * board, on every range change, to be told what the page was holding when
+     * it threw it away.
+     *
+     * These rows carry `provenance` exactly as the query ones do — nothing
+     * above replaces anything but `tile` — so there was never a reason to go
+     * back to the source for it.
+     */
     if (progressResult.status === "fulfilled") {
       const progress = progressResult.value;
-      flowTiles = rows.map((r) => {
+      flowTiles = flowTiles.map((r) => {
         const mine = streamRefsOfProvenance(r.provenance)
           .map((ref) => progress.get(`${ref.connectionId}:${ref.configHash}`))
           .filter((p): p is ImportCoverage => p != null);
         // A flow reading two streams shows the one with furthest still to go —
         // the number is only as settled as its least-settled input.
         const importing = mine.sort((a, b) => b.targetMs - b.coveredMs - (a.targetMs - a.coveredMs))[0];
-        // Rebuilt from the query rows (they carry `provenance`), so the marker
-        // decorated above has to be re-applied rather than assumed to survive.
-        return { ...r, importing, unpublished: unpublished.has(r.flowId) };
+        return { ...r, importing };
       });
     }
   } catch (err) {
@@ -561,7 +592,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
    * failure. Deduped by flow, because one flow can publish several tiles and
    * one run answers all of them.
    */
-  const pendingCustomFlows = customRange
+  const pendingCustomFlows: string[] = customRange
     ? [
         ...new Set(
           flowTiles
@@ -571,6 +602,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         ),
       ]
     : [];
+  /**
+   * The same fact, shaped for the tiles. Each one asks "is an answer coming for
+   * ME", and a `Set` is what keeps that from being a scan of the whole list per
+   * tile on a board with fifty of them.
+   */
+  const pendingCustomSet = new Set(pendingCustomFlows);
 
   /**
    * NO VIEWS — the Get-started card, and none of this page's chrome.
@@ -848,7 +885,14 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         unitKey: `${stored.format ?? "number"}:${stored.currency ?? ""}:${stored.unit ?? ""}`,
         value,
         attention: attentionOf(row, value),
-        node: <FlowTile key={`${row.flowId}:${row.outputNodeId}`} row={row} rangeKey={rangeKey} />,
+        node: (
+          <FlowTile
+            key={`${row.flowId}:${row.outputNodeId}`}
+            row={row}
+            rangeKey={rangeKey}
+            computing={pendingCustomSet.has(row.flowId)}
+          />
+        ),
       };
     }),
     ...tiles.map((tile): BoardTile => {
@@ -1663,6 +1707,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                  different component instance. */
               <CustomBoard
                 key={activeView ?? "default"}
+                computingFlows={pendingCustomFlows}
                 viewId={activeView!}
                 tiles={canvasTiles}
                 options={tileOptions}
