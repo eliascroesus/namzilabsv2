@@ -85,7 +85,28 @@ const EDGES = [
   wire("aaB", "calcAA"), wire("bD", "calcNum"),
 ];
 
-export default function DesignFlowPage() {
+/**
+ * `?empty=1` RENDERS THE FIRST-RUN CANVAS, and it exists because that state was
+ * unreachable.
+ *
+ * This page seeds a six-way split, so the get-started card a NEW flow shows —
+ * and the builder tour's first spotlight, which anchors to it — could not be
+ * looked at anywhere: the real builder needs a session AND a workspace with no
+ * flows. Two changes to that card shipped unseen, one of them a blue button on
+ * a blue ground.
+ *
+ * `?empty=1&connected=1` is the other half: the card offers "Start with Get
+ * data" when an account is connected and "Connect an app first" when none is,
+ * and those are different buttons on the same blue.
+ */
+export default async function DesignFlowPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ empty?: string; connected?: string }>;
+}) {
+  const sp = await searchParams;
+  const empty = sp.empty === "1";
+  const connected = sp.connected === "1";
   return (
     <div data-design-flow className="h-dvh w-full">
       <FlowCanvas
@@ -94,8 +115,12 @@ export default function DesignFlowPage() {
         status="draft"
         publishedVersion={null}
         publishedFingerprint={null}
-        initialGraph={{ nodes: NODES, edges: EDGES, metrics: [] }}
-        connections={[{ id: "conn_specimen", name: "Google Sheets — Leads", source: "gsheets", syncStatus: "ready" }]}
+        initialGraph={empty ? { nodes: [], edges: [], metrics: [] } : { nodes: NODES, edges: EDGES, metrics: [] }}
+        connections={
+          empty && !connected
+            ? []
+            : [{ id: "conn_specimen", name: "Google Sheets — Leads", source: "gsheets", syncStatus: "ready" }]
+        }
       />
     </div>
   );

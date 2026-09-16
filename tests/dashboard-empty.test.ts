@@ -286,6 +286,51 @@ describe("one picker, reached from both places", () => {
     expect(canvas).not.toMatch(/h-1\.5 bg-primary/);
   });
 
+  it("gives every action on that card the shell's own white fill", () => {
+    /**
+     * `GET_STARTED_CTA` EXISTS SO THE CALLERS CANNOT DRIFT, and they had.
+     *
+     * The builder's card has two branches — "Start with Get data" when an
+     * account is connected, "Connect an app first" when none is — and they
+     * disagreed: one took the token, the other was `variant: "accent"`. A blue
+     * button on a blue gradient is the shape you have to hunt for, and the
+     * comment above it claimed the two were "the same object wearing a
+     * different label" while they were not.
+     *
+     * White is the only fill with guaranteed contrast against every stop of
+     * that gradient, which is why the token is a token. Every action inside a
+     * `GetStartedCard` has to wear it.
+     */
+    const canvas = readFileSync(join(process.cwd(), "src/components/flow/flow-canvas.tsx"), "utf8");
+    for (const [name, src] of [
+      ["board-empty.tsx", empty],
+      ["flow-canvas.tsx", canvas],
+    ] as const) {
+      /**
+       * COMMENT-STRIPPED. `board-empty.tsx` explains the token by NAME right
+       * above the button that wears it, so counting raw text found two
+       * mentions for one action and failed on the correct code. Both of these
+       * files argue with themselves in prose; only the code counts.
+       */
+      const card = src
+        .slice(src.indexOf("<GetStartedCard"), src.indexOf("</GetStartedCard>"))
+        .replace(/\/\*[\s\S]*?\*\//g, " ")
+        .replace(/(^|[^:])\/\/[^\n]*/g, "$1 ");
+      expect(card.length, `${name}: could not find the card — this check would pass vacuously`).toBeGreaterThan(80);
+      /**
+       * COUNTED, NOT PARSED. The first version matched each opening tag with
+       * `<(?:Button|Link)\b[^>]*` and compared inside it — which stops at the
+       * `>` in `onClick={() =>` and reported a perfectly correct button as
+       * missing the token. Matching JSX with a regex is the bug; counting is
+       * enough to catch the drift this guards.
+       */
+      const actions = [...card.matchAll(/<(?:Button|Link)\b/g)].length;
+      const wearing = [...card.matchAll(/GET_STARTED_CTA/g)].length;
+      expect(actions, `${name}: no actions found inside the card`).toBeGreaterThan(0);
+      expect(wearing, `${name}: ${actions} action(s) on the card but only ${wearing} take GET_STARTED_CTA`).toBe(actions);
+    }
+  });
+
   it("is opened by the empty card too, from the same component", () => {
     expect(empty).toMatch(/import \{ ViewTemplatePicker, type CalendarOption \}/);
     expect(empty).toMatch(/<ViewTemplatePicker/);

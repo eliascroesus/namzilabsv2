@@ -2411,18 +2411,25 @@ export function EmptyCanvas({ hasConnections, onStart }: { hasConnections: boole
             Start with Get data
           </Button>
         ) : (
-          <>
-            {/* With no account connected, THIS is the one act the screen exists
-                for instead — so the brand button moves with it rather than
-                being spent on a press that ends at an empty panel. Same
-                `accent` variant, because it is the same object wearing a
-                different label. */}
-            <Link href="/integrations" className={cn(buttonVariants({ variant: "accent", size: "lg" }), "mt-8 w-full")}>
-              <Plug size={16} />
-              Connect an app first
-            </Link>
-            <p className="mt-3 text-center text-xs text-muted-foreground">A flow reads records from a connected account — there aren&rsquo;t any yet.</p>
-          </>
+          /* With no account connected, THIS is the one act the screen exists
+             for instead — so the hero moves with it rather than being spent on
+             a press that ends at an empty panel.
+
+             `GET_STARTED_CTA`, THE SAME WHITE FILL ITS SIBLING TAKES. The
+             comment here used to claim these were "the same object wearing a
+             different label" while one was white and this one was `accent`
+             blue — a blue button on a blue card, which is the shape you have to
+             hunt for. The token exists precisely so the two callers cannot
+             drift; this one had.
+
+             The explanatory line under it is gone at the owner's ask. It also
+             could not have stayed as it was: `text-muted-foreground` is a
+             light-ground token, and on this card it rendered as a dim olive
+             against the blue. */
+          <Link href="/integrations" className={cn(buttonVariants({ variant: "secondary", size: "lg" }), "mt-8 w-full", GET_STARTED_CTA)}>
+            <Plug size={16} />
+            Connect an app first
+          </Link>
         )}
       </GetStartedCard>
     </div>
