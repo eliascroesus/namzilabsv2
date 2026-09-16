@@ -1088,12 +1088,25 @@ export function RailContent({
               GET FREE ACCESS IS NOT HERE ANY MORE. Its gift moved to the top
               bar (node 51:5756), where it sits beside the account as an offer
               rather than under two acts as a third one. */}
-          {/* `accent` NAMED, not inherited. The default variant is `default`
-              (a bordered `--card` fill), and this button is the one act in the
-              column — the Figma fills it with the brand. Relying on a default
-              here is how the identical control ends up drawn two ways in two
-              files, which is what happened to "+ Add" in the board header. */}
-          <Button asChild variant="accent" size="sm" className="h-9 w-full">
+          {/* `rail` NAMED, not inherited — and it is `rail` rather than
+              `accent` as of 16 Sep 2026, at the owner's ask.
+
+              IT WAS THE BRAND FILL, and the problem was the neighbour. The
+              invite card directly above it is a blue gradient, so two solid
+              blues sat stacked in a 260px column with nothing between them:
+              the offer and the act read as one block, and the act — the thing
+              the column exists for — had no edge of its own. Drawn as the
+              rail's own raised step it is still the only filled control down
+              there, but it is now the rail's object rather than a second
+              banner, and the card above it gets its colour back.
+
+              The variant carries all four values so the rail's ladder decides
+              them per theme (#202020 + #343434 up, #FFFFFF + #E1E1E1 down);
+              see `button.tsx`. Naming it rather than overriding `accent` with
+              classes is the same rule this comment already carried: an
+              override would leave `hover:bg-primary-hover` behind it, which is
+              a silent conflict between two rules that both write a fill. */}
+          <Button asChild variant="rail" size="sm" className="h-9 w-full">
             <Link href="/dashboard/flows">
               <Plus />
               <span className="text-button font-semibold">New</span>

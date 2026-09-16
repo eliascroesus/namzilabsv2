@@ -105,6 +105,31 @@ const buttonVariants = cva(
          */
         accent: "bg-primary text-primary-foreground shadow-xs hover:bg-primary-hover active:bg-primary-active",
         /**
+         * A BUTTON THAT BELONGS TO THE RAIL, drawn in the rail's own four
+         * tokens rather than the content's.
+         *
+         * The rail is the one column whose ground flips INDEPENDENTLY of the
+         * theme's cards — near-black under `.mix` and `.dark`, off-white under
+         * `:root` — so a control standing on it cannot borrow `--card` and
+         * `--border` and land anywhere sensible. It already has its own set,
+         * and the search field two hundred lines up in `sidebar.tsx` already
+         * spends the same pair (`border-rail-border bg-rail-control`); this is
+         * that surface as a button.
+         *
+         * Every value is the ladder's, in both directions: #202020 on a
+         * #121212 rail is a step UP, #FFFFFF on a #F3F3F3 rail is the same step
+         * with the sign flipped, and `--rail-accent` is the hover the token
+         * layer already names for exactly this ("the avatar disc, and a rail
+         * hover") — #3A3A3A up, #E9E9E9 down.
+         *
+         * NO `shadow-xs`. The filled variants carry one because they sit on a
+         * page that is lighter than they are; this one is a raised step on a
+         * ground that is darker than it, and the hairline is what separates
+         * them — a drop shadow under a near-black control on near-black is a
+         * smudge nobody can see and a light leak in the other theme.
+         */
+        rail: "border border-rail-border bg-rail-control text-rail-foreground hover:bg-rail-accent active:bg-rail-accent",
+        /**
          * THE RECESSED TWIN OF `default`, AND NOW ITS OWN TOKEN.
          *
          * It used to borrow `--control` — the surface a search field or a
