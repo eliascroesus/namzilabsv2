@@ -373,9 +373,17 @@ export function ChartFrame({
             <span className="min-w-0 truncate">Recomputing…</span>
           </div>
         ) : blocked ? (
-          <p className="text-xs text-muted-foreground" title={blocked}>
-            {blocked.length > 160 ? `${blocked.slice(0, 160)}…` : blocked}
-          </p>
+          /**
+           * NOTHING ON THE FACE — see `FlowTile`, which made the same change
+           * for the same reason and carries the argument.
+           *
+           * `unavailable` is a thrown message stored verbatim by the engine, so
+           * a customer's card was printing a developer's exception, clipped
+           * mid-sentence. `emptyReason` reaches this branch too and IS ours and
+           * human — but it is also already said by the mark below it, which
+           * draws its own empty state rather than needing a caption.
+           */
+          <span className="sr-only">{blocked}</span>
         ) : (
           children
         )}

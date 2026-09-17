@@ -312,9 +312,32 @@ export function FlowTile({
           <span className="min-w-0 truncate">Recomputing…</span>
         </div>
       ) : unavailable ? (
-        <p className="mt-2.5 text-xs text-muted-foreground" title={unavailable}>
-          {unavailable.length > 160 ? `${unavailable.slice(0, 160)}…` : unavailable}
-        </p>
+        /**
+         * NOTHING ON THE FACE — the em-dash above has already said there is no
+         * number, and this line was saying it again in the engine's words.
+         *
+         * `unavailable` is whatever was thrown while computing
+         * (`engine.ts` stores `e.message` verbatim), so what a customer read on
+         * their dashboard was a developer's exception: `Can't sum "deal_value"
+         * — none of the…`, clipped mid-sentence because a 160-character string
+         * does not fit a tile. It named a column they never chose, in wording
+         * from a stack trace, and then ran out of room before the reason.
+         *
+         * IT IS NOT DISCARDED. The whole message stays in the DOM, announced to
+         * a screen reader and readable in the inspector — so it is still there
+         * for whoever is debugging, which is who it was always written for.
+         * `sr-only` rather than a `title`: a tooltip is invisible to anyone not
+         * holding a mouse, and this is the one state where a non-sighted reader
+         * is owed MORE than a bare dash, not less.
+         *
+         * The counter-argument is real and was weighed: an earlier commit
+         * replaced a fixed "No data for this period." with this exact text,
+         * because a fixed sentence CLAIMED emptiness when the truth was
+         * "nobody computed it". That reasoning holds for our own sentences and
+         * not for a thrown error — a dash that says nothing is honest; a
+         * half-sentence of internals is not.
+         */
+        <span className="sr-only">{unavailable}</span>
       ) : t.series && t.series.length > 0 && drawsItsSeries(windowed?.assembled === true, stored, t) ? (
         <Sparkbars series={t.series} format={t} />
       ) : t.groups && t.groups.length > 0 ? (
