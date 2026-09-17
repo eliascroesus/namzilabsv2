@@ -44,11 +44,20 @@ function Series({
       <div className="flex flex-col gap-1">
         <span className="text-xs uppercase tracking-wide text-muted-foreground">{label}</span>
         <span className="text-2xl font-semibold tabular-nums">{fmt.format(today)}</span>
+        {/**
+         * "0 today" on its own reads as a broken panel at a glance, which is
+         * what three zeros in a row across this section looked like. Leading
+         * with the window and putting today beside it says the true thing: the
+         * product is being used, and today is young.
+         */}
         <span className="text-xs text-muted-foreground">
-          today · {fmt.format(window)} in {series.length} days
+          today · <span className="font-medium text-foreground">{fmt.format(window)}</span> in {series.length} days
         </span>
       </div>
-      <Sparkbars series={series} format={{ format: "number", precision: 0 }} className="h-12" />
+      {/* `h-16`, not `h-12`. At thirty buckets each bar is a few pixels wide,
+          and at twelve pixels tall a one-signup day and a four-signup day are
+          the same mark. Height is the only axis this chart has. */}
+      <Sparkbars series={series} format={{ format: "number", precision: 0 }} className="h-16" />
       <span className="text-xs text-muted-foreground">{sub}</span>
     </Card>
   );
@@ -71,15 +80,18 @@ export function GrowthSection({ series, totals }: { series: GrowthSeries; totals
          * than the moment the workspace was made. Those are excluded here, and
          * were NOT excluded from this page's 30-day figure until 17 Sep 2026.
          */}
-        Days are UTC. A new workspace is one that was created, not one whose owner record was filled in later — see{" "}
-        <code className="rounded-sm bg-muted px-1 py-0.5 text-[11px]">src/lib/admin/growth.ts</code>.
+        {/* THE SOURCE PATH IS GONE. A file name is a note to whoever maintains
+            this, and it was printed to whoever READS it — the reasoning belongs
+            in the module, which is where it now stays. What survives is the
+            part an operator needs to interpret the number in front of them. */}
+        Days are UTC · a new workspace means one that was created, not one whose owner record was filled in later
       </p>
       <div className="grid gap-3 md:grid-cols-3">
         <Series
           label="New workspaces"
           today={totals.workspacesToday}
           series={series.workspaces}
-          sub={`${fmt.format(totals.workspaces7d)} in 7 days · ${fmt.format(totals.workspaces30d)} in 30`}
+          sub={`${fmt.format(totals.workspaces7d)} in the last 7 days`}
         />
         <Series
           label="Apps connected"

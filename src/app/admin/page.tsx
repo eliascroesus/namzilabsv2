@@ -5,6 +5,8 @@ import { StatusPill } from "@/components/ui/badge";
 import { TableShell, Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
 import { brokenConnections, fleetGrowth, fleetOverview, recentWorkspaces } from "@/lib/admin/fleet";
 import { totalsFrom } from "@/lib/admin/growth";
+import { resolveOrgNames } from "@/lib/admin/org-names";
+import { MinorStats, PrimaryStat, Workspace, When } from "@/components/admin/bits";
 import { GrowthSection } from "@/components/admin/growth-section";
 
 export const dynamic = "force-dynamic";
@@ -23,20 +25,21 @@ export const dynamic = "force-dynamic";
 
 const fmt = new Intl.NumberFormat("en-GB");
 
-function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
-  return (
-    <Card className="flex flex-col gap-1">
-      <span className="text-xs uppercase tracking-wide text-muted-foreground">{label}</span>
-      <span className="text-2xl font-semibold tabular-nums">{value}</span>
-      {hint ? <span className="text-xs text-muted-foreground">{hint}</span> : null}
-    </Card>
-  );
-}
-
 export default async function AdminOverviewPage() {
   const fleet = await fleetOverview();
   const [broken, newWorkspaces, growth] = [await brokenConnections(), await recentWorkspaces(), await fleetGrowth(30)];
   const totals = totalsFrom(growth);
+  /**
+   * ONE RESOLUTION FOR THE WHOLE PAGE. The leaderboard, the broken connections
+   * and the governance log all print workspaces, and the same workspace usually
+   * appears in more than one of them — so the ids are pooled and deduped once
+   * rather than each table looking up its own.
+   */
+  const names = await resolveOrgNames([
+    ...fleet.topByConnections.map((r) => r.orgId),
+    ...broken.map((c) => c.orgId),
+    ...fleet.recentGovernance.map((g) => g.orgId),
+  ]);
 
   const errored = fleet.connections.byStatus.find((s) => s.status === "error")?.n ?? 0;
 
@@ -57,15 +60,32 @@ export default async function AdminOverviewPage() {
         }
       />
 
+      {/* FOUR, THEN THE REST. Eight identical tiles is a wall rather than a
+          hierarchy: every figure at the same volume means the reader takes
+          whichever is left-most. These four are the health of the business. */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Stat label="Workspaces" value={fmt.format(fleet.workspaces)} hint={`${fmt.format(newWorkspaces)} in the last 30 days`} />
-        <Stat label="People" value={fmt.format(fleet.people)} hint="distinct workspace owners" />
-        <Stat label="Connections" value={fmt.format(fleet.connections.total)} hint={errored > 0 ? `${errored} in error` : "all healthy"} />
-        <Stat label="AI assistants" value={fmt.format(fleet.ai.grants)} hint="workspaces connected" />
-        <Stat label="Flows" value={fmt.format(fleet.built.flows)} />
-        <Stat label="Metrics" value={fmt.format(fleet.built.metrics)} />
-        <Stat label="Board tiles" value={fmt.format(fleet.built.tiles)} />
-        <Stat label="Referrals" value={fmt.format(fleet.referrals)} hint="signups attributed" />
+        <PrimaryStat label="Workspaces" value={fleet.workspaces} hint={`${fmt.format(newWorkspaces)} created in 30 days`} />
+        <PrimaryStat label="People" value={fleet.people} hint="workspace owners — a floor, not a headcount" />
+        <PrimaryStat
+          label="Connections"
+          value={fleet.connections.total}
+          hint={errored > 0 ? `${errored} in error` : "all healthy"}
+          /* The one figure on the page that can demand action, so it is the one
+             allowed to change colour when it does. */
+          tone={errored > 0 ? "warn" : undefined}
+        />
+        <PrimaryStat label="Flows" value={fleet.built.flows} hint="the act the product exists for" />
+      </div>
+
+      <div className="mt-3">
+        <MinorStats
+          items={[
+            { label: "board tiles", value: fleet.built.tiles },
+            { label: "classic metrics", value: fleet.built.metrics },
+            { label: "AI assistants", value: fleet.ai.grants },
+            { label: "referred signups", value: fleet.referrals },
+          ]}
+        />
       </div>
 
       <GrowthSection series={growth} totals={totals} />
@@ -90,11 +110,15 @@ export default async function AdminOverviewPage() {
                   fleet.topByConnections.map((row) => (
                     <TR key={row.orgId} static>
                       {/*
-                        The id, not the name. Resolving ten names means ten
-                        WorkOS calls on every page load for a leaderboard —
-                        paste the id into Look up when one of them matters.
+                        THE NAME NOW, not the id. The old note here — "resolving
+                        ten names means ten WorkOS calls on every page load" —
+                        was defending against a cost this page explicitly
+                        accepts ("even if it takes 10 seconds to load in doesn't
+                        matter"). Ten parallel lookups is under a second, and it
+                        is the difference between a leaderboard and a column of
+                        hex nobody can act on. Bounded in `org-names.ts`.
                       */}
-                      <TD className="font-mono text-xs">{row.orgId}</TD>
+                      <TD><Workspace orgId={row.orgId} names={names} /></TD>
                       <TD className="tabular-nums">{row.n}</TD>
                     </TR>
                   ))
@@ -149,14 +173,12 @@ export default async function AdminOverviewPage() {
               <TBody>
                 {broken.map((c, i) => (
                   <TR key={`${c.orgId}-${c.source}-${i}`} static>
-                    <TD className="font-mono text-xs">{c.orgId}</TD>
+                    <TD><Workspace orgId={c.orgId} names={names} /></TD>
                     <TD>{c.source}</TD>
                     <TD>
                       <StatusPill tone="danger">{c.status === "error" ? "connection" : "sync"}</StatusPill>
                     </TD>
-                    <TD className="text-muted-foreground">
-                      {c.lastEventAt ? c.lastEventAt.toISOString().slice(0, 10) : "never"}
-                    </TD>
+                    <TD className="text-muted-foreground"><When at={c.lastEventAt} /></TD>
                   </TR>
                 ))}
               </TBody>
@@ -228,8 +250,11 @@ export default async function AdminOverviewPage() {
                   fleet.recentGovernance.map((row, i) => (
                     <TR key={`${row.action}-${i}`} static>
                       <TD className="font-mono text-xs">{row.action}</TD>
-                      <TD className="font-mono text-xs text-muted-foreground">{row.orgId ?? "—"}</TD>
-                      <TD className="text-muted-foreground">{row.at.toISOString().slice(0, 16).replace("T", " ")}</TD>
+                      <TD><Workspace orgId={row.orgId} names={names} /></TD>
+                      {/* "how long ago", with the exact instant on hover. The
+                          ISO string wrapped onto three lines in this column and
+                          still needed arithmetic to be useful. */}
+                      <TD className="text-muted-foreground"><When at={row.at} /></TD>
                     </TR>
                   ))
                 )}
