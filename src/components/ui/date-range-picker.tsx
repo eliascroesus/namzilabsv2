@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { RANGE_OPTIONS, type RangeKey } from "@/lib/metrics/range";
 import { dayKey, daysInMonth, monthBefore, monthGrid, monthKeyOf, monthLabel, WEEKDAYS, type MonthKey } from "@/lib/metrics/calendar";
@@ -17,36 +18,57 @@ import { dayKey, daysInMonth, monthBefore, monthGrid, monthKeyOf, monthLabel, WE
  * pair. The same day twice is one day, which is what the sentence's "or same
  * day" asks for and what a range picker usually gets wrong.
  *
- * ═══ WHY IT WAS REBUILT, AND WHAT WAS ACTUALLY WRONG ═══
+ * ═══ WHY IT WAS REBUILT ═══
  *
- * The first version showed ONE month. That is the whole bug, and it is worse
- * than it sounds: the window a customer most often wants is "the last few
- * weeks", which crosses a month boundary about as often as not. Drawing it
- * meant clicking the start date, clicking `›` — which paints a completely
- * different month, so the day just anchored is now off-screen — and then
- * clicking the end date on faith. You could not see your own range while you
- * were making it. Two months side by side is not decoration; it is the
- * difference between picking a range and guessing at one.
+ * The brief was Calendly: "calendly has made it extremely easy for users and
+ * very comfortable to change dates and ranges". What Calendly gets right here
+ * is not the styling — it is that you can see your whole range while you are
+ * making it.
+ *
+ * The first version showed ONE month, and that is the whole bug. The window a
+ * customer most often wants is "the last few weeks", which crosses a month
+ * boundary about as often as not. Drawing it meant clicking the start date,
+ * clicking `›` — which paints a completely different month, so the day just
+ * anchored is now off-screen — and then clicking the end date on faith. You
+ * could not see your own range while you were making it.
  *
  * It also had NO presets, because they were removed when it was written: the
  * six were a segmented pill track and the owner's word was "not preset ranges
  * but … a calendar dropdown thing". That correctly killed the TRACK, and took
  * the shortcuts with it. "Last 30 days" went from one click to two clicks and
- * two pieces of date arithmetic done by the customer. They are back as a rail
- * down the side, which is where every picker of this shape puts them.
+ * two pieces of date arithmetic done by the customer.
+ *
+ * ═══ THE SHAPE IS CALENDLY'S, AND THE PARTS ARE THIS KIT'S ═══
+ *
+ * A left column — heading, the preset dropdown, the two dates, and Cancel and
+ * Apply at its foot — with the two months to the right of it. The dropdown is
+ * the kit's own `Select`, which already draws a bordered trigger with a chevron
+ * and ticks the chosen row, so the one place this could have drifted into a
+ * second visual language instead reuses the one the rest of the product speaks.
+ *
+ * THE TWO DATE BOXES ARE NOT DECORATION. Clicking one arms that end, so the
+ * next day you click moves only it — changing a window's end is one click
+ * rather than redrawing the whole thing. They are also what makes the half-made
+ * state legible: mid-pair the start box holds your anchor and the end box goes
+ * back to saying "End date", which is the one thing a calendar grid cannot say
+ * about itself. They do not accept typing; that needs a date parser, and a
+ * parser on the control that drives the whole dashboard is its own change.
  *
  * ═══ A PRESET APPLIES; A DRAWN RANGE WAITS FOR APPLY ═══
  *
  * These look inconsistent and are not. A preset is a COMPLETE answer the
- * instant it is clicked, so making it wait behind an Apply would add a click to
+ * instant it is picked, so making it wait behind an Apply would add a click to
  * the one case that should be fastest. A hand-drawn pair is not complete until
  * the second click, and even then it is worth a look before it costs a round
  * trip — every commit re-renders the board and drops every tile to a skeleton.
- * So the rail commits on click, the grid collects a draft, and Apply spends it.
+ * So the dropdown commits on change, the grid collects a draft, and Apply
+ * spends it.
  *
- * `onCancel` exists so the footer's other button can close the popover without
- * touching the window. Discarding the draft is automatic: it lives in this
- * component's state, and the popover unmounts it.
+ * `Custom…` is in the list because the reference's is, and it is the honest
+ * name for where the dropdown stands once you have drawn a window by hand.
+ * Choosing it deliberately does nothing: the calendar beside it is how a custom
+ * range gets made, and a row that re-drew the grid would be a second way to do
+ * the same thing.
  *
  * ═══ EVERY DATE IN THIS FILE IS UTC, and that is not pedantry ═══
  *
@@ -90,8 +112,16 @@ const dayMs = (key: string) => Date.parse(`${key}T00:00:00Z`);
 const prettyDay = (key: string) =>
   new Date(dayMs(key)).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 
-/** How many days a pair covers, counting BOTH ends — one day is "1 day". */
-const spanOf = (from: string, to: string) => Math.round((dayMs(to) - dayMs(from)) / 86_400_000) + 1;
+/** The one spelling this component stores a pair in: earlier day first. */
+const order = (a: string, b: string) => (a <= b ? { from: a, to: b } : { from: b, to: a });
+
+/**
+ * The dropdown's value when the window in force is one nobody picked from the
+ * list. A real key would have to be a seventh `RangeKey`, which `resolveRange`
+ * would then have to answer for — this is a value for the SELECT, not for the
+ * URL, and it never leaves this file.
+ */
+const CUSTOM = "custom";
 
 export function DateRangePicker({
   /** Today, in the caller's own clock — see the header on why this is a prop. */
@@ -99,9 +129,9 @@ export function DateRangePicker({
   /** The window currently in force, so the grid opens on it. */
   value,
   /**
-   * The range key in force, so the rail can mark its own row. A drawn window
-   * (`2026-08-03..2026-08-14`) matches nothing here, which is correct: the rail
-   * shows no selection and the footer shows the dates.
+   * The range key in force, so the dropdown can show its own label. A drawn
+   * window (`2026-08-03..2026-08-14`) matches nothing here and reads "Custom…",
+   * which is what it is.
    */
   activeKey,
   onPick,
@@ -130,165 +160,218 @@ export function DateRangePicker({
   const [hover, setHover] = useState<string | null>(null);
   /** The pair Apply would commit. `null` means nothing has been drawn yet. */
   const [draft, setDraft] = useState<{ from: string; to: string } | null>(null);
+  /** Which date box is armed, so the next click moves only that end. */
+  const [editing, setEditing] = useState<"from" | "to" | null>(null);
 
-  const pending = anchor ? { from: anchor, to: hover ?? anchor } : draft ?? value ?? null;
-  const lo = pending ? (pending.from <= pending.to ? pending.from : pending.to) : null;
-  const hi = pending ? (pending.from <= pending.to ? pending.to : pending.from) : null;
+  /**
+   * The pair on screen: the draft if one has been drawn, else the window in
+   * force. Everything below — the band, the two boxes, what an armed end is
+   * measured against — reads this one value, so they cannot disagree.
+   */
+  const shown = draft ?? value ?? null;
+
+  /** The band, including whatever the pointer is currently proposing. */
+  const pending =
+    anchor ? order(anchor, hover ?? anchor)
+    : editing && shown && hover ? (editing === "from" ? order(hover, shown.to) : order(shown.from, hover))
+    : shown;
+  const lo = pending?.from ?? null;
+  const hi = pending?.to ?? null;
 
   const commit = (day: string) => {
+    // An armed box moves ONE end and leaves the other where it was.
+    if (editing && shown) {
+      const other = editing === "from" ? shown.to : shown.from;
+      setEditing(null);
+      setAnchor(null);
+      setHover(null);
+      setDraft(order(day, other));
+      return;
+    }
     if (!anchor) {
       setAnchor(day);
       return;
     }
     setAnchor(null);
     setHover(null);
-    setDraft({ from: anchor <= day ? anchor : day, to: anchor <= day ? day : anchor });
+    setDraft(order(anchor, day));
+  };
+
+  /** Arming a box cancels a half-made pair — two ways to set one end at once. */
+  const arm = (end: "from" | "to") => {
+    setAnchor(null);
+    setHover(null);
+    setEditing((e) => (e === end ? null : end));
   };
 
   const months: MonthKey[] = [monthBefore(month), month];
-  /**
-   * The pair the footer names: the draft if one has been drawn, else the window
-   * in force — the same order `pending` resolves the band in, so the words and
-   * the band can never describe different days.
-   */
-  const shown = draft ?? value ?? null;
+  /** Mid-pair the start box holds the anchor and the end box empties. */
+  const boxFrom = anchor ?? shown?.from ?? null;
+  const boxTo = anchor ? null : (shown?.to ?? null);
+  /** A drawn window is `Custom…` however the board's own key spells it. */
+  const selected = draft ? CUSTOM : (RANGE_OPTIONS.find((r) => r.key === activeKey)?.key ?? CUSTOM);
 
   return (
     /**
-     * IT OWNS ITS OWN PADDING, and the popover is handed `p-0`. The footer's
-     * rule has to run the full width of the panel — a divider that stops 16px
-     * short of both walls reads as an underline on the text above it rather
-     * than as the edge of a region — and it cannot do that from inside a
-     * parent's padding box.
+     * IT OWNS ITS OWN PADDING, and the popover is handed `p-0`. The column
+     * divider has to run the full height of the panel — a rule that stops 16px
+     * short at both ends reads as a stray mark rather than as the edge of a
+     * region — and it cannot do that from inside a parent's padding box.
      */
-    <div className="flex flex-col" onMouseLeave={() => setHover(null)}>
-      <div className="flex flex-col p-3 md:flex-row">
-        {/* THE SHORTCUTS, DOWN THE SIDE.
-            A wrapping row of chips below `md` and a list at `md` and up: the
-            rail is 160px of a ~660px panel on a desktop, and on a phone that
-            panel is already as wide as the screen, so the same six answers have
-            to lie down rather than stand up. */}
-        <div className="flex flex-row flex-wrap gap-1 border-b border-border pb-3 md:w-40 md:shrink-0 md:flex-col md:border-b-0 md:border-r md:pb-0 md:pr-3">
-          <p className="w-full px-1 pb-1 text-2xs font-medium uppercase tracking-wide text-faint">Quick ranges</p>
-          {RANGE_OPTIONS.map((r) => {
-            const on = r.key === activeKey;
-            return (
-              <button
-                key={r.key}
-                type="button"
-                aria-current={on ? "true" : undefined}
-                /**
-                 * A preset is the whole answer, so it commits on this click —
-                 * see the header. Disabled rather than dropped when there is
-                 * nowhere to send it (the design gallery), because a rail that
-                 * changes length between surfaces is a layout nobody can review.
-                 */
-                disabled={!onPickPreset}
-                onClick={() => onPickPreset?.(r.key)}
-                className={cn(
-                  "rounded-control px-2 py-1.5 text-left text-xs transition-colors duration-(--duration-fast) md:w-full",
-                  on ? "bg-brand-soft text-marker" : "text-muted-foreground hover:bg-control hover:text-foreground",
-                  !onPickPreset && "cursor-default",
-                )}
-              >
+    <div className="flex flex-col md:flex-row" onMouseLeave={() => setHover(null)}>
+      <div className="flex flex-col gap-3 border-b border-border p-3 md:w-72 md:shrink-0 md:border-b-0 md:border-r">
+        <p className="text-sm font-medium text-foreground">Date range</p>
+
+        <Select
+          value={selected}
+          onValueChange={(v) => {
+            // `Custom…` is where the dropdown STANDS, not something it does —
+            // the calendar beside it is how a custom range gets made.
+            if (v === CUSTOM) return;
+            /**
+             * A preset REPLACES whatever was half-drawn. On the board this is
+             * academic — the preset navigates and the popover unmounts with its
+             * state — but the component must not depend on being torn down to
+             * be correct, and anywhere it stays mounted a surviving draft would
+             * keep the two boxes showing a window the preset just overruled.
+             */
+            setDraft(null);
+            setAnchor(null);
+            setEditing(null);
+            onPickPreset?.(v as RangeKey);
+          }}
+        >
+          <SelectTrigger className="w-full" aria-label="Range preset" disabled={!onPickPreset}>
+            <SelectValue />
+          </SelectTrigger>
+          {/**
+           * `popper`, NOT the kit default. A `Select` normally opens
+           * item-aligned — it lifts the menu so the CHOSEN row lands over the
+           * trigger, which is right for a long list you are scrubbing through
+           * and wrong here: picking `Custom…`, the last of seven, threw the
+           * menu up over the panel's own heading and off the top of the
+           * popover. Six short answers want a menu that drops, and matching the
+           * trigger's width keeps the column reading as one control.
+           */}
+          <SelectContent position="popper" className="w-(--radix-select-trigger-width)">
+            {RANGE_OPTIONS.map((r) => (
+              <SelectItem key={r.key} value={r.key}>
                 {r.label}
-              </button>
-            );
-          })}
+              </SelectItem>
+            ))}
+            <SelectItem value={CUSTOM}>Custom…</SelectItem>
+          </SelectContent>
+        </Select>
+
+        {/* THE TWO ENDS, each one a target. See the header: clicking a box arms
+            that end so the next day you click moves only it. */}
+        <div className="flex items-center gap-2">
+          <DateBox label="Start date" day={boxFrom} armed={editing === "from"} onClick={() => arm("from")} />
+          <span className="shrink-0 text-xs text-muted-foreground">to</span>
+          <DateBox label="End date" day={boxTo} armed={editing === "to"} onClick={() => arm("to")} />
         </div>
 
-        <div className="pt-3 md:pl-3 md:pt-0">
-          {/* ONE HEADER FOR BOTH MONTHS, arrows at the outside edges. The two
-              labels sit over their own grids, so the row reads as a single span
-              of time rather than as two independent calendars. */}
-          <div className="mb-1 flex items-center gap-1">
-            <Button variant="ghost" size="iconSm" aria-label="Previous month" onClick={() => setMonth(monthBefore(month))}>
-              <ChevronLeft />
-            </Button>
-            {/* `aria-live` so a screen reader hears the months change under the
-                arrows — the grids below re-render silently otherwise. */}
-            <span aria-live="polite" className="flex flex-1 justify-around gap-2 text-sm font-medium text-foreground">
-              {/* Below `md` only the later month is drawn, so only its name
-                  belongs in the header. */}
-              <span className="hidden md:block">{monthLabel(months[0])}</span>
-              <span>{monthLabel(months[1])}</span>
-            </span>
-            <Button
-              variant="ghost"
-              size="iconSm"
-              aria-label="Next month"
-              // Never past the month holding today: every day beyond it is
-              // disabled, so an empty grid would be a control that goes
-              // somewhere and shows nothing.
-              disabled={month >= monthKeyOf(now)}
-              onClick={() => setMonth(monthKeyOf(dayMs(`${month}-01`) + daysInMonth(month) * 86_400_000))}
-            >
-              <ChevronRight />
-            </Button>
-          </div>
-
-          <div className="flex gap-5">
-            {months.map((m, i) => (
-              // The earlier month is the one that goes when there is no room
-              // for two: the later one holds today, and a picker that hid today
-              // would be hiding the day every backward range ends on.
-              <div key={m} className={i === 0 ? "hidden md:block" : undefined}>
-                <MonthTable month={m} todayKey={todayKey} lo={lo} hi={hi} onEnter={setHover} onPick={commit} />
-              </div>
-            ))}
-          </div>
+        {/* `mt-auto` pins these to the foot of the column however tall the
+            calendar beside them happens to be — a five-row month and a six-row
+            month must not move the buttons. */}
+        <div className="mt-auto flex gap-2 pt-1">
+          <Button variant="default" size="sm" className="flex-1" onClick={() => onCancel?.()}>
+            Cancel
+          </Button>
+          <Button
+            variant="accent"
+            size="sm"
+            className="flex-1"
+            // Nothing drawn means Apply would re-commit the window already in
+            // force: a round trip, every tile to a skeleton, the same numbers
+            // back.
+            disabled={!draft}
+            onClick={() => draft && onPick(draft.from, draft.to)}
+          >
+            Apply
+          </Button>
         </div>
       </div>
 
-      {/* WHAT THE NEXT CLICK WILL DO, said in words, and then WHAT IS ON SCREEN.
-          A half-made range is the one state a calendar cannot show
-          unambiguously — the grid looks the same whether you are about to start
-          a range or finish one — so the sentence carries that.
+      <div className="p-3">
+        {/* ONE HEADER FOR BOTH MONTHS, arrows at the outside edges. The two
+            labels sit over their own grids, so the row reads as a single span
+            of time rather than as two independent calendars. */}
+        <div className="mb-1 flex items-center gap-1">
+          <Button variant="ghost" size="iconSm" aria-label="Previous month" onClick={() => setMonth(monthBefore(month))}>
+            <ChevronLeft />
+          </Button>
+          {/* `aria-live` so a screen reader hears the months change under the
+              arrows — the grids below re-render silently otherwise. */}
+          <span aria-live="polite" className="flex flex-1 justify-around gap-2 text-sm font-medium text-foreground">
+            {/* Below `md` only the later month is drawn, so only its name
+                belongs in the header. */}
+            <span className="hidden md:block">{monthLabel(months[0])}</span>
+            <span>{monthLabel(months[1])}</span>
+          </span>
+          <Button
+            variant="ghost"
+            size="iconSm"
+            aria-label="Next month"
+            // Never past the month holding today: every day beyond it is
+            // disabled, so an empty grid would be a control that goes somewhere
+            // and shows nothing.
+            disabled={month >= monthKeyOf(now)}
+            onClick={() => setMonth(monthKeyOf(dayMs(`${month}-01`) + daysInMonth(month) * 86_400_000))}
+          >
+            <ChevronRight />
+          </Button>
+        </div>
 
-          THE DATES DESCRIBE THE BAND, NOT THE DRAFT, and that distinction was a
-          bug worth the extra line. Reading only `draft` made the footer say
-          "Pick a start date." under a grid that was visibly showing the window
-          in force, because opening the popover draws `value` and creates no
-          draft. The footer has to name whatever the band is drawn from or it
-          contradicts it. Which of the two it is, Apply already says by being
-          live or dead. */}
-      <div className="flex items-center gap-3 border-t border-border px-3 py-2.5">
-        <p className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-          {anchor ? (
-            "Pick the second date, or the same one again for a single day."
-          ) : shown ? (
-            <>
-              <span className="font-medium text-foreground">{prettyDay(shown.from)}</span>
-              {shown.from === shown.to ? null : (
-                <>
-                  {" – "}
-                  <span className="font-medium text-foreground">{prettyDay(shown.to)}</span>
-                </>
-              )}
-              {` · ${spanOf(shown.from, shown.to)} ${spanOf(shown.from, shown.to) === 1 ? "day" : "days"}`}
-            </>
-          ) : (
-            // All time is the one window with no pair of days, so it reaches
-            // here — and "Pick a start date." is exactly right for it.
-            "Pick a start date."
-          )}
-        </p>
-        <Button variant="default" size="sm" onClick={() => onCancel?.()}>
-          Cancel
-        </Button>
-        <Button
-          variant="accent"
-          size="sm"
-          // Nothing drawn means Apply would re-commit the window already in
-          // force: a round trip, every tile to a skeleton, the same numbers
-          // back.
-          disabled={!draft}
-          onClick={() => draft && onPick(draft.from, draft.to)}
-        >
-          Apply
-        </Button>
+        <div className="flex gap-5">
+          {months.map((m, i) => (
+            // The earlier month is the one that goes when there is no room for
+            // two: the later one holds today, and a picker that hid today would
+            // be hiding the day every backward range ends on.
+            <div key={m} className={i === 0 ? "hidden md:block" : undefined}>
+              <MonthTable month={m} todayKey={todayKey} lo={lo} hi={hi} onEnter={setHover} onPick={commit} />
+            </div>
+          ))}
+        </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * ONE END OF THE RANGE, as a box you can aim at.
+ *
+ * Styled off the `Select` trigger beside it rather than off `Input`, because
+ * that is what it is: a control that opens onto another way of choosing, not a
+ * field you type into. Armed, it takes the brand ring — which is what a focused
+ * field in this kit does, and that is the point, since armed IS "the next thing
+ * you do lands here".
+ */
+function DateBox({
+  label,
+  day,
+  armed,
+  onClick,
+}: {
+  label: string;
+  day: string | null;
+  armed: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      aria-pressed={armed}
+      onClick={onClick}
+      className={cn(
+        "flex h-8 min-w-0 flex-1 items-center rounded-control border border-input bg-control px-2 text-xs tabular-nums transition-colors duration-(--duration-fast) hover:border-rule",
+        armed && "border-primary ring-1 ring-primary",
+        day ? "text-foreground" : "text-muted-foreground",
+      )}
+    >
+      <span className="truncate">{day ? prettyDay(day) : label}</span>
+    </button>
   );
 }
 
@@ -297,7 +380,7 @@ export function DateRangePicker({
  *
  * Split out because it is drawn twice and the band arithmetic below is the
  * fiddly part of the component — two copies of it is how one month ends up
- * rounding the range's end and the other does not.
+ * drawing the range's end differently from the other.
  */
 function MonthTable({
   month,
@@ -317,9 +400,9 @@ function MonthTable({
   return (
     /**
      * `border-spacing-x-0` IS WHAT MAKES THE BAND A BAND. With a horizontal gap
-     * the selection is a row of separate rounded blocks — seven islands rather
-     * than one span — and the eye reads islands as seven days picked, not one
-     * range. The vertical gap stays, because week rows ARE separate things.
+     * the selection is a row of separate blocks — seven islands rather than one
+     * span — and the eye reads islands as seven days picked, not one range. The
+     * vertical gap stays, because week rows ARE separate things.
      */
     <table className="border-separate border-spacing-x-0 border-spacing-y-1" role="grid">
       <thead>
@@ -344,8 +427,8 @@ function MonthTable({
               const end = cell.key === hi;
               const edge = start || end;
               /**
-               * THE BAND IS ITS OWN LAYER, BEHIND THE NUMBER, and it stops at
-               * the middle of each endpoint rather than at the cell wall. That
+               * THE BAND IS ITS OWN LAYER, BEHIND THE NUMBERS, and it stops at
+               * the MIDDLE of each endpoint rather than at the cell wall. That
                * half-cell is the entire reason the shape reads correctly: the
                * filled disc marks the day picked, and the wash leaves it
                * travelling in one direction only — out of the start, into the
@@ -353,17 +436,18 @@ function MonthTable({
                * grow a tail pointing out of the range, which reads as two more
                * days selected than there are.
                *
+               * SQUARE WHERE A ROW BREAKS, which is the reference's answer and
+               * the better one: a rounded cap at the end of a week says "the
+               * range stops here" about a range that carries on into the next
+               * line. A straight edge at the wall says the opposite, correctly.
+               *
                * A single-day range (`lo === hi`) gets no band at all: there is
                * nothing between one day and itself, and a half-band on each
                * side of one disc is a shape that means nothing.
                */
               const band =
                 selected && lo !== hi ?
-                  cn(
-                    "pointer-events-none absolute inset-y-0 bg-brand-soft",
-                    start ? "left-1/2" : ci === 0 ? "left-0 rounded-l-full" : "left-0",
-                    end ? "right-1/2" : ci === 6 ? "right-0 rounded-r-full" : "right-0",
-                  )
+                  cn("pointer-events-none absolute inset-y-0 bg-brand-soft", start ? "left-1/2" : "left-0", end ? "right-1/2" : "right-0")
                 : null;
               return (
                 <td key={ci} className="relative p-0">
@@ -381,7 +465,7 @@ function MonthTable({
                       // and the disc is what makes the band look threaded
                       // through the picked days rather than stopping beside
                       // them.
-                      "relative flex size-9 items-center justify-center rounded-full text-xs tabular-nums transition-colors duration-(--duration-fast)",
+                      "relative flex size-9 items-center justify-center rounded-full text-sm tabular-nums transition-colors duration-(--duration-fast)",
                       // A day past today is not a result yet — see the header.
                       future && "cursor-default text-faint",
                       !future && !selected && "text-foreground hover:bg-control",

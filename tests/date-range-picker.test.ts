@@ -8,13 +8,12 @@ import { join } from "node:path";
  * "Not preset ranges but … a calendar dropdown thing and the user can pick the
  * ranges so it can click on one date and then to another date or same day."
  *
- * The rebuild's own brief: "more like calendly because calendly has made it
- * extremely easy for users and very comfortable to change dates and ranges".
- * What that came down to was two months instead of one — the window people
- * actually want crosses a month boundary about as often as not, and drawing one
- * meant anchoring a date and then paging away from it — plus the return of the
- * preset shortcuts, which had been removed along with the segmented pill track
- * they used to live in.
+ * The rebuild's brief was a reference: "just make it look like the calendly
+ * one". What that came down to was two months instead of one — the window
+ * people actually want crosses a month boundary about as often as not, and
+ * drawing one meant anchoring a date and then paging away from it — plus a left
+ * column carrying a preset dropdown, the two ends of the range as boxes, and
+ * Cancel and Apply at its foot.
  *
  * The riskiest thing about this component cannot be caught by rendering it:
  * this suite runs with `TZ=UTC` and no DOM, so a picker doing its day maths in
@@ -24,10 +23,11 @@ import { join } from "node:path";
  * guard against the one bug the environment cannot reproduce.
  *
  * WHAT THIS FILE STILL CANNOT SEE is whether the thing is pleasant to use. It
- * reads text. The interaction was driven in a real browser instead — presets
- * commit on one click, a pair drawn across the two months reads back as eight
- * days, backwards draws the same window as forwards, the same day twice is one
- * day, and tomorrow is unclickable.
+ * reads text. The interaction was driven in a real browser instead: a preset
+ * commits from the dropdown, a pair drawn across the two months reads back in
+ * the boxes, arming one box moves only that end, backwards draws the same
+ * window as forwards, the same day twice is one day, and tomorrow is
+ * unclickable.
  */
 const root = join(__dirname, "..");
 const read = (p: string) => readFileSync(join(root, p), "utf8");
@@ -51,10 +51,10 @@ describe("the calendar does its arithmetic in UTC, like everything else", () => 
 
   it("pins the timezone on every formatter it runs", () => {
     /**
-     * The footer prints "Aug 24, 2026", which is `toLocaleDateString` — and
-     * that reads LOCAL time unless told otherwise. Unpinned, the footer would
-     * name the day before the one the band is drawn on, for anyone west of
-     * Greenwich, which is the disagreement this whole file exists to prevent.
+     * The boxes print "Aug 24, 2026", which is `toLocaleDateString` — and that
+     * reads LOCAL time unless told otherwise. Unpinned, a box would name the
+     * day before the one the band is drawn on, for anyone west of Greenwich,
+     * which is the disagreement this whole file exists to prevent.
      */
     const c = code(picker);
     for (const call of c.match(/toLocaleDateString\([^)]*\)/g) ?? []) {
@@ -110,26 +110,90 @@ describe("two months, which is the whole point of the rebuild", () => {
   });
 });
 
-describe("the shortcuts came back", () => {
-  it("draws one row per preset, from the single list the URL also speaks", () => {
+describe("the left column", () => {
+  it("offers the presets from the single list the URL also speaks", () => {
     /**
-     * `RANGE_OPTIONS` rather than a list retyped here: the rail's rows and the
-     * keys `?range=` accepts have to be the same six, or a shortcut writes a
-     * URL that resolves to something else.
+     * `RANGE_OPTIONS` rather than a list retyped here: the dropdown's rows and
+     * the keys `?range=` accepts have to be the same six, or a shortcut writes
+     * a URL that resolves to something else.
      */
     const c = code(picker);
     expect(c).toMatch(/from "@\/lib\/metrics\/range"/);
     expect(c).toMatch(/RANGE_OPTIONS\.map\(/);
   });
 
-  it("commits a preset on ONE click, because a preset is a whole answer", () => {
+  it("commits a preset the moment it is chosen, because a preset is a whole answer", () => {
     // The case that should be fastest must not also pay for an Apply.
-    expect(code(picker)).toMatch(/onClick=\{\(\) => onPickPreset\?\.\(r\.key\)\}/);
+    expect(code(picker)).toMatch(/onPickPreset\?\.\(v as RangeKey\)/);
   });
 
-  it("marks the row the board is standing on", () => {
-    expect(code(picker)).toMatch(/const on = r\.key === activeKey/);
-    expect(code(picker)).toMatch(/aria-current=\{on \? "true" : undefined\}/);
+  it("lets a preset overrule a half-drawn pair rather than survive under it", () => {
+    /**
+     * On the board this is academic — a preset navigates and the popover
+     * unmounts with its state — but the component must not depend on being torn
+     * down to be correct. Anywhere it stays mounted, a surviving draft would
+     * keep the boxes showing a window the preset just replaced.
+     */
+    const c = code(picker);
+    expect(c).toMatch(/if \(v === CUSTOM\) return;[\s\S]{0,120}setDraft\(null\)/);
+  });
+
+  it("shows the window in force, and says Custom when no preset spells it", () => {
+    const c = code(picker);
+    expect(c).toMatch(/const selected = draft \? CUSTOM : \(RANGE_OPTIONS\.find\(\(r\) => r\.key === activeKey\)\?\.key \?\? CUSTOM\)/);
+    // `Custom…` is where the dropdown STANDS, not something it does: the
+    // calendar beside it is how a custom range gets made.
+    expect(c).toMatch(/if \(v === CUSTOM\) return/);
+  });
+
+  it("drops the menu below the trigger rather than lifting it over the panel", () => {
+    /**
+     * A `Select` opens item-aligned by default, which lifts the menu so the
+     * CHOSEN row lands on the trigger. With `Custom…` selected — the last of
+     * seven — that threw the menu up over the column's own heading and off the
+     * top of the popover.
+     */
+    expect(code(picker)).toMatch(/position="popper"/);
+  });
+
+  it("keeps Cancel and Apply at the foot however tall the calendar is", () => {
+    // A five-row month and a six-row month must not move the buttons.
+    expect(code(picker)).toMatch(/mt-auto flex gap-2/);
+  });
+});
+
+describe("the two date boxes", () => {
+  it("arms one end, so the next click moves only that end", () => {
+    /**
+     * Changing a window's end should be one click, not a redraw of the whole
+     * thing. The other end is read off `shown` so it cannot drift from the band.
+     */
+    const c = code(picker);
+    expect(c).toMatch(/const \[editing, setEditing\] = useState<"from" \| "to" \| null>\(null\)/);
+    expect(c).toMatch(/const other = editing === "from" \? shown\.to : shown\.from/);
+    expect(c).toMatch(/setDraft\(order\(day, other\)\)/);
+  });
+
+  it("empties the end box mid-pair, which is what the grid cannot say", () => {
+    /**
+     * A calendar cannot show "about to start" and "about to finish"
+     * unambiguously — the grid looks identical in both. The boxes can: the
+     * start holds the anchor and the end goes back to its placeholder.
+     */
+    const c = code(picker);
+    expect(c).toMatch(/const boxFrom = anchor \?\? shown\?\.from \?\? null/);
+    expect(c).toMatch(/const boxTo = anchor \? null : \(shown\?\.to \?\? null\)/);
+    expect(c).toContain("End date");
+  });
+
+  it("names the pair on screen, not the draft", () => {
+    /**
+     * THE BUG THIS ASSERTION HOLDS SHUT. Reading only `draft` left the boxes
+     * empty under a grid that was visibly showing the window in force, because
+     * opening the popover draws `value` and creates no draft. The boxes have to
+     * name whatever the band is drawn from.
+     */
+    expect(code(picker)).toMatch(/const shown = draft \?\? value \?\? null/);
   });
 });
 
@@ -146,9 +210,9 @@ describe("what the grid lets you pick", () => {
   it("drafts on the SECOND click, and Apply is what spends it", () => {
     /**
      * "click on one date and then to another date or same day". The anchor
-     * makes the first click a promise rather than a selection; ordering the
-     * pair at commit is what makes the same day twice a single day, and a
-     * right-to-left drag the same window as left-to-right.
+     * makes the first click a promise rather than a selection; `order` at
+     * commit is what makes the same day twice a single day, and a right-to-left
+     * drag the same window as left-to-right.
      *
      * The pair stops at a DRAFT rather than going straight out, because every
      * commit re-renders the board and drops every tile to a skeleton — worth a
@@ -156,28 +220,23 @@ describe("what the grid lets you pick", () => {
      */
     const c = code(picker);
     expect(c).toMatch(/if \(!anchor\) \{[\s\S]{0,60}setAnchor\(day\)/);
-    expect(c).toMatch(/setDraft\(\{ from: anchor <= day \? anchor : day, to: anchor <= day \? day : anchor \}\)/);
-    expect(c, "and Apply is the only thing that calls onPick with it").toMatch(/onPick\(draft\.from, draft\.to\)/);
+    expect(c).toMatch(/setDraft\(order\(anchor, day\)\)/);
+    expect(c, "and Apply is the only thing that calls onPick").toMatch(/onPick\(draft\.from, draft\.to\)/);
     expect(c, "dead until there is something to spend").toMatch(/disabled=\{!draft\}/);
   });
 
-  it("previews the half-made range under the pointer, and says so in words", () => {
-    // A calendar cannot show "about to start" and "about to finish"
-    // unambiguously — the grid looks identical in both.
-    const c = code(picker);
-    expect(c).toMatch(/onMouseEnter=\{\(\) => onEnter\(cell\.key\)\}/);
-    expect(c).toContain("Pick the second date, or the same one again for a single day.");
-    expect(c).toContain("Pick a start date.");
+  it("orders every pair the same way, wherever it was made", () => {
+    // One helper, so the anchor path and the armed-box path cannot disagree
+    // about which of two days is the start.
+    expect(code(picker)).toMatch(/const order = \(a: string, b: string\) => \(a <= b \? \{ from: a, to: b \} : \{ from: b, to: a \}\)/);
   });
 
-  it("names the band in the footer, not the draft", () => {
-    /**
-     * THE BUG THIS ASSERTION HOLDS SHUT. Reading only `draft` made the footer
-     * say "Pick a start date." underneath a grid that was visibly showing the
-     * window in force — opening the popover draws `value` and creates no
-     * draft. The words have to name whatever the band is drawn from.
-     */
-    expect(code(picker)).toMatch(/const shown = draft \?\? value \?\? null/);
+  it("previews under the pointer, including while one end is armed", () => {
+    const c = code(picker);
+    expect(c).toMatch(/onMouseEnter=\{\(\) => onEnter\(cell\.key\)\}/);
+    expect(c, "an armed end previews against the other one").toMatch(
+      /editing && shown && hover \?[\s\S]{0,120}order\(hover, shown\.to\)/,
+    );
   });
 });
 
@@ -185,8 +244,8 @@ describe("how the selection is drawn", () => {
   it("runs the band under the numbers as one span, not seven blocks", () => {
     /**
      * With a horizontal gap between cells a selected week is a row of separate
-     * rounded blocks, and the eye reads blocks as seven days picked rather than
-     * one range.
+     * blocks, and the eye reads blocks as seven days picked rather than one
+     * range.
      */
     expect(code(picker)).toMatch(/border-spacing-x-0/);
     expect(code(picker)).toMatch(/absolute inset-y-0 bg-brand-soft/);
@@ -202,6 +261,23 @@ describe("how the selection is drawn", () => {
     const c = code(picker);
     expect(c).toMatch(/start \? "left-1\/2"/);
     expect(c).toMatch(/end \? "right-1\/2"/);
+  });
+
+  it("leaves the band square where a week breaks", () => {
+    /**
+     * The reference's own answer and the better one: a rounded cap at the end
+     * of a week says "the range stops here" about a range that carries on into
+     * the next line.
+     */
+    /**
+     * Pulled out POSITIVELY first. A bare `not.toMatch` over the whole file
+     * would also pass if the band layer were deleted outright — the vacuous
+     * green this repo has been bitten by before. Finding the expression is what
+     * makes the absence of rounding on it mean something.
+     */
+    const band = code(picker).match(/cn\("pointer-events-none absolute inset-y-0 bg-brand-soft"[\s\S]*?\)\n/)?.[0];
+    expect(band, "the band layer should be here to check").toBeTruthy();
+    expect(band, "no rounded caps on the band").not.toMatch(/rounded/);
   });
 
   it("draws no band at all for a single day", () => {
@@ -237,10 +313,10 @@ describe("where it lives, and why", () => {
 
   it("owns its padding, and the popover that holds it hands over none", () => {
     /**
-     * The footer's rule has to reach both walls of the panel — a divider that
-     * stops 16px short reads as an underline on the text above it rather than
-     * as the edge of a region — and it cannot do that from inside the
-     * popover's own padding box.
+     * The column divider has to run the full height of the panel — a rule that
+     * stops 16px short at both ends reads as a stray mark rather than as the
+     * edge of a region — and it cannot do that from inside the popover's own
+     * padding box.
      */
     expect(code(read("src/app/dashboard/board-controls.tsx"))).toMatch(/<PopoverContent align="end" className="w-auto p-0">/);
   });
