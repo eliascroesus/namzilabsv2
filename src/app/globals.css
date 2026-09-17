@@ -2463,6 +2463,84 @@ html.mix {
   }
 
   /**
+   * GLASS — a white card that sits ON a blue ground, and ONLY on a blue ground.
+   *
+   * The reference the owner handed over (themochi.app) builds its whole page
+   * out of these: a translucent white face, a white rim, and a blur that lifts
+   * whatever is behind it. It is the single biggest reason that page reads as
+   * expensive rather than as a stack of boxes, and it costs one class.
+   *
+   * NO BOX-SHADOW, AND THAT IS THE HOUSE RULE RATHER THAN AN OVERSIGHT. The
+   * reference draws `0 2px 8px rgba(18,43,105,.05)` under every card; this
+   * repo's shadow ladder is `none` on every rung by the owner's instruction of
+   * 11 Sep 2026 — "remove all drop shadow and instead just add a border stroke"
+   * — and `pnpm shadows` fails any page that paints one. Copying the shadow
+   * would have re-opened a decision that was already made.
+   *
+   * It costs nothing here, and the reason is worth keeping: a drop shadow
+   * separates a card from a ground by faking distance, and this card is
+   * separated from the sky by being A DIFFERENT COLOUR AND A DIFFERENT
+   * TEXTURE already. The rim does the edge, the blur does the depth. On white
+   * neither would be visible, which is why this class is blue-only and why the
+   * white sections below the fold use `border-border bg-card` instead.
+   *
+   * IT DOES NOT FOLLOW THE THEME, because the surfaces it sits on do not
+   * either: `.hero-sky` and `.sky-card` are the same blue for every visitor,
+   * so a glass card that went dark under `prefers-color-scheme: dark` would be
+   * near-black on deep blue — the one pairing the sky was chosen to avoid.
+   */
+  .glass-card {
+    border: 1px solid rgb(255 255 255 / 0.55);
+    background: rgb(255 255 255 / 0.1);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+  }
+
+  /**
+   * The same material, opaque — for a card whose CONTENT IS A DRAWING OF THE
+   * PRODUCT rather than a few lines of white type.
+   *
+   * A picture of the app inside a 10%-white pane is a picture of the app with
+   * a blue wash over it: every border in there is `--border`, every tile is
+   * `--card`, and all of it was drawn to sit on the product's own ground. So
+   * the ones carrying a screenshot get a real white face and keep the rim, and
+   * what makes them read as the same family is the rim and the radius rather
+   * than the transparency.
+   */
+  .glass-solid {
+    border: 1px solid rgb(255 255 255 / 0.7);
+    background: rgb(255 255 255 / 0.96);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+  }
+
+  /**
+   * AND THIS ONE ALONE FOLLOWS THE THEME, which contradicts the paragraph
+   * above it for a reason worth writing down.
+   *
+   * `.glass-card` does not follow the theme because it holds nothing but white
+   * type, and white type is right on blue in anybody's theme. This one holds a
+   * DRAWING OF THE PRODUCT, and the product follows the theme: every border in
+   * there is `--border`, every tile is `--card`. Pinned white, the dark-theme
+   * page rendered a white card with a near-black well punched into it — the
+   * heading light-on-white, the picture under it light-on-black, one card in
+   * two themes at once. It looked like a rendering bug because it was one.
+   *
+   * The honest reading is that a dark-theme visitor SHOULD see the dark
+   * product, because that is the product they have. So the face moves to meet
+   * its contents rather than the contents being forced to meet the face.
+   *
+   * THE RIM STAYS BRIGHT ANYWAY — `/0.7` white would vanish on a light card and
+   * is exactly what a dark card on a blue ground needs to stay separate from
+   * it, so it only drops to /0.22 rather than to a border token. The card is
+   * still lit from the sky it sits on.
+   */
+  .dark .glass-solid {
+    border-color: rgb(255 255 255 / 0.22);
+    background: color-mix(in oklab, var(--card) 96%, transparent);
+  }
+
+  /**
    * THE RAIL'S INVITE CARD — the refer board's sky, at a tenth of the size,
    * with a light running round its edge.
    *

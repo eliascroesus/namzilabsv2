@@ -33,6 +33,13 @@ const LINKS: Array<{ href: string; label: string }> = [
   { href: "#how", label: "How it works" },
   { href: "#ai", label: "Ask your AI" },
   { href: "#integrations", label: "Integrations" },
+  /* FAQ IS IN THE CAPSULE AND `#proof`/`#compare` ARE NOT, which is a choice
+     rather than an oversight: those two are steps in the argument the page
+     makes top to bottom, and nobody arrives wanting to jump to "the same
+     question, two ways". The questions are the one section somebody navigates
+     to DIRECTLY — it is where you go when you are most of the way to signing up
+     and want to know what read access means. */
+  { href: "#faq", label: "FAQ" },
   { href: "/docs", label: "Docs" },
 ];
 

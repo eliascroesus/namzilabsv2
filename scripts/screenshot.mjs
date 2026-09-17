@@ -20,28 +20,63 @@ const [path = "/design", out = "shot.png", height, scrollY] = process.argv.slice
 const base = process.env.SHOT_BASE ?? "http://localhost:3000";
 
 /**
- * THE THEME THIS TOOL COULD NOT SEE.
+ * THE THEME THIS TOOL COULD NOT SEE — AND THE FIX THAT DID NOT WORK EITHER.
  *
- * The theme is `system` by default and lives in localStorage, so a headless
- * browser always reported "light" — which means every screenshot ever taken
- * with this script was of the LIGHT theme, including the ones used to sign off
- * a re-theme whose reference export is a DARK frame. That is the same failure
- * the header above describes: it exits 0 and hands you a picture of the wrong
- * thing.
+ * The note here used to say the theme "lives in localStorage, so a headless
+ * browser always reported light", and offered `SHOT_SCHEME=dark` as the cure.
+ * The diagnosis was right and the cure was not: `colorScheme` only changes what
+ * `prefers-color-scheme` reports, and this app does not read that. Its theme is
+ * a CLASS on the root element — `@custom-variant dark (&:where(.dark, .dark *))`
+ * — applied by next-themes from the `theme` key, whose default is `mix`. So
+ * `SHOT_SCHEME=dark` went on handing back a picture of `mix` while printing
+ * the word "dark" in the shell, which is the same failure one layer down.
  *
- *   SHOT_SCHEME=dark pnpm shot /design/overview out.png
+ * SETTING THE KEY IS WHAT ACTUALLY SWITCHES IT, before any script on the page
+ * runs so it also beats the inline anti-flash script next-themes injects:
+ *
+ *   SHOT_THEME=dark pnpm shot /design/overview out.png     # or light, mix
+ *
+ * `SHOT_SCHEME` still sets the browser-level scheme, because form controls and
+ * scrollbars follow it and a dark page with a white scrollbar is worth seeing.
+ * Pass SHOT_THEME and it is set for you.
  */
+const theme = process.env.SHOT_THEME;
 const browser = await chromium.launch();
 const page = await browser.newPage({
   viewport: { width: Number(process.env.SHOT_WIDTH ?? 1440), height: Number(height) || 900 },
   deviceScaleFactor: 2,
-  colorScheme: process.env.SHOT_SCHEME === "dark" ? "dark" : "light",
+  colorScheme: (theme ?? process.env.SHOT_SCHEME) === "dark" ? "dark" : "light",
 });
+if (theme) {
+  await page.addInitScript((t) => {
+    try {
+      localStorage.setItem("theme", t);
+    } catch {
+      /* Storage refused: the page renders its default, which is still a
+         legitimate picture — do not abort over it. */
+    }
+  }, theme);
+}
 const res = await page.goto(`${base}${path}`, { waitUntil: "networkidle", timeout: 60_000 });
 if (!res || res.status() >= 400) {
   console.error(`✗ ${path} returned ${res?.status() ?? "no response"}`);
   await browser.close();
   process.exit(1);
+}
+/* The class arrives after hydration, so a shot taken on `networkidle` alone can
+   still catch the page mid-swap. Failing loudly beats saving the wrong theme
+   under the right filename — the whole point of the note above. */
+if (theme) {
+  await page
+    .waitForFunction((t) => document.documentElement.classList.contains(t), theme, { timeout: 10_000 })
+    .catch(() => {
+      console.error(`✗ the ${theme} theme never applied — refusing to save a picture of the default`);
+      process.exitCode = 1;
+    });
+  if (process.exitCode) {
+    await browser.close();
+    process.exit(1);
+  }
 }
 /**
  * Scroll whatever ACTUALLY scrolls, rather than assuming it is <main>.
