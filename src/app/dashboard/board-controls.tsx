@@ -216,6 +216,28 @@ export function RangeMenu({
    */
   const value = rangeDays(active, now);
 
+  /**
+   * THE URL IS STILL THE TRUTH, and there is one way to write it.
+   *
+   * The window rides in `?range=` exactly as the presets did when they were
+   * pills, so back and forward work and a link pasted into Slack opens on the
+   * window the sender was looking at — `go()` is the same optimistic transition
+   * the pills used, so the board skeletons on the press rather than after the
+   * round trip.
+   *
+   * Built off the board's own href so the view and the source ride along; a
+   * picked window must not throw you back to the default board. Shared by both
+   * halves of the picker because a preset and a drawn pair differ only in what
+   * the key spells — `30d` or `2026-08-03..2026-08-14` — and two copies of this
+   * is how one of them starts dropping the view.
+   */
+  const goRange = (key: string) => {
+    setOpen(false);
+    const url = new URL(href, "http://board.local");
+    url.searchParams.set("range", key);
+    go(`${url.pathname}${url.search}`, { dim: "range", key });
+  };
+
   return (
     <Anchored open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -232,28 +254,19 @@ export function RangeMenu({
           <ChevronDown aria-hidden />
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-auto p-3">
+      {/* `p-0` — the picker owns its padding, because its footer's rule has to
+          run the full width of the panel rather than stopping inside the
+          popover's own 16px. */}
+      <PopoverContent align="end" className="w-auto p-0">
         <DateRangePicker
           now={now}
           value={value}
-          onPick={(from, to) => {
-            setOpen(false);
-            /**
-             * THE URL IS STILL THE TRUTH. The window rides in `?range=` exactly
-             * as the presets did, so back and forward work and a link pasted
-             * into Slack opens on the window the sender was looking at —
-             * `go()` is the same optimistic transition the pills used, so the
-             * board skeletons on the press rather than after the round trip.
-             *
-             * Built off the board's own href so the view and the source ride
-             * along; a picked window must not throw you back to the default
-             * board.
-             */
-            const url = new URL(href, "http://board.local");
-            const key = customRangeKey(from, to);
-            url.searchParams.set("range", key);
-            go(`${url.pathname}${url.search}`, { dim: "range", key });
-          }}
+          /* So the rail can mark the row the board is standing on. A drawn
+             window matches no preset and marks nothing, which is the truth. */
+          activeKey={active}
+          onCancel={() => setOpen(false)}
+          onPickPreset={goRange}
+          onPick={(from, to) => goRange(customRangeKey(from, to))}
         />
       </PopoverContent>
     </Anchored>

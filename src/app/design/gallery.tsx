@@ -33,6 +33,7 @@ import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Chip } from "@/components/ui/chip";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
+import { rangeDays } from "@/lib/metrics/range";
 import {
   Command,
   CommandEmpty,
@@ -208,10 +209,18 @@ export function Gallery() {
    * does not. The date is the one the kit was drawn on.
    */
   const KIT_NOW = new Date("2026-09-07T12:00:00.000Z");
+  /**
+   * A window that CROSSES THE MONTH BOUNDARY on purpose — Aug 24 to Sep 4
+   * against a kit "today" of 7 September. The two-month grid exists precisely
+   * for this shape, and a demo range sitting inside one month would show the
+   * component doing none of the work it was rebuilt to do.
+   */
   const [pickedRange, setPickedRange] = useState<{ from: string; to: string } | null>({
-    from: "2026-08-03",
-    to: "2026-08-12",
+    from: "2026-08-24",
+    to: "2026-09-04",
   });
+  /** Empty, because the range above is DRAWN — no preset spells it. */
+  const [pickedKey, setPickedKey] = useState("");
 
   return (
     <TooltipProvider>
@@ -709,10 +718,25 @@ export function Gallery() {
         <Family name="Date range" file="date-range-picker.tsx">
           <Spec
             name="the period control's calendar"
-            note="Two clicks make a window; the same day twice makes one day. Days after today are disabled — a tile is a result, and the forward view is the Calendar. Every date is UTC, like the rest of the product: `now` arrives as a prop so the server and the client cannot disagree across a midnight."
+            note="Two months, because the window people actually want crosses a month boundary as often as not — one month meant anchoring a date and then paging away from it. The rail commits on click (a preset is a whole answer); the grid collects a draft and Apply spends it, because every commit drops every tile on the board to a skeleton. Two clicks make a window; the same day twice makes one day. Days after today are disabled — a tile is a result, and the forward view is the Calendar. Every date is UTC: `now` arrives as a prop so the server and the client cannot disagree across a midnight."
           >
-            <div className="w-fit rounded-surface border border-border p-3">
-              <DateRangePicker now={KIT_NOW} value={pickedRange} onPick={(from, to) => setPickedRange({ from, to })} />
+            {/* `overflow-hidden` and no padding: the picker owns its padding
+                so its footer rule can reach both walls, and the clip is what
+                keeps that rule inside the rounded corner. */}
+            <div className="w-fit overflow-hidden rounded-surface border border-border">
+              <DateRangePicker
+                now={KIT_NOW}
+                value={pickedRange}
+                activeKey={pickedKey}
+                onPickPreset={(key) => {
+                  setPickedKey(key);
+                  setPickedRange(rangeDays(key, KIT_NOW));
+                }}
+                onPick={(from, to) => {
+                  setPickedKey("");
+                  setPickedRange({ from, to });
+                }}
+              />
             </div>
           </Spec>
         </Family>
