@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { formatDurationAxis, formatMetricValue } from "@/lib/format";
-import { bucketLabel, durationTickSteps, niceTicks, padSeries, type BucketUnit } from "@/lib/board/scale";
+import { bucketLabel, countTickSteps, durationTickSteps, niceTicks, padSeries, type BucketUnit } from "@/lib/board/scale";
 import type { ChartFormat, SeriesPoint } from "@/components/charts";
 
 /**
@@ -242,7 +242,7 @@ export function LineChart({
     AXIS_DIVISIONS,
     // A TIME AXIS STEPS ON TIME. Without this the decimal ladder picks
     // 1000-second steps and the gutter reads 16m 40s. See `durationTickSteps`.
-    format.format === "duration" ? durationTickSteps(format.unit ?? "seconds") : undefined,
+    format.format === "duration" ? durationTickSteps(format.unit ?? "seconds") : countTickSteps(format.precision),
   );
   const x = (i: number) => (points.length === 1 ? 50 : (i / (points.length - 1)) * 100);
 
@@ -395,7 +395,7 @@ export function BarsVertical({
     AXIS_DIVISIONS,
     // A TIME AXIS STEPS ON TIME. Without this the decimal ladder picks
     // 1000-second steps and the gutter reads 16m 40s. See `durationTickSteps`.
-    format.format === "duration" ? durationTickSteps(format.unit ?? "seconds") : undefined,
+    format.format === "duration" ? durationTickSteps(format.unit ?? "seconds") : countTickSteps(format.precision),
   );
   const zero = yPct(Math.max(lo, Math.min(hi, 0)), lo, hi);
   const slot = 100 / points.length;

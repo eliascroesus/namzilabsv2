@@ -2,6 +2,7 @@ import { SectionHeading } from "@/components/ui/page";
 import { ChartFrame } from "@/components/board-charts/frame";
 import { BarsVertical } from "@/components/board-charts/cartesian";
 import { accentOf } from "@/lib/board/tile-config";
+import { ChartHover } from "@/components/chart-hover";
 import type { GrowthSeries, GrowthTotals } from "@/lib/admin/growth";
 
 /**
@@ -50,13 +51,28 @@ function Growth({
           the room — a tile on a customer's board is sized by its grid cell, and
           copying that constraint here would be inheriting a limit rather than a
           design. */}
-      <div className="h-64">
-        <ChartFrame title={title} headline={fmt.format(total)} status="fresh">
-          {/* `unit="day"` is what makes the axis print dates instead of raw
-              ISO strings, and what lets `padSeries` keep the spacing honest
-              across a gap. */}
-          <BarsVertical series={series} format={COUNT} accent={accentOf()} unit="day" />
-        </ChartFrame>
+      {/**
+       * `ChartHover` IS THE WHOLE TOOLTIP, and it is the board's, not a second
+       * one written for this page.
+       *
+       * The marks stay pure functions with no state and no handlers — each hit
+       * band already carries a finished `data-tip` sentence composed where the
+       * data and its format are, plus `data-x`/`data-y` for the crosshair. This
+       * wrapper is the one interactive component: it reads the attributes on
+       * pointermove and positions a readout. So the admin charts get the
+       * dashboard's hover — the rule through the plot, the dot on the bar, the
+       * date and value beside the cursor — by being wrapped, and nothing here
+       * knows how a tooltip works.
+       */}
+      <div className="flex h-64 flex-col">
+        <ChartHover>
+          <ChartFrame title={title} headline={fmt.format(total)} status="fresh">
+            {/* `unit="day"` is what makes the axis print dates instead of raw
+                ISO strings, and what lets `padSeries` keep the spacing honest
+                across a gap. */}
+            <BarsVertical series={series} format={COUNT} accent={accentOf()} unit="day" />
+          </ChartFrame>
+        </ChartHover>
       </div>
       <p className="px-1 text-xs text-muted-foreground">
         <span className="font-medium text-foreground">{fmt.format(today)}</span> today · {note}

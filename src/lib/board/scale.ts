@@ -52,6 +52,35 @@ const DURATION_TICK_STEPS_SEC = [
  * boundaries. An unrecognised unit falls back to the decimal ladder rather
  * than guessing — see `formatDuration`, which takes the same position.
  */
+/**
+ * THE LADDER FOR AN AXIS THAT COUNTS THINGS — whole numbers only.
+ *
+ * The default decimal ladder is `{1, 2, 2.5, 5} × 10^n`, which is right until
+ * the values are small integers. A chart whose biggest day is ONE signup has a
+ * span of 1, so the step lands on 0.25 and the axis reads 0 · 0 · 1 · 1 · 1 —
+ * five gridlines, three of them lying, because a count is drawn at precision 0
+ * and a quarter of a workspace rounds to a whole one.
+ *
+ * Found on the admin panel's growth chart, where "1" appeared twice above a
+ * "0". It was never an admin bug: every count metric on every customer's board
+ * whose best day is one or two has been drawing a duplicated axis.
+ *
+ * Same shape as `durationTickSteps` — an explicit ladder handed to `niceTicks`
+ * — and the same reason: some axes cannot be subdivided, and the unit decides
+ * it, not the arithmetic. 2.5 is absent for exactly that reason.
+ */
+const COUNT_TICK_STEPS = [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1_000];
+
+/**
+ * A ladder for whole-number axes, or `undefined` to keep the decimal one.
+ *
+ * Only when the format ASKS for whole numbers. A percentage at precision 2 is
+ * still free to step by a quarter, because there the fractions are real.
+ */
+export function countTickSteps(precision: number | undefined): number[] | undefined {
+  return precision === 0 ? COUNT_TICK_STEPS : undefined;
+}
+
 export function durationTickSteps(valueUnit: string): number[] | undefined {
   const per: Record<string, number> = { seconds: 1, minutes: 60, hours: 3_600, days: 86_400 };
   const p = per[valueUnit];

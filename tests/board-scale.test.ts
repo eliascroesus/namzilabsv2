@@ -1,8 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { arcPath, bucketLabel, niceTicks, bucketKeyOf,
+import { arcPath, bucketLabel, countTickSteps, niceTicks, bucketKeyOf,
   padSeries, pieSlices, stageWidths, funnelShape } from "@/lib/board/scale";
+import { formatMetricValue } from "@/lib/format";
 
 /**
  * THE CHART KIT'S ARITHMETIC, ASSERTED RATHER THAN EYEBALLED.
@@ -397,5 +398,59 @@ describe("padding to the window", () => {
     for (const spelling of ['iso.slice(0, 7)', 'iso.slice(0, 10)', "-Q", "-W", "String(y)"]) {
       expect(body, `engine bucketKey no longer uses ${spelling}`).toContain(spelling);
     }
+  });
+});
+
+describe("an axis that counts things steps in whole numbers", () => {
+  /**
+   * THE DUPLICATED AXIS — spotted on the admin panel's growth chart, which drew
+   * "1" twice above a "0", and never an admin bug at all.
+   *
+   * The default ladder is {1, 2, 2.5, 5} × 10^n. On a chart whose best day is
+   * ONE signup the span is 1, so the step lands on 0.25 and the ticks come out
+   * 0 · 0.25 · 0.5 · 0.75 · 1 — five gridlines which, drawn at the precision a
+   * count is formatted with, read 0 · 0 · 1 · 1 · 1. Three of those five labels
+   * are lies, and every count metric on every customer's board whose best day
+   * is one or two has been drawing them.
+   */
+  const labelsFor = (max: number, precision: number) => {
+    const steps = precision === 0 ? countTickSteps(precision) : undefined;
+    const { ticks } = niceTicks(0, max, 4, steps);
+    return ticks.map((t) => formatMetricValue(t, { format: "number", precision }));
+  };
+
+  it("never prints the same label twice on a small count axis", () => {
+    for (const max of [1, 2, 3, 4, 7]) {
+      const labels = labelsFor(max, 0);
+      expect(new Set(labels).size, `max ${max} drew a duplicated label: ${labels.join(" · ")}`).toBe(labels.length);
+    }
+  });
+
+  it("is the fix that was missing — the default ladder still duplicates", () => {
+    /**
+     * The proof this test is not vacuous. Without the ladder the SAME input
+     * produces the broken axis, so if `countTickSteps` were ever quietly
+     * dropped the assertion above would start failing rather than passing for
+     * some other reason.
+     */
+    const { ticks } = niceTicks(0, 1, 4);
+    const labels = ticks.map((t) => formatMetricValue(t, { format: "number", precision: 0 }));
+    expect(new Set(labels).size, "the unladdered axis is expected to duplicate").toBeLessThan(labels.length);
+  });
+
+  it("still covers the data, and still includes zero", () => {
+    for (const max of [1, 3, 9, 40, 137]) {
+      const { ticks } = niceTicks(0, max, 4, countTickSteps(0));
+      expect(ticks[0]).toBe(0);
+      expect(ticks[ticks.length - 1], `max ${max} fell outside its own axis`).toBeGreaterThanOrEqual(max);
+      expect(ticks.every((t) => Number.isInteger(t)), `max ${max} produced a fractional tick`).toBe(true);
+    }
+  });
+
+  it("leaves a fractional format alone", () => {
+    // A percentage at precision 2 has real fractions; the ladder must not
+    // flatten them into whole numbers.
+    expect(countTickSteps(2)).toBeUndefined();
+    expect(countTickSteps(undefined)).toBeUndefined();
   });
 });
