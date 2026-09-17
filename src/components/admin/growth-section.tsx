@@ -1,109 +1,97 @@
-import { Card } from "@/components/ui/card";
 import { SectionHeading } from "@/components/ui/page";
-import { Sparkbars } from "@/components/charts";
+import { ChartFrame } from "@/components/board-charts/frame";
+import { BarsVertical } from "@/components/board-charts/cartesian";
+import { accentOf } from "@/lib/board/tile-config";
 import type { GrowthSeries, GrowthTotals } from "@/lib/admin/growth";
 
 /**
- * GROWTH, DRAWN.
+ * GROWTH, DRAWN THE WAY THE PRODUCT DRAWS EVERYTHING ELSE.
  *
- * Three series that answer three different questions, in the order a founder
- * actually asks them: did anyone show up, did they plug anything in, did they
- * build the thing they came for. A single "signups" line would answer the first
- * and hide the two that say whether the product worked.
+ * The first version of this used `Sparkbars` — the 40px strip a metric tile
+ * carries under a number. At three days of data that reads fine; at thirty it
+ * is a row of hairlines in a pale field, with no axis, no scale and no dates.
+ * It told you something had happened without letting you see WHEN or HOW MUCH,
+ * which is the entire job of a growth chart.
  *
- * `Sparkbars` rather than a new chart: it is already zero-anchored, already
- * theme-aware, already draws its own axis and field, and is already the mark
- * every metric tile in the product uses. A second bar chart written for this
- * page would be a second set of decisions about the same picture.
+ * So this is `ChartFrame` + `BarsVertical`, which is exactly what a customer's
+ * own dashboard renders for a bar metric: a real y-axis with chosen ticks, a
+ * zero line, dated labels at the ends and middle, and the brand accent. The
+ * admin panel is a dashboard; there was never a reason for it to have its own
+ * weaker chart, and one fewer set of chart decisions in the codebase is worth
+ * more than the couple of lines this saved.
+ *
+ * THE HEADLINE IS THE WINDOW, NOT TODAY. Three cards each reading "0" — which
+ * is what "today" gives you most mornings — looks like a broken panel at a
+ * glance, and it is the one reading a founder should never get by accident.
+ * The thirty-day total is the number that says whether the thing is working;
+ * today sits under the chart, where a zero is information rather than alarm.
  */
 
 const fmt = new Intl.NumberFormat("en-GB");
 
-/**
- * One row of the growth block: the headline, then the shape behind it.
- *
- * The number and the chart come from ONE series — see `totalsFrom` — so the
- * figure above the bars is by construction the last bar. Two counts of the same
- * thing taken at two moments eventually disagree, and a panel whose tile says 4
- * over a chart showing 3 is a panel nobody believes again.
- */
-function Series({
-  label,
-  today,
+/** Whole counts: no decimals on a chart of people and things. */
+const COUNT = { format: "number" as const, precision: 0 };
+
+function Growth({
+  title,
   series,
-  sub,
+  today,
+  note,
 }: {
-  label: string;
-  today: number;
+  title: string;
   series: Array<{ bucket: string; value: number }>;
-  sub: string;
+  today: number;
+  note: string;
 }) {
-  const window = series.reduce((a, b) => a + b.value, 0);
+  const total = series.reduce((a, b) => a + b.value, 0);
   return (
-    <Card className="flex flex-col gap-3">
-      <div className="flex flex-col gap-1">
-        <span className="text-xs uppercase tracking-wide text-muted-foreground">{label}</span>
-        <span className="text-2xl font-semibold tabular-nums">{fmt.format(today)}</span>
-        {/**
-         * "0 today" on its own reads as a broken panel at a glance, which is
-         * what three zeros in a row across this section looked like. Leading
-         * with the window and putting today beside it says the true thing: the
-         * product is being used, and today is young.
-         */}
-        <span className="text-xs text-muted-foreground">
-          today · <span className="font-medium text-foreground">{fmt.format(window)}</span> in {series.length} days
-        </span>
+    <div className="flex flex-col gap-2">
+      {/* `h-64` because these are the only charts on the page and the page has
+          the room — a tile on a customer's board is sized by its grid cell, and
+          copying that constraint here would be inheriting a limit rather than a
+          design. */}
+      <div className="h-64">
+        <ChartFrame title={title} headline={fmt.format(total)} status="fresh">
+          {/* `unit="day"` is what makes the axis print dates instead of raw
+              ISO strings, and what lets `padSeries` keep the spacing honest
+              across a gap. */}
+          <BarsVertical series={series} format={COUNT} accent={accentOf()} unit="day" />
+        </ChartFrame>
       </div>
-      {/* `h-16`, not `h-12`. At thirty buckets each bar is a few pixels wide,
-          and at twelve pixels tall a one-signup day and a four-signup day are
-          the same mark. Height is the only axis this chart has. */}
-      <Sparkbars series={series} format={{ format: "number", precision: 0 }} className="h-16" />
-      <span className="text-xs text-muted-foreground">{sub}</span>
-    </Card>
+      <p className="px-1 text-xs text-muted-foreground">
+        <span className="font-medium text-foreground">{fmt.format(today)}</span> today · {note}
+      </p>
+    </div>
   );
 }
 
 export function GrowthSection({ series, totals }: { series: GrowthSeries; totals: GrowthTotals }) {
   return (
     <section className="mt-8">
-      <SectionHeading>Growth</SectionHeading>
+      <SectionHeading>Growth · last {series.days} days</SectionHeading>
       <p className="mb-3 text-xs text-muted-foreground">
-        {/**
-         * THE TIMEZONE IS STATED, not assumed. A founder checking at 9pm in
-         * Stockholm is looking at a UTC day that closed two hours ago, and the
-         * difference between "today is quiet" and "today ended" is the whole
-         * value of the figure.
-         *
-         * AND WHAT A "NEW WORKSPACE" IS. `workspace_owners` carries a second
-         * kind of row — an owner claimed for an OLD workspace the first time
-         * its ranks are read — which is dated the moment it is claimed rather
-         * than the moment the workspace was made. Those are excluded here, and
-         * were NOT excluded from this page's 30-day figure until 17 Sep 2026.
-         */}
-        {/* THE SOURCE PATH IS GONE. A file name is a note to whoever maintains
-            this, and it was printed to whoever READS it — the reasoning belongs
-            in the module, which is where it now stays. What survives is the
-            part an operator needs to interpret the number in front of them. */}
+        {/* The reasoning lives in `growth.ts`; what survives here is the part an
+            operator needs to read the number in front of them. */}
         Days are UTC · a new workspace means one that was created, not one whose owner record was filled in later
       </p>
-      <div className="grid gap-3 md:grid-cols-3">
-        <Series
-          label="New workspaces"
-          today={totals.workspacesToday}
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Growth
+          title="New workspaces"
           series={series.workspaces}
-          sub={`${fmt.format(totals.workspaces7d)} in the last 7 days`}
+          today={totals.workspacesToday}
+          note={`${fmt.format(totals.workspaces7d)} in the last 7 days`}
         />
-        <Series
-          label="Apps connected"
-          today={totals.connectionsToday}
+        <Growth
+          title="Apps connected"
           series={series.connections}
-          sub="Somebody plugged a source in"
+          today={totals.connectionsToday}
+          note="somebody plugged a source in"
         />
-        <Series
-          label="Flows built"
-          today={totals.flowsToday}
+        <Growth
+          title="Flows built"
           series={series.flows}
-          sub="The act the product exists for"
+          today={totals.flowsToday}
+          note="the act the product exists for"
         />
       </div>
     </section>
