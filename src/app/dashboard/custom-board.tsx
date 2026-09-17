@@ -867,7 +867,28 @@ export function CustomBoard({
                     e.stopPropagation();
                     onPointerDown(e, { id: tile.id, mode: "resize" });
                   }}
-                  className="absolute bottom-0.5 right-0.5 z-10 size-4 cursor-se-resize rounded-control opacity-0 [touch-action:none] after:absolute after:bottom-1 after:right-1 after:size-2 after:rounded-control after:border-b-2 after:border-r-2 after:border-muted-foreground focus-within:opacity-100 group-hover/cell:opacity-100 pointer-coarse:opacity-100"
+                  /**
+                   * A CORNER BRACKET, NOT A CRESCENT — and the old shape was an
+                   * accident of two numbers being equal.
+                   *
+                   * The mark is a box carrying only its BOTTOM and RIGHT
+                   * borders, which is the resize corner every desktop draws. It
+                   * also carried `rounded-control` — 8px — on a `size-2` box,
+                   * which is 8px too. A radius equal to the box is a circle, so
+                   * the two borders curved into one another and rendered as an
+                   * arc floating in the corner: it read as a spinner, or a
+                   * half-loaded something, rather than as a grip.
+                   *
+                   * 10px of box with a 4px elbow on the bottom-right corner
+                   * ONLY. The other two ends stay square because a bracket's
+                   * open ends are square — rounding them would round the shape
+                   * back toward the circle this is escaping.
+                   *
+                   * The 16px hit area around it is untouched: what changed is
+                   * the drawing, never the target, and a grip you can see but
+                   * not hit is the worse of the two bugs.
+                   */
+                  className="absolute bottom-0.5 right-0.5 z-10 size-4 cursor-se-resize rounded-control opacity-0 [touch-action:none] after:absolute after:bottom-0.5 after:right-0.5 after:size-2.5 after:rounded-br-xs after:border-b-2 after:border-r-2 after:border-muted-foreground focus-within:opacity-100 group-hover/cell:opacity-100 pointer-coarse:opacity-100"
                 />
               )}
             </div>
