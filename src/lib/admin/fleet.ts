@@ -1,4 +1,5 @@
-import { desc, gt, sql } from "drizzle-orm";
+import { and, desc, eq, gt, sql } from "drizzle-orm";
+import { growthSeries, type GrowthSeries } from "@/lib/admin/growth";
 import {
   auditLog,
   connections,
@@ -276,14 +277,38 @@ export async function brokenConnections(): Promise<Array<{ orgId: string; source
 }
 
 /**
- * How many workspaces were claimed in the last 30 days — the only growth
- * figure here, and one row.
+ * How many workspaces were CREATED in the last 30 days.
+ *
+ * `source = 'created'` is load-bearing and was missing. `workspace_owners`
+ * holds two kinds of row and only one of them is a signup: the backfill in
+ * `permissions.ts` claims an owner for an OLD workspace the first time its
+ * ranks are read, and it does not set `claimed_at`, so the column defaults to
+ * `now()`. A workspace made in March and opened for the first time today
+ * therefore arrived here dated today, and this number counted it as new.
+ *
+ * It always looked plausible, which is why it survived: there was no way to
+ * see the inflation except by knowing the write path. See
+ * `src/lib/admin/growth.ts`, which exists partly because of this.
  */
 export async function recentWorkspaces(): Promise<number> {
   await requireStaff();
   const rows = await getDb()
     .select({ n: sql<number>`count(*)::int` })
     .from(workspaceOwners)
-    .where(gt(workspaceOwners.claimedAt, new Date(Date.now() - 30 * 86_400_000)));
+    .where(
+      and(
+        eq(workspaceOwners.source, "created"),
+        gt(workspaceOwners.claimedAt, new Date(Date.now() - 30 * 86_400_000)),
+      ),
+    );
   return n(rows);
+}
+
+/**
+ * The growth series, gated. `growth.ts` takes its `db` so it can be tested
+ * against real Postgres; this is the thin staff-checked wiring the page uses.
+ */
+export async function fleetGrowth(days = 30): Promise<GrowthSeries> {
+  await requireStaff();
+  return growthSeries(getDb(), days);
 }

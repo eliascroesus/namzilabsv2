@@ -3,7 +3,9 @@ import { Card } from "@/components/ui/card";
 import { InfoTip } from "@/components/ui/info-tip";
 import { StatusPill } from "@/components/ui/badge";
 import { TableShell, Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
-import { brokenConnections, fleetOverview, recentWorkspaces } from "@/lib/admin/fleet";
+import { brokenConnections, fleetGrowth, fleetOverview, recentWorkspaces } from "@/lib/admin/fleet";
+import { totalsFrom } from "@/lib/admin/growth";
+import { GrowthSection } from "@/components/admin/growth-section";
 
 export const dynamic = "force-dynamic";
 
@@ -33,7 +35,8 @@ function Stat({ label, value, hint }: { label: string; value: string; hint?: str
 
 export default async function AdminOverviewPage() {
   const fleet = await fleetOverview();
-  const [broken, newWorkspaces] = [await brokenConnections(), await recentWorkspaces()];
+  const [broken, newWorkspaces, growth] = [await brokenConnections(), await recentWorkspaces(), await fleetGrowth(30)];
+  const totals = totalsFrom(growth);
 
   const errored = fleet.connections.byStatus.find((s) => s.status === "error")?.n ?? 0;
 
@@ -64,6 +67,8 @@ export default async function AdminOverviewPage() {
         <Stat label="Board tiles" value={fmt.format(fleet.built.tiles)} />
         <Stat label="Referrals" value={fmt.format(fleet.referrals)} hint="signups attributed" />
       </div>
+
+      <GrowthSection series={growth} totals={totals} />
 
       <section className="mt-8 grid gap-6 lg:grid-cols-2">
         <div>
