@@ -198,6 +198,12 @@
   --font-sans: var(--font-inter, "Inter"), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   /* prettier-ignore */
   --font-display: var(--font-inter, "Inter"), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  /* THE LANDING PAGE'S FACE, AND NOWHERE ELSE'S. See the note beside `outfit`
+     in layout.tsx: the app's one-family rule is about the interface, and `/`
+     is not the interface. Nothing inside the product resolves this variable,
+     so a dashboard still makes exactly one font request. */
+  /* prettier-ignore */
+  --font-marketing: var(--font-outfit, "Outfit"), var(--font-inter, "Inter"), system-ui, sans-serif;
   /* IDs, API keys, webhook URLs, code. System mono — nothing to load, and
      technical strings stop wearing the browser's fallback serif-mono mix. */
   --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
@@ -2494,6 +2500,174 @@ html.mix {
     background: rgb(255 255 255 / 0.1);
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
+  }
+
+  /**
+   * ── DAYLIGHT ───────────────────────────────────────────────────────────
+   *
+   * THE HERO USED TO BE A DEEP NAVY WASH WITH WHITE TYPE ON IT, and the
+   * owner's verdict on that page was that it "looks like an AI website". He is
+   * right, and the ground is half the reason: a saturated blue-to-blue
+   * gradient under a white headline is the single most-generated hero on the
+   * web, and no amount of layout work underneath it changes what the first
+   * screen says about who made the page.
+   *
+   * The reference he handed over (themochi.app) does the opposite and it is
+   * the whole trick: a BRIGHT daylight sky with real clouds, and the headline
+   * set in near-black on top of it. Black on pale blue is both the higher
+   * contrast pairing and the less common one — it reads as a photograph
+   * somebody chose rather than as a fill somebody defaulted to.
+   *
+   * THE LAST STOP IS STILL `--background`, for the same reason it always was:
+   * the product window straddles the seam where the hero meets the page, and
+   * any literal there is a hairline of the wrong colour across the full width
+   * in one theme or the other.
+   */
+  .day-sky {
+    position: relative;
+    isolation: isolate;
+    background:
+      /* The sun, top right — the one warm thing on the page, and the reason
+         the clouds have a direction to be lit from. */
+      radial-gradient(38% 34% at 84% -8%, rgb(255 252 240 / 0.95), transparent 66%),
+      radial-gradient(52% 44% at 10% 2%, rgb(255 255 255 / 0.5), transparent 70%),
+      linear-gradient(180deg, #7fa9e4 0%, #9cc0ee 22%, #c2daf7 52%, #e4eefb 78%, var(--background) 100%);
+  }
+
+  /**
+   * DUSK, FOR THE DARK THEME — not the day sky dimmed.
+   *
+   * The light sky cannot simply carry over: its last stop is `--background`,
+   * which is #121212 in dark, so a pale blue would have fallen off a cliff
+   * into near-black exactly where the product window sits. Nor can the type
+   * stay near-black — it is `--foreground`, which inverts.
+   *
+   * So the dark theme gets the same sky later in the day. The stops keep the
+   * same SHAPE (a lit corner, a body, a pale foot meeting the page) and only
+   * the hour changes, which is why the clouds drawn on top of it need no dark
+   * variant of their own — they are white at low opacity and a white cloud
+   * works at noon and at dusk.
+   */
+  .dark .day-sky {
+    background:
+      radial-gradient(38% 34% at 84% -8%, rgb(255 236 200 / 0.28), transparent 66%),
+      radial-gradient(52% 44% at 10% 2%, rgb(120 160 230 / 0.22), transparent 70%),
+      linear-gradient(180deg, #1b2c52 0%, #22375f 24%, #2b4472 52%, #243a5e 78%, var(--background) 100%);
+  }
+
+  /**
+   * ── DAYLIGHT GLASS: the nav capsule, and the connector chips under it ───
+   *
+   * WHY THESE ARE CLASSES AND NOT `dark:` AT THE CALL SITE. Both started as
+   * `bg-white/55 dark:bg-white/8`, and `check:ui` was right to reject it: a
+   * value that differs between the themes is a ROLE, and a role spelled twice
+   * in a className is how the two themes drift. It is the same reasoning that
+   * put `.dark .day-sky` and `.dark .glass-solid` in this file rather than in
+   * the components.
+   *
+   * WHAT THE MATERIAL IS. A white pane at low opacity over the sky, with a
+   * bright rim and a real blur. The blur is the part that matters and the part
+   * a flat translucent fill cannot fake: the clouds SMEAR as they pass behind
+   * the bar, which is what makes it read as glass sitting in front of a sky
+   * rather than as a lighter rectangle drawn on one.
+   *
+   * TWO WEIGHTS, because they carry different loads. The capsule holds 14px
+   * nav links and can afford to be thin; the chip holds a connector's name
+   * next to its logo and has to stay legible over the brightest and the
+   * dimmest part of the sky, so it is denser.
+   */
+  .glass-bar {
+    border: 1px solid rgb(255 255 255 / 0.7);
+    background: rgb(255 255 255 / 0.55);
+    backdrop-filter: blur(20px) saturate(1.4);
+    -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  }
+  .glass-chip {
+    border: 1px solid rgb(255 255 255 / 0.7);
+    background: rgb(255 255 255 / 0.78);
+    backdrop-filter: blur(12px) saturate(1.3);
+    -webkit-backdrop-filter: blur(12px) saturate(1.3);
+  }
+  /* Dusk: the sky behind them is dark, so a white pane becomes a dark one with
+     a lit edge. The ink on both is `--foreground`, which has already
+     inverted — these only have to give it a ground to sit on. */
+  .dark .glass-bar {
+    border-color: rgb(255 255 255 / 0.1);
+    background: rgb(255 255 255 / 0.07);
+  }
+  .dark .glass-chip {
+    border-color: rgb(255 255 255 / 0.12);
+    background: rgb(12 18 32 / 0.55);
+  }
+
+  /**
+   * THE CLOUD FIELD, AND WHY IT DIMS AFTER DARK.
+   *
+   * The cumulus are drawn in white and that is right at noon. Carried
+   * unchanged into `.dark .day-sky` — a dusk sky — they stayed the brightest
+   * thing on the screen, which is backwards (clouds are lit BY the sky, they
+   * do not out-shine it) and it put a white cloud edge directly under the `T`
+   * of a white headline. The pixel sampler still passed it, so this is a
+   * judgement rather than a failure, but a headline that needs a measurement
+   * to prove it is readable is too close to the line.
+   *
+   * Opacity rather than a second set of fills: one number, and the shading
+   * inside each cloud keeps its relationships.
+   */
+  .cloud-field {
+    opacity: 1;
+  }
+  .dark .cloud-field {
+    opacity: 0.42;
+  }
+
+  /**
+   * ── THE MARKETING PAGE'S ELEVATION LADDER ──────────────────────────────
+   *
+   * THE APP HAS NO SHADOWS AND KEEPS NONE. The owner's instruction of 11
+   * September retired every rung to `none`, the reasoning being that a card is
+   * separated from the page by its BORDER, and `pnpm shadows` fails any
+   * `/design/*` route that paints one. That rule is not touched here and the
+   * ladder above stays dead.
+   *
+   * THIS IS A SECOND LADDER FOR ONE ROUTE, and the reason it exists is that
+   * the instruction it appears to contradict was about the INTERFACE. A
+   * dashboard is a dense grid where a shadow under every tile is noise. A
+   * landing page is a handful of large objects on a bright ground, where
+   * depth is how a card reads as sitting on the sky rather than being cut out
+   * of it — and the reference the owner asked to be matched builds its entire
+   * look on exactly this, `0 2px 8px rgba(18,43,105,.05)` under every surface.
+   *
+   * NAMED `--lift-*` RATHER THAN `--shadow-*` so the two systems cannot be
+   * confused at a call site, and so `check-ui`'s stock-shadow rule keeps
+   * policing the app's ladder without an exemption that would also cover the
+   * app.
+   */
+  .lift-sm {
+    box-shadow:
+      0 1px 2px 0 rgb(18 43 105 / 0.06),
+      0 2px 8px 0 rgb(18 43 105 / 0.05);
+  }
+  .lift-md {
+    box-shadow:
+      0 1px 2px 0 rgb(18 43 105 / 0.06),
+      0 8px 20px -6px rgb(18 43 105 / 0.12),
+      0 18px 40px -12px rgb(18 43 105 / 0.1);
+  }
+  .lift-lg {
+    box-shadow:
+      0 2px 4px 0 rgb(18 43 105 / 0.05),
+      0 14px 34px -10px rgb(18 43 105 / 0.16),
+      0 40px 80px -24px rgb(18 43 105 / 0.18);
+  }
+  /* Depth reads as distance from a ground, and in the dark theme there is no
+     light to cast it — a navy shadow on #121212 is invisible and the card
+     floats on nothing. So the dark theme spends the same budget on a lit EDGE
+     instead, which is the move the rail already makes. */
+  .dark .lift-sm,
+  .dark .lift-md,
+  .dark .lift-lg {
+    box-shadow: 0 0 0 1px rgb(255 255 255 / 0.06);
   }
 
   /**

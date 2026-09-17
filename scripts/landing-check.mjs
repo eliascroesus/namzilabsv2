@@ -78,8 +78,8 @@ const ratio = (a, b) => {
  * never experiences — the same mistake `.marquee-track` made here twice.
  */
 const HIDE =
-  ".hero-sky h1,.hero-sky p,.marquee span > span,.sky-card h2,.sky-card p," +
-  ".sky-panel h2,.sky-panel p,.sky-panel dd span,.sky-panel li" +
+  ".day-sky h1,.day-sky p,.marquee span > span,.sky-card h2,.sky-card p," +
+  ".sky-panel h2,.sky-panel p,.sky-panel li" +
   "{visibility:hidden!important}";
 
 const browser = await chromium.launch();
@@ -160,7 +160,7 @@ for (const [w, h, name, theme] of [
 
   // ── composition ──────────────────────────────────────────────────────────
   const geo = await page.evaluate(() => {
-    const sky = document.querySelector(".hero-sky");
+    const sky = document.querySelector(".day-sky");
     const fig = sky?.querySelector("figure");
     /**
      * THE HEADING, NOT THE SECTION. The section under the hero starts where
@@ -220,7 +220,7 @@ for (const [w, h, name, theme] of [
        A literal there instead — the #C0D5FF this shipped with first — is a
        hairline of the wrong blue across the full width in one theme or both. */
     const seam = await page.evaluate(() => {
-      const sky = document.querySelector(".hero-sky");
+      const sky = document.querySelector(".day-sky");
       const r = sky.getBoundingClientRect();
       const below = document.elementFromPoint(8, Math.min(innerHeight - 2, r.bottom + 8));
       const paint = (el) => {
@@ -366,7 +366,7 @@ for (const [w, h, name, theme] of [
         weight: Number(cs.fontWeight),
       });
     };
-    const sky = document.querySelector(".hero-sky");
+    const sky = document.querySelector(".day-sky");
     add(sky.querySelector("h1 span"), "headline");
     add(sky.querySelector("p"), "paragraph");
     /* A DATA ATTRIBUTE, NOT `.uppercase.tracking-widest`. The rebuild took the
@@ -413,8 +413,13 @@ for (const [w, h, name, theme] of [
    * its own ground would measure it against the sky two layers down.
    */
   for (const [sel, label, probes] of [
-    [".sky-panel", "the facts band", [["dd span:first-child", "a figure"], ["dd span:last-child", "its label"]]],
-    ["#how", "how it works", [["h2", "heading"], ["p", "body copy"]]],
+    /* TWO BLUE SURFACES LEFT, DOWN FROM FOUR. The page went to daylight at the
+       owner's ask, so the facts band and the how-it-works section are ordinary
+       ink on the page's own ground and the token layer governs them. These two
+       are the only places white type still sits on a fill — the assistant card
+       (the invite board's sky, kept because he named it) and the closing
+       card — and they are the only places a contrast bug can hide from
+       `check:ui`. */
     ["#ai .sky-panel", "the assistant card", [["h2", "heading"], ["p", "body copy"], ["li", "a tool-name chip"]]],
     [".sky-card", "the closing card", [["h2", "heading"], ["p", "body copy"]]],
   ]) {
@@ -423,8 +428,16 @@ for (const [w, h, name, theme] of [
       if (!el) return null;
       const r = el.getBoundingClientRect();
       /* Centre the surface in the viewport so its type is not clipped at an
-         edge, but never scroll past the document's own end. */
-      const want = r.top + scrollY - Math.max(0, (innerHeight - r.height) / 2);
+         edge, but never scroll past the document's own end.
+         
+         AND NEVER PUT ITS TOP UNDER THE NAV. The capsule is sticky, 
+         translucent white and about 80px tall, so a surface taller than the
+         viewport — which is every one of these on a phone — got scrolled until
+         its first line sat behind the glass, and the sampler dutifully
+         measured white-on-blue through a 55%-white bar at 2.09:1. The text is
+         not broken; that is simply not where anybody reads it. 96px clears the
+         capsule and its inset. */
+      const want = r.top + scrollY - Math.max(96, (innerHeight - r.height) / 2);
       return Math.max(0, Math.min(want, document.documentElement.scrollHeight - innerHeight));
     }, sel);
 

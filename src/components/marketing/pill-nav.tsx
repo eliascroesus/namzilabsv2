@@ -46,20 +46,27 @@ const LINKS: Array<{ href: string; label: string }> = [
 /**
  * THE CAPSULE'S ONE BUTTON, spelled once.
  *
- * WHITE, NOT THE BRAND FILL, and not the kit's `white` variant either. The
- * capsule sits on brand blue for the whole hero, so a #568CFF button on a
- * #3462CF ground is a shape you have to hunt for; and `variant="white"` is
- * `bg-secondary`, which follows the THEME — on a dark-mode visitor's machine
- * it renders a near-black button on a near-black capsule. The hero's sky does
- * not change with the theme, so neither may the control sitting on it.
+ * INK ON WHITE, WHICH IS AN INVERSION OF WHAT IT WAS. The old capsule was a
+ * 72%-black slab with a white button in it, because the sky underneath ran
+ * from #1B3577 to #C0D5FF and a dark bar was the only thing legible over both
+ * ends of it. The sky is DAYLIGHT now — pale blue, near-white at its foot — so
+ * that slab became the heaviest object on the screen, sitting on top of the
+ * lightest one.
+ *
+ * `--foreground` and `--background` rather than pinned neutrals, because the
+ * new sky DOES follow the theme (see `.dark .day-sky`): dusk in the dark
+ * theme, noon in the light one. The old comment's rule — "the sky does not
+ * change with the theme, so neither may the control on it" — was true of the
+ * old sky and is now exactly backwards.
  */
-const WHITE_CTA = "gap-1.5 rounded-full border-transparent bg-white text-neutral-950 hover:bg-brand-50";
+const WHITE_CTA =
+  "gap-1.5 rounded-full border-transparent bg-foreground text-background hover:bg-foreground/90";
 
 /** The pill a nav link wears inside the capsule. */
 const PILL =
-  "inline-flex min-h-8 items-center rounded-full px-4 py-1.5 text-sm font-medium text-white/80 " +
-  "transition-colors duration-(--duration-fast) hover:bg-white/15 hover:text-white " +
-  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white";
+  "inline-flex min-h-8 items-center rounded-full px-4 py-1.5 text-sm font-medium text-foreground/70 " +
+  "transition-colors duration-(--duration-fast) hover:bg-foreground/8 hover:text-foreground " +
+  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
 
 export function PillNav({ signedIn }: { signedIn: boolean }) {
   return (
@@ -88,17 +95,23 @@ export function PillNav({ signedIn }: { signedIn: boolean }) {
       <nav
         aria-label="Main"
         className={cn(
-          "mx-auto flex w-full max-w-5xl items-center justify-between gap-3 rounded-frame p-2 pl-4 sm:rounded-full sm:pl-5",
-          // A dark capsule rather than a translucent one: the sky underneath
-          // runs from #1B3577 to #C0D5FF, and a bar that borrows its ground
-          // would be legible at the top of the page and invisible at the
-          // bottom of it. The blur is what keeps it from reading as a slab.
-          "border border-white/10 bg-[color-mix(in_oklab,var(--color-neutral-950)_72%,transparent)] shadow-lifted backdrop-blur-md",
+          "mx-auto flex w-full max-w-5xl items-center justify-between gap-3 rounded-2xl p-2 pl-4 sm:rounded-full sm:pl-5",
+          // GLASS, NOT A SLAB. The reference floats a white translucent
+          // capsule on its sky and it is the right answer here for a reason
+          // the old dark bar could not use: a pale sky is close enough to
+          // white that a 70%-white bar reads as the same material lit
+          // differently, rather than as a panel laid over the top. The blur is
+          // what sells it — the clouds smear behind the bar as they pass under
+          // it, which a flat fill cannot fake.
+          // `.glass-bar` rather than `bg-white/55 dark:bg-white/8`: the two
+          // themes need different values, which makes it a role rather than a
+          // pair of classes. See the note beside it in globals.css.
+          "glass-bar lift-sm",
         )}
       >
         <Link
           href="/"
-          className="font-display shrink-0 rounded-control text-lg font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
+          className="font-marketing shrink-0 rounded-control text-lg font-bold tracking-tight text-foreground focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
         >
           Namzilabs
         </Link>
@@ -122,10 +135,11 @@ export function PillNav({ signedIn }: { signedIn: boolean }) {
               <a className={cn(PILL, "hidden sm:inline-flex")} href="/sign-in">
                 Sign in
               </a>
-              {/* WHITE, NOT THE BRAND FILL. The capsule sits on brand blue for
-                  the whole hero, and a #568CFF button on a #3462CF ground is a
-                  shape you have to hunt for. White is the only fill with a
-                  guaranteed contrast against every stop of that gradient. */}
+              {/* INK, NOT THE BRAND FILL — see WHITE_CTA above. On the pale
+                  sky the near-black pill is the highest-contrast object
+                  available, which is what the page's one action should be, and
+                  it matches the two CTAs in the body rather than introducing a
+                  third button colour. */}
               <a className={cn(buttonVariants({ variant: "secondary" }), WHITE_CTA)} href="/sign-up">
                 Get started
                 <ArrowUpRight className="size-4" aria-hidden />
@@ -137,7 +151,7 @@ export function PillNav({ signedIn }: { signedIn: boolean }) {
           <details className="group relative md:hidden">
             <summary
               aria-label="Open the menu"
-              className="flex size-9 cursor-pointer list-none items-center justify-center rounded-full text-white/80 transition-colors duration-(--duration-fast) hover:bg-white/15 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white [&::-webkit-details-marker]:hidden"
+              className="flex size-9 cursor-pointer list-none items-center justify-center rounded-full text-foreground/70 transition-colors duration-(--duration-fast) hover:bg-foreground/8 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden"
             >
               <Menu className="size-5" aria-hidden />
             </summary>

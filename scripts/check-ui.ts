@@ -188,6 +188,23 @@ const RULES: Rule[] = [
      * §3 of the kit said "Never `font-bold`" and only prose was enforcing it.
      */
     find: (line) => (/\bfont-bold\b/.test(line) ? "font-bold" : null),
+    allow: {
+      /**
+       * THE LANDING PAGE IS NOT THE INTERFACE, and that is the whole
+       * exemption. The rule above is about the app: a board of tiles separates
+       * chrome from figure with size, and a fourth weight in there is a
+       * decision nothing else honours.
+       *
+       * `/` runs a SECOND family — Outfit, loaded only for this route and only
+       * at 600/700 (see layout.tsx) — precisely because the owner's verdict on
+       * the all-Inter version was that it "looks like an AI website". A display
+       * face whose display weight is forbidden is not a display face. Inter is
+       * still capped at semibold everywhere it appears, including in the body
+       * copy on these same pages.
+       */
+      "src/app/page.tsx": "the marketing display face (Outfit) is set at 700; the app's Inter is still capped at semibold",
+      "src/components/marketing/": "same — the landing page's display face, loaded for this route only",
+    },
   },
   {
     name: "off-kit radius",
@@ -415,6 +432,17 @@ const RULES: Rule[] = [
       // a token would not make it theme-aware, it would make it the wrong
       // logo — which is the bug this file was rewritten to fix.
       "src/connectors/logos.ts": "official marks carry the fills they shipped with; a token here would redraw somebody else's logo",
+      /**
+       * AN ILLUSTRATION, WHICH IS THE SAME EXCEPTION AS A LOGO ONE LINE ABOVE.
+       * These six values are the lit crown, the body and the shadowed
+       * underside of a drawn cumulus — they are the artwork, not a surface the
+       * theme is entitled to restyle. A cloud whose underside followed
+       * `--muted` would not be theme-aware, it would be the wrong picture. The
+       * SKY behind them is tokenised and does follow the theme (`.day-sky` /
+       * `.dark .day-sky`); white clouds work at noon and at dusk, which is why
+       * they need no second cut.
+       */
+      "src/components/marketing/clouds.tsx": "the cumulus artwork — lit crown, body and shadowed underside; a token here would redraw the illustration",
       // The Google "G" on the sign-in button, for the same reason: Google's
       // brand terms require the mark in its own four colours, and a token here
       // would be us redrawing it. Every other colour on that screen is a token.

@@ -2,12 +2,13 @@ import Link from "next/link";
 import { withAuth } from "@workos-inc/authkit-nextjs";
 import { ArrowRight } from "lucide-react";
 import { CONNECTOR_CATALOG } from "@/connectors/catalog";
-import { buttonVariants } from "@/components/ui/button";
 import { AppWindow } from "@/components/marketing/app-window";
 import { ToolMarquee } from "@/components/marketing/marquee";
 import { AiPanel } from "@/components/marketing/ai-panel";
 import { PillNav } from "@/components/marketing/pill-nav";
 import { ProblemGrid } from "@/components/marketing/problem";
+import { Clouds } from "@/components/marketing/clouds";
+import { FeatureRow } from "@/components/marketing/feature-row";
 import { ConnectShot } from "@/components/marketing/connect-shot";
 import { FlowShot } from "@/components/marketing/flow-shot";
 import { ReceiptsShot } from "@/components/marketing/receipts-shot";
@@ -15,57 +16,56 @@ import { Reconcile } from "@/components/marketing/reconcile";
 import { Compare } from "@/components/marketing/compare";
 import { Faq } from "@/components/marketing/faq";
 import { ToolGrid } from "@/components/marketing/tool-grid";
-import { cn } from "@/lib/utils";
 
 /**
  * THE FRONT DOOR.
  *
- * THE HERO IS THE THESIS, NOT A DESCRIPTION OF IT. What this product does is
- * settle an argument — Calendly says 41 meetings, Close says 38, the sheet the
- * team keeps by hand says 44, and somebody has to walk into a Monday meeting
- * with ONE figure and a reason to trust it. So the headline is that claim and
- * the rest of the page is its proof, shown rather than asserted.
+ * ── WHY THIS IS THE SECOND REBUILD IN A WEEK ───────────────────────────────
  *
- * ── WHAT THE SEPTEMBER REBUILD CHANGED ─────────────────────────────────────
+ * The first one fixed the page's structure and kept the app's clothes, and the
+ * owner's verdict was that it "looks like an AI website". That is a fair
+ * reading and it is worth writing down exactly what was wrong, because every
+ * individual decision in it was defensible:
  *
- * The page before this one had a strong hero and then four thousand pixels of
- * document. Every section under the fold had the identical shape — a tracked-
- * out capitalised eyebrow, a left-flush heading, a paragraph, a grid of
- * hairline boxes — so nothing on it was louder than anything else and the eye
- * had nowhere to stop. It also contained, after the hero, exactly ZERO
- * pictures of the product it was selling.
+ *   - ONE TYPEFACE. Inter at three weights, separated only by size. Correct
+ *     for a dashboard, and the reason a marketing page reads as generated:
+ *     size is the only typographic idea a page has when nobody chose a face.
+ *   - A SATURATED BLUE HERO WITH WHITE TYPE ON IT. The most-generated hero on
+ *     the web.
+ *   - EVERYTHING LEFT-FLUSH, EVERY HEADLINE A CLEVER TWO-PART SENTENCE.
+ *     "Three tools. Three answers. One you can defend." is four of those in a
+ *     row, and the rhythm is unmistakable.
+ *   - EVERY OBJECT THE SAME CARD. One radius, one border, no shadow, pictures
+ *     shrunk into equal thirds.
  *
- * Three things fix that, and all three came from the reference the owner
- * handed over (themochi.app):
+ * ── WHAT THIS ONE DOES INSTEAD ─────────────────────────────────────────────
  *
- *   1. GROUND COLOUR AS RHYTHM. The blue returns four times — the hero, the
- *      facts, the three steps, the assistant — with quiet white between each
- *      pair. A loud surface is only loud next to a quiet one, which is why the
- *      answer to "make it look better" was not "more blue everywhere".
- *   2. A PICTURE PER CLAIM. Connecting a tool, building a metric and reading
- *      its receipts are now drawn rather than described. They are DOM, not
- *      screenshots: sharp at any density, correct in both themes, incapable of
- *      going stale, and carrying no customer's data — which a screenshot taken
- *      against this repo's `.env.local` would ([[env-local-mixes-test-workos-
- *      with-prod-db]] is not a hypothetical).
- *   3. GLASS ON THE BLUE. White, translucent, blurred, rimmed — the reference's
- *      signature material, and the reason its page reads as expensive. Ours
- *      carries no drop shadow, because the owner retired the shadow ladder in
- *      September; the rim does the edge and the blur does the depth.
+ * The brief was the reference the owner sent (themochi.app), and the four
+ * things that actually carry it:
  *
- * ── WHAT IT STILL REFUSES TO DO ────────────────────────────────────────────
+ *   1. A DISPLAY FACE. Outfit at 700 — geometric, single-storey `g`, straight
+ *      tail on the `y` — against Inter for everything that is read rather than
+ *      looked at. Two families, obviously different, which is the oldest trick
+ *      there is and the one the previous version refused.
+ *   2. DAYLIGHT, NOT A BLUE FILL. A bright sky with drawn cumulus and the
+ *      headline in NEAR-BLACK on top of it. Higher contrast than white-on-navy
+ *      and far less common.
+ *   3. SHORT, CENTRED HEADLINES. "Your tools disagree. This settles it." is
+ *      six words. The old hero's supporting paragraph alone was sixty.
+ *   4. PICTURES THAT RUN OFF THE EDGE. Each feature row puts its screenshot at
+ *      128% of its column, past the margin — a window onto the product rather
+ *      than an illustration of it, and legible because it is large.
  *
- * The reference carries a wall of customer testimonials, "what our clients are
- * saying", and a before/after table whose numbers ($44K becoming $118,000) are
- * invented. We have no customers to quote and no right to promise a close
- * rate, so: no logos-as-customers, no usage counts, no testimonials, and a
- * comparison section that contrasts THE WORK rather than the results. The
- * stat band holds four facts checkable from this repository and the connector
- * count is computed from CONNECTOR_CATALOG, so the page cannot claim an
- * integration the product does not ship.
+ * ── WHAT IT STILL REFUSES ──────────────────────────────────────────────────
  *
- * A landing page is the cheapest place in a product to lie and the most
- * expensive place to be caught.
+ * The reference carries a testimonial wall, client quotes, a "trusted by" row
+ * of real customer avatars, and a before/after table whose figures ($44K
+ * becoming $118,000) are invented. We have no customers to quote and no right
+ * to promise anybody a close rate. So the social-proof slot holds the tools we
+ * READ, labelled as such; the comparison contrasts the WORK rather than the
+ * results; the FAQ answers only what this repository can be checked against;
+ * and the connector count is computed from CONNECTOR_CATALOG so the page
+ * cannot claim an integration the product does not ship.
  */
 export const metadata = {
   title: "Namzilabs — one number, from every tool you already use",
@@ -74,11 +74,11 @@ export const metadata = {
 };
 
 /**
- * The stat band, and the reason each of these four is here rather than a
- * customer count: every one is a fact this repository can be checked against.
- * The integration count is COMPUTED, so it cannot fall behind the catalogue;
- * ten minutes is the sweep's real cadence (`materialize-stale`); the other two
- * are claims the product either honours or does not.
+ * The stat band. Every one of these four is a fact this repository can be
+ * checked against rather than a customer count: the integration total is
+ * COMPUTED so it cannot fall behind the catalogue, ten minutes is the sweep's
+ * real cadence (`materialize-stale`), and the other two are claims the product
+ * either honours or does not.
  */
 const FACTS: Array<{ figure: string; label: string }> = [
   { figure: `${CONNECTOR_CATALOG.length}`, label: "Tools it reads" },
@@ -88,53 +88,52 @@ const FACTS: Array<{ figure: string; label: string }> = [
 ];
 
 /**
- * The three steps, each with its own drawing.
+ * THE DARK PILL, and it is the page's only button shape.
  *
- * NUMBERED, because this genuinely is a sequence — you cannot build a metric
- * before connecting a tool — and numbering something that is not a sequence is
- * decoration.
+ * NOT `buttonVariants`. The kit's `lg` button is a 40px control built for a
+ * form row, and this is a 52px marketing pill with a disc on the end of it —
+ * borrowing the app's control and then overriding its height, radius, padding
+ * and every colour is how a component ends up with a variant that exists for
+ * one caller. The reference uses the same shape in six places and so does
+ * this page.
  */
-const STEPS: Array<{ title: string; body: string; shot: () => React.ReactNode }> = [
-  {
-    title: "Connect your tools",
-    body: "Sign in with Google, or paste an API key. New records arrive within minutes and your history backfills behind you.",
-    shot: ConnectShot,
-  },
-  {
-    title: "Build the metric",
-    body: "Drag steps onto a canvas: pull records, keep the ones that count, match the same person, total what is left.",
-    shot: FlowShot,
-  },
-  {
-    title: "Watch it stay right",
-    body: "It recomputes on its own and shows its working — when it ran, what it read, what it matched, what it left out.",
-    shot: ReceiptsShot,
-  },
-];
+function Cta({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <a
+      href={href}
+      className="lift-md group inline-flex h-13 items-center gap-2 rounded-full bg-foreground pl-7 pr-2 text-button font-semibold text-background transition-transform duration-(--duration-fast) ease-(--ease-standard) hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring motion-reduce:transition-none motion-reduce:hover:translate-y-0"
+    >
+      {children}
+      {/* The disc gives the pill an interior, so it reads as an object rather
+          than as a lozenge of ink. The arrow nudges on hover — the one moving
+          thing on the page that answers a pointer. */}
+      <span className="flex size-9 items-center justify-center rounded-full bg-background/15">
+        <ArrowRight
+          aria-hidden
+          className="size-4 transition-transform duration-(--duration-fast) ease-(--ease-standard) group-hover:translate-x-0.5 motion-reduce:transition-none"
+        />
+      </span>
+    </a>
+  );
+}
+
+/** A centred section head — the reference's shape, and the page's default. */
+function Head({ eyebrow, title, blurb }: { eyebrow: string; title: React.ReactNode; blurb?: string }) {
+  return (
+    <div className="mx-auto max-w-2xl text-center">
+      <p className="text-sm font-medium text-brand-800">{eyebrow}</p>
+      <h2 className="font-marketing mt-3 text-display-lg font-bold leading-[1.08] tracking-tight text-balance text-foreground">
+        {title}
+      </h2>
+      {blurb && <p className="mt-5 text-md leading-relaxed text-muted-foreground">{blurb}</p>}
+    </div>
+  );
+}
 
 export default async function Home() {
   const { user } = await withAuth();
   const cta = user ? "/dashboard" : "/sign-up";
   const ctaLabel = user ? "Go to dashboard" : "Start free";
-
-  /* The page's one action, drawn twice — top and bottom. WHITE, NOT THE BRAND
-     FILL: a #568CFF button on a deep blue ground is a shape you have to hunt
-     for. The arrow in its own dark disc gives the white pill an interior, so
-     it reads as an object rather than as a gap in the sky. */
-  const heroCta = (
-    <a
-      className={cn(
-        buttonVariants({ variant: "secondary", size: "lg" }),
-        "gap-2 rounded-full border-transparent bg-white text-neutral-950 hover:bg-brand-50",
-      )}
-      href={cta}
-    >
-      {ctaLabel}
-      <span className="-mr-2 flex size-7 items-center justify-center rounded-full bg-neutral-950">
-        <ArrowRight className="size-4 text-white" aria-hidden />
-      </span>
-    </a>
-  );
 
   return (
     <div className="flex min-h-dvh flex-col bg-background">
@@ -142,60 +141,64 @@ export default async function Home() {
 
       <main id="main" className="flex-1">
         {/* ==== Hero ======================================================= */}
-        {/* NO `overflow-hidden` HERE, and it is worth a line because putting it
-             back is the obvious tidy-up. The product window hangs out of the
-             bottom of this section on purpose — that overlap is what makes it
-             read as sitting in FRONT of the page rather than as another block
-             stacked on it — and `overflow-hidden` cut it off at the seam. */}
-        <section className="hero-sky relative px-5 pb-16 pt-28 sm:px-8 sm:pb-20 sm:pt-32 lg:pt-40">
-          <div className="mx-auto w-full max-w-6xl">
+        {/* NO `overflow-hidden` ON THE SECTION. The product window hangs out of
+            the bottom on purpose — that overlap is what makes it read as
+            sitting in FRONT of the page rather than as another block stacked
+            on it. The clouds do their own clipping from the inside. */}
+        <section className="day-sky relative px-5 pb-16 pt-32 sm:px-8 sm:pb-20 sm:pt-36 lg:pt-44">
+          <Clouds />
+
+          <div className="mx-auto w-full max-w-5xl text-center">
             {/**
-             * THE HEADLINE IS ONE SENTENCE SET AS TWO BLOCKS, one flush left
-             * and one flush right, which is the reference's signature move and
-             * the reason a five-word line can hold a whole screen: the eye
-             * travels the full width of the page to finish reading it.
+             * SIX WORDS, TWO LINES, CENTRED.
              *
-             * It is written in sentence case and CAPITALISED IN CSS. Typing it
-             * in capitals would put "ONE NUMBER" into the accessibility tree
-             * and into every search result, where some screen readers spell
-             * capitalised words out letter by letter; `uppercase` is a
-             * rendering instruction and leaves the text itself alone.
+             * The line that was here ran "SEE ALL YOUR DATA / IN ONE PLACE" in
+             * capitals across the full width, with a sixty-word paragraph under
+             * it. It said nothing a competitor could not say.
+             *
+             * This one states the problem and the fix in the smallest number of
+             * words either fits in: the tools disagree — everybody with more
+             * than three of them knows this — and here is the thing that ends
+             * the argument. Written in sentence case, because it is a sentence.
              */}
-            <h1 className="font-display text-banner font-semibold uppercase leading-none text-white">
-              <span className="block">See all your data</span>
-              <span className="mt-1 block text-right sm:mt-2">in one place</span>
+            {/* THE SPANS ONLY BREAK FROM `sm` UP, and that is a phone bug
+                rather than a preference. `text-banner` bottoms out at 44px, and
+                "Your tools disagree." set at 44px in Outfit Bold is about
+                460px wide — on a 390px screen with 40px of gutter it pushed the
+                document to 414px and the whole page scrolled sideways, which
+                `pnpm landing` catches and no source check could. Forced as
+                blocks the line cannot wrap out of trouble; allowed to flow, it
+                sets itself in three or four and `text-balance` keeps them even. */}
+            <h1 className="font-marketing text-balance text-banner font-bold leading-[0.95] tracking-[-0.03em] text-foreground">
+              <span className="sm:block">Your tools disagree.</span>{" "}
+              <span className="sm:block">This settles it.</span>
             </h1>
 
-            <div className="mt-12 flex flex-col gap-10 sm:mt-14 lg:flex-row lg:items-end lg:justify-between lg:gap-16">
-              <p className="max-w-md text-md leading-relaxed text-white/90 sm:text-lg">
-                Your calendar, your CRM, your outreach tool and your payment processor each answer a different half of
-                the same question. Namzilabs reads all of them, matches the records that are the same person twice
-                over, and builds the metric none of them can — with the arithmetic shown underneath it.
-              </p>
+            <p className="mx-auto mt-7 max-w-xl text-lg leading-relaxed text-foreground/75">
+              Namzilabs reads every tool you already use, matches the records that are the same person twice over, and
+              gives you one figure with the arithmetic attached.
+            </p>
 
-              <div className="flex shrink-0 flex-col items-start gap-3 lg:items-end">
-                {heroCta}
-                <p className="text-sm text-white">Read-only access. Disconnect any tool and keep what it sent.</p>
-              </div>
+            <div className="mt-9 flex flex-col items-center gap-4">
+              <Cta href={cta}>{ctaLabel}</Cta>
+              {/* The three objections somebody has before connecting a CRM,
+                  answered before they are asked and in six words. */}
+              <p className="text-sm font-medium text-foreground/70">
+                Read-only access · No warehouse · No SQL
+              </p>
             </div>
 
             {/* ---- Reads from: the honest logo wall ---------------------- */}
-            <div className="mt-14 sm:mt-16">
-              {/* SENTENCE CASE, NOT TRACKED-OUT CAPITALS. A capitalised eyebrow
-                  over every heading is the single commonest tell of a page
-                  nobody art-directed, and this page had five of them. The
-                  reference uses plain sentence-case labels; so does this now.
-
-                  FULL WHITE, not /80, and that part is measured rather than
-                  chosen: at /80 this line sits at 3.89:1 on the brightened sky
-                  where 4.5 is the bar. `data-hero-label` is what
-                  `landing-check` samples, so the hook cannot be lost to a
-                  restyle the way a `.uppercase.tracking-widest` selector
-                  silently would be. */}
-              <p data-hero-label className="text-sm font-medium text-white">
+            <div className="mt-16 sm:mt-20">
+              {/* `data-hero-label` is the hook `landing-check` samples. It is a
+                  data attribute rather than a class selector because the
+                  previous one — `.uppercase.tracking-widest` — described how
+                  the thing looked, and stopped matching the moment the
+                  tracked-out capitals came off. */}
+              <p data-hero-label className="text-sm font-medium text-foreground/70">
                 Reads from {CONNECTOR_CATALOG.length} tools, including
               </p>
-              <div className="mt-4">
+              <div className="mt-5">
                 <ToolMarquee />
               </div>
             </div>
@@ -208,17 +211,18 @@ export default async function Home() {
              * and the section's bottom padding is what makes that subtraction
              * happen at all: with `pb-0` the figure's negative bottom margin
              * COLLAPSES THROUGH the section and becomes the section's own
-             * margin, so the sky simply ended level with the window and the
-             * overlap this whole composition is built on silently did nothing.
-             * It measured right in the source and wrong in the browser.
+             * margin, so the sky ends level with the window and the overlap
+             * this whole composition is built on silently does nothing. It
+             * measured right in the source and wrong in the browser, which is
+             * why `pnpm landing` asserts the gap in pixels.
              */}
             <figure className="relative z-10 mt-14 -mb-40 sm:mt-16 sm:-mb-48">
-              <div className="aspect-[4/3] w-full sm:aspect-video">
+              <div className="lift-lg aspect-[4/3] w-full overflow-hidden rounded-3xl sm:aspect-video">
                 <AppWindow />
               </div>
               <figcaption className="sr-only">
-                The Namzilabs dashboard: a board of metric tiles — meetings booked, pickup rate, speed to lead —
-                each recomputed from the tools it reads.
+                The Namzilabs dashboard: a board of metric tiles — meetings booked, pickup rate, speed to lead — each
+                recomputed from the tools it reads.
               </figcaption>
             </figure>
           </div>
@@ -227,56 +231,33 @@ export default async function Home() {
         {/* ==== The facts ================================================== */}
         {/* The top padding pays for the window hanging into this section:
             112px of overlap plus a section's worth of air above the heading. */}
-        <section className="mx-auto w-full max-w-6xl px-5 pb-16 pt-44 sm:px-8 sm:pb-24 sm:pt-56">
-          {/* THE BAND SPANS THE PAGE RATHER THAN SHARING THE ROW, and the
-              reason is a wrap. Beside a 24rem heading column it had about
-              640px for four columns — 145px each — and "Recompute cadence"
-              broke onto a second line while its three neighbours stayed on
-              one, so the row of labels ran ragged and the figures above them
-              stopped sitting on a line. Full width gives each fact ~270px,
-              which fits the longest label twice over and makes the one loud
-              row on this half of the page actually loud. */}
-          <div className="grid gap-y-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,28rem)] lg:items-end lg:gap-x-16">
-            <h2 className="font-display text-display-lg font-semibold leading-tight text-foreground">
-              Built to be argued with.
-            </h2>
-            <p className="text-md leading-relaxed text-muted-foreground">
-              Every figure shows its working, so the answer to &ldquo;where did that come from?&rdquo; is a click
-              rather than an afternoon.
-            </p>
-          </div>
-
-          <div className="mt-10">
-            {/**
-             * THE FACTS, ON THE SKY — the first time the blue comes back, and
-             * early enough that the page reads as having a colour rather than
-             * as a white document with a blue hat.
-             *
-             * `.sky-panel`, NOT `.sky-card`, and the difference is measured.
-             * `.sky-card` opens out to #3F73E6 at its foot, where white sits at
-             * 4.36:1 — fine for the closing call to action, whose type is all
-             * in the top half over the deep end, and wrong here, where a row of
-             * 14px labels runs along the bottom edge. The panel never opens
-             * past #2B53AE, where the same ink is 7.1:1.
-             */}
-            <dl className="sky-panel grid grid-cols-2 gap-x-8 gap-y-10 overflow-hidden rounded-frame p-8 sm:grid-cols-4 sm:rounded-3xl sm:p-10">
-              {FACTS.map((f) => (
-                <div key={f.label} className="min-w-0">
-                  <dt className="sr-only">{f.label}</dt>
-                  <dd>
-                    {/* `text-nowrap`: "Read-only" is the one figure here that
-                        is a word rather than a number, and a hyphen is a break
-                        opportunity — it split into "Read-" / "only" the first
-                        time this row was measured. */}
-                    <span className="stat-numeral block text-nowrap text-display-lg leading-none text-white">
-                      {f.figure}
-                    </span>
-                    <span className="mt-2 block text-sm text-white/85">{f.label}</span>
-                  </dd>
-                </div>
-              ))}
-            </dl>
-          </div>
+        <section className="mx-auto w-full max-w-6xl px-5 pb-20 pt-44 sm:px-8 sm:pb-28 sm:pt-56">
+          <h2 className="sr-only">Namzilabs in four numbers</h2>
+          {/* A PLAIN ROW, NOT FOUR CARDS. Boxing each figure would make this
+              the fourth grid of bordered rectangles on the page; hairlines
+              between them say the same thing for a tenth of the ink. */}
+          <dl className="grid grid-cols-2 gap-y-10 sm:grid-cols-4 sm:divide-x sm:divide-border">
+            {FACTS.map((f, i) => (
+              <div key={f.label} className={i === 0 ? "sm:pr-6" : "sm:px-6"}>
+                <dt className="sr-only">{f.label}</dt>
+                <dd>
+                  {/* `text-nowrap`: "Read-only" is the one figure here that is
+                      a word rather than a number, and a hyphen is a break
+                      opportunity — it split into "Read-" / "only" the first
+                      time this row was measured. */}
+                  {/* `text-nowrap` keeps "Read-only" whole — a hyphen is a
+                      break opportunity and it split into "Read-" / "only" the
+                      first time this row was measured. Which is exactly why it
+                      has to step DOWN on a phone: 48px unbreakable in a 175px
+                      half-column overflowed the page by 4px. */}
+                  <span className="font-marketing block text-nowrap text-display-md font-bold leading-none tracking-tight text-foreground lg:text-display-lg">
+                    {f.figure}
+                  </span>
+                  <span className="mt-2 block text-sm text-muted-foreground">{f.label}</span>
+                </dd>
+              </div>
+            ))}
+          </dl>
         </section>
 
         {/* ==== The problem ================================================ */}
@@ -285,282 +266,205 @@ export default async function Home() {
          * defend" only lands on somebody who already feels the disagreement;
          * for everybody else the page opened with an answer to a question they
          * had not been asked.
-         *
-         * It is deliberately NOT the reconciliation argument — that is the
-         * section below, and making it twice would flatten both. This is about
-         * there being nowhere to stand: ten tools, ten correct answers, ten
-         * separate logins, and no way to put two of them in one sentence.
          */}
         <section id="problem" className="scroll-mt-28 border-y border-border bg-card">
-          <div className="mx-auto w-full max-w-6xl px-5 py-16 sm:px-8 sm:py-24">
-            {/* THE HEADING AND ITS PARAGRAPH NOW SIT SIDE BY SIDE, which is the
-                one change this section needed: the heading column was 60% of a
-                1152px page and the right-hand 40% held nothing at all, so the
-                section opened with half a screen of empty white. */}
-            {/* THE HEADING COLUMN WAS TOO NARROW FOR ITS OWN COPY. At 29rem
-                for the paragraph the heading had ~624px, and "No way to put
-                them in one sentence." needs about 860 at 48px — so the line
-                that was written as one broke after "in", and the `<br />`
-                above it produced a four-line heading with two ragged
-                fragments. Shorter copy AND a wider column, because either one
-                alone leaves it a word away from breaking again. */}
-            <div className="grid gap-y-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,25rem)] lg:items-end lg:gap-x-12">
-              <h2 className="font-display text-balance text-display-lg font-semibold leading-tight text-foreground">
-                Ten tools. Ten dashboards.
-                <br />
-                No way to add them up.
-              </h2>
-              <p className="text-md leading-relaxed text-muted-foreground">
-                Whether you are a company or one person with an audience, the work runs on about ten pieces of
-                software, and every one of them ships analytics for its own slice. They are all correct. None of them
-                can see the others — so answering what a campaign earned, or what a meeting costs, means exporting
-                four CSVs and hoping the names line up.
-              </p>
-            </div>
-            <div className="mt-12">
+          <div className="mx-auto w-full max-w-6xl px-5 py-20 sm:px-8 sm:py-28">
+            <Head
+              eyebrow="The problem"
+              title="Ten tools. Ten dashboards. No way to add them up."
+              blurb="Every one of them ships analytics for its own slice, and every one of them is correct. None of them can see the others."
+            />
+            <div className="mt-14">
               <ProblemGrid />
             </div>
           </div>
         </section>
 
         {/* ==== The receipts =============================================== */}
-        <section id="proof" className="mx-auto w-full max-w-6xl scroll-mt-28 px-5 py-16 sm:px-8 sm:py-24">
-          <div className="max-w-3xl">
-            <h2 className="font-display text-display-lg font-semibold leading-tight text-foreground">
-              Three tools. Three answers.
-              <br />
-              One you can defend.
-            </h2>
-            <p className="mt-6 text-md leading-relaxed text-muted-foreground">
-              None of them are lying. Calendly counts the invite, Close counts what a rep logged, the sheet counts
-              what somebody typed on Friday. The disagreement is real, and the only useful answer is the one that
-              shows how it was resolved.
-            </p>
-          </div>
-
-          {/* THE ARGUMENT AT FULL WIDTH. It used to be a 460px card in the
-              right-hand column — the most important claim on the page, typeset
-              smaller than the paragraph beside it. */}
-          <div className="mt-12">
+        <section id="proof" className="mx-auto w-full max-w-6xl scroll-mt-28 px-5 py-20 sm:px-8 sm:py-28">
+          <Head
+            eyebrow="The receipts"
+            title="Three tools. Three answers. One you can defend."
+            blurb="None of them are lying — they are counting different things. The only useful answer is the one that shows how it was resolved."
+          />
+          <div className="mt-14">
             <Reconcile />
           </div>
         </section>
 
         {/* ==== How it works =============================================== */}
         {/**
-         * THE SECOND BLUE ANCHOR, and the one that earns it: three pictures of
-         * the product, which is what this section was missing entirely. Each
-         * card is an opaque white face rather than a translucent one — a
-         * drawing of the app inside a 10%-white pane is a drawing of the app
-         * with a blue wash over it, since every border in there is `--border`
-         * and every tile is `--card`.
+         * THREE ROWS, NOT THREE CARDS, and the flow builder finally appears on
+         * the landing page. It is the most distinctive screen this product has
+         * and the previous four versions of this page never showed it.
          */}
-        <section id="how" className="sky-panel scroll-mt-28 overflow-hidden">
-          <div className="mx-auto w-full max-w-6xl px-5 py-16 sm:px-8 sm:py-24">
-            <div className="max-w-3xl">
-              <h2 className="font-display text-display-lg font-semibold leading-tight text-white">
-                Connected on Monday.
-                <br />
-                Defensible by Friday.
-              </h2>
-              <p className="mt-6 text-md leading-relaxed text-white/85">
-                Three steps, and none of them involve a warehouse, a nightly export or a line of SQL.
-              </p>
+        {/* THE CLIP LIVES ON THE SECTION, NOT ON THE CONTAINER, and the
+            difference is the whole effect. Clipped at `max-w-6xl` the
+            screenshots stopped 144px short of the screen with white either
+            side, which reads as a card that overflowed its box by accident.
+            Clipped at the section they run off the EDGE OF THE PAGE, which is
+            the reference's move and the thing that makes them read as windows
+            onto something larger.
+
+            `overflow-x-clip` rather than `overflow-hidden`: the latter makes
+            the section a scroll container, which silently kills the
+            `position: sticky` nav for the whole time it is on screen. */}
+        <section id="how" className="scroll-mt-28 overflow-x-clip border-y border-border bg-card">
+          <div className="mx-auto w-full max-w-6xl px-5 py-20 sm:px-8 sm:py-28">
+            <Head eyebrow="How it works" title="Connected on Monday. Defensible by Friday." />
+
+            <div className="mt-16 flex flex-col gap-20 sm:gap-28">
+              <FeatureRow
+                label="Step one — connect"
+                title="Sign in, and the records start arriving"
+                body="Connect with Google or paste an API key. New records land within minutes and your history backfills behind you, so you are building the moment it is connected —"
+                accent="you never wait for a backfill to finish."
+                side="right"
+              >
+                <ConnectShot />
+              </FeatureRow>
+
+              <FeatureRow
+                label="Step two — build"
+                title="Drag four steps onto a canvas"
+                body="Pull records, keep the ones that count, match the same person across two sources, total what is left. Test it against real rows before you publish it —"
+                accent="no SQL, and no warehouse in between."
+                side="left"
+              >
+                <FlowShot />
+              </FeatureRow>
+
+              <FeatureRow
+                label="Step three — defend"
+                title="Every figure carries its working"
+                body="A published metric recomputes on its own and shows what it did: when it last ran, which sources it read, how many records it matched as the same person, and"
+                accent="what it left out, and why."
+                side="right"
+              >
+                <ReceiptsShot />
+              </FeatureRow>
             </div>
-
-            {/**
-             * SUBGRID, AND THE MISALIGNMENT IT FIXES.
-             *
-             * Each card is words over a picture, and the three sets of words
-             * wrap to different depths while the three pictures have different
-             * natural heights. Laid out as three independent flex columns the
-             * cards ended up the same height — the grid stretches them — but
-             * the WELLS inside them started at three different y positions,
-             * about 30px apart, which reads as three cards that were each
-             * nudged by hand.
-             *
-             * `grid-rows-subgrid` makes all three cards share the SAME two row
-             * tracks: the text row is as tall as the deepest paragraph and the
-             * well row takes what is left, so every heading, every paragraph
-             * and every picture starts on the same line across the row. The
-             * alternative — a hand-tuned `min-h` on the paragraph — is a number
-             * that is right at one breakpoint and wrong at the next.
-             */}
-            <ol className="mt-12 grid gap-5 md:grid-cols-3 md:grid-rows-[auto_1fr]">
-              {STEPS.map((step, i) => {
-                const Shot = step.shot;
-                return (
-                  <li
-                    key={step.title}
-                    className="glass-solid flex flex-col overflow-hidden rounded-frame sm:rounded-3xl md:row-span-2 md:grid md:grid-rows-subgrid"
-                  >
-                    <div className="flex flex-col gap-2 p-5 sm:p-6">
-                      <span className="flex items-center gap-2.5">
-                        {/* `--foreground` ON `--background`, not a pinned
-                            near-black disc: on the dark card that was a black
-                            circle on a nearly black face, so all anybody saw
-                            was a floating numeral. The disc has to invert with
-                            the card it is printed on. */}
-                        <span className="stat-numeral flex size-6 shrink-0 items-center justify-center rounded-full bg-foreground text-xs leading-none text-background">
-                          {i + 1}
-                        </span>
-                        <h3 className="text-lg font-semibold tracking-tight text-foreground">{step.title}</h3>
-                      </span>
-                      {/* THE TOKENS, NOT PINNED NEUTRALS. These were
-                          `text-neutral-950` and `text-neutral-700` on the
-                          reasoning that the card never follows the theme — and
-                          the card turned out to be the one blue-ground object
-                          that has to, because it carries a picture of the
-                          product. See `.dark .glass-solid`. */}
-                      <p className="text-sm leading-relaxed text-muted-foreground">{step.body}</p>
-                    </div>
-
-                    {/* The drawing sits in a well below the words — inset,
-                        clipped, and bottom-bleeding, so each card reads as a
-                        caption over a window rather than as text above a
-                        picture. `min-h-0` because a grid track will not let a
-                        child shrink below its content otherwise, which is how
-                        the tallest drawing pushes the row past the card. */}
-                    <div className="min-h-0 px-3 pb-3 sm:px-4 sm:pb-4">
-                      <Shot />
-                    </div>
-                  </li>
-                );
-              })}
-            </ol>
           </div>
         </section>
 
         {/* ==== By hand, or not ============================================ */}
-        <section id="compare" className="mx-auto w-full max-w-6xl scroll-mt-28 px-5 py-16 sm:px-8 sm:py-24">
-          <div className="max-w-2xl">
-            <h2 className="font-display text-display-lg font-semibold leading-tight text-foreground">
-              The same question, two ways.
-            </h2>
-            <p className="mt-6 text-md leading-relaxed text-muted-foreground">
-              Nobody is promised a close rate here — no software can honestly do that. What changes is the work
-              between the question and the answer.
-            </p>
-          </div>
-          <div className="mt-12">
+        <section id="compare" className="mx-auto w-full max-w-6xl scroll-mt-28 px-5 py-20 sm:px-8 sm:py-28">
+          <Head
+            eyebrow="What changes"
+            title="The same question, two ways"
+            blurb="Nobody is promised a close rate here — no software can honestly do that. What changes is the work between the question and the answer."
+          />
+          <div className="mt-14">
             <Compare />
           </div>
         </section>
 
         {/* ==== Ask your AI ================================================ */}
         {/**
-         * NOT A ROADMAP. Namzilabs ships an MCP server at `/api/mcp` with six
-         * tools and a `use_ai_assistants` permission deciding who in a
-         * workspace may point an assistant at it, so every claim here is about
-         * something that works today.
+         * THE ONE DEEP-BLUE SURFACE LEFT ON THE PAGE, and it is here because
+         * the owner asked for the invite board's card specifically — "the blue
+         * card on invite & earn, I really like that design". The rest of the
+         * page went bright to match the reference; this keeps the thing he
+         * named, and being the only one of its kind is what makes it land.
          *
-         * The argument is narrow on purpose: an assistant with no numbers
-         * answers "why did close rate drop" with seasonality and lead quality —
-         * fluent, unfalsifiable, useless. The same assistant with read access
-         * to your published metrics answers it with the two figures that moved
-         * and the one that did not.
+         * NOT A ROADMAP: Namzilabs ships an MCP server at `/api/mcp` with six
+         * tools and a `use_ai_assistants` permission deciding who may point an
+         * assistant at it, so every claim here is about something that works
+         * today.
          */}
-        <section id="ai" className="scroll-mt-28 border-y border-border bg-card">
-          <div className="mx-auto w-full max-w-6xl px-5 py-16 sm:px-8 sm:py-24">
-            <div className="sky-panel overflow-hidden rounded-frame p-7 sm:rounded-3xl sm:p-10 lg:p-12">
-              <div className="grid items-center gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,30rem)] lg:gap-16">
-                <div>
-                  <h2 className="font-display text-display-lg font-semibold leading-tight text-white">
-                    Opinions are cheap.
-                    <br />
-                    Give it the numbers.
-                  </h2>
-                  <p className="mt-6 max-w-lg text-md leading-relaxed text-white/85">
-                    Connect Claude or ChatGPT to your workspace over MCP and it reads your published metrics
-                    directly — the same figures on the same board, not a screenshot you pasted and not a guess. Ask
-                    it what changed, and the answer arrives with the arithmetic attached.
-                  </p>
-                  <p className="mt-4 max-w-lg text-md leading-relaxed text-white/85">
-                    Read-only, scoped to one workspace, and switched on per person — so an assistant can analyse
-                    everything it is shown and change nothing.
-                  </p>
-                  <ul className="mt-8 flex flex-wrap gap-2">
-                    {["list_metrics", "get_metric", "get_metric_days", "list_sources"].map((t) => (
-                      /* The real tool names, because somebody evaluating this
-                         will want to know exactly what an assistant can call —
-                         and because naming them is a claim this repo can be
-                         checked against (`src/lib/mcp/tools`). */
-                      <li
-                        key={t}
-                        className="glass-card stat-numeral rounded-full px-3 py-1.5 text-xs text-white"
-                      >
-                        {t}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+        <section id="ai" className="scroll-mt-28 px-5 pb-20 sm:px-8 sm:pb-28">
+          <div className="sky-panel mx-auto w-full max-w-6xl overflow-hidden rounded-3xl p-8 sm:p-12 lg:p-16">
+            <div className="grid items-center gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,30rem)] lg:gap-16">
+              <div>
+                <p className="text-sm font-medium text-white/80">Ask your AI</p>
+                <h2 className="font-marketing mt-3 text-display-lg font-bold leading-[1.08] tracking-tight text-white">
+                  Opinions are cheap. Give it the numbers.
+                </h2>
+                <p className="mt-6 max-w-lg text-md leading-relaxed text-white/85">
+                  Connect Claude or ChatGPT to your workspace over MCP and it reads your published metrics directly —
+                  the same figures on the same board, not a screenshot you pasted and not a guess. Read-only, scoped to
+                  one workspace, and switched on per person.
+                </p>
+                <ul className="mt-8 flex flex-wrap gap-2">
+                  {["list_metrics", "get_metric", "get_metric_days", "list_sources"].map((t) => (
+                    /* The real tool names, because somebody evaluating this
+                       will want to know exactly what an assistant can call —
+                       and because naming them is a claim this repo can be
+                       checked against (`src/lib/mcp/tools`). */
+                    <li key={t} className="glass-card stat-numeral rounded-full px-3 py-1.5 text-xs text-white">
+                      {t}
+                    </li>
+                  ))}
+                </ul>
+              </div>
 
-                {/* The panel keeps its own opaque ground for the same reason
-                    the step cards do: it is a drawing of a conversation inside
-                    the product, and the product is not translucent. */}
-                <div className="glass-solid overflow-hidden rounded-frame p-3 sm:rounded-3xl sm:p-4">
-                  <AiPanel />
-                </div>
+              {/* The panel keeps an opaque ground: it is a drawing of a
+                  conversation inside the product, and the product is not
+                  translucent. */}
+              <div className="glass-solid overflow-hidden rounded-3xl p-3 sm:p-4">
+                <AiPanel />
               </div>
             </div>
           </div>
         </section>
 
         {/* ==== Integrations =============================================== */}
-        <section id="integrations" className="mx-auto w-full max-w-6xl scroll-mt-28 px-5 py-16 sm:px-8 sm:py-24">
-          <div className="grid gap-y-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,29rem)] lg:items-end lg:gap-x-16">
-            <h2 className="font-display text-display-lg font-semibold leading-tight text-foreground">
-              {CONNECTOR_CATALOG.length} tools, read directly.
-            </h2>
-            <p className="text-md leading-relaxed text-muted-foreground">
-              No warehouse in between, no nightly export to babysit. Namzilabs talks to each tool&rsquo;s own API and
-              keeps its copy current. Missing one? A custom webhook takes events from anything that can POST.
-            </p>
-          </div>
-          <div className="mt-12">
-            <ToolGrid />
-          </div>
-        </section>
-
-        {/* ==== Questions ================================================== */}
-        <section id="faq" className="scroll-mt-28 border-y border-border bg-card">
-          <div className="mx-auto w-full max-w-6xl px-5 py-16 sm:px-8 sm:py-24">
-            <div className="grid gap-y-8 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] lg:items-start lg:gap-x-16">
-              <div>
-                <h2 className="font-display text-display-lg font-semibold leading-tight text-foreground">
-                  Before you
-                  <br />
-                  connect a CRM.
-                </h2>
-                <p className="mt-5 text-md leading-relaxed text-muted-foreground">
-                  The questions worth asking of anything you are about to give read access to.
-                </p>
-              </div>
-              <Faq />
+        <section id="integrations" className="scroll-mt-28 border-y border-border bg-card">
+          <div className="mx-auto w-full max-w-6xl px-5 py-20 sm:px-8 sm:py-28">
+            <Head
+              eyebrow="Integrations"
+              title={`${CONNECTOR_CATALOG.length} tools, read directly`}
+              blurb="No warehouse in between, no nightly export to babysit. Missing one? A custom webhook takes events from anything that can POST."
+            />
+            <div className="mt-14">
+              <ToolGrid />
             </div>
           </div>
         </section>
 
+        {/* ==== Questions ================================================== */}
+        <section id="faq" className="mx-auto w-full max-w-4xl scroll-mt-28 px-5 py-20 sm:px-8 sm:py-28">
+          <Head
+            eyebrow="Questions"
+            title="Before you connect a CRM"
+            blurb="The questions worth asking of anything you are about to give read access to."
+          />
+          <div className="mt-14">
+            <Faq />
+          </div>
+        </section>
+
         {/* ==== Closing ==================================================== */}
-        <section className="mx-auto w-full max-w-6xl px-5 py-16 sm:px-8 sm:py-24">
-          {/* The sky again, this time as an object rather than as a ground.
-              `.sky-card` here rather than `.sky-panel` because the type is all
-              in the top half — this is the one place the brighter foot is
-              right, since nothing but air sits on it. */}
-          <div className="sky-card overflow-hidden rounded-frame px-6 py-16 text-center sm:rounded-3xl sm:px-10 sm:py-20">
-            <h2 className="font-display mx-auto max-w-2xl text-display-lg font-semibold leading-tight text-white">
+        <section className="px-5 pb-20 sm:px-8 sm:pb-28">
+          <div className="sky-card mx-auto w-full max-w-6xl overflow-hidden rounded-3xl px-6 py-20 text-center sm:px-10 sm:py-24">
+            <h2 className="font-marketing mx-auto max-w-2xl text-display-lg font-bold leading-[1.08] tracking-tight text-white">
               Stop reconciling by hand.
             </h2>
             <p className="mx-auto mt-5 max-w-lg text-md leading-relaxed text-white/85 sm:text-lg">
               Connect one tool and build your first metric in an afternoon.
             </p>
-            <div className="mt-9 flex justify-center">{heroCta}</div>
+            {/* WHITE ON THE BLUE, inverting the page's dark pill: a near-black
+                button on a deep blue ground is a shape you have to hunt for. */}
+            <div className="mt-10 flex justify-center">
+              <a
+                href={cta}
+                className="lift-md group inline-flex h-13 items-center gap-2 rounded-full bg-white pl-7 pr-2 text-button font-semibold text-neutral-950 transition-transform duration-(--duration-fast) ease-(--ease-standard) hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white motion-reduce:transition-none motion-reduce:hover:translate-y-0"
+              >
+                {ctaLabel}
+                <span className="flex size-9 items-center justify-center rounded-full bg-neutral-950/10">
+                  <ArrowRight
+                    aria-hidden
+                    className="size-4 transition-transform duration-(--duration-fast) ease-(--ease-standard) group-hover:translate-x-0.5 motion-reduce:transition-none"
+                  />
+                </span>
+              </a>
+            </div>
           </div>
         </section>
       </main>
 
       <footer className="border-t border-border">
-        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-4 px-5 py-6 text-sm text-muted-foreground sm:px-8">
+        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-4 px-5 py-8 text-sm text-muted-foreground sm:px-8">
           <span>&copy; {new Date().getFullYear()} Namzilabs</span>
           <nav className="flex gap-5">
             <Link className="inline-flex min-h-6 items-center rounded-control transition-colors hover:text-foreground" href="/docs">

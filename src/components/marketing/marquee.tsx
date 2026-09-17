@@ -53,14 +53,14 @@ export function ToolMarquee() {
                self-sufficient: it reads the same however light the sky
                underneath it gets, which is one fewer thing coupled to a
                gradient stop. */
-            className="flex shrink-0 items-center gap-2 rounded-full border border-white/20 bg-neutral-950/25 py-1.5 pl-1.5 pr-4"
+            className="glass-chip lift-sm flex shrink-0 items-center gap-2 rounded-full py-1.5 pl-1.5 pr-4"
           >
             {/* THE PRODUCT'S OWN MARK, drawn as a pill. This kept its own copy
                 of the tile and its own contrast rule, so the marquee showed two
                 letters while the app showed logos — and the yellow-mark caveat
                 had to be remembered here separately. */}
             <SourceMark source={entry.source} size={24} radius="9999px" className="stat-numeral" />
-            <span className="whitespace-nowrap text-sm font-medium text-white">{entry.name}</span>
+            <span className="whitespace-nowrap text-sm font-medium text-foreground">{entry.name}</span>
           </span>
           );
         })}

@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+import { Inter, Outfit } from "next/font/google";
 import "./globals.css";
 
 /**
@@ -32,6 +32,33 @@ import "./globals.css";
  * cost of a second font request.
  */
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
+
+/**
+ * THE SECOND FAMILY, AND WHY THE ARGUMENT ABOVE DOES NOT COVER IT.
+ *
+ * Everything above is about the INTERFACE, and it still holds: a board of
+ * numbers separates chrome from figure with size and nothing else, and a
+ * display face in there would be decoration wearing a job title.
+ *
+ * The landing page is not the interface. Its job is to be looked at by
+ * somebody who has not decided to care yet, and the owner's verdict on the
+ * version set entirely in Inter was that it "looks like an AI website" — which
+ * is a fair reading of a page whose only typographic idea is size. A neutral
+ * grotesque at three weights is what every generated page uses, because it is
+ * what you reach for when you have not chosen anything.
+ *
+ * Outfit is geometric where Inter is neutral: single-storey `g`, a straight
+ * diagonal tail on the `y`, circular bowls. It carries the reference the owner
+ * handed over (themochi.app) closely enough to read as the same decision, and
+ * it is unmistakably NOT the default.
+ *
+ * TWO WEIGHTS ONLY, and loaded for one route. 600 and 700 are what the
+ * headlines use; shipping the variable range would be four times the bytes for
+ * weights nothing calls. It is scoped to `--font-marketing`, which only `/`
+ * spends — the app never resolves this variable, so a dashboard still makes
+ * exactly one font request.
+ */
+const outfit = Outfit({ subsets: ["latin"], weight: ["600", "700"], variable: "--font-outfit", display: "swap" });
 
 import { ThemeProvider } from "@/components/theme";
 import { InputModality } from "@/components/input-modality";
@@ -117,7 +144,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     // On a Mac that resolves to SF Pro and looks nearly right, which is why it
     // survived: it was wrong on every other platform and nothing failed.
     // Measured with getComputedStyle, not inferred.
-    <html lang="en" className={inter.variable} suppressHydrationWarning>
+    <html lang="en" className={`${inter.variable} ${outfit.variable}`} suppressHydrationWarning>
       <body>
         {/* WHICH DEVICE IS DRIVING, stamped on <html> for globals.css to read.
             It renders nothing; it exists so the shared focus ring can stay off
