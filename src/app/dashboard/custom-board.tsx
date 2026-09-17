@@ -42,6 +42,7 @@ import type { TileConfig } from "@/lib/board/tile-config";
 import { CustomTile, type CustomTileSource } from "@/components/custom-tile";
 import { PortalSlot } from "@/components/portal-slot";
 import { CANVAS_ATTR, CELL_ATTR, HANDLE_ATTR, useCanvasDrag } from "./canvas-drag";
+import { useCellFlip } from "./use-cell-flip";
 import { useSettle } from "./board-settle";
 import { MetricPicker } from "./add-tile-picker";
 import { TileConfigPanel } from "./tile-config-panel";
@@ -659,6 +660,12 @@ export function CustomBoard({
     }),
   );
   const cells = canvasCells(preview ?? boxes);
+  /**
+   * THE NEIGHBOURS GLIDE, THE HELD TILE SNAPS. `grid-column`/`grid-row` cannot
+   * be transitioned, so the displaced tiles are animated by FLIP — see
+   * `use-cell-flip.ts` for why that is affordable inside a drag.
+   */
+  useCellFlip(rootRef, CELL_ATTR, cells, gesture?.id ?? null);
   const empty = cells.length === 0;
 
   return (
@@ -743,9 +750,36 @@ export function CustomBoard({
               key={tile.id}
               {...{ [CELL_ATTR]: tile.id }}
               style={vars as React.CSSProperties}
-              className={`board-cell group/cell relative transition-opacity duration-(--duration-fast) ${
+              /**
+               * A HELD TILE IS LIFTED, NOT FADED.
+               *
+               * This was `opacity-70`, which is the product's vocabulary for
+               * DISABLED — so the one tile you were actively carrying looked
+               * like the one tile you could not touch. Picking something up
+               * should raise it: full opacity, a hair of scale, a brand ring,
+               * and above its neighbours so it passes over them rather than
+               * through them.
+               *
+               * A RING AND NOT A SHADOW. Every `--shadow-*` in this kit is
+               * `none` deliberately — "the border is" — and `pnpm shadows`
+               * fails any element that paints one, so `shadow-lifted` would
+               * have compiled to nothing and looked like it worked. The ring
+               * goes through `--tw-ring-shadow`, which that sweep leaves alone,
+               * and it is the same move the tab strip makes with a background
+               * when one of its tabs is being dragged.
+               *
+               * `cursor-grabbing` matters more than it sounds. Without it the
+               * open-hand `cursor-grab` stays up for the whole drag, which
+               * quietly says "you may pick this up" while you are already
+               * holding it.
+               */
+              className={`board-cell group/cell relative ${
                 canArrange ? "cursor-grab [touch-action:none]" : ""
-              } ${gesture?.id === tile.id ? "opacity-70" : ""}`}
+              } ${
+                gesture?.id === tile.id
+                  ? "z-20 scale-[1.015] cursor-grabbing ring-2 ring-primary transition-none"
+                  : "transition-opacity duration-(--duration-fast)"
+              }`}
               onPointerDown={canArrange ? (e) => onPointerDown(e, { id: tile.id, mode: "move" }) : undefined}
               onClick={(e) => {
                 if (!canEdit) return;
