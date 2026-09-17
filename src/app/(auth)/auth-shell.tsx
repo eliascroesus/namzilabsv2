@@ -148,14 +148,25 @@ function GoogleButton({ next }: { next: string }) {
   return (
     <a
       href={`/auth/google?next=${encodeURIComponent(next)}`}
-      /* TRANSLUCENT, WHERE THE SUBMIT IS SOLID WHITE. Both cannot be the loud
-         one: on this ground white IS the emphasis, so spending it twice would
-         leave the page with two primaries and no order to read them in. Google
-         keeps its own four-colour mark — their terms require that, and it
-         carries perfectly well on a dark surface. */
+      /**
+       * WHITE, at the owner's ask — and it is also what Google's own brand
+       * guidance prefers: the four-colour mark is drawn to sit on white, and on
+       * a translucent blue it was the one element on the card fighting its
+       * background.
+       *
+       * SO BOTH BUTTONS ARE WHITE NOW, and the hierarchy moved off colour onto
+       * position and weight instead: Google is first because it is the faster
+       * path, the submit is last because it is the one that completes the form,
+       * and the divider between them is what says they are alternatives rather
+       * than steps. On a card this size that reads more clearly than one loud
+       * button and one quiet one did.
+       *
+       * `bg-white` spelled out for the same reason as the submit below — the
+       * kit's `white` variant follows the theme and this card does not.
+       */
       className={cn(
         buttonVariants({ variant: "secondary", size: "lg" }),
-        "w-full gap-2.5 border-white/25 bg-white/10 text-white hover:border-white/40 hover:bg-white/15 active:bg-white/20",
+        "w-full gap-2.5 border-transparent bg-white text-neutral-950 shadow-xs hover:bg-brand-50 active:bg-brand-50",
       )}
     >
       {/* Google's own four colours. Their brand guidelines are explicit that
