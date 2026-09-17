@@ -1,5 +1,5 @@
 import { ShellSkeleton } from "@/components/shell-skeleton";
-import { Skeleton } from "@/components/ui/skeleton";
+import { TilePlaceholder } from "@/components/tile-placeholder";
 import { canvasCells } from "@/lib/board/grid";
 import { REPORT_PRESET } from "@/lib/board/presets";
 
@@ -59,13 +59,9 @@ export default function DashboardLoading() {
         <span className="sr-only">Loading metrics…</span>
         {canvasCells(REPORT_PRESET.tiles.map((t, i) => ({ id: String(i), ...t }))).map(({ tile, vars }) => (
           <div key={tile.id} className="board-cell" style={vars as React.CSSProperties}>
-            {/* The placeholder card `TileArea` already draws, spelled the same
-                way. There should be one of these in the product, not three. */}
-            <div className="h-full rounded-surface border border-border bg-card p-4 shadow-card">
-              <Skeleton className="h-4 w-2/5" />
-              <Skeleton className="mt-3 h-9 w-1/2" />
-              <Skeleton className="mt-3 h-10 w-full" />
-            </div>
+            {/* One placeholder, shared with the other three surfaces that draw
+                one — see `tile-placeholder.tsx` for what four copies cost. */}
+            <TilePlaceholder />
           </div>
         ))}
       </div>

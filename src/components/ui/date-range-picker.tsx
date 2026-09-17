@@ -4,8 +4,10 @@ import { useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { RANGE_OPTIONS, type RangeKey } from "@/lib/metrics/range";
+import { parseDayInput } from "@/lib/metrics/day-input";
 import { dayKey, daysInMonth, monthBefore, monthGrid, monthKeyOf, monthLabel, WEEKDAYS, type MonthKey } from "@/lib/metrics/calendar";
 
 /**
@@ -46,23 +48,31 @@ import { dayKey, daysInMonth, monthBefore, monthGrid, monthKeyOf, monthLabel, WE
  * and ticks the chosen row, so the one place this could have drifted into a
  * second visual language instead reuses the one the rest of the product speaks.
  *
- * THE TWO DATE BOXES ARE NOT DECORATION. Clicking one arms that end, so the
- * next day you click moves only it — changing a window's end is one click
- * rather than redrawing the whole thing. They are also what makes the half-made
- * state legible: mid-pair the start box holds your anchor and the end box goes
- * back to saying "End date", which is the one thing a calendar grid cannot say
- * about itself. They do not accept typing; that needs a date parser, and a
- * parser on the control that drives the whole dashboard is its own change.
+ * THE TWO DATE BOXES ARE FIELDS. They began read-only and that was wrong: the
+ * month arrows step ONE month, so a window starting in January 2025 was twenty
+ * presses away, and a control whose brief is "comfortable to change dates"
+ * cannot ask that. `parseDayInput` reads what is typed — explicitly, per
+ * format, never through `new Date`, which would parse half of them in local
+ * time against a grid that is entirely UTC.
  *
- * ═══ A PRESET APPLIES; A DRAWN RANGE WAITS FOR APPLY ═══
+ * They are targets as well: focusing one aims the next calendar click at that
+ * end, so moving a window's end is one click rather than redrawing the whole
+ * window. And they carry the half-made state, which is the one thing a calendar
+ * grid cannot say about itself — mid-pair the start box holds your anchor and
+ * the end box goes back to reading "End date".
  *
- * These look inconsistent and are not. A preset is a COMPLETE answer the
- * instant it is picked, so making it wait behind an Apply would add a click to
- * the one case that should be fastest. A hand-drawn pair is not complete until
- * the second click, and even then it is worth a look before it costs a round
- * trip — every commit re-renders the board and drops every tile to a skeleton.
- * So the dropdown commits on change, the grid collects a draft, and Apply
- * spends it.
+ * ═══ THE GRID APPLIES ITSELF; TYPING WAITS FOR APPLY ═══
+ *
+ * Two clicks on a calendar is not a half-finished thought that wants
+ * confirming, it is the answer, so a pair completed on the grid commits itself.
+ * A preset is the same: a COMPLETE answer the instant it is picked, and making
+ * the fastest case pay for an Apply would be backwards.
+ *
+ * TYPING IS THE ONE THING THAT WAITS, and the asymmetry is the point rather
+ * than an inconsistency. Committing a typed field the moment it parsed would
+ * close the popover as soon as you tabbed out of the FIRST of the two boxes,
+ * before you had said what the second one was. So the fields collect a draft
+ * and Apply spends it, which is the only thing Apply is for.
  *
  * `Custom…` is in the list because the reference's is, and it is the honest
  * name for where the dropdown stands once you have drawn a window by hand.
@@ -178,30 +188,76 @@ export function DateRangePicker({
   const lo = pending?.from ?? null;
   const hi = pending?.to ?? null;
 
+  /**
+   * A PAIR COMPLETED ON THE GRID APPLIES ITSELF.
+   *
+   * It used to stop at a draft and wait for Apply, and that was one click too
+   * many for the gesture the whole control is built around: two clicks on a
+   * calendar is not a half-finished thought that wants confirming, it is the
+   * answer. The owner's words — "when I click on the calendar on one and then
+   * the other to get the range then it should auto apply".
+   *
+   * TYPING STILL WAITS, and the asymmetry is the point rather than an
+   * inconsistency. Committing a typed field the moment it parsed would close
+   * the popover as soon as you tabbed out of the FIRST of the two boxes, before
+   * you had said what the second one was. So the fields collect a draft and
+   * Apply spends it, which is the only thing Apply is for now.
+   */
+  /**
+   * SPEND A PAIR, AND LEAVE NOTHING BEHIND IT.
+   *
+   * Clearing the draft is the whole reason this is a function rather than three
+   * calls to `onPick`. `shown` reads `draft ?? value`, so a draft that outlives
+   * the commit that spent it keeps the fields and the band describing the
+   * window BEFORE the one just applied — the parent updates `value` and nothing
+   * on screen moves. On the board the popover unmounts and takes the state with
+   * it, which is exactly why this was invisible there and turned up the moment
+   * the component was driven somewhere it stays mounted.
+   */
+  const spend = (next: { from: string; to: string }) => {
+    setDraft(null);
+    setAnchor(null);
+    setHover(null);
+    setEditing(null);
+    onPick(next.from, next.to);
+  };
+
   const commit = (day: string) => {
-    // An armed box moves ONE end and leaves the other where it was.
+    // An armed end moves ONE side and leaves the other where it was — and that
+    // is a finished pair too, so it applies like any other.
     if (editing && shown) {
-      const other = editing === "from" ? shown.to : shown.from;
-      setEditing(null);
-      setAnchor(null);
-      setHover(null);
-      setDraft(order(day, other));
+      spend(order(day, editing === "from" ? shown.to : shown.from));
       return;
     }
     if (!anchor) {
       setAnchor(day);
       return;
     }
-    setAnchor(null);
-    setHover(null);
-    setDraft(order(anchor, day));
+    spend(order(anchor, day));
   };
 
-  /** Arming a box cancels a half-made pair — two ways to set one end at once. */
-  const arm = (end: "from" | "to") => {
+  /**
+   * A DATE THAT WAS TYPED, held as a draft for Apply.
+   *
+   * Clamped to today for the same reason the grid disables tomorrow: a tile is
+   * a RESULT. `parseCustomRange` clamps a hand-edited URL identically, so a
+   * typed future date lands on the same window either way — and because the
+   * field snaps back to the canonical spelling afterwards, the clamp is
+   * something you SEE rather than something that happens to you.
+   */
+  const typed = (end: "from" | "to", day: string) => {
+    const at = day > todayKey ? todayKey : day;
+    const base = shown ?? { from: at, to: at };
     setAnchor(null);
     setHover(null);
-    setEditing((e) => (e === end ? null : end));
+    setDraft(end === "from" ? order(at, base.to) : order(base.from, at));
+  };
+
+  /** Focusing a field aims the next calendar click at that end. */
+  const aim = (end: "from" | "to") => {
+    setAnchor(null);
+    setHover(null);
+    setEditing(end);
   };
 
   const months: MonthKey[] = [monthBefore(month), month];
@@ -263,12 +319,14 @@ export function DateRangePicker({
           </SelectContent>
         </Select>
 
-        {/* THE TWO ENDS, each one a target. See the header: clicking a box arms
-            that end so the next day you click moves only it. */}
+        {/* THE TWO ENDS, TYPEABLE. Also targets: focusing one aims the next
+            calendar click at that end, so moving a window's end is one click
+            and reaching January 2025 is one sentence rather than twenty presses
+            of the month arrow. */}
         <div className="flex items-center gap-2">
-          <DateBox label="Start date" day={boxFrom} armed={editing === "from"} onClick={() => arm("from")} />
+          <DateField label="Start date" day={boxFrom} armed={editing === "from"} onAim={() => aim("from")} onType={(d) => typed("from", d)} />
           <span className="shrink-0 text-xs text-muted-foreground">to</span>
-          <DateBox label="End date" day={boxTo} armed={editing === "to"} onClick={() => arm("to")} />
+          <DateField label="End date" day={boxTo} armed={editing === "to"} onAim={() => aim("to")} onType={(d) => typed("to", d)} />
         </div>
 
         {/* `mt-auto` pins these to the foot of the column however tall the
@@ -286,7 +344,7 @@ export function DateRangePicker({
             // force: a round trip, every tile to a skeleton, the same numbers
             // back.
             disabled={!draft}
-            onClick={() => draft && onPick(draft.from, draft.to)}
+            onClick={() => draft && spend(draft)}
           >
             Apply
           </Button>
@@ -339,39 +397,78 @@ export function DateRangePicker({
 }
 
 /**
- * ONE END OF THE RANGE, as a box you can aim at.
+ * ONE END OF THE RANGE — typeable, and a target for the grid.
  *
- * Styled off the `Select` trigger beside it rather than off `Input`, because
- * that is what it is: a control that opens onto another way of choosing, not a
- * field you type into. Armed, it takes the brand ring — which is what a focused
- * field in this kit does, and that is the point, since armed IS "the next thing
- * you do lands here".
+ * It began as a read-only box, and that was the wrong call: the month arrows
+ * step ONE month, so a window starting in January 2025 was twenty presses away,
+ * and a control whose whole brief is "comfortable to change dates" cannot make
+ * you do that. It is a real field now, parsed by `parseDayInput` — which
+ * matches each accepted spelling explicitly rather than handing the string to
+ * `new Date`, because that function reads `8/19/2026` in LOCAL time and the
+ * whole product dates in UTC.
+ *
+ * ═══ WHAT IS TYPED IS NOT WHAT IS SHOWN, UNTIL IT SETTLES ═══
+ *
+ * `typing` holds the in-progress text and `null` means "show the canonical
+ * day". Without that split, every keystroke would be re-formatted under the
+ * cursor — you could not delete the comma in "Aug 19, 2026" without it growing
+ * back. On blur or Enter the text is parsed and thrown away either way: a good
+ * entry is replaced by the canonical spelling of the day it named, and a bad
+ * one snaps back to the date still in force, which is how somebody learns it
+ * was rejected without an error message appearing inside a popover.
+ *
+ * ESCAPE IS CAUGHT WHILE AN EDIT IS PENDING. It reaches the popover otherwise
+ * and closes the whole thing, so the key that everywhere else means "undo this
+ * edit" would instead discard the edit AND the popover around it.
+ *
+ * ARMED IS ITS OWN RING, not the focus ring. Focusing aims the next calendar
+ * click at this end, and clicking the calendar blurs the field — so if the mark
+ * were `focus-visible` it would vanish at the exact moment it became true.
  */
-function DateBox({
+function DateField({
   label,
   day,
   armed,
-  onClick,
+  onAim,
+  onType,
 }: {
   label: string;
   day: string | null;
   armed: boolean;
-  onClick: () => void;
+  onAim: () => void;
+  onType: (day: string) => void;
 }) {
+  const [typing, setTyping] = useState<string | null>(null);
+  const text = typing ?? (day ? prettyDay(day) : "");
+
+  const settle = () => {
+    if (typing === null) return;
+    const parsed = parseDayInput(typing);
+    setTyping(null);
+    if (parsed) onType(parsed);
+  };
+
   return (
-    <button
-      type="button"
+    <Input
       aria-label={label}
-      aria-pressed={armed}
-      onClick={onClick}
-      className={cn(
-        "flex h-8 min-w-0 flex-1 items-center rounded-control border border-input bg-control px-2 text-xs tabular-nums transition-colors duration-(--duration-fast) hover:border-rule",
-        armed && "border-primary ring-1 ring-primary",
-        day ? "text-foreground" : "text-muted-foreground",
-      )}
-    >
-      <span className="truncate">{day ? prettyDay(day) : label}</span>
-    </button>
+      placeholder={label}
+      value={text}
+      onFocus={onAim}
+      onChange={(e) => setTyping(e.target.value)}
+      onBlur={settle}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          settle();
+        }
+        if (e.key === "Escape" && typing !== null) {
+          // See the header: otherwise this closes the popover instead.
+          e.stopPropagation();
+          setTyping(null);
+        }
+      }}
+      className={cn("min-w-0 flex-1 px-2 text-xs tabular-nums", armed && "border-primary ring-1 ring-primary")}
+    />
   );
 }
 

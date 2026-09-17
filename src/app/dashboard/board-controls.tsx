@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useRef, useState, useTransition, 
 import { useRouter } from "next/navigation";
 import { Box, CalendarDays, ChevronDown, Copy as CopyIcon, LayoutDashboard, MoreHorizontal, PenLine, Trash2, Users } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { TilePlaceholder } from "@/components/tile-placeholder";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover } from "@/components/flow/controls/Popover";
@@ -1329,11 +1330,7 @@ export function TileArea({
         <span className="sr-only">Loading metrics…</span>
         {canvasCells(canvas).map(({ tile, vars }) => (
           <div key={tile.id} className="board-cell" style={vars as React.CSSProperties}>
-            <div className="h-full rounded-surface border border-border bg-card p-4 shadow-card">
-              <Skeleton className="h-4 w-2/5" />
-              <Skeleton className="mt-3 h-9 w-1/2" />
-              <Skeleton className="mt-3 h-10 w-full" />
-            </div>
+            <TilePlaceholder />
           </div>
         ))}
       </div>
@@ -1392,14 +1389,11 @@ export function TileArea({
  * state nobody looks at twice.
  */
 function TileSkeleton() {
-  return (
-    <div className="rounded-surface border border-border bg-card p-4 shadow-card">
-      <Skeleton className="h-4 w-2/5" />
-      <Skeleton className="mt-3 h-9 w-1/2" />
-      <Skeleton className="mt-3 h-10 w-full" />
-      <Skeleton className="mt-3 h-3 w-1/3" />
-    </div>
-  );
+  /* `h-44` — 176px, the height `BOARD_GRID` gives a tile. These two skeletons
+     stack AUTO-HEIGHT cards rather than filling a sized cell, so `h-full`
+     resolves to nothing and the flexible body would collapse to zero. The
+     canvas sites pass no height and take their cell's. */
+  return <TilePlaceholder className="h-44" />;
 }
 
 /**

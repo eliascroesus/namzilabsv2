@@ -166,12 +166,57 @@ describe("the two date boxes", () => {
   it("arms one end, so the next click moves only that end", () => {
     /**
      * Changing a window's end should be one click, not a redraw of the whole
-     * thing. The other end is read off `shown` so it cannot drift from the band.
+     * thing. The other end is read off `shown` so it cannot drift from the band,
+     * and the result is a finished pair, so it applies like any other.
      */
     const c = code(picker);
     expect(c).toMatch(/const \[editing, setEditing\] = useState<"from" \| "to" \| null>\(null\)/);
-    expect(c).toMatch(/const other = editing === "from" \? shown\.to : shown\.from/);
-    expect(c).toMatch(/setDraft\(order\(day, other\)\)/);
+    expect(c).toMatch(/spend\(order\(day, editing === "from" \? shown\.to : shown\.from\)\)/);
+    expect(c, "focusing a field is what aims it").toMatch(/onFocus=\{onAim\}/);
+  });
+
+  it("hands what was typed to the parser, and parses it nowhere else", () => {
+    /**
+     * The month arrows step ONE month, so January 2025 was twenty presses away.
+     * What the fields accept is `day-input.ts`'s business and is pinned by its
+     * own suite — including that it never reaches for `new Date(text)`, which
+     * reads `8/19/2026` in LOCAL time against a grid that is entirely UTC. What
+     * matters HERE is only that the typed string goes there and nowhere else.
+     *
+     * Deliberately not a blanket ban on `new Date(` in this file: `prettyDay`
+     * calls it on a NUMBER, which is unambiguous and correct. An assertion
+     * broad enough to catch the bug was broad enough to fail on the fix.
+     */
+    const c = code(picker);
+    expect(c).toMatch(/from "@\/lib\/metrics\/day-input"/);
+    expect(c).toMatch(/const parsed = parseDayInput\(typing\)/);
+    expect(c, "the typed string is never parsed by hand").not.toMatch(/new Date\(typing/);
+    expect(c, "nor by Date.parse").not.toMatch(/Date\.parse\(typing/);
+  });
+
+  it("holds what is being typed apart from what is shown", () => {
+    /**
+     * Without the split every keystroke would be re-formatted under the cursor —
+     * you could not delete the comma in "Aug 19, 2026" without it growing back.
+     */
+    const c = code(picker);
+    expect(c).toMatch(/const \[typing, setTyping\] = useState<string \| null>\(null\)/);
+    expect(c).toMatch(/const text = typing \?\? \(day \? prettyDay\(day\) : ""\)/);
+    // Good or bad, the field goes back to the canonical spelling: a rejected
+    // entry snapping back is how somebody learns it was rejected.
+    expect(c).toMatch(/setTyping\(null\);\s*\n\s*if \(parsed\) onType\(parsed\)/);
+  });
+
+  it("clamps a typed future date rather than accepting one", () => {
+    // A tile is a RESULT. `parseCustomRange` clamps a hand-edited URL the same
+    // way, so both doors land on the same window.
+    expect(code(picker)).toMatch(/const at = day > todayKey \? todayKey : day/);
+  });
+
+  it("catches Escape while an edit is pending, so it does not close the popover", () => {
+    // Everywhere else Escape means "undo this edit"; unhandled it would discard
+    // the edit AND the popover around it.
+    expect(code(picker)).toMatch(/e\.key === "Escape" && typing !== null[\s\S]{0,120}stopPropagation/);
   });
 
   it("empties the end box mid-pair, which is what the grid cannot say", () => {
@@ -207,22 +252,33 @@ describe("what the grid lets you pick", () => {
     expect(c).toMatch(/disabled=\{future\}/);
   });
 
-  it("drafts on the SECOND click, and Apply is what spends it", () => {
+  it("APPLIES on the second click rather than waiting for a button", () => {
     /**
-     * "click on one date and then to another date or same day". The anchor
-     * makes the first click a promise rather than a selection; `order` at
-     * commit is what makes the same day twice a single day, and a right-to-left
-     * drag the same window as left-to-right.
+     * "when I click on the calendar on one and then the other to get the range
+     * then it should auto apply". Two clicks on a calendar is not a
+     * half-finished thought that wants confirming, it is the answer.
      *
-     * The pair stops at a DRAFT rather than going straight out, because every
-     * commit re-renders the board and drops every tile to a skeleton — worth a
-     * look before it is spent.
+     * The anchor still makes the first click a promise rather than a selection;
+     * `order` at commit is what makes the same day twice a single day, and a
+     * right-to-left drag the same window as left-to-right.
      */
     const c = code(picker);
     expect(c).toMatch(/if \(!anchor\) \{[\s\S]{0,60}setAnchor\(day\)/);
-    expect(c).toMatch(/setDraft\(order\(anchor, day\)\)/);
-    expect(c, "and Apply is the only thing that calls onPick").toMatch(/onPick\(draft\.from, draft\.to\)/);
-    expect(c, "dead until there is something to spend").toMatch(/disabled=\{!draft\}/);
+    expect(c).toMatch(/spend\(order\(anchor, day\)\)/);
+    expect(c, "Apply is left for the typed path only").toMatch(/disabled=\{!draft\}/);
+    expect(c).toMatch(/onClick=\{\(\) => draft && spend\(draft\)\}/);
+  });
+
+  it("clears the draft on the way out, so nothing outlives the commit it spent", () => {
+    /**
+     * THE BUG THIS HOLDS SHUT, caught by driving the component somewhere it
+     * stays mounted. `shown` reads `draft ?? value`, so a draft that survived
+     * its own commit kept the fields and the band describing the window BEFORE
+     * the one just applied — the parent updated `value` and nothing on screen
+     * moved. On the board the popover unmounts and takes the state with it,
+     * which is exactly why it was invisible there.
+     */
+    expect(code(picker)).toMatch(/const spend = \(next: \{ from: string; to: string \}\) => \{\s*\n\s*setDraft\(null\)/);
   });
 
   it("orders every pair the same way, wherever it was made", () => {

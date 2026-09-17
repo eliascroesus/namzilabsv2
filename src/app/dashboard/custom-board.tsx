@@ -33,7 +33,7 @@ import { canvasCells, compact, GRID_COLS, type GridBox } from "@/lib/board/grid"
 import { Button } from "@/components/ui/button";
 import { Popover } from "@/components/flow/controls/Popover";
 import { Toast } from "@/components/ui/toast";
-import { Skeleton } from "@/components/ui/skeleton";
+import { TilePlaceholder } from "@/components/tile-placeholder";
 import { GrowingTextarea } from "@/components/ui/input";
 import { SectionHeading } from "@/components/ui/page";
 import { ADDABLE_BLOCKS, CHARTS, asChartId, blockKindOf, blockTileKey, minSize, type BlockId, type ChartId } from "@/lib/board/charts";
@@ -1211,11 +1211,7 @@ function EmptyTile({ chart, canEdit, onPick }: { chart: string; canEdit: boolean
  */
 function PendingCard() {
   return (
-    <div className="h-full rounded-surface border border-border bg-card p-4 shadow-card" aria-busy="true">
-      <Skeleton className="h-4 w-2/5" />
-      <Skeleton className="mt-3 h-9 w-1/2" />
-      <Skeleton className="mt-3 h-10 w-full" />
-    </div>
+    <TilePlaceholder />
   );
 }
 

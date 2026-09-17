@@ -33,6 +33,8 @@ import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Chip } from "@/components/ui/chip";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
+import { TilePlaceholder } from "@/components/tile-placeholder";
+import { canvasCells } from "@/lib/board/grid";
 import { rangeDays } from "@/lib/metrics/range";
 import {
   Command,
@@ -714,11 +716,36 @@ export function Gallery() {
           </Spec>
         </Family>
 
+        {/* ── TILE PLACEHOLDER ────────────────────────────────────────── */}
+        <Family name="Tile placeholder" file="tile-placeholder.tsx">
+          <Spec
+            name="a tile whose number has not arrived"
+            note="AT EVERY HEIGHT THE CANVAS CAN PRODUCE. The old version drew a fixed stack — 104px of bars plus 32px of padding — inside cards the grid sizes from a 24px row unit, so the smallest tile the resize handle will make (`MIN_TILE_H` is 3 rows, 104px) was 32px short of holding it: the bars hung out of the bottom of one card and across the top of the next, on every range change. A title plus a body that flexes is correct at 104px and at 384px and needs to know neither. Same `Card`, same variant, same padding as the real tile, so the box cannot drift from what it stands in for; `overflow-hidden` is the backstop, so a stored tile shorter than the handle allows clips instead of painting over its neighbour."
+          >
+            {/* `canvasCells` rather than hand-written grid variables: it is what
+                every other surface places a tile with, so this demo cannot drift
+                from the board it is demonstrating. The heights are the ones the
+                product really makes — `MIN_TILE_H` (3 rows, the floor the resize
+                handle enforces), and the 4 and 6 the report preset lays down. */}
+            <div data-placeholder-demo className="board-canvas w-full">
+              {canvasCells([
+                { id: "smallest", x: 0, y: 0, w: 4, h: 3 },
+                { id: "stat", x: 4, y: 0, w: 4, h: 4 },
+                { id: "chart", x: 8, y: 0, w: 4, h: 6 },
+              ]).map(({ tile, vars }) => (
+                <div key={tile.id} className="board-cell" style={vars as React.CSSProperties}>
+                  <TilePlaceholder />
+                </div>
+              ))}
+            </div>
+          </Spec>
+        </Family>
+
         {/* ── DATE RANGE PICKER ───────────────────────────────────────── */}
         <Family name="Date range" file="date-range-picker.tsx">
           <Spec
             name="the period control's calendar"
-            note="Two months, because the window people actually want crosses a month boundary as often as not — one month meant anchoring a date and then paging away from it. The rail commits on click (a preset is a whole answer); the grid collects a draft and Apply spends it, because every commit drops every tile on the board to a skeleton. Two clicks make a window; the same day twice makes one day. Days after today are disabled — a tile is a result, and the forward view is the Calendar. Every date is UTC: `now` arrives as a prop so the server and the client cannot disagree across a midnight."
+            note="Two months, because the window people actually want crosses a month boundary as often as not — one month meant anchoring a date and then paging away from it. A pair completed on the grid APPLIES ITSELF, and so does a preset; typing is the one thing that waits for Apply, because committing on blur would close the popover before you had filled the second field. The fields parse `Aug 19, 2026`, `2026-08-19`, `8/19/2026` and `19 Aug 2026` — explicitly, never through `new Date`, which reads half of those in local time. Focusing a field aims the next calendar click at that end. Days after today are disabled and a typed future date clamps — a tile is a result, and the forward view is the Calendar. Every date is UTC: `now` arrives as a prop so the server and the client cannot disagree across a midnight."
           >
             {/* `overflow-hidden` and no padding: the picker owns its padding
                 so its footer rule can reach both walls, and the clip is what
