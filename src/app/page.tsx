@@ -7,7 +7,8 @@ import { ToolMarquee } from "@/components/marketing/marquee";
 import { AiPanel } from "@/components/marketing/ai-panel";
 import { PillNav } from "@/components/marketing/pill-nav";
 import { ProblemGrid } from "@/components/marketing/problem";
-import { Clouds } from "@/components/marketing/clouds";
+import { NightSky } from "@/components/marketing/night-sky";
+import { Pricing } from "@/components/marketing/pricing";
 import { FeatureRow } from "@/components/marketing/feature-row";
 import { ConnectShot } from "@/components/marketing/connect-shot";
 import { FlowShot } from "@/components/marketing/flow-shot";
@@ -88,7 +89,11 @@ const FACTS: Array<{ figure: string; label: string }> = [
 ];
 
 /**
- * THE DARK PILL, and it is the page's only button shape.
+ * THE HERO'S PILL — WHITE, because the sky under it is night.
+ *
+ * It was near-black for exactly as long as the hero was daylight. On a #070B18
+ * sky a near-black button is a hole, and white is the only fill with a
+ * guaranteed contrast against every stop the button could land on.
  *
  * NOT `buttonVariants`. The kit's `lg` button is a 40px control built for a
  * form row, and this is a 52px marketing pill with a disc on the end of it —
@@ -101,13 +106,13 @@ function Cta({ href, children }: { href: string; children: React.ReactNode }) {
   return (
     <a
       href={href}
-      className="lift-md group inline-flex h-13 items-center gap-2 rounded-full bg-foreground pl-7 pr-2 text-button font-semibold text-background transition-transform duration-(--duration-fast) ease-(--ease-standard) hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring motion-reduce:transition-none motion-reduce:hover:translate-y-0"
+      className="lift-md group inline-flex h-13 items-center gap-2 rounded-full bg-white pl-7 pr-2 text-button font-semibold text-neutral-950 transition-transform duration-(--duration-fast) ease-(--ease-standard) hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white motion-reduce:transition-none motion-reduce:hover:translate-y-0"
     >
       {children}
       {/* The disc gives the pill an interior, so it reads as an object rather
           than as a lozenge of ink. The arrow nudges on hover — the one moving
           thing on the page that answers a pointer. */}
-      <span className="flex size-9 items-center justify-center rounded-full bg-background/15">
+      <span className="flex size-9 items-center justify-center rounded-full bg-neutral-950/10">
         <ArrowRight
           aria-hidden
           className="size-4 transition-transform duration-(--duration-fast) ease-(--ease-standard) group-hover:translate-x-0.5 motion-reduce:transition-none"
@@ -145,8 +150,8 @@ export default async function Home() {
             the bottom on purpose — that overlap is what makes it read as
             sitting in FRONT of the page rather than as another block stacked
             on it. The clouds do their own clipping from the inside. */}
-        <section className="day-sky relative px-5 pb-16 pt-32 sm:px-8 sm:pb-20 sm:pt-36 lg:pt-44">
-          <Clouds />
+        <section className="night-sky relative px-5 pb-16 pt-32 sm:px-8 sm:pb-20 sm:pt-36 lg:pt-44">
+          <NightSky />
 
           <div className="mx-auto w-full max-w-5xl text-center">
             {/**
@@ -169,12 +174,17 @@ export default async function Home() {
                 `pnpm landing` catches and no source check could. Forced as
                 blocks the line cannot wrap out of trouble; allowed to flow, it
                 sets itself in three or four and `text-balance` keeps them even. */}
-            <h1 className="font-marketing text-balance text-banner font-bold leading-[0.95] tracking-[-0.03em] text-foreground">
+            {/* WHITE, NOT `--foreground`. Every word in this hero sits in the
+                top half of a sunrise, which is near-black at the top and brand
+                blue by the time the last line of it lands — a ground that does
+                NOT follow the theme. `--foreground` would render this headline
+                in near-black on near-black for a light-theme visitor. */}
+            <h1 className="font-marketing text-balance text-banner font-bold leading-[0.95] tracking-[-0.03em] text-white">
               <span className="sm:block">Your tools disagree.</span>{" "}
               <span className="sm:block">This settles it.</span>
             </h1>
 
-            <p className="mx-auto mt-7 max-w-xl text-lg leading-relaxed text-foreground/75">
+            <p className="mx-auto mt-7 max-w-xl text-lg leading-relaxed text-white/80">
               Namzilabs reads every tool you already use, matches the records that are the same person twice over, and
               gives you one figure with the arithmetic attached.
             </p>
@@ -183,7 +193,7 @@ export default async function Home() {
               <Cta href={cta}>{ctaLabel}</Cta>
               {/* The three objections somebody has before connecting a CRM,
                   answered before they are asked and in six words. */}
-              <p className="text-sm font-medium text-foreground/70">
+              <p className="text-sm font-medium text-white">
                 Read-only access · No warehouse · No SQL
               </p>
             </div>
@@ -195,7 +205,7 @@ export default async function Home() {
                   previous one — `.uppercase.tracking-widest` — described how
                   the thing looked, and stopped matching the moment the
                   tracked-out capitals came off. */}
-              <p data-hero-label className="text-sm font-medium text-foreground/70">
+              <p data-hero-label className="text-sm font-medium text-white">
                 Reads from {CONNECTOR_CATALOG.length} tools, including
               </p>
               <div className="mt-5">
@@ -419,6 +429,26 @@ export default async function Home() {
             <div className="mt-14">
               <ToolGrid />
             </div>
+          </div>
+        </section>
+
+        {/* ==== Pricing ==================================================== */}
+        {/**
+         * THE NUMBERS IN HERE ARE A PROPOSAL AND NEED THE OWNER'S SIGN-OFF.
+         * He asked for a pricing section and did not give prices; the ladder,
+         * the three figures and the tool caps were chosen in `pricing.tsx` by
+         * reading what this product costs to run, and every one of them is a
+         * commercial decision rather than a design one. They live in a single
+         * array for exactly that reason.
+         */}
+        <section id="pricing" className="mx-auto w-full max-w-6xl scroll-mt-28 px-5 py-20 sm:px-8 sm:py-28">
+          <Head
+            eyebrow="Pricing"
+            title="Priced on tools, not on people"
+            blurb="What costs us money is sweeping other companies' APIs, not the number of people looking at the answer — so the seats are generous and the ladder is built on how much you connect."
+          />
+          <div className="mt-14">
+            <Pricing cta={cta} />
           </div>
         </section>
 

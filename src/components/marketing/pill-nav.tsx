@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowUpRight, Menu } from "lucide-react";
+import { BrandMark } from "@/components/marketing/brand-mark";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -29,16 +30,21 @@ import { cn } from "@/lib/utils";
 
 /** Same list twice — once in the capsule, once in the sheet — so it lives once. */
 const LINKS: Array<{ href: string; label: string }> = [
-  { href: "#problem", label: "The problem" },
+  /* FIVE, AND THE CUT IS DELIBERATE. Adding "Pricing" made six, and six
+     wrapped the capsule onto two lines at 1440 — the nav is a fixed-width
+     object and its content is not free. "The problem" and "Integrations" came
+     off: the first is the argument's opening move and nobody arrives wanting
+     to jump to it, and the second is answered by the marquee in the hero
+     before anybody would think to look for it. */
   { href: "#how", label: "How it works" },
   { href: "#ai", label: "Ask your AI" },
-  { href: "#integrations", label: "Integrations" },
   /* FAQ IS IN THE CAPSULE AND `#proof`/`#compare` ARE NOT, which is a choice
      rather than an oversight: those two are steps in the argument the page
      makes top to bottom, and nobody arrives wanting to jump to "the same
      question, two ways". The questions are the one section somebody navigates
      to DIRECTLY — it is where you go when you are most of the way to signing up
      and want to know what read access means. */
+  { href: "#pricing", label: "Pricing" },
   { href: "#faq", label: "FAQ" },
   { href: "/docs", label: "Docs" },
 ];
@@ -59,14 +65,13 @@ const LINKS: Array<{ href: string; label: string }> = [
  * change with the theme, so neither may the control on it" — was true of the
  * old sky and is now exactly backwards.
  */
-const WHITE_CTA =
-  "gap-1.5 rounded-full border-transparent bg-foreground text-background hover:bg-foreground/90";
+const WHITE_CTA = "gap-1.5 rounded-full border-transparent bg-white text-neutral-950 hover:bg-brand-50";
 
 /** The pill a nav link wears inside the capsule. */
 const PILL =
-  "inline-flex min-h-8 items-center rounded-full px-4 py-1.5 text-sm font-medium text-foreground/70 " +
-  "transition-colors duration-(--duration-fast) hover:bg-foreground/8 hover:text-foreground " +
-  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
+  "inline-flex min-h-8 items-center whitespace-nowrap rounded-full px-4 py-1.5 text-sm font-medium text-white/80 " +
+  "transition-colors duration-(--duration-fast) hover:bg-white/15 hover:text-white " +
+  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white";
 
 export function PillNav({ signedIn }: { signedIn: boolean }) {
   return (
@@ -103,16 +108,27 @@ export function PillNav({ signedIn }: { signedIn: boolean }) {
           // differently, rather than as a panel laid over the top. The blur is
           // what sells it — the clouds smear behind the bar as they pass under
           // it, which a flat fill cannot fake.
-          // `.glass-bar` rather than `bg-white/55 dark:bg-white/8`: the two
-          // themes need different values, which makes it a role rather than a
-          // pair of classes. See the note beside it in globals.css.
-          "glass-bar lift-sm",
+          // DARK GLASS, AND IT WENT BACK TO DARK FOR A REASON WORTH KEEPING.
+          // It was a white capsule for exactly as long as the hero was a
+          // daylight sky. The hero is a sunrise now — near-black at the top —
+          // so a 55%-white bar over it rendered mid-grey with near-black links
+          // on it, and the first thing on the page was its least legible
+          // object.
+          //
+          // The deeper reason it cannot simply follow the sky: this bar is
+          // STICKY. It travels the whole document, over a night sky, four
+          // white sections and two blue cards, and the only bar that works
+          // over all six is one opaque enough to bring its own ground. 72%
+          // black is the figure that survived being measured on every one of
+          // them; the blur is what keeps it from reading as a slab.
+          "border border-white/10 bg-[color-mix(in_oklab,var(--color-neutral-950)_72%,transparent)] backdrop-blur-xl",
         )}
       >
         <Link
           href="/"
-          className="font-marketing shrink-0 rounded-control text-lg font-bold tracking-tight text-foreground focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
+          className="font-marketing flex shrink-0 items-center gap-2 rounded-control text-lg font-bold tracking-tight text-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
         >
+          <BrandMark className="size-6 shrink-0" />
           Namzilabs
         </Link>
 
@@ -151,7 +167,7 @@ export function PillNav({ signedIn }: { signedIn: boolean }) {
           <details className="group relative md:hidden">
             <summary
               aria-label="Open the menu"
-              className="flex size-9 cursor-pointer list-none items-center justify-center rounded-full text-foreground/70 transition-colors duration-(--duration-fast) hover:bg-foreground/8 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden"
+              className="flex size-9 cursor-pointer list-none items-center justify-center rounded-full text-white/80 transition-colors duration-(--duration-fast) hover:bg-white/15 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white [&::-webkit-details-marker]:hidden"
             >
               <Menu className="size-5" aria-hidden />
             </summary>

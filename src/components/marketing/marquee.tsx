@@ -60,7 +60,10 @@ export function ToolMarquee() {
                 letters while the app showed logos — and the yellow-mark caveat
                 had to be remembered here separately. */}
             <SourceMark source={entry.source} size={24} radius="9999px" className="stat-numeral" />
-            <span className="whitespace-nowrap text-sm font-medium text-foreground">{entry.name}</span>
+            {/* PINNED, NOT `--foreground`. The chip is white in both themes
+                because the sky it sits on is, so ink that inverted with the
+                theme would be white on white for a dark-theme visitor. */}
+            <span className="whitespace-nowrap text-sm font-medium text-neutral-950">{entry.name}</span>
           </span>
           );
         })}

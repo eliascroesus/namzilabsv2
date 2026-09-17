@@ -78,7 +78,7 @@ const ratio = (a, b) => {
  * never experiences — the same mistake `.marquee-track` made here twice.
  */
 const HIDE =
-  ".day-sky h1,.day-sky p,.marquee span > span,.sky-card h2,.sky-card p," +
+  ".night-sky h1,.night-sky p,.marquee span > span,.sky-card h2,.sky-card p," +
   ".sky-panel h2,.sky-panel p,.sky-panel li" +
   "{visibility:hidden!important}";
 
@@ -160,7 +160,7 @@ for (const [w, h, name, theme] of [
 
   // ── composition ──────────────────────────────────────────────────────────
   const geo = await page.evaluate(() => {
-    const sky = document.querySelector(".day-sky");
+    const sky = document.querySelector(".night-sky");
     const fig = sky?.querySelector("figure");
     /**
      * THE HEADING, NOT THE SECTION. The section under the hero starts where
@@ -192,7 +192,7 @@ for (const [w, h, name, theme] of [
        one before it, and the anchors in the nav promise exactly this list. */
     check(
       JSON.stringify(geo.sections) ===
-        JSON.stringify(["problem", "proof", "how", "compare", "ai", "integrations", "faq"]),
+        JSON.stringify(["problem", "proof", "how", "compare", "ai", "integrations", "pricing", "faq"]),
       "the page tells its story in order",
       geo.sections.join(" → "),
     );
@@ -220,7 +220,7 @@ for (const [w, h, name, theme] of [
        A literal there instead — the #C0D5FF this shipped with first — is a
        hairline of the wrong blue across the full width in one theme or both. */
     const seam = await page.evaluate(() => {
-      const sky = document.querySelector(".day-sky");
+      const sky = document.querySelector(".night-sky");
       const r = sky.getBoundingClientRect();
       const below = document.elementFromPoint(8, Math.min(innerHeight - 2, r.bottom + 8));
       const paint = (el) => {
@@ -366,7 +366,7 @@ for (const [w, h, name, theme] of [
         weight: Number(cs.fontWeight),
       });
     };
-    const sky = document.querySelector(".day-sky");
+    const sky = document.querySelector(".night-sky");
     add(sky.querySelector("h1 span"), "headline");
     add(sky.querySelector("p"), "paragraph");
     /* A DATA ATTRIBUTE, NOT `.uppercase.tracking-widest`. The rebuild took the

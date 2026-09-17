@@ -434,15 +434,15 @@ const RULES: Rule[] = [
       "src/connectors/logos.ts": "official marks carry the fills they shipped with; a token here would redraw somebody else's logo",
       /**
        * AN ILLUSTRATION, WHICH IS THE SAME EXCEPTION AS A LOGO ONE LINE ABOVE.
-       * These six values are the lit crown, the body and the shadowed
-       * underside of a drawn cumulus — they are the artwork, not a surface the
-       * theme is entitled to restyle. A cloud whose underside followed
-       * `--muted` would not be theme-aware, it would be the wrong picture. The
-       * SKY behind them is tokenised and does follow the theme (`.day-sky` /
-       * `.dark .day-sky`); white clouds work at noon and at dusk, which is why
-       * they need no second cut.
+       * These are the star fills and the colour of the lines joining the
+       * constellation — the artwork, not a surface the theme is entitled to
+       * restyle. A star whose fill followed `--muted` would not be theme-aware,
+       * it would be the wrong picture. The SKY behind them is tokenised
+       * (`.night-sky`) and its foot is `--background`, so the one part that
+       * meets the page does follow the theme; stars are white at night in
+       * either one.
        */
-      "src/components/marketing/clouds.tsx": "the cumulus artwork — lit crown, body and shadowed underside; a token here would redraw the illustration",
+      "src/components/marketing/night-sky.tsx": "the starfield artwork — star fills and the constellation's joins; a token here would redraw the illustration",
       // The Google "G" on the sign-in button, for the same reason: Google's
       // brand terms require the mark in its own four colours, and a token here
       // would be us redrawing it. Every other colour on that screen is a token.
@@ -489,6 +489,21 @@ const RULES: Rule[] = [
       // inside them. An allowlist entry that no longer suppresses anything is
       // an invitation to put something back under it.
       "src/app/dashboard/settings/RanksPanel.tsx": "a full-width card-header disclosure and the dashed New-rank ghost",
+      /**
+       * A SEGMENTED CONTROL, WHICH THE KIT DOES NOT HAVE. The billing toggle
+       * is two options sharing one track, where the selected half is raised
+       * and the other is quiet — not one of `Button`'s eight variants, and not
+       * `Tabs` either, which carries `role="tablist"` and promises panels that
+       * do not exist here.
+       *
+       * Reaching for `Button` would have meant taking the kit's control
+       * height, radius and padding and then overriding all three, which is the
+       * exact move that grows a ninth variant nobody asked for. The honest
+       * options were a new `ToggleGroup` primitive or this, and a primitive
+       * with one caller on a marketing page is not a primitive — this codebase
+       * already carries twelve with no consumers at all.
+       */
+      "src/components/marketing/pricing.tsx": "a segmented billing toggle; the kit has no ToggleGroup and Tabs promises panels this has none of",
     },
   },
 ];
