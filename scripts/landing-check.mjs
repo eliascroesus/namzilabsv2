@@ -23,8 +23,17 @@
  *   4. NO SIDEWAYS SCROLL at four widths.
  *   5. ONE H1, and the section order the nav promises.
  *
- * Usage: `pnpm dev` in one terminal, `pnpm landing` in another.
- * SHOT_BASE overrides http://localhost:3000. Exits non-zero on any failure.
+ * Usage:
+ *   pnpm landing                     against `pnpm dev` on :3000
+ *   pnpm preview                     builds, serves and checks the PRODUCTION
+ *                                    output — which is what actually deploys
+ *   SHOT_BASE=https://namzilabs.co pnpm landing
+ *                                    against the live site, after a deploy
+ *
+ * The third form is not a nicety. A build can compile, render correctly in
+ * dev, and still ship a page whose stylesheet is a previous build's — which is
+ * precisely what happened, and what "the page's own stylesheet is applied"
+ * below exists to catch. Exits non-zero on any failure.
  */
 import { chromium } from "playwright";
 
@@ -94,6 +103,47 @@ for (const [w, h, name, theme] of [
     `the ${theme} theme is actually applied`,
   );
   await page.waitForTimeout(500);
+
+  /**
+   * ── DID THE STYLESHEET ACTUALLY LAND? ───────────────────────────────────
+   *
+   * THE CHECK THIS FILE WAS MISSING, and the one that would have caught the
+   * worst deploy of this rebuild. Vercel served the new HTML with the PREVIOUS
+   * build's CSS — every custom class absent, the page rendered as unstyled
+   * markup — and nothing here noticed, because every other assertion reads the
+   * DOM, and the DOM was perfect. Tailwind's own utilities still applied, so
+   * even a casual look at "is there any CSS" would have passed.
+   *
+   * So this reads COMPUTED STYLE for a handful of classes that exist only in
+   * this page's own layer. If the stylesheet is stale, missing, or built from
+   * another commit, these fall back to their initial values and the run goes
+   * red. It is deliberately about the page's own CSS rather than Tailwind's:
+   * the two rebuild independently, and it was exactly that gap that shipped.
+   */
+  const landed = await page.evaluate(() => {
+    const of = (sel, prop) => {
+      const el = document.querySelector(sel);
+      return el ? getComputedStyle(el)[prop] : null;
+    };
+    return {
+      navSticky: of(".site-nav", "position"),
+      figureSize: parseFloat(of(".receipt-figure", "fontSize") || "0"),
+      figureMono: of(".receipt-figure", "fontFamily") || "",
+      inkBlock: of(".ink-block", "backgroundColor") || "",
+      ledgerGrid: of(".ledger-row", "display"),
+      btn: of(".btn-solid", "borderRadius") || "",
+    };
+  });
+  check(landed.navSticky === "sticky", "the page's own stylesheet is applied — the nav is sticky", `got ${landed.navSticky}`);
+  check(landed.figureSize > 36, "the receipt's figure is at display scale", `${landed.figureSize}px`);
+  check(/plex|mono/i.test(landed.figureMono), "the figure is set in the mono face", landed.figureMono.slice(0, 40));
+  check(
+    landed.inkBlock !== "rgba(0, 0, 0, 0)" && landed.inkBlock !== "",
+    "the full-bleed block paints a ground",
+    landed.inkBlock,
+  );
+  check(landed.ledgerGrid === "grid", "the ledger rows are laid out on their grid", `got ${landed.ledgerGrid}`);
+  check(parseFloat(landed.btn) > 100, "the buttons are pills", landed.btn);
 
   // ── structure ────────────────────────────────────────────────────────────
   const shape = await page.evaluate(() => ({

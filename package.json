@@ -29,6 +29,7 @@
     "shot:modes": "node scripts/shot-modes.mjs",
     "composed": "node scripts/composed-check.mjs",
     "landing": "node scripts/landing-check.mjs",
+    "preview": "node scripts/preview.mjs",
     "refer": "node scripts/refer-check.mjs",
     "check:tenancy": "tsx scripts/check-tenancy.ts",
     "headers": "node scripts/headers-check.mjs",
