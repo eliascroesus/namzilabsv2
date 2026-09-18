@@ -42,13 +42,7 @@ const TIERS: Array<{
     name: "Solo",
     monthly: 49,
     blurb: "For one person with an audience and more tools than time.",
-    features: [
-      "Up to 5 tools connected",
-      "Unlimited metrics and boards",
-      "10-minute recompute",
-      "Full receipts on every figure",
-      "1 seat",
-    ],
+    features: ["Up to 5 tools connected", "1 seat"],
   },
   {
     name: "Team",
@@ -57,11 +51,9 @@ const TIERS: Array<{
     blurb: "For a team that has to agree on one number before Monday.",
     features: [
       "Up to 20 tools connected",
-      "Unlimited metrics and boards",
-      "10-minute recompute",
+      "10 seats",
       "Shared boards and saved views",
       "Claude and ChatGPT over MCP",
-      "10 seats",
     ],
   },
   {
@@ -70,14 +62,23 @@ const TIERS: Array<{
     blurb: "For everybody who needs the same figure at the same time.",
     features: [
       "Every connector, no cap",
-      "Unlimited metrics and boards",
-      "10-minute recompute",
+      "Unlimited seats",
       "Roles and per-person permissions",
       "Claude and ChatGPT over MCP",
-      "Unlimited seats",
     ],
   },
 ];
+
+/**
+ * THE THREE THINGS EVERY PLAN GETS, lifted out of the columns.
+ *
+ * They used to take a line in each of the three, which is three-quarters of
+ * what a reader was scanning for differences in — and "full receipts on every
+ * figure" appeared on SOLO ONLY, which read as though the paid tiers lose the
+ * product's best feature. Stating them once above the table leaves the columns
+ * holding nothing but what actually differs.
+ */
+const UNIVERSAL = "Every plan: unlimited metrics and boards, recomputed every ten minutes, full receipts on every figure.";
 
 export function Pricing({ cta }: { cta: string }) {
   const [yearly, setYearly] = useState(false);
@@ -92,7 +93,7 @@ export function Pricing({ cta }: { cta: string }) {
       <div
         role="group"
         aria-label="Billing period"
-        className="flex items-center gap-1 rounded-full border border-border bg-card p-1"
+        className="pricing-toggle"
       >
         {[
           { on: false, label: "Monthly" },
@@ -105,20 +106,18 @@ export function Pricing({ cta }: { cta: string }) {
             onClick={() => setYearly(opt.on)}
             className={cn(
               "flex cursor-pointer items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-colors duration-(--duration-fast)",
-              yearly === opt.on
-                ? "lift-sm bg-background text-foreground"
-                : "text-muted-foreground hover:text-foreground",
+              yearly === opt.on ? "pricing-toggle-on" : "pricing-toggle-off",
             )}
           >
             {opt.label}
             {opt.on && (
-              <span className="rounded-full bg-brand-soft px-2 py-0.5 text-xs font-semibold text-brand-800">
-                −{Math.round(YEARLY_OFF * 100)}%
-              </span>
+              <span className="pricing-save">−{Math.round(YEARLY_OFF * 100)}%</span>
             )}
           </button>
         ))}
       </div>
+
+      <p className="pricing-universal">{UNIVERSAL}</p>
 
       {/* ── the cards ───────────────────────────────────────────────────── */}
       <div className="grid w-full gap-5 lg:grid-cols-3">
@@ -132,13 +131,14 @@ export function Pricing({ cta }: { cta: string }) {
             <div
               key={tier.name}
               className={cn(
-                "flex flex-col rounded-3xl border p-7 sm:p-8",
-                /* THE POPULAR TIER IS RAISED, NOT RECOLOURED. A brand-filled
-                   card would make the other two read as disabled; a ring and a
-                   shadow say "start here" without saying "not those". */
-                tier.popular
-                  ? "lift-lg border-brand-400 bg-card ring-1 ring-brand-400"
-                  : "lift-sm border-border bg-card",
+                "pricing-col",
+                /* THREE IDENTICAL CARDS WAS THE OLD ANSWER AND IT SAID NOTHING.
+                   Solo and Business are plain columns now, separated by
+                   hairlines — furniture, not objects. Team is the one panel:
+                   inverted, the same ink as the full-bleed sections, so the
+                   recommendation is legible from across the room instead of
+                   being announced by a 26px pill. */
+                tier.popular && "pricing-col-featured ink-block",
               )}
             >
               {/* `min-h-8` SO THE THREE PRICE ROWS SIT ON A LINE. Only the
@@ -147,46 +147,47 @@ export function Pricing({ cta }: { cta: string }) {
                   its neighbours — which pushed its price, its button and every
                   feature under it out of alignment with the other two. */}
               <div className="flex min-h-8 items-center justify-between gap-3">
-                <h3 className="font-marketing text-xl font-bold tracking-tight text-foreground">{tier.name}</h3>
+                <h3 className="font-marketing text-xl font-bold tracking-tight" style={{ color: "var(--ink)" }}>{tier.name}</h3>
                 {tier.popular && (
-                  <span className="rounded-full bg-brand-soft px-2.5 py-1 text-xs font-semibold text-brand-800">
-                    Most popular
-                  </span>
+                  <span className="pricing-badge">Most popular</span>
                 )}
               </div>
 
-              <p className="mt-2 min-h-10 text-sm leading-relaxed text-muted-foreground">{tier.blurb}</p>
+              <p className="mt-2 min-h-10 text-sm leading-relaxed" style={{ color: "var(--ink-muted)" }}>{tier.blurb}</p>
 
               <p className="mt-6 flex items-baseline gap-1.5">
-                <span className="font-marketing text-display-md font-bold leading-none tracking-tight text-foreground">
+                {/* NOT MONO. Mono on this page means "a machine computed
+                    this and you can check it"; a price is a number a person
+                    chose. Using it here would empty the rule of meaning. */}
+                <span className="font-marketing text-display-md font-bold leading-none tracking-tight" style={{ color: "var(--ink)" }}>
                   ${price}
                 </span>
-                <span className="text-sm text-muted-foreground">/ month</span>
+                <span className="text-sm" style={{ color: "var(--ink-muted)" }}>/ month</span>
               </p>
               {/* The line is always present, so the cards do not change height
                   when the toggle moves — a 20px reflow across three cards is
                   the tell that a toggle is doing more than it should. */}
-              <p className="mt-1.5 min-h-5 text-xs text-muted-foreground">
+              <p className="mt-1.5 min-h-5 text-xs" style={{ color: "var(--ink-muted)" }}>
                 {yearly ? `Billed yearly — $${price * 12}` : "Billed monthly"}
               </p>
 
               <a
                 href={cta}
-                className={cn(
-                  "mt-7 flex h-11 items-center justify-center rounded-full text-button font-semibold transition-colors duration-(--duration-fast) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
-                  tier.popular
-                    ? "bg-foreground text-background hover:bg-foreground/90"
-                    : "border border-border text-foreground hover:bg-accent",
-                )}
+                className={cn("mt-7 w-full", tier.popular ? "btn-solid-invert" : "btn-ghost")}
               >
                 Start free
               </a>
 
-              <ul className="mt-7 flex flex-col gap-3 border-t border-border pt-6">
+              {/* ONLY WHAT DIFFERS. The three facts true of every plan moved
+                  above the table, so a reader comparing columns is comparing
+                  the jump rather than re-reading the same three lines. */}
+              <ul className="mt-7 flex flex-col gap-3 pt-6" style={{ borderTop: "1px solid var(--rule)" }}>
                 {tier.features.map((f) => (
                   <li key={f} className="flex min-w-0 items-start gap-2.5">
-                    <Check aria-hidden className="mt-0.5 size-4 shrink-0 text-success" />
-                    <span className="min-w-0 text-sm leading-relaxed text-foreground">{f}</span>
+                    <Check aria-hidden className="mt-0.5 size-4 shrink-0" style={{ color: "var(--ink-muted)" }} />
+                    <span className="min-w-0 text-sm leading-relaxed" style={{ color: "var(--ink)" }}>
+                      {f}
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -195,7 +196,7 @@ export function Pricing({ cta }: { cta: string }) {
         })}
       </div>
 
-      <p className="text-sm text-muted-foreground">
+      <p className="text-sm" style={{ color: "var(--ink-muted)" }}>
         Every plan starts with a 14-day trial. No card up front, and read-only access throughout.
       </p>
     </div>

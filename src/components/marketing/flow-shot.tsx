@@ -18,13 +18,18 @@ import { SourceMark } from "@/components/source-mark";
  */
 const STEPS: Array<{ icon: typeof Filter; kind: string; detail: string; source?: string }> = [
   { icon: Filter, kind: "Pull records", detail: "Calendly · invitee.created", source: "calendly" },
-  { icon: Filter, kind: "Keep the ones that count", detail: "status is active" },
+  { icon: Filter, kind: "Keep the ones that count", detail: "has an email to match on" },
   { icon: Users, kind: "Match the same person", detail: "email, then phone" },
   { icon: Sigma, kind: "Total what is left", detail: "count of unique people" },
 ];
 
 /** The count riding each edge, so the drop from 123 to 41 is visible. */
-const EDGES = ["123 records", "104 kept", "41 unique"];
+/* THE SAME FIGURES AS EVERY RECEIPT ON THE PAGE. This said "104 kept", an
+   intermediate that exists nowhere else — and on a page whose entire claim is
+   that the arithmetic can be checked, two different middles for the same sum
+   is the defect the rebuild set out to fix. 123 arrive, 3 are excluded, 120
+   are considered, 79 are matched away, 41 remain. */
+const EDGES = ["123 records", "120 considered", "41 unique"];
 
 export function FlowShot() {
   return (

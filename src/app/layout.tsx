@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, Outfit } from "next/font/google";
+import { IBM_Plex_Mono, Inter, Outfit } from "next/font/google";
 import "./globals.css";
 
 /**
@@ -59,6 +59,28 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "sw
  * exactly one font request.
  */
 const outfit = Outfit({ subsets: ["latin"], weight: ["600", "700"], variable: "--font-outfit", display: "swap" });
+
+/**
+ * THE THIRD FAMILY, AND IT HAS ONE JOB.
+ *
+ * Mono on this page means "a machine produced this figure and you can check
+ * it" — the numbers inside a receipt, the record counts, the metric values.
+ * Nothing else. Not labels, not nav, not prices, which are set by a person.
+ * The moment it is used for texture the semantic is gone and it is just
+ * another face.
+ *
+ * WHY IT IS LOADED RATHER THAN USING `--font-mono`. That token is a system
+ * stack — SF Mono on a Mac, Consolas on Windows, Liberation Mono on Linux —
+ * with different widths and different figure shapes. Fine for an API key in a
+ * settings field; wrong for the one element the whole page is built around,
+ * which has to look the same to everybody and has to hold a column of digits
+ * in vertical alignment. Plex Mono is the more clerical of the two obvious
+ * choices, which suits a receipt better than a code face does.
+ *
+ * TWO WEIGHTS, latin only, marketing-scoped like Outfit: nothing inside the
+ * app resolves `--font-plex`, so a dashboard still makes one font request.
+ */
+const plex = IBM_Plex_Mono({ subsets: ["latin"], weight: ["400", "500"], variable: "--font-plex", display: "swap" });
 
 import { ThemeProvider } from "@/components/theme";
 import { InputModality } from "@/components/input-modality";
@@ -144,7 +166,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     // On a Mac that resolves to SF Pro and looks nearly right, which is why it
     // survived: it was wrong on every other platform and nothing failed.
     // Measured with getComputedStyle, not inferred.
-    <html lang="en" className={`${inter.variable} ${outfit.variable}`} suppressHydrationWarning>
+    <html lang="en" className={`${inter.variable} ${outfit.variable} ${plex.variable}`} suppressHydrationWarning>
       <body>
         {/* WHICH DEVICE IS DRIVING, stamped on <html> for globals.css to read.
             It renders nothing; it exists so the shared focus ring can stay off

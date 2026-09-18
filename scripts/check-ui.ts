@@ -493,6 +493,15 @@ const RULES: Rule[] = [
        * already carries twelve with no consumers at all.
        */
       "src/components/marketing/pricing.tsx": "a segmented billing toggle; the kit has no ToggleGroup and Tabs promises panels this has none of",
+      /**
+       * AN ACCORDION TRIGGER, WHICH THE KIT DOES NOT HAVE EITHER. It has to be
+       * a real `<button>` carrying `aria-expanded` and `aria-controls` — that
+       * is the whole accessibility point of the pattern — and `Button` would
+       * bring a 36px control height, a fixed radius and a variant's fill to
+       * something that is a full-width row of heading text with a glyph at the
+       * end. Overriding all four is how a ninth variant gets born.
+       */
+      "src/components/marketing/faq.tsx": "an accordion trigger: a full-width heading row that must carry aria-expanded, which is not one of Button's variants",
     },
   },
 ];

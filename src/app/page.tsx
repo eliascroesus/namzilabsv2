@@ -1,129 +1,141 @@
 import Link from "next/link";
 import { withAuth } from "@workos-inc/authkit-nextjs";
-import { ArrowRight } from "lucide-react";
 import { CONNECTOR_CATALOG } from "@/connectors/catalog";
-import { AppWindow } from "@/components/marketing/app-window";
-import { Clouds, Pipes } from "@/components/marketing/pipes";
-import { Reveal } from "@/components/marketing/reveal";
-import { AiPanel } from "@/components/marketing/ai-panel";
 import { PillNav } from "@/components/marketing/pill-nav";
-import { BrandMark } from "@/components/marketing/brand-mark";
-import { ProblemGrid } from "@/components/marketing/problem";
-import { Pricing } from "@/components/marketing/pricing";
-import { FeatureRow } from "@/components/marketing/feature-row";
+import { SectionShell } from "@/components/marketing/shell";
+import { Receipt } from "@/components/marketing/receipt";
+import { LedgerRow } from "@/components/marketing/ledger-row";
+import { StatDivider } from "@/components/marketing/stat-divider";
+import { CustomerLogos } from "@/components/marketing/customer-logos";
+import { ToolChip } from "@/components/marketing/tool-chip";
 import { ConnectShot } from "@/components/marketing/connect-shot";
 import { FlowShot } from "@/components/marketing/flow-shot";
-import { ReceiptsShot } from "@/components/marketing/receipts-shot";
-import { Reconcile } from "@/components/marketing/reconcile";
-import { Compare } from "@/components/marketing/compare";
+import { AiPanel } from "@/components/marketing/ai-panel";
 import { Faq } from "@/components/marketing/faq";
-import { ToolGrid } from "@/components/marketing/tool-grid";
+import { Pricing } from "@/components/marketing/pricing";
+import { BrandMark } from "@/components/marketing/brand-mark";
 
 /**
  * THE FRONT DOOR.
  *
- * ── WHY THIS IS THE SECOND REBUILD IN A WEEK ───────────────────────────────
+ * ── WHAT THIS REBUILD IS FOR ───────────────────────────────────────────────
  *
- * The first one fixed the page's structure and kept the app's clothes, and the
- * owner's verdict was that it "looks like an AI website". That is a fair
- * reading and it is worth writing down exactly what was wrong, because every
- * individual decision in it was defensible:
+ * The page before it had good writing and generic design: every section was
+ * the same centred column of rounded cards, so nothing had hierarchy and
+ * nothing was memorable, and the one thing that makes this product different —
+ * that every figure shows the arithmetic that produced it — was rendered small,
+ * mid-page, inside a card that looked like all the other cards.
  *
- *   - ONE TYPEFACE. Inter at three weights, separated only by size. Correct
- *     for a dashboard, and the reason a marketing page reads as generated:
- *     size is the only typographic idea a page has when nobody chose a face.
- *   - A SATURATED BLUE HERO WITH WHITE TYPE ON IT. The most-generated hero on
- *     the web.
- *   - EVERYTHING LEFT-FLUSH, EVERY HEADLINE A CLEVER TWO-PART SENTENCE.
- *     "Three tools. Three answers. One you can defend." is four of those in a
- *     row, and the rhythm is unmistakable.
- *   - EVERY OBJECT THE SAME CARD. One radius, one border, no shadow, pictures
- *     shrunk into equal thirds.
+ * Three structural decisions carry the rebuild:
  *
- * ── WHAT THIS ONE DOES INSTEAD ─────────────────────────────────────────────
+ *   1. A SPINE. One 12-column grid runs the whole page, claim on 1–5 and
+ *      evidence on 6–12, and every figure anywhere on the page right-aligns to
+ *      the same axis. Only the hero and the closing block are centred.
+ *   2. THE RECEIPT IS THE SIGNATURE. It appears three times and nowhere else,
+ *      and it is the only object allowed to be loud.
+ *   3. FULL-BLEED BLOCKS BREAK THE RHYTHM, so scrolling has a pulse instead of
+ *      one uninterrupted field.
  *
- * The brief was the reference the owner sent (themochi.app), and the four
- * things that actually carry it:
+ * ── THE ARITHMETIC ─────────────────────────────────────────────────────────
  *
- *   1. A DISPLAY FACE. Outfit at 700 — geometric, single-storey `g`, straight
- *      tail on the `y` — against Inter for everything that is read rather than
- *      looked at. Two families, obviously different, which is the oldest trick
- *      there is and the one the previous version refused.
- *   2. DAYLIGHT, NOT A BLUE FILL. A bright sky with drawn cumulus and the
- *      headline in NEAR-BLACK on top of it. Higher contrast than white-on-navy
- *      and far less common.
- *   3. SHORT, CENTRED HEADLINES. "Your tools disagree. This settles it." is
- *      six words. The old hero's supporting paragraph alone was sixty.
- *   4. PICTURES THAT RUN OFF THE EDGE. Each feature row puts its screenshot at
- *      128% of its column, past the margin — a window onto the product rather
- *      than an illustration of it, and legible because it is large.
- *
- * ── WHAT IT STILL REFUSES ──────────────────────────────────────────────────
- *
- * The reference carries a testimonial wall, client quotes, a "trusted by" row
- * of real customer avatars, and a before/after table whose figures ($44K
- * becoming $118,000) are invented. We have no customers to quote and no right
- * to promise anybody a close rate. So the social-proof slot holds the tools we
- * READ, labelled as such; the comparison contrasts the WORK rather than the
- * results; the FAQ answers only what this repository can be checked against;
- * and the connector count is computed from CONNECTOR_CATALOG so the page
- * cannot claim an integration the product does not ship.
+ * Every receipt on this page reconciles: 123 − 3 = 120, 120 − 79 = 41. The
+ * page this replaces showed 123 / 82 / 41, which does not, and it did it in
+ * the one section whose entire claim is that the working is shown.
  */
 export const metadata = {
   title: "Namzilabs — one number, from every tool you already use",
   description:
-    "Namzilabs reads Calendly, Close, Instantly, Google Sheets and more, reconciles the overlap between them, and gives you one figure you can defend — with the receipts for how it got there.",
+    "Namzilabs reads your calendar, CRM, outreach tools and payments directly, matches the same person across them, and gives you one figure your whole team can defend.",
 };
 
 /**
- * THE HERO'S PILL — NEAR-BLACK, because the sky under it is daylight again.
- *
- * It was white for exactly as long as the hero was a night sky, where a
- * near-black button would have been a hole. On a bright cloud photograph the
- * reverse holds and by a wider margin: white-on-white had the button
- * dissolving into the clouds. The closing card keeps the WHITE version, and
- * that is not an inconsistency — it sits on a deep blue card, which is the one
- * dark ground left on the page.
- *
- * NOT `buttonVariants`. The kit's `lg` button is a 40px control built for a
- * form row, and this is a 52px marketing pill with a disc on the end of it —
- * borrowing the app's control and then overriding its height, radius, padding
- * and every colour is how a component ends up with a variant that exists for
- * one caller. The reference uses the same shape in six places and so does
- * this page.
+ * THE TOOL COUNT IS COMPUTED, NOT TYPED. The brief writes "32 tools" as a
+ * literal in two places and the catalogue holds thirty-two today, so it renders
+ * identically — but a hard-coded count is a claim that goes stale silently the
+ * next time a connector ships.
  */
-function Cta({ href, children }: { href: string; children: React.ReactNode }) {
-  return (
-    <a
-      href={href}
-      className="lift-md group inline-flex h-13 items-center gap-2 rounded-full bg-neutral-950 pl-7 pr-2 text-button font-semibold text-white transition-transform duration-(--duration-fast) ease-(--ease-standard) hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring motion-reduce:transition-none motion-reduce:hover:translate-y-0"
-    >
-      {children}
-      {/* The disc gives the pill an interior, so it reads as an object rather
-          than as a lozenge of ink. The arrow nudges on hover — the one moving
-          thing on the page that answers a pointer. */}
-      <span className="flex size-9 items-center justify-center rounded-full bg-white/15">
-        <ArrowRight
-          aria-hidden
-          className="size-4 transition-transform duration-(--duration-fast) ease-(--ease-standard) group-hover:translate-x-0.5 motion-reduce:transition-none"
-        />
-      </span>
-    </a>
-  );
-}
+const TOOLS = CONNECTOR_CATALOG.length;
 
-/** A centred section head — the reference's shape, and the page's default. */
-function Head({ eyebrow, title, blurb }: { eyebrow: string; title: React.ReactNode; blurb?: string }) {
-  return (
-    <Reveal className="mx-auto max-w-2xl text-center">
-      <p className="text-sm font-medium text-brand-800">{eyebrow}</p>
-      <h2 className="font-marketing mt-3 text-display-lg font-bold leading-[1.08] tracking-tight text-balance text-foreground">
-        {title}
-      </h2>
-      {blurb && <p className="mt-5 text-md leading-relaxed text-muted-foreground">{blurb}</p>}
-    </Reveal>
-  );
-}
+const LEDGER: Array<{ source: string; name: string; metric: string; figure: string; clause: string }> = [
+  { source: "calendly", name: "Calendly", metric: "Meetings booked", figure: "41", clause: "but not which ones showed up" },
+  { source: "close", name: "Close CRM", metric: "Deals created", figure: "18", clause: "but not what they cost to get" },
+  { source: "stripe", name: "Stripe", metric: "Revenue", figure: "$48.2k", clause: "but not which campaign earned it" },
+  { source: "instantly", name: "Instantly", metric: "Replies", figure: "112", clause: "but not which became revenue" },
+  { source: "aircall", name: "Aircall", metric: "Calls connected", figure: "306", clause: "but not against how many leads" },
+  { source: "gsheets", name: "Google Sheets", metric: "Rows, kept by hand", figure: "2,130", clause: "but only until Friday" },
+];
+
+/** The three that disagree, dimmer than the receipt that resolves them. */
+const DISAGREE: Array<{ source: string; name: string; counted: string; figure: string }> = [
+  { source: "calendly", name: "Calendly", counted: "every invitee-created event", figure: "41" },
+  { source: "close", name: "Close CRM", counted: "meetings a rep logged to a lead", figure: "38" },
+  { source: "gsheets", name: "Google Sheets", counted: "what somebody typed on Friday", figure: "44" },
+];
+
+const BY_HAND = [
+  "Export a CSV from each tool, one at a time",
+  "Hope the names and emails line up between them",
+  "Dedupe by hand, and guess at the ones that are close",
+  "Paste the total somewhere before the meeting",
+  "Answer “where did that come from?” with an afternoon",
+];
+
+const WITH_US = [
+  "Each tool read directly, through its own API",
+  "The same person matched across sources automatically",
+  "Recomputed on its own, every ten minutes",
+  "One figure on a board your whole team is looking at",
+  "Answer “where did that come from?” with a click",
+];
+
+/**
+ * THE FOUR TOOL NAMES GET A LINE EACH rather than sitting as bare chips. They
+ * are the four things an assistant can actually do, and a reader evaluating
+ * whether to point Claude at their CRM wants to know what that means — not to
+ * be shown four identifiers and left to guess.
+ */
+const MCP_TOOLS: Array<{ name: string; what: string }> = [
+  { name: "list_metrics", what: "every figure you have published, and nothing you have not" },
+  { name: "get_metric", what: "one figure, with the working that produced it" },
+  { name: "get_metric_days", what: "the same figure day by day, for a range it asks for" },
+  { name: "list_sources", what: "which tools the workspace reads, and when each last swept" },
+];
+
+const STEPS: Array<{ n: string; title: string; body: React.ReactNode; visual: React.ReactNode }> = [
+  {
+    n: "1",
+    title: "Sign in, and the records start arriving",
+    body: (
+      <>
+        Connect with Google or paste an API key. New records land within minutes and your history backfills behind
+        you, so you are building the moment it is connected — you never wait for a backfill to finish.
+      </>
+    ),
+    visual: <ConnectShot />,
+  },
+  {
+    n: "2",
+    title: "Drag four steps onto a canvas",
+    body: (
+      <>
+        Pull records, keep the ones that count, match the same person across two sources, total what is left. Test it
+        against real rows before you publish it — no SQL, and no warehouse in between.
+      </>
+    ),
+    visual: <FlowShot />,
+  },
+  {
+    n: "3",
+    title: "Every figure carries its working",
+    body: (
+      <>
+        A published metric recomputes on its own and shows what it did: when it last ran, which sources it read, how
+        many records it matched as the same person, and what it left out, and why.
+      </>
+    ),
+    visual: <Receipt size="sm" />,
+  },
+];
 
 export default async function Home() {
   const { user } = await withAuth();
@@ -131,381 +143,325 @@ export default async function Home() {
   const ctaLabel = user ? "Go to dashboard" : "Start free";
 
   return (
-    <div className="lander flex min-h-dvh flex-col bg-background">
+    <div className="lander flex min-h-dvh flex-col bg-[var(--background)]">
       <PillNav signedIn={Boolean(user)} />
 
       <main id="main" className="flex-1">
-        {/* ==== Hero ======================================================= */}
-        {/**
-         * THE COMPOSITION, AND WHY IT IS BUILT IN THIS ORDER.
-         *
-         * Three layers, back to front: the sky, the PIPES, and the dashboard.
-         * The pipes run down behind the window and stop at it, which is the
-         * whole idea — the connector marks fall out of the sky, down the
-         * tubes, and arrive in the board. The reference this came from
-         * (wissly.framer.website) runs app icons down a bamboo chute because
-         * bamboo suits an education brand; this page has a literal version of
-         * that picture available to it, so it uses the literal one.
-         *
-         * THE WINDOW HAS TO OVERLAP THE PIPES, not sit under them. If the
-         * tubes ended above the card the field reads as a decorative border
-         * and the card as an unrelated object; ending BEHIND it is what makes
-         * the two one picture. `-mt-*` on the figure and `z-10` do that, and
-         * the pipes' own heights are cut so none of them pokes out below.
-         */}
-        <section className="cloud-sky relative overflow-x-clip px-5 pb-16 pt-24 sm:px-8 sm:pb-20 sm:pt-28 lg:pt-32">
-          <div className="mx-auto w-full max-w-6xl">
-            <div className="text-center">
-              {/**
-               * NEAR-BLACK ON A BRIGHT SKY, and pinned rather than tokenised.
-               * The sky is a photograph — the same picture for everybody — so
-               * `--foreground` would render this headline white on white the
-               * moment a dark-theme visitor arrived. It is the same rule the
-               * connector chips follow and the opposite of the one the rest of
-               * the page follows, because the rest of the page sits on a
-               * ground that does follow the theme.
-               */}
-              <h1 className="font-marketing text-balance text-[clamp(2.75rem,7.6vw,6.75rem)] font-bold leading-[0.95] tracking-[-0.03em] text-neutral-950">
-                <span className="sm:block">Analyze all your data</span>{" "}
-                <span className="sm:block">in one place.</span>
-              </h1>
+        {/* ══ HERO — centred, and one of only two centred blocks ═══════════ */}
+        <section className="hero-block px-5 pt-32 sm:px-8 lg:pt-40">
+          <div className="mx-auto w-full max-w-[72rem] text-center">
+            {/* TWO LINES, ONE SENTENCE EACH, SAME SIZE. The second is a
+                qualification of the first rather than decoration, so it takes
+                a lighter weight and the muted ink instead of a smaller step —
+                which is the distinction the two-tone pattern exists to make. */}
+            <h1 className="t-display-lg mx-auto max-w-[20ch] text-balance" style={{ color: "var(--ink)" }}>
+              <span className="block font-bold">One number, from every tool you already use.</span>
+              <span className="mt-2 block font-normal" style={{ color: "var(--ink-muted)" }}>
+                With the arithmetic shown underneath it.
+              </span>
+            </h1>
 
-              <p className="mx-auto mt-7 max-w-xl text-lg leading-relaxed text-neutral-800">
-                Build any metric you can describe — like Zapier, but for your data — and find every bottleneck in your
-                business.
-              </p>
+            <p className="t-body-lg mx-auto mt-8" style={{ color: "var(--ink-muted)" }}>
+              Namzilabs reads your calendar, CRM, outreach tools and payments directly, matches the same person across
+              them, and gives you one figure your whole team can defend.
+            </p>
 
-              <div className="mt-10 flex justify-center">
-                <Cta href={cta}>{ctaLabel}</Cta>
+            <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
+              <a href={cta} className="btn-solid">
+                {ctaLabel}
+              </a>
+              <a href="#proof" className="btn-ghost">
+                See how a figure is built
+              </a>
+            </div>
+
+            <p className="mt-5 text-sm" style={{ color: "var(--ink-muted)" }}>
+              14 days free, no card. Read-only access to every tool it reads.
+            </p>
+          </div>
+
+          {/* The nav flips to opaque when this passes out of view. One pixel,
+              at the hero's foot — correct however the headline wraps, and two
+              observer callbacks instead of a scroll listener running forever. */}
+          <div id="nav-sentinel" aria-hidden className="h-px w-full" />
+
+          {/* THE HERO IS THE RECEIPT, not a shrunken screenshot. It is cropped
+              at a FIXED section height rather than by the viewport: the proof
+              strip sits directly beneath it, and a viewport-relative crop
+              would move that strip with the window and shift the layout. */}
+          <div className="hero-receipt">
+            <div className="mx-auto w-full max-w-[72rem]">
+              <div className="mx-auto w-full max-w-[38rem]">
+                <Receipt size="xl" reveal />
               </div>
             </div>
+          </div>
+        </section>
 
-            {/* ---- the board, and the pipes running into it ------------- */}
-            {/**
-             * THE PIPES LIVE INSIDE THE FIGURE, not in a box above it, and
-             * that is what makes the composition one object. Positioned
-             * against the figure, `top: 36%` is 36% of the DASHBOARD's height —
-             * so the runs enter its sides at a fixed point on the card however
-             * tall the card gets, instead of at a guessed distance from
-             * something else. They reach 12vw past the figure's edges, which
-             * clears the viewport on a centred `max-w-6xl`; the section clips
-             * the overflow.
-             */}
-            <div className="relative mt-12 sm:mt-14">
-              {/* `max-w-5xl`, NOT the container's `max-w-6xl`. The chutes hang
-                  off this box's edges, so its width decides whether there is
-                  anywhere for them to be: at 72rem on a 1440 laptop there were
-                  144px outside it and the whole field rendered behind the card.
-                  64rem leaves 208, which is a chute's mouth plus the gap its
-                  marks fly across. */}
-              <figure className="relative mx-auto max-w-5xl -mb-40 sm:-mb-48">
-                {/* Behind the chutes, then the chutes, then in front of them —
-                    the front layer is the one that puts the pipes in a scene
-                    rather than on a backdrop. */}
-                <Clouds layer="behind" />
-                <Pipes />
-                <Clouds layer="front" />
+        {/* ══ PROOF STRIP ══════════════════════════════════════════════════ */}
+        <div className="px-5 sm:px-8">
+          <div className="mx-auto w-full max-w-[72rem]">
+            <StatDivider
+              facts={[
+                { head: `${TOOLS} tools`, body: "read directly, through each tool’s own API" },
+                { head: "Every 10 minutes", body: "every published figure recomputes on its own" },
+                /* THE WORDING CHANGED FROM THE BRIEF, and the owner agreed.
+                   "Never writes — no connector in this product can change a
+                   record" invites a reader to go and check, and two connectors
+                   (Close, Calendly) POST to create a webhook subscription in
+                   the customer's account. No connector changes a RECORD, so the
+                   original sentence was defensible — but the proof strip is
+                   where a security reviewer looks, and a claim that needs a
+                   lawyer is the wrong claim for this page. */
+                { head: "Reads only", body: "it never edits your data — no connector can change a record" },
+              ]}
+            />
+            {/* Renders nothing while the array is empty. No placeholder brands,
+                no greyed-out "your logo here". */}
+            <CustomerLogos customers={[]} />
+          </div>
+        </div>
 
-                {/**
-                 * THE OVERLAP, AND THE ARITHMETIC BEHIND IT.
-                 *
-                 * How far the window hangs below the sky is `|mb| - section
-                 * pb`, and the section's bottom padding is what makes that
-                 * subtraction happen at all: with `pb-0` the figure's negative
-                 * bottom margin COLLAPSES THROUGH the section and becomes the
-                 * section's own margin, so the sky ends level with the window
-                 * and the overlap this composition is built on silently does
-                 * nothing. Correct in the source, absent in the browser —
-                 * which is why `pnpm landing` asserts the gap in pixels.
-                 */}
-                {/* `data-product-window` is what `landing-check` measures the
-                    ratio of. It used to find this by taking the figure's FIRST
-                    CHILD, which was true until the pipes became the first child
-                    and the check started measuring a 7rem strip — correctly
-                    failing, but for a reason that had nothing to do with the
-                    window. A hook that depends on sibling order is a hook that
-                    breaks the day the composition changes. */}
-                {/* `product-shot` paints `/dashboard.png` over the drawn board
-                    through an `::after`. Missing file, nothing painted, drawing
-                    shows — see the note in globals.css. `AppWindow` stays in
-                    the markup on purpose: it IS the fallback. */}
-                <div
-                  data-product-window
-                  className="product-shot lift-lg relative z-10 aspect-[4/3] w-full overflow-hidden rounded-3xl bg-neutral-950 sm:aspect-video"
-                >
-                  <AppWindow />
+        {/* ══ THE PROBLEM ══════════════════════════════════════════════════ */}
+        <SectionShell
+          id="problem"
+          label="The problem"
+          title={
+            <>
+              Ten tools. Ten dashboards.
+              <br />
+              No way to add them up.
+            </>
+          }
+          standfirst="Every one of them ships analytics for its own slice, and every one of them is correct. None of them can see the others."
+        >
+          <ul className="ledger">
+            {LEDGER.map((row) => (
+              <LedgerRow key={row.source} {...row} />
+            ))}
+          </ul>
+
+          {/* The hinge of the argument, on a row of its own. It used to be
+              trapped in a grey card in the middle of the grid, and it used to
+              repeat the H2 verbatim. */}
+          <p className="ledger-thesis">
+            Six logins, six exports, six sets of names that nearly match. The question you actually have — what a
+            meeting costs, which channel carried the month — lives in the space between them.
+          </p>
+        </SectionShell>
+
+        {/* ══ THE RECEIPTS — the first break in the paper rhythm ═══════════ */}
+        <SectionShell
+          id="proof"
+          tone="ink"
+          label="The receipts"
+          title={
+            <>
+              Three tools. Three answers.
+              <br />
+              One you can defend.
+            </>
+          }
+          standfirst="None of them are lying — they are counting different things. The only useful answer is the one that shows how it was resolved."
+        >
+          <div className="grid gap-12 lg:grid-cols-12 lg:gap-8">
+            {/* The three that disagree, dimmed — evidence, not the answer. */}
+            <ul className="ledger ledger--narrow lg:col-span-5" style={{ ["--num-col" as string]: "3.5rem" }}>
+              {DISAGREE.map((d) => (
+                <li key={d.source} className="ledger-row">
+                  <span className="ledger-tool">
+                    <span className="ledger-name">{d.name}</span>
+                  </span>
+                  <span className="ledger-figure t-num">{d.figure}</span>
+                  <span className="ledger-clause">{d.counted}</span>
+                </li>
+              ))}
+            </ul>
+
+            <div className="lg:col-span-6 lg:col-start-7">
+              <Receipt />
+            </div>
+          </div>
+        </SectionShell>
+
+        {/* ══ HOW IT WORKS ═════════════════════════════════════════════════ */}
+        <SectionShell id="how" label="How it works" title="Connected on Monday. Defensible by Friday.">
+          <ol className="flex flex-col gap-20 lg:gap-28">
+            {STEPS.map((step, i) => (
+              <li key={step.n} className="grid items-center gap-8 lg:grid-cols-12 lg:gap-12">
+                {/* ALTERNATING SIDES on the same spine, not three cards in a
+                    row. Reading order follows the visual order at every width
+                    because the markup order flips, not just the columns. */}
+                <div className={i % 2 ? "lg:col-span-5 lg:col-start-8 lg:row-start-1" : "lg:col-span-5"}>
+                  <p className="t-num text-sm" style={{ color: "var(--ink-muted)" }}>
+                    {step.n}
+                  </p>
+                  <h3
+                    className="font-marketing mt-3 text-2xl font-bold tracking-tight sm:text-3xl"
+                    style={{ color: "var(--ink)" }}
+                  >
+                    {step.title}
+                  </h3>
+                  {/* NO LINK COLOUR ON EMPHASIS. Three phrases in here were
+                      styled blue on the old page and none of them was
+                      clickable. Nothing on this page may look clickable unless
+                      it is. */}
+                  <p className="mt-4 text-[1.0625rem] leading-relaxed" style={{ color: "var(--ink-muted)" }}>
+                    {step.body}
+                  </p>
                 </div>
 
-                <figcaption className="sr-only">
-                  The Namzilabs dashboard: leads, booked leads, calls showed, customers, revenue and average order
-                  value, over a weekly revenue chart and a conversion funnel — each figure recomputed from the tools it
-                  reads.
-                </figcaption>
-              </figure>
-            </div>
-          </div>
-        </section>
+                <div className={i % 2 ? "lg:col-span-6 lg:col-start-1 lg:row-start-1" : "lg:col-span-6 lg:col-start-7"}>
+                  <div className="step-visual">{step.visual}</div>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </SectionShell>
 
-        {/* ==== The facts were here, and the owner took them out ========= */}
-        {/* A row of four figures — 32 tools / 10 min / 0 SQL / read-only — used
-            to sit between the hero and the problem. They were true and
-            checkable, and they were also the fourth thing on the page making a
-            claim before anybody had been told what the product does. The three
-            worth keeping are now said where they mean something: the tool count
-            in the marquee and in the integrations heading, the access model
-            under the button and in the FAQ, and the recompute cadence inside
-            step three, where it is a feature rather than a statistic. */}
-
-        {/* ==== The problem ================================================ */}
-        {/**
-         * THE SECTION EVERYTHING AFTER IT DEPENDS ON. "One number you can
-         * defend" only lands on somebody who already feels the disagreement;
-         * for everybody else the page opened with an answer to a question they
-         * had not been asked.
-         */}
-        {/* THE TOP PADDING PAYS FOR THE PRODUCT WINDOW hanging into this
-            section — 112px of overlap plus a section's worth of air. It moved
-            here from the stat band when that came out; without it the window
-            lands on this section's heading, and `pnpm landing` measures that
-            gap in pixels precisely because the source cannot show it. */}
-        <section id="problem" className="scroll-mt-28 px-5 pb-20 pt-44 sm:px-8 sm:pb-28 sm:pt-56">
-          <div className="mx-auto w-full max-w-6xl">
-            <Head
-              eyebrow="The problem"
-              title="Ten tools. Ten dashboards. No way to add them up."
-              blurb="Every one of them ships analytics for its own slice, and every one of them is correct. None of them can see the others."
-            />
-            <div className="mt-14">
-              <ProblemGrid />
-            </div>
-          </div>
-        </section>
-
-        {/* ==== The receipts =============================================== */}
-        <section id="proof" className="glow-top mx-auto w-full max-w-6xl scroll-mt-28 px-5 py-20 sm:px-8 sm:py-28">
-          <Head
-            eyebrow="The receipts"
-            title="Three tools. Three answers. One you can defend."
-            blurb="None of them are lying — they are counting different things. The only useful answer is the one that shows how it was resolved."
-          />
-          <Reveal className="mt-14" delay={80}>
-            <Reconcile />
-          </Reveal>
-        </section>
-
-        {/* ==== How it works =============================================== */}
-        {/**
-         * THREE ROWS, NOT THREE CARDS, and the flow builder finally appears on
-         * the landing page. It is the most distinctive screen this product has
-         * and the previous four versions of this page never showed it.
-         */}
-        {/* THE CLIP LIVES ON THE SECTION, NOT ON THE CONTAINER, and the
-            difference is the whole effect. Clipped at `max-w-6xl` the
-            screenshots stopped 144px short of the screen with white either
-            side, which reads as a card that overflowed its box by accident.
-            Clipped at the section they run off the EDGE OF THE PAGE, which is
-            the reference's move and the thing that makes them read as windows
-            onto something larger.
-
-            `overflow-x-clip` rather than `overflow-hidden`: the latter makes
-            the section a scroll container, which silently kills the
-            `position: sticky` nav for the whole time it is on screen. */}
-        <section id="how" className="lander-band scroll-mt-28 overflow-x-clip">
-          <div className="mx-auto w-full max-w-6xl px-5 py-20 sm:px-8 sm:py-28">
-            <Head eyebrow="How it works" title="Connected on Monday. Defensible by Friday." />
-
-            <div className="mt-16 flex flex-col gap-20 sm:gap-28">
-              <FeatureRow
-                label="Step one — connect"
-                title="Sign in, and the records start arriving"
-                body="Connect with Google or paste an API key. New records land within minutes and your history backfills behind you, so you are building the moment it is connected —"
-                accent="you never wait for a backfill to finish."
-                side="right"
-              >
-                <ConnectShot />
-              </FeatureRow>
-
-              <FeatureRow
-                label="Step two — build"
-                title="Drag four steps onto a canvas"
-                body="Pull records, keep the ones that count, match the same person across two sources, total what is left. Test it against real rows before you publish it —"
-                accent="no SQL, and no warehouse in between."
-                side="left"
-              >
-                <FlowShot />
-              </FeatureRow>
-
-              <FeatureRow
-                label="Step three — defend"
-                title="Every figure carries its working"
-                body="A published metric recomputes on its own and shows what it did: when it last ran, which sources it read, how many records it matched as the same person, and"
-                accent="what it left out, and why."
-                side="right"
-              >
-                <ReceiptsShot />
-              </FeatureRow>
-            </div>
-          </div>
-        </section>
-
-        {/* ==== By hand, or not ============================================ */}
-        <section id="compare" className="mx-auto w-full max-w-6xl scroll-mt-28 px-5 py-20 sm:px-8 sm:py-28">
-          <Head
-            eyebrow="What changes"
-            title="The same question, two ways"
-            blurb="Nobody is promised a close rate here — no software can honestly do that. What changes is the work between the question and the answer."
-          />
-          <Reveal className="mt-14" delay={80}>
-            <Compare />
-          </Reveal>
-        </section>
-
-        {/* ==== Ask your AI ================================================ */}
-        {/**
-         * THE ONE DEEP-BLUE SURFACE LEFT ON THE PAGE, and it is here because
-         * the owner asked for the invite board's card specifically — "the blue
-         * card on invite & earn, I really like that design". The rest of the
-         * page went bright to match the reference; this keeps the thing he
-         * named, and being the only one of its kind is what makes it land.
-         *
-         * NOT A ROADMAP: Namzilabs ships an MCP server at `/api/mcp` with six
-         * tools and a `use_ai_assistants` permission deciding who may point an
-         * assistant at it, so every claim here is about something that works
-         * today.
-         */}
-        <section id="ai" className="scroll-mt-28 px-5 pb-20 sm:px-8 sm:pb-28">
-          <div className="sky-panel mx-auto w-full max-w-6xl overflow-hidden rounded-3xl p-8 sm:p-12 lg:p-16">
-            <div className="grid items-center gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,30rem)] lg:gap-16">
-              <div>
-                <p className="text-sm font-medium text-white/80">Ask your AI</p>
-                <h2 className="font-marketing mt-3 text-display-lg font-bold leading-[1.08] tracking-tight text-white">
-                  Opinions are cheap. Give it the numbers.
-                </h2>
-                <p className="mt-6 max-w-lg text-md leading-relaxed text-white/85">
-                  Connect Claude or ChatGPT to your workspace over MCP and it reads your published metrics directly —
-                  the same figures on the same board, not a screenshot you pasted and not a guess. Read-only, scoped to
-                  one workspace, and switched on per person.
+        {/* ══ WHAT CHANGES ═════════════════════════════════════════════════ */}
+        <SectionShell
+          id="compare"
+          tone="sunk"
+          label="What changes"
+          title="The same question, two ways"
+          standfirst="Nobody is promised a close rate here — no software can honestly do that. What changes is the work between the question and the answer."
+        >
+          <div className="compare-grid">
+            {[
+              { head: "Reconciling by hand", when: "Every week, usually on a Friday", items: BY_HAND, muted: true },
+              { head: "With Namzilabs", when: "Once, when you connect it", items: WITH_US, muted: false },
+            ].map((col) => (
+              <div key={col.head} className="compare-col">
+                <p className="text-lg font-semibold" style={{ color: col.muted ? "var(--ink-muted)" : "var(--ink)" }}>
+                  {col.head}
                 </p>
-                <ul className="mt-8 flex flex-wrap gap-2">
-                  {["list_metrics", "get_metric", "get_metric_days", "list_sources"].map((t) => (
-                    /* The real tool names, because somebody evaluating this
-                       will want to know exactly what an assistant can call —
-                       and because naming them is a claim this repo can be
-                       checked against (`src/lib/mcp/tools`). */
-                    <li key={t} className="glass-card stat-numeral rounded-full px-3 py-1.5 text-xs text-white">
-                      {t}
+                <p className="mt-1 text-sm" style={{ color: "var(--ink-muted)" }}>
+                  {col.when}
+                </p>
+                <ul className="mt-6 flex flex-col gap-3">
+                  {col.items.map((item) => (
+                    <li
+                      key={item}
+                      className="text-[0.9375rem] leading-relaxed"
+                      style={{ color: col.muted ? "var(--ink-muted)" : "var(--ink)" }}
+                    >
+                      {item}
                     </li>
                   ))}
                 </ul>
               </div>
+            ))}
+          </div>
+        </SectionShell>
 
-              {/* The panel keeps an opaque ground: it is a drawing of a
-                  conversation inside the product, and the product is not
-                  translucent. */}
-              <div className="glass-solid overflow-hidden rounded-3xl p-3 sm:p-4">
-                <AiPanel />
-              </div>
+        {/* ══ ASK YOUR AI — the second full-bleed block ════════════════════ */}
+        <SectionShell id="ai" tone="ink" label="Ask your AI" title="Opinions are cheap. Give it the numbers.">
+          <div className="grid gap-12 lg:grid-cols-12 lg:gap-10">
+            <div className="lg:col-span-5">
+              <p className="text-[1.0625rem] leading-relaxed" style={{ color: "var(--ink-muted)" }}>
+                Connect Claude or ChatGPT to your workspace over MCP and it reads your published metrics directly —
+                the same figures on the same board, not a screenshot you pasted and not a guess. Read-only, scoped to
+                one workspace, and switched on per person.
+              </p>
+
+              <dl className="mcp-list">
+                {MCP_TOOLS.map((t) => (
+                  <div key={t.name} className="mcp-row">
+                    <dt className="t-num text-sm" style={{ color: "var(--ink)" }}>
+                      {t.name}
+                    </dt>
+                    <dd className="text-sm" style={{ color: "var(--ink-muted)" }}>
+                      {t.what}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+
+            <div className="lg:col-span-6 lg:col-start-7">
+              <AiPanel />
             </div>
           </div>
-        </section>
+        </SectionShell>
 
-        {/* ==== Integrations =============================================== */}
-        <section id="integrations" className="lander-band scroll-mt-28">
-          <div className="mx-auto w-full max-w-6xl px-5 py-20 sm:px-8 sm:py-28">
-            <Head
-              eyebrow="Integrations"
-              title={`${CONNECTOR_CATALOG.length} tools, read directly`}
-              blurb="No warehouse in between, no nightly export to babysit. Missing one? A custom webhook takes events from anything that can POST."
-            />
-            <div className="mt-14">
-              <ToolGrid />
+        {/* ══ INTEGRATIONS ═════════════════════════════════════════════════ */}
+        <SectionShell
+          id="integrations"
+          label="Integrations"
+          title={`${TOOLS} tools, read directly`}
+          standfirst="No warehouse in between, no nightly export to babysit. Missing one? A custom webhook takes events from anything that can POST."
+        >
+          {/* A WRAPPED GRID, NOT A MARQUEE. The old ticker clipped mid-word at
+              its right edge when static, and a scrolling row of names is a
+              thing you cannot read on a page whose question is "do you read MY
+              stack" — which is answered by scanning, not by waiting. Nothing
+              moves and nothing is ever cut. */}
+          <ul className="flex flex-wrap gap-2.5">
+            {CONNECTOR_CATALOG.map((entry) => (
+              <li key={entry.source}>
+                <ToolChip source={entry.source} name={entry.name} />
+              </li>
+            ))}
+          </ul>
+        </SectionShell>
+
+        {/* ══ PRICING ══════════════════════════════════════════════════════ */}
+        <SectionShell
+          id="pricing"
+          tone="sunk"
+          label="Pricing"
+          title="Priced on tools, not on people"
+          standfirst="What costs us money is sweeping other companies’ APIs, not the number of people looking at the answer — so the seats are generous and the ladder is built on how much you connect."
+        >
+          <Pricing cta={cta} />
+        </SectionShell>
+
+        {/* ══ QUESTIONS ════════════════════════════════════════════════════ */}
+        <SectionShell
+          id="faq"
+          label="Questions"
+          title="Before you connect a CRM"
+          standfirst="The questions worth asking of anything you are about to give read access to."
+        >
+          <div className="lg:grid lg:grid-cols-12 lg:gap-10">
+            <div className="lg:col-span-7 lg:col-start-6">
+              <Faq />
             </div>
           </div>
-        </section>
+        </SectionShell>
 
-        {/* ==== Pricing ==================================================== */}
-        {/**
-         * THE NUMBERS IN HERE ARE A PROPOSAL AND NEED THE OWNER'S SIGN-OFF.
-         * He asked for a pricing section and did not give prices; the ladder,
-         * the three figures and the tool caps were chosen in `pricing.tsx` by
-         * reading what this product costs to run, and every one of them is a
-         * commercial decision rather than a design one. They live in a single
-         * array for exactly that reason.
-         */}
-        <section id="pricing" className="glow-top mx-auto w-full max-w-6xl scroll-mt-28 px-5 py-20 sm:px-8 sm:py-28">
-          <Head
-            eyebrow="Pricing"
-            title="Priced on tools, not on people"
-            blurb="What costs us money is sweeping other companies' APIs, not the number of people looking at the answer — so the seats are generous and the ladder is built on how much you connect."
-          />
-          <Reveal className="mt-14" delay={80}>
-            <Pricing cta={cta} />
-          </Reveal>
-        </section>
-
-        {/* ==== Questions ================================================== */}
-        <section id="faq" className="mx-auto w-full max-w-4xl scroll-mt-28 px-5 py-20 sm:px-8 sm:py-28">
-          <Head
-            eyebrow="Questions"
-            title="Before you connect a CRM"
-            blurb="The questions worth asking of anything you are about to give read access to."
-          />
-          <Reveal className="mt-14" delay={80}>
-            <Faq />
-          </Reveal>
-        </section>
-
-        {/* ==== Closing ==================================================== */}
-        <section className="px-5 pb-20 sm:px-8 sm:pb-28">
-          <div className="sky-card mx-auto w-full max-w-6xl overflow-hidden rounded-3xl px-6 py-20 text-center sm:px-10 sm:py-24">
-            <h2 className="font-marketing mx-auto max-w-2xl text-display-lg font-bold leading-[1.08] tracking-tight text-white">
+        {/* ══ CLOSING — the second and last centred block ══════════════════ */}
+        <section className="ink-block px-5 py-28 text-center sm:px-8 lg:py-40">
+          <div className="mx-auto w-full max-w-[72rem]">
+            {/* THE LARGEST TYPE ANYWHERE ON THE PAGE, larger than the H1. */}
+            <p className="t-display-xl text-balance" style={{ color: "var(--ink)" }}>
               Stop reconciling by hand.
-            </h2>
-            <p className="mx-auto mt-5 max-w-lg text-md leading-relaxed text-white/85 sm:text-lg">
+            </p>
+            <p className="mx-auto mt-6 text-lg" style={{ color: "var(--ink-muted)" }}>
               Connect one tool and build your first metric in an afternoon.
             </p>
-            {/* WHITE ON THE BLUE, inverting the page's dark pill: a near-black
-                button on a deep blue ground is a shape you have to hunt for. */}
             <div className="mt-10 flex justify-center">
-              <a
-                href={cta}
-                className="lift-md group inline-flex h-13 items-center gap-2 rounded-full bg-white pl-7 pr-2 text-button font-semibold text-neutral-950 transition-transform duration-(--duration-fast) ease-(--ease-standard) hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white motion-reduce:transition-none motion-reduce:hover:translate-y-0"
-              >
+              <a href={cta} className="btn-solid">
                 {ctaLabel}
-                <span className="flex size-9 items-center justify-center rounded-full bg-neutral-950/10">
-                  <ArrowRight
-                    aria-hidden
-                    className="size-4 transition-transform duration-(--duration-fast) ease-(--ease-standard) group-hover:translate-x-0.5 motion-reduce:transition-none"
-                  />
-                </span>
               </a>
             </div>
           </div>
         </section>
       </main>
 
-      {/* ==== Footer ===================================================== */}
-      {/**
-       * A REAL FOOTER, which this page did not have. It was one line — a
-       * copyright and three links — and a one-line footer is the clearest
-       * signal a site can send that nobody finished it. The reference closes on
-       * a proper set of columns, and it costs nothing but the links that
-       * already exist elsewhere on the page.
-       *
-       * EVERY LINK HERE GOES SOMEWHERE THAT EXISTS. No "Careers", no "Press",
-       * no "Changelog" — a footer padded with dead anchors is worse than a
-       * short one, and the `/docs`, `/terms` and `/privacy` routes plus this
-       * page's own sections are the honest inventory.
-       */}
-      <footer className="lander-band border-t border-border">
-        <div className="mx-auto w-full max-w-6xl px-5 py-14 sm:px-8 sm:py-16">
+      <footer className="px-5 sm:px-8" style={{ borderTop: "1px solid var(--rule)" }}>
+        <div className="mx-auto w-full max-w-[72rem] py-14">
           <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.6fr)_repeat(3,minmax(0,1fr))] lg:gap-8">
             <div className="max-w-xs">
-              <span className="font-marketing flex items-center gap-2 text-lg font-bold tracking-tight text-foreground">
+              <span
+                className="font-marketing flex items-center gap-2 text-lg font-bold tracking-tight"
+                style={{ color: "var(--ink)" }}
+              >
                 <BrandMark className="size-6 shrink-0" />
                 Namzilabs
               </span>
-              <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+              <p className="mt-3 text-sm leading-relaxed" style={{ color: "var(--ink-muted)" }}>
                 One number, from every tool you already use — with the arithmetic shown underneath it.
               </p>
             </div>
@@ -538,14 +494,13 @@ export default async function Home() {
               },
             ].map((col) => (
               <div key={col.title}>
-                <p className="text-sm font-semibold text-foreground">{col.title}</p>
+                <p className="text-sm font-semibold" style={{ color: "var(--ink)" }}>
+                  {col.title}
+                </p>
                 <ul className="mt-4 flex flex-col gap-3">
                   {col.links.map((l) => (
                     <li key={l.label}>
-                      <Link
-                        href={l.href}
-                        className="inline-flex min-h-6 items-center rounded-control text-sm text-muted-foreground transition-colors duration-(--duration-fast) hover:text-foreground"
-                      >
+                      <Link href={l.href} className="foot-link">
                         {l.label}
                       </Link>
                     </li>
@@ -555,13 +510,15 @@ export default async function Home() {
             ))}
           </div>
 
-          <div className="mt-12 flex flex-wrap items-center justify-between gap-4 border-t border-border pt-6 text-sm text-muted-foreground">
+          <div
+            className="mt-12 flex flex-wrap items-center justify-between gap-4 pt-6 text-sm"
+            style={{ borderTop: "1px solid var(--rule)", color: "var(--ink-muted)" }}
+          >
             <span>&copy; {new Date().getFullYear()} Namzilabs</span>
             <span>Read-only access to every tool it reads.</span>
           </div>
         </div>
       </footer>
-
     </div>
   );
 }

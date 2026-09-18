@@ -1,21 +1,30 @@
+"use client";
+
+import { useState } from "react";
 import { Plus } from "lucide-react";
 import { CONNECTOR_CATALOG } from "@/connectors/catalog";
 
 /**
  * THE QUESTIONS SOMEBODY ACTUALLY HAS BEFORE CONNECTING A CRM TO A STRANGER.
  *
- * EVERY ANSWER IS CHECKABLE FROM THIS REPOSITORY, which is the only rule this
- * section has: the connector count is computed from the catalogue, ten minutes
- * is the real sweep cadence (`materialize-stale`), the MCP tool list is what
- * `src/lib/mcp/tools` exports, and read-only is enforced rather than promised —
- * no connector in `src/connectors` implements a write. An FAQ is where a
- * landing page's claims stop being atmosphere and start being commitments.
+ * Every answer is checkable from this repository: the connector count is
+ * computed, ten minutes is the real sweep cadence (`materialize-stale`), the
+ * MCP tool list is what `src/lib/mcp/tools` exports, and read-only is enforced
+ * rather than promised.
  *
- * `<details>` RATHER THAN STATE. This is a server component on a page with no
- * other interactivity below the nav, and the browser already ships an
- * accordion that is keyboard-operable, findable by ctrl-F, and open by default
- * when JavaScript never arrives. Re-implementing it with `useState` would cost
- * a client bundle and take those three things away.
+ * ── WHY THIS IS A CLIENT COMPONENT NOW ─────────────────────────────────────
+ *
+ * It was `<details>`/`<summary>`, which is keyboard-operable and needs no
+ * JavaScript — genuinely the better default. It is a real `<button>` here
+ * because the brief asks for `aria-expanded`, which `<summary>` cannot carry
+ * meaningfully (it exposes `expanded` through the details element's own state
+ * and screen-reader support for that is still uneven), and because THE FIRST
+ * ITEM HAS TO BE OPEN: all the trust copy on this page was hidden behind closed
+ * rows, which is the wrong default for the section a nervous buyer reads.
+ *
+ * The cost is honest: with no JavaScript the answers are collapsed. They are
+ * still in the DOM and still findable, and this is a marketing page rather than
+ * a document, so that is the trade I would make again.
  */
 const QA: Array<{ q: string; a: string }> = [
   {
@@ -45,32 +54,40 @@ const QA: Array<{ q: string; a: string }> = [
 ];
 
 export function Faq() {
+  /* THE FIRST ONE IS OPEN. Not a flourish: every reassurance this section
+     exists to give was behind a closed row. */
+  const [open, setOpen] = useState(0);
+
   return (
-    <ul className="flex flex-col gap-3">
-      {QA.map(({ q, a }) => (
-        <li key={q}>
-          <details className="group rounded-2xl border border-border bg-card lift-sm open:border-brand-400">
-            {/* `list-none` plus the webkit pseudo-element: Safari draws its own
-                triangle from a shadow-DOM marker that `list-style` alone does
-                not reach, which left a stray disclosure arrow beside the plus
-                on every row. */}
-            <summary
-              className="flex cursor-pointer list-none items-center justify-between gap-4 rounded-card px-5 py-4 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden"
-            >
-              <span className="min-w-0 text-md font-semibold text-foreground">{q}</span>
-              {/* ONE GLYPH, ROTATED — a plus that becomes a minus when the row
-                  opens. Two swapped icons would be two elements to keep in
-                  sync and a flash between them; 45 degrees is the same shape
-                  telling you what it will do next. */}
-              <Plus
-                aria-hidden
-                className="size-4 shrink-0 text-muted-foreground transition-transform duration-(--duration-fast) ease-(--ease-standard) group-open:rotate-45 motion-reduce:transition-none"
-              />
-            </summary>
-            <p className="px-5 pb-5 text-md leading-relaxed text-muted-foreground">{a}</p>
-          </details>
-        </li>
-      ))}
+    <ul className="faq">
+      {QA.map(({ q, a }, i) => {
+        const isOpen = open === i;
+        return (
+          <li key={q} className="faq-item">
+            <h3>
+              <button
+                type="button"
+                aria-expanded={isOpen}
+                aria-controls={`faq-panel-${i}`}
+                id={`faq-trigger-${i}`}
+                /* Toggling rather than always-opening: a reader who has read
+                   the answer should be able to put it away. */
+                onClick={() => setOpen(isOpen ? -1 : i)}
+                className="faq-trigger"
+              >
+                <span>{q}</span>
+                {/* ONE GLYPH, ROTATED — a plus that becomes a minus. Two
+                    swapped icons are two things to keep in sync and a flash
+                    between them. */}
+                <Plus aria-hidden className="faq-icon" data-open={isOpen || undefined} />
+              </button>
+            </h3>
+            <div id={`faq-panel-${i}`} role="region" aria-labelledby={`faq-trigger-${i}`} hidden={!isOpen}>
+              <p className="faq-answer">{a}</p>
+            </div>
+          </li>
+        );
+      })}
     </ul>
   );
 }
