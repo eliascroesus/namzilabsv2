@@ -121,7 +121,14 @@ export function PillNav({ signedIn }: { signedIn: boolean }) {
           // over all six is one opaque enough to bring its own ground. 72%
           // black is the figure that survived being measured on every one of
           // them; the blur is what keeps it from reading as a slab.
-          "border border-white/10 bg-[color-mix(in_oklab,var(--color-neutral-950)_72%,transparent)] backdrop-blur-xl",
+          //
+          // `blur-md` RATHER THAN `blur-xl`, AND THE FILL WENT UP TO 76% TO
+          // PAY FOR IT. This bar is sticky, so its backdrop is re-sampled on
+          // every scroll frame for the whole document, and a 24px radius is
+          // roughly four times the work of a 12px one. Four points of extra
+          // opacity buy back the legibility the smaller radius gives up, and
+          // cost nothing per frame.
+          "border border-white/10 bg-[color-mix(in_oklab,var(--color-neutral-950)_76%,transparent)] backdrop-blur-md",
         )}
       >
         <Link

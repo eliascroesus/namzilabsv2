@@ -49,7 +49,7 @@ export function Faq() {
     <ul className="flex flex-col gap-3">
       {QA.map(({ q, a }) => (
         <li key={q}>
-          <details className="group rounded-card border border-border bg-card open:bg-background">
+          <details className="group rounded-2xl border border-border bg-card lift-sm open:border-brand-400">
             {/* `list-none` plus the webkit pseudo-element: Safari draws its own
                 triangle from a shadow-DOM marker that `list-style` alone does
                 not reach, which left a stray disclosure arrow beside the plus

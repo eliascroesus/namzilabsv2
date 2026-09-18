@@ -37,7 +37,7 @@ export function Reconcile() {
         {SOURCES.map((s) => (
           <li
             key={s.source}
-            className="flex min-w-0 flex-1 items-center gap-4 rounded-card border border-border bg-card px-4 py-4 sm:px-5"
+            className="lift-sm flex min-w-0 flex-1 items-center gap-4 rounded-2xl border border-border bg-card px-4 py-4 sm:px-5"
           >
             <SourceMark source={s.source} size={36} className="stat-numeral shrink-0" />
 
@@ -68,7 +68,7 @@ export function Reconcile() {
       </div>
 
       {/* ── the one that resolves them ──────────────────────────────────── */}
-      <div className="flex min-w-0 flex-col justify-between gap-6 rounded-card border border-brand-soft-line bg-brand-soft p-5 sm:p-6 lg:w-[19rem] lg:shrink-0">
+      <div className="lift-md flex min-w-0 flex-col justify-between gap-6 rounded-2xl border border-brand-soft-line bg-brand-soft p-5 sm:p-6 lg:w-[19rem] lg:shrink-0">
         <span className="flex items-center gap-2">
           <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-success">
             <Check className="size-3.5 text-white" />

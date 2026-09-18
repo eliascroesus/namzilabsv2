@@ -1,49 +1,59 @@
-import { Bell, ChartLine, LayoutGrid, Plug, Radio, RefreshCw, Search, Settings, Workflow } from "lucide-react";
+import { Bell, Gift, LayoutGrid, Plug, Plus, Radio, RefreshCw, Search, Settings, Share2, Workflow } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
- * THE PRODUCT, DRAWN — the hero's one picture, at 16:9.
+ * A DRAWING OF THE REAL DASHBOARD.
  *
- * WHY THIS IS NOT A SCREENSHOT, which is the obvious way to fill this slot.
- * Three reasons, in order of how much they cost:
+ * ── WHY THIS WAS REBUILT ───────────────────────────────────────────────────
  *
- *  1. `/design/overview` is a TEST FIXTURE. Its tiles are named "Total Leads
- *     (Arman)" three times and "Speed To Lead (Arman)" twice, because it exists
- *     to prove a grid reflows, not to be looked at. A landing page whose one
- *     product image repeats the same metric three times says the product has
- *     one metric.
- *  2. A PNG is fixed at one width and one density. This is the element that
- *     has to survive a 375px phone and a 2560px display, and cropping a
- *     screenshot to fit either is how a hero image ends up showing a sidebar
- *     and half a card.
- *  3. It would be a binary in a repo that currently has no `public/` directory
- *     at all, re-shot by hand every time the chrome changes.
+ * The owner sent a screenshot of his actual board and asked for it on the
+ * lander instead of this. The old drawing was not wrong so much as it was a
+ * drawing of a DIFFERENT product: a six-tile grid of blue line charts, where
+ * the real thing opens on a row of scorecards, a green revenue bar chart and
+ * an orange funnel. Somebody who clicked through would have arrived somewhere
+ * they had not been shown.
  *
- * So it is a DRAWING, and the honesty bar for a drawing is that it must be a
- * drawing of the real thing: the rail, the view strip, the range pill and the
- * card grid are the dashboard's own composition at the dashboard's own
- * proportions, in the kit's tokens, with the brand as the only colour. What is
- * invented is the CONTENT — plausible metrics for a company that is not real —
- * and content is the one part of a product shot nobody has ever taken to be a
- * promise.
+ * So the layout, the chrome and the chart types here are copied from that
+ * screenshot: the workspace switcher and the Invite-&-earn card in the rail,
+ * the date range beside the title, the tab strip with its Add / range /
+ * Compare To / Refresh All controls, six scorecards over three rate cards, the
+ * green weekly revenue chart, and the funnel under it.
  *
- * IT FILLS A 16:9 BOX, which is a layout fact rather than a taste one. The
- * figure outside sets the ratio and this fills it; every row below is `flex-1`
- * or `shrink-0` so the board grows into whatever height that works out to,
- * instead of sitting at its natural height with a band of empty card under it.
- * The first version was 309px of content in a 648px frame.
+ * ── WHY THE NUMBERS ARE NOT HIS ────────────────────────────────────────────
  *
- * `aria-hidden`, and this one is not a shrug. Every word in here is decorative
- * duplicate, and a screen reader that walked it would read forty numbers
- * belonging to a company that does not exist before reaching the sign-up link.
- * The figure outside carries one real caption instead.
+ * The screenshot is of a live workspace — a named client, $259,748 of revenue,
+ * 726 leads, a close rate. Publishing that on the front page would put a real
+ * customer's book on the open web, and `.env.local` points at the production
+ * database, so a literal screenshot taken here would leak whatever it caught.
+ * Every figure below is invented and internally consistent instead: 512 leads
+ * → 268 booked (52.3%) → 179 showed (66.8%) → 61 customers (34.1% close),
+ * 61 × $3,040 ≈ $185,440. A demo whose funnel does not reconcile is a demo of
+ * the problem this product claims to fix.
+ *
+ * ── WHY IT IS STILL DOM RATHER THAN A PNG ──────────────────────────────────
+ *
+ * It stays sharp on any display, follows the theme, cannot go stale against a
+ * UI change the way an exported image does, and carries nobody's data.
  */
 
-const SERIES = [8, 14, 11, 19, 26, 22, 31];
-const DIP = [26, 22, 24, 18, 21, 16, 19];
-const BARS = [34, 52, 78, 61, 44, 70, 58];
+/** The weekly revenue bars — fourteen weeks, in the real chart's green. */
+const WEEKS = [2, 96, 41, 18, 12, 52, 88, 30, 30, 51, 26, 60, 14, 3];
 
-/** One nav row in the drawn rail. */
+const SCORES: Array<{ label: string; value: string }> = [
+  { label: "Leads", value: "512" },
+  { label: "Booked Leads", value: "268" },
+  { label: "Calls Showed", value: "179" },
+  { label: "Customers", value: "61" },
+  { label: "Revenue", value: "$185,440" },
+  { label: "AOV", value: "$3,040" },
+];
+
+const RATES: Array<{ label: string; value: string }> = [
+  { label: "Booking rate", value: "52.3%" },
+  { label: "Show up rate", value: "66.8%" },
+  { label: "Close rate", value: "34.1%" },
+];
+
 function RailRow({ icon: Icon, label, active }: { icon: typeof LayoutGrid; label: string; active?: boolean }) {
   return (
     <span
@@ -58,79 +68,16 @@ function RailRow({ icon: Icon, label, active }: { icon: typeof LayoutGrid; label
   );
 }
 
-/** A chart card: title, figure, drawing. The dashboard's tile, at hero scale. */
-function TileCard({
-  title,
-  value,
-  delta,
-  className,
-  children,
-}: {
-  title: string;
-  value: string;
-  delta?: string;
-  /** The breakpoint lives HERE, not on a wrapper: a `<span>` around a grid
-   *  child becomes the grid item itself, and the card inside it then sits at
-   *  its natural height while the track stretches around it. */
-  className?: string;
-  children: React.ReactNode;
-}) {
+/** A control in the tab strip — a label in a hairline box, drawn once. */
+function Pill({ children, solid }: { children: React.ReactNode; solid?: boolean }) {
   return (
-    <div className={cn("flex min-w-0 flex-col rounded-card border border-border bg-card p-3", className)}>
-      <span className="truncate text-xs font-semibold text-foreground">{title}</span>
-      <span className="mt-0.5 flex items-baseline gap-1.5">
-        <span className="stat-numeral text-lg leading-tight text-foreground">{value}</span>
-        {delta && <span className="text-xs text-success">{delta}</span>}
-      </span>
-      {/* `flex-1` and `min-h-0`: the drawing takes whatever height the 16:9
-          frame leaves over, and without `min-h-0` a flex child refuses to go
-          below its content's own size and pushes the card past the frame. */}
-      <span className="mt-2 block min-h-0 flex-1">{children}</span>
-    </div>
-  );
-}
-
-/** A scorecard: the tile with no chart, which is most of a real board. */
-function Scorecard({ title, value, className }: { title: string; value: string; className?: string }) {
-  return (
-    <div className={cn("flex min-w-0 flex-col justify-center rounded-card border border-border bg-card p-3", className)}>
-      <span className="truncate text-xs font-medium text-muted-foreground">{title}</span>
-      <span className="stat-numeral mt-1 truncate text-md leading-tight text-foreground">{value}</span>
-    </div>
-  );
-}
-
-/** The line and area drawings share one path; only the fill differs. */
-function Spark({ data = SERIES, filled }: { data?: number[]; filled?: boolean }) {
-  const max = Math.max(...data);
-  const pts = data.map((v, i) => [(i / (data.length - 1)) * 100, 100 - (v / max) * 92]);
-  const line = pts.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
-  return (
-    <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="size-full">
-      {filled && <polygon points={`0,100 ${line} 100,100`} className="fill-brand-400" style={{ fillOpacity: 0.16 }} />}
-      {/* `vector-effect` keeps the stroke 1.5px after `preserveAspectRatio="none"`
-          has stretched the 100x100 box into a wide rectangle — without it the
-          horizontal runs draw thin and the verticals draw fat. */}
-      <polyline
-        points={line}
-        fill="none"
-        vectorEffect="non-scaling-stroke"
-        strokeWidth={1.5}
-        strokeLinejoin="round"
-        strokeLinecap="round"
-        className="stroke-brand-400"
-      />
-    </svg>
-  );
-}
-
-function Bars() {
-  const max = Math.max(...BARS);
-  return (
-    <span className="flex h-full items-end gap-1.5">
-      {BARS.map((v, i) => (
-        <span key={i} className="min-w-0 flex-1 rounded-t-md bg-brand-400" style={{ height: `${Math.round((v / max) * 100)}%` }} />
-      ))}
+    <span
+      className={cn(
+        "flex shrink-0 items-center gap-1 rounded-control px-2 py-1 text-[10px] font-medium",
+        solid ? "bg-accent text-foreground" : "border border-border text-muted-foreground",
+      )}
+    >
+      {children}
     </span>
   );
 }
@@ -143,94 +90,188 @@ export function AppWindow() {
        * THE BEZEL. Every rung of the kit's shadow ladder is `none` — the
        * product does not draw drop shadows, and `pnpm shadows` asserts that by
        * outcome rather than by class name. So the depth that would normally
-       * come from a shadow comes from a dark frame instead, which is what a
-       * product image usually gets from a device: a near-black bezel reads as
-       * hardware, and hardware reads as a thing sitting in front of the sky.
+       * come from a shadow comes from a dark frame instead: a near-black bezel
+       * reads as hardware, and hardware reads as a thing sitting in front of
+       * the sky.
        */
       className="h-full rounded-frame bg-neutral-950 p-1.5 sm:rounded-3xl sm:p-2.5"
     >
       <div className="flex h-full overflow-hidden rounded-card bg-card sm:rounded-2xl">
-        {/* --- the rail ------------------------------------------------------ */}
-        <div className="hidden w-44 shrink-0 flex-col gap-3 border-r border-border bg-muted/40 p-3 sm:flex">
+        {/* ── the rail ──────────────────────────────────────────────────── */}
+        <div className="hidden w-40 shrink-0 flex-col gap-2.5 border-r border-border bg-muted/40 p-2.5 lg:flex">
           <span className="flex items-center gap-2">
-            <span className="stat-numeral flex size-6 items-center justify-center rounded-control bg-primary text-xs text-primary-foreground">
+            <span className="stat-numeral flex size-5 items-center justify-center rounded-control bg-primary text-[10px] text-primary-foreground">
               N
             </span>
-            <span className="truncate text-xs font-semibold text-foreground">Acme Sales</span>
+            <span className="truncate text-[11px] font-semibold text-foreground">Northwind</span>
           </span>
-          <span className="flex items-center gap-1.5 rounded-control border border-border bg-card px-2 py-1.5 text-xs text-muted-foreground">
+
+          <span className="flex items-center gap-1.5 rounded-control border border-border bg-card px-2 py-1 text-[10px] text-muted-foreground">
             <Search className="size-3" />
             Search
           </span>
+
           <span className="flex flex-col gap-0.5">
             <RailRow icon={LayoutGrid} label="Dashboard" active />
+            {/* THE SUB-ITEMS UNDER DASHBOARD, because the real rail has them
+                and they are what tells you a board is a set of views rather
+                than one screen. */}
+            <span className="flex flex-col gap-0.5 pl-6">
+              {["Overview", "Calls", "Money", "Leads"].map((v, i) => (
+                <span
+                  key={v}
+                  className={cn("py-0.5 text-[10px]", i === 0 ? "font-medium text-foreground" : "text-muted-foreground")}
+                >
+                  {v}
+                </span>
+              ))}
+            </span>
             <RailRow icon={Radio} label="Activity" />
             <RailRow icon={Workflow} label="Flows" />
             <RailRow icon={Plug} label="Apps" />
             <RailRow icon={Settings} label="Settings" />
           </span>
-          {/* The rail's foot, which is where the real one keeps the workspace
-              it is signed into. Pushed down by `mt-auto` rather than spaced,
-              so it stays at the bottom however tall the frame gets. */}
-          <span className="mt-auto flex flex-col gap-1 rounded-card border border-border bg-card p-2.5">
-            <span className="text-xs font-semibold text-foreground">31 tools connected</span>
-            <span className="text-xs text-muted-foreground">Last sweep 2m ago</span>
+
+          {/* THE RAIL'S FOOT — the invite card and the New button, which is
+              what the real one carries and the reason the column reads as a
+              workspace rather than as a nav list. `.sky-panel` is the same
+              blue the owner named as his favourite surface in the product. */}
+          <span className="mt-auto flex flex-col gap-1.5">
+            <span className="sky-panel flex items-center gap-2 overflow-hidden rounded-control px-2 py-1.5">
+              <Gift className="size-3 shrink-0 text-white" />
+              <span className="flex min-w-0 flex-col">
+                <span className="truncate text-[10px] font-semibold leading-3 text-white">Invite &amp; earn</span>
+                <span className="truncate text-[9px] leading-3 text-white/75">1 invite = 1 month free</span>
+              </span>
+            </span>
+            <span className="flex items-center justify-center gap-1 rounded-control bg-foreground py-1.5 text-[10px] font-semibold text-background">
+              <Plus className="size-3" />
+              New
+            </span>
           </span>
         </div>
 
-        {/* --- the board ----------------------------------------------------- */}
+        {/* ── the board ─────────────────────────────────────────────────── */}
         <div className="flex min-w-0 flex-1 flex-col">
-          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-2.5">
+          {/* the title bar */}
+          <div className="flex shrink-0 items-center justify-between gap-3 px-3 pb-2 pt-2.5">
             <span className="flex min-w-0 items-baseline gap-2">
               <span className="truncate text-sm font-semibold text-foreground">Overview</span>
-              <span className="hidden truncate text-xs text-muted-foreground sm:inline">Last 7 days</span>
+              <span className="hidden truncate text-[10px] text-muted-foreground sm:inline">
+                Sat, Jun 20 &ndash; Thu, Sep 17
+              </span>
             </span>
-            <span className="flex shrink-0 items-center gap-1.5">
-              <span className="hidden items-center gap-1 rounded-control border border-border px-2 py-1 text-xs text-muted-foreground sm:flex">
-                <RefreshCw className="size-3" />
-                Updated 2m ago
-              </span>
-              <span className="flex items-center gap-1 rounded-control border border-border px-2 py-1 text-xs text-muted-foreground">
-                <ChartLine className="size-3" />
-                Compare
-              </span>
-              <Bell className="size-3.5 text-muted-foreground" />
+            <span className="flex shrink-0 items-center gap-2 text-muted-foreground">
+              <span className="hidden text-[10px] sm:inline">Updated 2 hr ago</span>
+              <Share2 className="size-3" />
+              <Bell className="size-3" />
             </span>
           </div>
 
-          {/**
-           * A GRID WITH PROPORTIONAL ROWS, not a stack of natural heights. Two
-           * chart rows at `2fr` and a scorecard row at `1fr` divide whatever
-           * the 16:9 frame leaves, which is what lets the same markup look
-           * right in a 648px frame and a 300px one.
-           */}
-          <div className="grid min-h-0 flex-1 grid-cols-2 grid-rows-[2fr_1fr] gap-2.5 p-3 sm:gap-3 sm:p-4 lg:grid-cols-3 lg:grid-rows-[2fr_2fr_1fr]">
-            <TileCard title="Meetings booked" value="41" delta="+18%">
-              <Spark />
-            </TileCard>
-            <TileCard title="Pickup rate" value="28.2%" delta="+4.1pts">
-              <Spark filled />
-            </TileCard>
-            {/* The third column, and the whole second row, are what a
-                two-column phone cannot fit without the cards going narrower
-                than their own numbers. */}
-            <TileCard title="Leads by rep" value="78" className="hidden lg:flex">
-              <Bars />
-            </TileCard>
+          {/* the tab strip */}
+          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-3 pb-2">
+            <span className="flex min-w-0 items-center gap-1">
+              <Pill solid>
+                <LayoutGrid className="size-2.5" />
+                Overview
+              </Pill>
+              {["Calls", "Money", "Leads"].map((t) => (
+                <span key={t} className="hidden shrink-0 px-2 text-[10px] text-muted-foreground sm:inline">
+                  {t}
+                </span>
+              ))}
+            </span>
+            <span className="flex shrink-0 items-center gap-1">
+              <Pill>
+                <Plus className="size-2.5" />
+                Add
+              </Pill>
+              <span className="hidden sm:flex">
+                <Pill>Last 90 days</Pill>
+              </span>
+              <span className="hidden lg:flex">
+                <Pill>Compare To</Pill>
+              </span>
+              <Pill>
+                <RefreshCw className="size-2.5" />
+                Refresh
+              </Pill>
+            </span>
+          </div>
 
-            <TileCard title="Revenue" value="$48.2k" delta="+9%" className="hidden lg:flex">
-              <Spark filled />
-            </TileCard>
-            <TileCard title="Speed to lead" value="8m 39s" className="hidden lg:flex">
-              <Spark data={DIP} />
-            </TileCard>
-            <TileCard title="Replies" value="112" delta="+22%" className="hidden lg:flex">
-              <Bars />
-            </TileCard>
+          {/* the board body */}
+          <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden p-3">
+            {/* ── six scorecards ──────────────────────────────────────── */}
+            <div className="grid shrink-0 grid-cols-3 gap-2 lg:grid-cols-6">
+              {SCORES.map((s) => (
+                <div key={s.label} className="min-w-0 rounded-card border border-border bg-background px-2.5 py-2">
+                  <span className="block truncate text-[10px] text-muted-foreground">{s.label}</span>
+                  <span className="stat-numeral mt-0.5 block truncate text-sm leading-tight text-foreground">
+                    {s.value}
+                  </span>
+                </div>
+              ))}
+            </div>
 
-            <Scorecard title="Show-up rate" value="69%" />
-            <Scorecard title="Close rate" value="20%" />
-            <Scorecard title="Cost per meeting" value="$41.80" className="hidden lg:flex" />
+            {/* ── three rates ─────────────────────────────────────────── */}
+            <div className="hidden shrink-0 grid-cols-3 gap-2 sm:grid">
+              {RATES.map((r) => (
+                <div key={r.label} className="min-w-0 rounded-card border border-border bg-background px-2.5 py-2">
+                  <span className="block truncate text-[10px] text-muted-foreground">{r.label}</span>
+                  <span className="stat-numeral mt-0.5 block text-md leading-tight text-foreground">{r.value}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* ── the revenue chart ───────────────────────────────────── */}
+            {/* GREEN, WHICH IS THE ONE PLACE THIS PAGE DOES NOT USE THE BRAND.
+                The real board draws money in `--success` and everything else
+                in the brand blue, and that distinction is the board's own
+                vocabulary — repainting it blue here to match the landing page
+                would be showing a product that does not exist. */}
+            <div className="flex min-h-0 flex-1 flex-col rounded-card border border-border bg-background p-2.5">
+              <span className="shrink-0">
+                <span className="block text-[10px] text-muted-foreground">Revenue</span>
+                <span className="stat-numeral block text-md leading-tight text-foreground">$185,440</span>
+              </span>
+              <span className="mt-2 flex min-h-0 flex-1 items-end gap-[3px]">
+                {WEEKS.map((v, i) => (
+                  <span
+                    key={i}
+                    className="min-w-0 flex-1 rounded-t-sm bg-success"
+                    style={{ height: `${Math.max(2, v)}%` }}
+                  />
+                ))}
+              </span>
+              <span className="mt-1 flex shrink-0 justify-between text-[9px] text-muted-foreground">
+                <span>W25</span>
+                <span>W31</span>
+                <span>W38</span>
+              </span>
+            </div>
+
+            {/* ── the funnel ──────────────────────────────────────────── */}
+            {/* Three stages, each band as wide as its share of the one before
+                it, so the taper IS the conversion rather than a shape drawn to
+                look like one. The rates printed on the steps are the same ones
+                in the cards above. */}
+            <div className="hidden shrink-0 rounded-card border border-border bg-background p-2.5 lg:block">
+              <span className="flex items-end gap-1">
+                {[
+                  { label: "Leads", value: "512", w: 100, tone: "bg-warn/25" },
+                  { label: "Calls Showed", value: "179", w: 62, tone: "bg-warn/55" },
+                  { label: "Customers", value: "61", w: 34, tone: "bg-warn" },
+                ].map((st) => (
+                  <span key={st.label} className="flex min-w-0 flex-1 flex-col gap-1">
+                    <span className="truncate text-[10px] text-muted-foreground">{st.label}</span>
+                    <span className="stat-numeral truncate text-xs leading-none text-foreground">{st.value}</span>
+                    <span className="flex h-4 items-center">
+                      <span className={cn("h-full rounded-sm", st.tone)} style={{ width: `${st.w}%` }} />
+                    </span>
+                  </span>
+                ))}
+              </span>
+            </div>
           </div>
         </div>
       </div>

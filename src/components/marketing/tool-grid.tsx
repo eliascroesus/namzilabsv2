@@ -33,7 +33,7 @@ export function ToolGrid() {
               cursor passing over. */}
           <span
             title={entry.description}
-            className="flex min-w-0 items-center gap-2.5 rounded-card border border-border bg-card px-3 py-3 transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:border-brand-400"
+            className="flex min-w-0 items-center gap-2.5 rounded-2xl border border-border bg-card px-3 py-3 transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:border-brand-400"
           >
             <SourceMark source={entry.source} size={28} className="stat-numeral shrink-0" />
             <span className="min-w-0 truncate text-sm font-medium text-foreground">{entry.name}</span>

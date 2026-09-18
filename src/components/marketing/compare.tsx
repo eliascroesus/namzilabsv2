@@ -43,7 +43,7 @@ export function Compare() {
           column somebody recognises, not the one they are being sold. Loud
           red crosses would be the page shouting at the reader about their
           own current week. */}
-      <div className="flex flex-col gap-5 rounded-card border border-border bg-card p-6 sm:p-7">
+      <div className="lift-sm flex flex-col gap-5 rounded-2xl border border-border bg-card p-6 sm:p-7">
         <div>
           <p className="text-lg font-semibold text-foreground">Reconciling by hand</p>
           <p className="mt-1 text-sm text-muted-foreground">Every week, usually on a Friday</p>
@@ -60,7 +60,7 @@ export function Compare() {
       </div>
 
       {/* ── with Namzilabs ──────────────────────────────────────────────── */}
-      <div className="flex flex-col gap-5 rounded-card border border-brand-soft-line bg-brand-soft p-6 sm:p-7">
+      <div className="lift-sm flex flex-col gap-5 rounded-2xl border border-brand-soft-line bg-brand-soft p-6 sm:p-7">
         <div>
           <p className="text-lg font-semibold text-foreground">With Namzilabs</p>
           <p className="mt-1 text-sm text-muted-foreground">Once, when you connect it</p>

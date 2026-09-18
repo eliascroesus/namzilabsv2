@@ -4,8 +4,10 @@ import { ArrowRight } from "lucide-react";
 import { CONNECTOR_CATALOG } from "@/connectors/catalog";
 import { AppWindow } from "@/components/marketing/app-window";
 import { ToolMarquee } from "@/components/marketing/marquee";
+import { PauseOffscreen } from "@/components/marketing/pause-offscreen";
 import { AiPanel } from "@/components/marketing/ai-panel";
 import { PillNav } from "@/components/marketing/pill-nav";
+import { BrandMark } from "@/components/marketing/brand-mark";
 import { ProblemGrid } from "@/components/marketing/problem";
 import { NightSky } from "@/components/marketing/night-sky";
 import { Pricing } from "@/components/marketing/pricing";
@@ -75,20 +77,6 @@ export const metadata = {
 };
 
 /**
- * The stat band. Every one of these four is a fact this repository can be
- * checked against rather than a customer count: the integration total is
- * COMPUTED so it cannot fall behind the catalogue, ten minutes is the sweep's
- * real cadence (`materialize-stale`), and the other two are claims the product
- * either honours or does not.
- */
-const FACTS: Array<{ figure: string; label: string }> = [
-  { figure: `${CONNECTOR_CATALOG.length}`, label: "Tools it reads" },
-  { figure: "10 min", label: "Recompute cadence" },
-  { figure: "0", label: "Lines of SQL" },
-  { figure: "Read-only", label: "Access it asks for" },
-];
-
-/**
  * THE HERO'S PILL — WHITE, because the sky under it is night.
  *
  * It was near-black for exactly as long as the hero was daylight. On a #070B18
@@ -141,7 +129,7 @@ export default async function Home() {
   const ctaLabel = user ? "Go to dashboard" : "Start free";
 
   return (
-    <div className="flex min-h-dvh flex-col bg-background">
+    <div className="lander flex min-h-dvh flex-col bg-background">
       <PillNav signedIn={Boolean(user)} />
 
       <main id="main" className="flex-1">
@@ -180,13 +168,25 @@ export default async function Home() {
                 NOT follow the theme. `--foreground` would render this headline
                 in near-black on near-black for a light-theme visitor. */}
             <h1 className="font-marketing text-balance text-banner font-bold leading-[0.95] tracking-[-0.03em] text-white">
-              <span className="sm:block">Your tools disagree.</span>{" "}
-              <span className="sm:block">This settles it.</span>
+              {/* THE HEADLINE NAMES THE JOB, NOT THE GRIEVANCE. It read "Your
+                  tools disagree. This settles it." — a good line about a
+                  problem, and one that leaves a visitor who has not yet felt
+                  that problem with no idea what the product IS. This says what
+                  you do with it in five words; the disagreement argument now
+                  starts in the section built for it. */}
+              <span className="sm:block">Analyze all your data</span>{" "}
+              <span className="sm:block">in one place.</span>
             </h1>
 
+            {/* THE ZAPIER COMPARISON IS DOING WORK, not name-dropping. "Build
+                any metric" is abstract until somebody knows the SHAPE of the
+                thing — steps chained into a flow, assembled rather than
+                queried — and one familiar product carries that faster than a
+                paragraph can. It is comparative reference and claims no
+                affiliation. */}
             <p className="mx-auto mt-7 max-w-xl text-lg leading-relaxed text-white/80">
-              Namzilabs reads every tool you already use, matches the records that are the same person twice over, and
-              gives you one figure with the arithmetic attached.
+              Build any metric you can describe — like Zapier, but for your data — and find every bottleneck in your
+              business.
             </p>
 
             <div className="mt-9 flex flex-col items-center gap-4">
@@ -209,7 +209,9 @@ export default async function Home() {
                 Reads from {CONNECTOR_CATALOG.length} tools, including
               </p>
               <div className="mt-5">
-                <ToolMarquee />
+                <PauseOffscreen>
+                  <ToolMarquee />
+                </PauseOffscreen>
               </div>
             </div>
 
@@ -238,37 +240,15 @@ export default async function Home() {
           </div>
         </section>
 
-        {/* ==== The facts ================================================== */}
-        {/* The top padding pays for the window hanging into this section:
-            112px of overlap plus a section's worth of air above the heading. */}
-        <section className="mx-auto w-full max-w-6xl px-5 pb-20 pt-44 sm:px-8 sm:pb-28 sm:pt-56">
-          <h2 className="sr-only">Namzilabs in four numbers</h2>
-          {/* A PLAIN ROW, NOT FOUR CARDS. Boxing each figure would make this
-              the fourth grid of bordered rectangles on the page; hairlines
-              between them say the same thing for a tenth of the ink. */}
-          <dl className="grid grid-cols-2 gap-y-10 sm:grid-cols-4 sm:divide-x sm:divide-border">
-            {FACTS.map((f, i) => (
-              <div key={f.label} className={i === 0 ? "sm:pr-6" : "sm:px-6"}>
-                <dt className="sr-only">{f.label}</dt>
-                <dd>
-                  {/* `text-nowrap`: "Read-only" is the one figure here that is
-                      a word rather than a number, and a hyphen is a break
-                      opportunity — it split into "Read-" / "only" the first
-                      time this row was measured. */}
-                  {/* `text-nowrap` keeps "Read-only" whole — a hyphen is a
-                      break opportunity and it split into "Read-" / "only" the
-                      first time this row was measured. Which is exactly why it
-                      has to step DOWN on a phone: 48px unbreakable in a 175px
-                      half-column overflowed the page by 4px. */}
-                  <span className="font-marketing block text-nowrap text-display-md font-bold leading-none tracking-tight text-foreground lg:text-display-lg">
-                    {f.figure}
-                  </span>
-                  <span className="mt-2 block text-sm text-muted-foreground">{f.label}</span>
-                </dd>
-              </div>
-            ))}
-          </dl>
-        </section>
+        {/* ==== The facts were here, and the owner took them out ========= */}
+        {/* A row of four figures — 32 tools / 10 min / 0 SQL / read-only — used
+            to sit between the hero and the problem. They were true and
+            checkable, and they were also the fourth thing on the page making a
+            claim before anybody had been told what the product does. The three
+            worth keeping are now said where they mean something: the tool count
+            in the marquee and in the integrations heading, the access model
+            under the button and in the FAQ, and the recompute cadence inside
+            step three, where it is a feature rather than a statistic. */}
 
         {/* ==== The problem ================================================ */}
         {/**
@@ -277,8 +257,13 @@ export default async function Home() {
          * for everybody else the page opened with an answer to a question they
          * had not been asked.
          */}
-        <section id="problem" className="scroll-mt-28 border-y border-border bg-card">
-          <div className="mx-auto w-full max-w-6xl px-5 py-20 sm:px-8 sm:py-28">
+        {/* THE TOP PADDING PAYS FOR THE PRODUCT WINDOW hanging into this
+            section — 112px of overlap plus a section's worth of air. It moved
+            here from the stat band when that came out; without it the window
+            lands on this section's heading, and `pnpm landing` measures that
+            gap in pixels precisely because the source cannot show it. */}
+        <section id="problem" className="scroll-mt-28 px-5 pb-20 pt-44 sm:px-8 sm:pb-28 sm:pt-56">
+          <div className="mx-auto w-full max-w-6xl">
             <Head
               eyebrow="The problem"
               title="Ten tools. Ten dashboards. No way to add them up."
@@ -319,7 +304,7 @@ export default async function Home() {
             `overflow-x-clip` rather than `overflow-hidden`: the latter makes
             the section a scroll container, which silently kills the
             `position: sticky` nav for the whole time it is on screen. */}
-        <section id="how" className="scroll-mt-28 overflow-x-clip border-y border-border bg-card">
+        <section id="how" className="lander-band scroll-mt-28 overflow-x-clip">
           <div className="mx-auto w-full max-w-6xl px-5 py-20 sm:px-8 sm:py-28">
             <Head eyebrow="How it works" title="Connected on Monday. Defensible by Friday." />
 
@@ -419,7 +404,7 @@ export default async function Home() {
         </section>
 
         {/* ==== Integrations =============================================== */}
-        <section id="integrations" className="scroll-mt-28 border-y border-border bg-card">
+        <section id="integrations" className="lander-band scroll-mt-28">
           <div className="mx-auto w-full max-w-6xl px-5 py-20 sm:px-8 sm:py-28">
             <Head
               eyebrow="Integrations"
@@ -493,22 +478,84 @@ export default async function Home() {
         </section>
       </main>
 
-      <footer className="border-t border-border">
-        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-4 px-5 py-8 text-sm text-muted-foreground sm:px-8">
-          <span>&copy; {new Date().getFullYear()} Namzilabs</span>
-          <nav className="flex gap-5">
-            <Link className="inline-flex min-h-6 items-center rounded-control transition-colors hover:text-foreground" href="/docs">
-              Docs
-            </Link>
-            <Link className="inline-flex min-h-6 items-center rounded-control transition-colors hover:text-foreground" href="/terms">
-              Terms
-            </Link>
-            <Link className="inline-flex min-h-6 items-center rounded-control transition-colors hover:text-foreground" href="/privacy">
-              Privacy
-            </Link>
-          </nav>
+      {/* ==== Footer ===================================================== */}
+      {/**
+       * A REAL FOOTER, which this page did not have. It was one line — a
+       * copyright and three links — and a one-line footer is the clearest
+       * signal a site can send that nobody finished it. The reference closes on
+       * a proper set of columns, and it costs nothing but the links that
+       * already exist elsewhere on the page.
+       *
+       * EVERY LINK HERE GOES SOMEWHERE THAT EXISTS. No "Careers", no "Press",
+       * no "Changelog" — a footer padded with dead anchors is worse than a
+       * short one, and the `/docs`, `/terms` and `/privacy` routes plus this
+       * page's own sections are the honest inventory.
+       */}
+      <footer className="lander-band border-t border-border">
+        <div className="mx-auto w-full max-w-6xl px-5 py-14 sm:px-8 sm:py-16">
+          <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.6fr)_repeat(3,minmax(0,1fr))] lg:gap-8">
+            <div className="max-w-xs">
+              <span className="font-marketing flex items-center gap-2 text-lg font-bold tracking-tight text-foreground">
+                <BrandMark className="size-6 shrink-0" />
+                Namzilabs
+              </span>
+              <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+                One number, from every tool you already use — with the arithmetic shown underneath it.
+              </p>
+            </div>
+
+            {[
+              {
+                title: "Product",
+                links: [
+                  { href: "#how", label: "How it works" },
+                  { href: "#ai", label: "Ask your AI" },
+                  { href: "#integrations", label: "Integrations" },
+                  { href: "#pricing", label: "Pricing" },
+                ],
+              },
+              {
+                title: "Learn",
+                links: [
+                  { href: "#problem", label: "The problem" },
+                  { href: "#proof", label: "The receipts" },
+                  { href: "#faq", label: "Questions" },
+                  { href: "/docs", label: "Docs" },
+                ],
+              },
+              {
+                title: "Legal",
+                links: [
+                  { href: "/terms", label: "Terms" },
+                  { href: "/privacy", label: "Privacy" },
+                ],
+              },
+            ].map((col) => (
+              <div key={col.title}>
+                <p className="text-sm font-semibold text-foreground">{col.title}</p>
+                <ul className="mt-4 flex flex-col gap-3">
+                  {col.links.map((l) => (
+                    <li key={l.label}>
+                      <Link
+                        href={l.href}
+                        className="inline-flex min-h-6 items-center rounded-control text-sm text-muted-foreground transition-colors duration-(--duration-fast) hover:text-foreground"
+                      >
+                        {l.label}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-12 flex flex-wrap items-center justify-between gap-4 border-t border-border pt-6 text-sm text-muted-foreground">
+            <span>&copy; {new Date().getFullYear()} Namzilabs</span>
+            <span>Read-only access to every tool it reads.</span>
+          </div>
         </div>
       </footer>
+
     </div>
   );
 }

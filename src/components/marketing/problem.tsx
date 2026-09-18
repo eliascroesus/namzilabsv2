@@ -36,7 +36,7 @@ function Fragment({ source, metric, value, note }: (typeof FRAGMENTS)[number]) {
   const brand = sourceStyle(source);
   const entry = CONNECTOR_CATALOG.find((c) => c.source === source);
   return (
-    <li className="flex min-w-0 flex-col gap-3 rounded-card border border-border bg-background p-5">
+    <li className="lift-sm flex min-w-0 flex-col gap-3 rounded-2xl border border-border bg-card p-5">
       <span className="flex min-w-0 items-center gap-2.5">
         {/* THE PRODUCT'S OWN MARK, not a second copy of it. This drew the two
             letters and computed its own ink, which meant the landing page kept

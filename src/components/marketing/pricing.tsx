@@ -138,7 +138,7 @@ export function Pricing({ cta }: { cta: string }) {
                    shadow say "start here" without saying "not those". */
                 tier.popular
                   ? "lift-lg border-brand-400 bg-card ring-1 ring-brand-400"
-                  : "border-border bg-card",
+                  : "lift-sm border-border bg-card",
               )}
             >
               {/* `min-h-8` SO THE THREE PRICE ROWS SIT ON A LINE. Only the
