@@ -192,7 +192,13 @@ export default async function Home() {
              * the overflow.
              */}
             <div className="relative mt-12 sm:mt-14">
-              <figure className="relative -mb-40 sm:-mb-48">
+              {/* `max-w-5xl`, NOT the container's `max-w-6xl`. The chutes hang
+                  off this box's edges, so its width decides whether there is
+                  anywhere for them to be: at 72rem on a 1440 laptop there were
+                  144px outside it and the whole field rendered behind the card.
+                  64rem leaves 208, which is a chute's mouth plus the gap its
+                  marks fly across. */}
+              <figure className="relative mx-auto max-w-5xl -mb-40 sm:-mb-48">
                 <Pipes />
 
                 {/**
@@ -214,9 +220,13 @@ export default async function Home() {
                     failing, but for a reason that had nothing to do with the
                     window. A hook that depends on sibling order is a hook that
                     breaks the day the composition changes. */}
+                {/* `product-shot` paints `/dashboard.png` over the drawn board
+                    through an `::after`. Missing file, nothing painted, drawing
+                    shows — see the note in globals.css. `AppWindow` stays in
+                    the markup on purpose: it IS the fallback. */}
                 <div
                   data-product-window
-                  className="lift-lg relative z-10 aspect-[4/3] w-full overflow-hidden rounded-3xl sm:aspect-video"
+                  className="product-shot lift-lg relative z-10 aspect-[4/3] w-full overflow-hidden rounded-3xl bg-neutral-950 sm:aspect-video"
                 >
                   <AppWindow />
                 </div>

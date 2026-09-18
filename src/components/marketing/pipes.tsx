@@ -3,106 +3,97 @@ import { SourceMark } from "@/components/source-mark";
 import { PauseOffscreen } from "@/components/marketing/pause-offscreen";
 
 /**
- * THE PIPES — two troughs running in from the edges of the screen, carrying
- * the connector marks into the dashboard.
+ * THE CHUTES — two pipe mouths at the edges of the screen, pouring the
+ * connector marks toward the dashboard.
  *
- * ── WHY THIS IS THE SECOND VERSION ─────────────────────────────────────────
+ * ── WHAT THE PREVIOUS VERSION GOT WRONG ────────────────────────────────────
  *
- * The first was seven VERTICAL tubes standing above the board like organ
- * pipes, and the owner's layout sketch is unambiguous that this is not it: two
- * runs, horizontal, entering from the left and right edges at the board's own
- * mid-height, with the marks travelling along them into its sides.
+ * It put the marks INSIDE the tube, travelling along it. That is not what the
+ * reference does and not what the owner's sketch shows, and once the real art
+ * arrived it was obviously impossible: `pipe-front.png` is an opaque cylinder,
+ * so anything "inside" was covered by it completely. What he saw was a stubby
+ * green lozenge with nothing in it.
  *
- * The sketch is also the better composition, and it is worth saying why rather
- * than just complying. Vertical tubes ABOVE the card make the board look like
- * something the pipes are pouring onto. Horizontal runs entering its SIDES make
- * the board the thing they connect to — which is the actual relationship: the
- * dashboard is not underneath the tools, it is what they join up into. It also
- * uses the empty width either side of a centred card, which the vertical
- * version left as dead sky.
+ * ── WHAT THE ART ACTUALLY IS ───────────────────────────────────────────────
  *
- * ── WHY THE TROUGH IS TWO LAYERS ───────────────────────────────────────────
+ * `pipe-front.png` is a cylinder WITH AN OPEN MOUTH — the dark ellipse at the
+ * top is the hole you look into. `pipe-back.png` is the same cylinder without
+ * it: a plain body. That is the reference's pair exactly ("Bamboo Top" and
+ * "Bamboo Bottom"), and the way it composes is that the marks pour OUT of the
+ * mouth and travel through OPEN SKY. Nothing is ever inside the tube.
  *
- * A mark has to travel INSIDE the tube, so it needs a far wall behind it and a
- * near lip in front of it. One image and the logos sit on top of a picture of a
- * pipe — stickers on a tube rather than objects inside one. The reference
- * builds it the same way and calls the halves "Bamboo Top" and "Bamboo Bottom".
+ * So: a chute at each edge with its mouth turned inward, and the marks flying
+ * from each mouth toward the board, where they disappear behind it. Which is
+ * the sketch — the pipes outside, the icons in the gap, the board in the
+ * middle.
  *
- * ── WHY THE ART IS OPTIONAL ────────────────────────────────────────────────
+ * ── WHY THE ART IS ROTATED RATHER THAN RE-EXPORTED ─────────────────────────
  *
- * `pipe-back.png` and `pipe-front.png` are referenced from CSS as background
- * layers over a drawn fallback. If they are absent the fallback is what shows
- * and it is built to stand on its own; if they are present they paint over it.
- * Neither state can break a build, so the art can land whenever it lands.
+ * Both files are drawn as upright cylinders. Rotating in CSS means the
+ * composition's direction can change without anybody opening a design tool,
+ * and means one file serves both sides — the right-hand chute is the same
+ * image turned the other way.
  */
 
 /**
- * WHICH MARKS RIDE WHICH SIDE — every other one, so the two runs never carry
- * the same logo at the same moment and the field reads as one catalogue split
- * in half rather than as one list played twice.
+ * WHICH MARKS POUR FROM WHICH SIDE — every other one, so the two streams never
+ * carry the same logo at the same moment and the field reads as one catalogue
+ * split in half rather than one list played twice.
  */
 function marksFor(side: "left" | "right") {
-  const start = side === "left" ? 0 : 1;
-  const picked = CONNECTOR_CATALOG.filter((_, i) => i % 2 === start);
-  /* Doubled, because the travel runs a full -50%: the second copy has to be
-     sitting exactly where the first began or the loop visibly jumps. */
+  const picked = CONNECTOR_CATALOG.filter((_, i) => i % 2 === (side === "left" ? 0 : 1));
+  /* Doubled: the travel runs a full -50%, so the second copy has to sit exactly
+     where the first began or the loop visibly jumps. */
   return [...picked, ...picked];
 }
 
-function Run({ side }: { side: "left" | "right" }) {
+function Chute({ side }: { side: "left" | "right" }) {
   return (
-    <div className="pipe-run absolute inset-y-0" data-side={side}>
-      {/* ── the far wall ─────────────────────────────────────────────────
-          Drawn first so everything else stacks on top of it. */}
-      <span aria-hidden className="pipe-back absolute inset-0" />
-
-      {/* ── what travels inside ──────────────────────────────────────────
-          THE MASK IS ON THE TRAVEL, NOT ON THE TUBE. The trough itself runs to
-          a hard edge — a pipe that fades out has no mouth — but a mark that
-          pops into existence at that edge reads as a glitch, so the marks
-          alone dissolve in over the first tenth of the run. */}
-      <span className="pipe-window absolute inset-x-0 top-1/2 -translate-y-1/2">
-        <span
-          className="pipe-travel flex items-center gap-10 sm:gap-14"
-          style={{
-            /* Inward on both sides: the left run travels right, the right run
-               travels left, and both arrive at the board. Two runs going the
-               same way would read as a conveyor passing through rather than as
-               two feeds converging. */
-            animationDirection: side === "left" ? "normal" : "reverse",
-            animationDuration: side === "left" ? "26s" : "31s",
-          }}
-        >
+    <>
+      {/* ── the marks, BEHIND the chute ──────────────────────────────────
+          Drawn first so the chute's lip overlaps the mark currently leaving
+          it. That overlap is the only thing that makes them read as coming OUT
+          of the mouth rather than as passing in front of a picture of a pipe. */}
+      <span className="pipe-flow" data-side={side}>
+        <span className="pipe-travel" data-side={side}>
           {marksFor(side).map((entry, i) => (
             <span
               key={`${entry.source}-${i}`}
-              /* A few degrees, alternating, so they read as objects being
-                 carried rather than a row of centred stickers. */
-              style={{ transform: `rotate(${i % 2 ? 7 : -7}deg)` }}
-              className="shrink-0"
+              /* A few degrees, alternating, so they read as objects in flight
+                 rather than a row of centred stickers. */
+              style={{ transform: `rotate(${i % 2 ? 8 : -8}deg)` }}
+              className="pipe-mark"
             >
-              <SourceMark source={entry.source} size={38} className="stat-numeral" />
+              <SourceMark source={entry.source} size={44} className="stat-numeral" />
             </span>
           ))}
         </span>
       </span>
 
-      {/* ── the near lip, over the marks ────────────────────────────────── */}
-      <span aria-hidden className="pipe-front absolute inset-0" />
-    </div>
+      {/* ── the chute itself ─────────────────────────────────────────────
+          A fixed box holding the art, which is rotated inside it. The box is
+          the FOOTPRINT after rotation; the art inside carries the unrotated
+          dimensions. Doing it the other way round makes `contain` fit the
+          image to the box before the turn, which squashes it. */}
+      <span aria-hidden className="pipe-chute" data-side={side}>
+        <span className="pipe-art" />
+      </span>
+    </>
   );
 }
 
 export function Pipes() {
   return (
     <PauseOffscreen>
-      {/* THE RUNS BLEED PAST THE VIEWPORT on their outer ends and past the
-          board's edge on their inner ones, so neither end is ever a visible
-          stop: the tube comes from off-screen and disappears behind the card.
-          The hero section clips the outer overflow. */}
-      <div aria-hidden className="pipe-field pointer-events-none absolute inset-x-0 z-0">
-        <Run side="left" />
-        <Run side="right" />
+      {/* FULL-BLEED, NOT THE CARD'S WIDTH. The chutes belong at the SCREEN's
+          edges — on a 1440 laptop a `max-w-6xl` card leaves 144px either side,
+          which is less than one chute, so anchoring to the card would have
+          buried them under it. Anchored to the viewport they sit in the gap on
+          a wide display and bleed off the edge on a narrow one, which is the
+          right behaviour in both directions. The hero clips the overflow. */}
+      <div aria-hidden className="pipe-field pointer-events-none">
+        <Chute side="left" />
+        <Chute side="right" />
       </div>
     </PauseOffscreen>
   );

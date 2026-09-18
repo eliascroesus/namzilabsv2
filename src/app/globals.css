@@ -2581,136 +2581,185 @@ html.mix {
   }
 
   /**
-   * ── THE PIPES ──────────────────────────────────────────────────────────
+   * ── THE CHUTES ─────────────────────────────────────────────────────────
    *
-   * Two horizontal troughs entering from the screen's edges and running behind
-   * the dashboard, with the connector marks travelling inside them. The shape
-   * is the owner's layout sketch; what makes it mean anything is that the page
-   * spends three sections below the fold saying "your tools feed one board",
-   * and this says it in a picture first.
+   * Two pipe mouths at the screen's edges, pouring the connector marks toward
+   * the dashboard through open sky. See `pipes.tsx` for why nothing travels
+   * INSIDE the tube: `pipe-front.png` is an opaque cylinder, so the previous
+   * version's marks were covered by it completely.
    *
-   * WHY HORIZONTAL BEAT THE VERTICAL VERSION IT REPLACES: tubes standing ABOVE
-   * the card make the board look like something being poured onto. Runs
-   * entering its SIDES make the board the thing they connect to, which is the
-   * actual relationship — and they use the empty width either side of a centred
-   * card, which the vertical version left as dead sky.
+   * THE ART IS OPTIONAL. Both files are `background-image`, so a missing one
+   * paints nothing rather than failing a build — the marks still fly, they
+   * just fly out of nowhere. That is a degraded picture rather than a broken
+   * page, which is the trade this whole hero is wired for.
+   */
+  /**
+   * THE FIELD IS THE CARD'S OWN BOX, and everything hangs off its edges.
    *
-   * ── THE ART IS OPTIONAL AND THE FALLBACK IS NOT A PLACEHOLDER ──────────
+   * THE FIRST VERSION ANCHORED THE CHUTES TO THE VIEWPORT and they were
+   * invisible, for a reason arithmetic settles rather than taste: a
+   * `max-w-6xl` card on a 1440 laptop leaves 144px either side, and the chute
+   * plus its stream needed 350. Both chutes and both streams rendered
+   * perfectly — entirely behind the card, which sits above them at `z-10`.
    *
-   * `pipe-back.png` and `pipe-front.png` are the far wall and the near lip. If
-   * they are missing, `background-image` silently paints nothing and the drawn
-   * layers underneath are what shows — so the page never ships broken and the
-   * art can arrive on its own schedule. `next/image` would have made a missing
-   * file a build error, which is the wrong trade for decoration.
-   *
-   * THE ART IS DRAWN UPRIGHT AND STRETCHED DOWN HERE. Both files are vertical
-   * cylinders; `background-size: 100% 100%` lays them into a horizontal box, so
-   * nothing has to be re-exported to change the composition's direction.
+   * Anchored to the CARD instead (`right: 100%` / `left: 100%`), the mouth is
+   * always just outside its edge whatever the viewport does, and the body runs
+   * outward and off the screen — which is where a pipe's far end belongs
+   * anyway. The card also narrowed to `max-w-5xl` to buy the room: 208px a
+   * side instead of 144.
    */
   .pipe-field {
-    /* The run sits a little above the board's middle, which is where the sketch
-       puts it and where it has to be: dead centre would cut the card in half
-       visually, and an entry point reads better slightly high. */
-    top: 36%;
-    height: 7rem;
+    position: absolute;
+    inset-inline: 0;
+    top: 15%;
+    height: 10.5rem;
+    z-index: 0;
   }
-  @media (min-width: 640px) {
+  @media (min-width: 1280px) {
     .pipe-field {
-      height: 9rem;
+      height: 12rem;
     }
   }
 
   /**
-   * EACH RUN REACHES FROM OFF-SCREEN TO BEHIND THE CARD. `-12vw` on the outer
-   * end means the mouth is never on screen — a pipe with a visible end stops
-   * being a pipe and becomes a lozenge — and 54% on the inner end carries it
-   * four per cent past the centre line, comfortably behind a card that is
-   * always wider than that.
+   * THE CHUTE'S FOOTPRINT — the box it occupies AFTER the art inside it has
+   * been turned. Its own aspect is the art's inverted: the drawing is 760x832
+   * upright, so laid on its side it is 832 long by 760 thick.
    */
-  .pipe-run[data-side="left"] {
-    left: -12vw;
-    right: 54%;
-  }
-  .pipe-run[data-side="right"] {
-    right: -12vw;
-    left: 54%;
-  }
-
-  /**
-   * THE FAR WALL — the inside of the trough, the surface a mark is seen
-   * against. It is the DARKER of the two layers on purpose: an interior is in
-   * shadow, and if the back is as bright as the lip the tube reads as flat
-   * tape.
-   */
-  .pipe-back {
-    border-radius: 999px;
-    background-image: url("/pipe-back.png");
-    background-repeat: no-repeat;
-    background-size: 100% 100%;
-    background-color: color-mix(in oklab, #3f73e6 22%, white);
-    box-shadow:
-      inset 0 16px 24px -12px rgb(26 58 120 / 0.5),
-      inset 0 -10px 18px -10px rgb(26 58 120 / 0.32),
-      inset 0 0 0 1px rgb(255 255 255 / 0.55);
-  }
-
-  /**
-   * THE NEAR LIP — drawn OVER the marks, and mostly transparent through its
-   * middle so they show through it. The two bands of tone at the edges are what
-   * sell the curve: a cylinder seen side-on is bright along its upper shoulder,
-   * clear across the belly where you look straight through the glass, and
-   * shaded along the lower edge where it turns away.
-   */
-  .pipe-front {
-    border-radius: 999px;
-    pointer-events: none;
-    background-image: url("/pipe-front.png");
-    background-repeat: no-repeat;
-    background-size: 100% 100%;
-  }
-  .pipe-front::after {
-    content: "";
+  .pipe-chute {
     position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    background: linear-gradient(
-      180deg,
-      rgb(255 255 255 / 0.92) 0%,
-      rgb(255 255 255 / 0.5) 15%,
-      rgb(255 255 255 / 0.05) 33%,
-      rgb(255 255 255 / 0) 58%,
-      rgb(120 160 210 / 0.2) 82%,
-      rgb(86 124 180 / 0.4) 100%
-    );
-    /* The specular — a hard line of light along the upper shoulder, and the
-       cheapest thing on this page that turns a shape into a material. */
-    box-shadow: inset 0 3px 0 0 rgb(255 255 255 / 0.85);
+    top: 50%;
+    height: 100%;
+    aspect-ratio: 832 / 760;
+    transform: translateY(-50%);
+  }
+  /* OUTSIDE THE CARD, WITH THE STREAM'S GAP BETWEEN. `right: 100%` puts the
+     chute's own right edge on the card's left edge; the margin then backs it
+     off by the width of the gap the marks fly across. Its far end runs off the
+     screen on a laptop, which is where a pipe's far end belongs — a chute with
+     a visible back end stops being a pipe and becomes a lozenge. */
+  .pipe-chute[data-side="left"] {
+    right: 100%;
+    margin-right: 6.5rem;
+  }
+  .pipe-chute[data-side="right"] {
+    left: 100%;
+    margin-left: 6.5rem;
   }
 
   /**
-   * THE WINDOW the marks travel through. Clipped to the tube's own radius so
-   * nothing rides outside the glass, and dissolved at both ends so a logo never
-   * blinks into existence at a hard edge.
+   * THE ART, TURNED INSIDE ITS BOX.
+   *
+   * It carries the UNROTATED dimensions — width and height swapped relative to
+   * the footprint — and is centred and then turned. Rotating the footprint
+   * instead would make `contain` fit the image before the turn, which is what
+   * squashes a cylinder into a lozenge.
    */
-  .pipe-window {
-    height: 100%;
+  .pipe-art {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 100cqh;
+    height: 100cqw;
+    background-image: url("/pipe-front.png");
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: contain;
+  }
+  /* `cqh`/`cqw` need a container to resolve against; without this they fall
+     back to nothing and the art collapses to zero. */
+  .pipe-chute {
+    container-type: size;
+  }
+  .pipe-chute[data-side="left"] .pipe-art {
+    /* The mouth is drawn at the TOP, so a quarter-turn clockwise points it
+       right — inward, toward the board. */
+    transform: translate(-50%, -50%) rotate(90deg);
+  }
+  .pipe-chute[data-side="right"] .pipe-art {
+    transform: translate(-50%, -50%) rotate(-90deg);
+  }
+
+  /**
+   * THE STREAM. It starts at the chute's mouth and runs to the middle of the
+   * page, where the board covers it. Masked at the mouth end only: a mark
+   * should fade IN as it clears the lip, and should not fade out at the other
+   * end because it is not supposed to reach one — the card hides it.
+   */
+  .pipe-flow {
+    position: absolute;
+    top: 50%;
+    height: 5rem;
     overflow: hidden;
-    border-radius: 999px;
-    mask-image: linear-gradient(90deg, transparent 0%, #000 9%, #000 91%, transparent 100%);
+    transform: translateY(-50%);
+  }
+  /* THE GAP THE MARKS CROSS — from the chute's mouth to a little way behind
+     the card, so a mark is covered by the card rather than stopping at it.
+     Masked at the mouth end only: a mark fades IN as it clears the lip, and
+     must not fade out at the other end because it is not meant to reach one. */
+  .pipe-flow[data-side="left"] {
+    right: 100%;
+    width: 9.5rem;
+    margin-right: -2.5rem;
+    mask-image: linear-gradient(90deg, transparent 0%, #000 26%);
+  }
+  .pipe-flow[data-side="right"] {
+    left: 100%;
+    width: 9.5rem;
+    margin-left: -2.5rem;
+    mask-image: linear-gradient(270deg, transparent 0%, #000 26%);
   }
 
   .pipe-travel {
+    display: flex;
+    align-items: center;
+    gap: 2.25rem;
     width: max-content;
     height: 100%;
-    padding-inline: 3rem;
-    animation-name: pipe-travel;
-    animation-timing-function: linear;
-    animation-iteration-count: infinite;
+    animation: pipe-travel 24s linear infinite;
     will-change: transform;
     backface-visibility: hidden;
   }
+  /* The right-hand stream runs the other way, and a little slower, so the two
+     sides are never in step. */
+  .pipe-travel[data-side="right"] {
+    animation-direction: reverse;
+    animation-duration: 29s;
+  }
+  .pipe-mark {
+    flex-shrink: 0;
+  }
   [data-offscreen="true"] .pipe-travel {
     animation-play-state: paused;
+  }
+
+  /**
+   * ── THE REAL SCREENSHOT, OVER THE DRAWN ONE ────────────────────────────
+   *
+   * `dashboard.png` is painted by an `::after` rather than as the element's
+   * background, and that is the whole mechanism: a background paints BEHIND
+   * content, so the drawn `AppWindow` would have covered it. An overlay paints
+   * in front.
+   *
+   * WHICH MAKES THE FALLBACK AUTOMATIC. If the file is missing the overlay
+   * paints nothing at all — it is a transparent box — and the drawn board
+   * underneath is what shows. No build error, no broken image icon, no flag to
+   * set. Upload the file and the real screenshot appears; delete it and the
+   * drawing comes back.
+   *
+   * `cover` AND A DARK GROUND: the shot is 16:9 and the frame is 16:9 from
+   * `sm` up, so cover crops nothing there. Below `sm` the frame is 4:3 and
+   * cover trims the sides, which is the right loss — a letterboxed screenshot
+   * with bars would look like a mistake, a cropped one looks like a window.
+   */
+  .product-shot::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: url("/dashboard.png");
+    background-position: center top;
+    background-repeat: no-repeat;
+    background-size: cover;
   }
 
   /**
