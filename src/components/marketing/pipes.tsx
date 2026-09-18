@@ -5,38 +5,32 @@ import { PauseOffscreen } from "@/components/marketing/pause-offscreen";
 /**
  * THE CHUTES — two angled pipes pouring the connector marks into the board.
  *
- * ── HOW THE REFERENCE ACTUALLY BUILDS THIS ─────────────────────────────────
+ * ── THE SANDWICH, WHICH IS THE WHOLE EFFECT ────────────────────────────────
  *
- * Reading wissly.framer.website's markup settles what two rounds of guessing
- * did not. It is ONE container with `transform: rotate(-43deg)` on it, holding:
- * a chute at one end, a second chute at the other, and a vertical ticker
- * running between them. Everything inside is axis-aligned; the container's
- * rotation is what makes the whole assembly diagonal.
+ * Three layers, and the middle one is the point:
  *
- * That is the trick worth stealing, and it is why the last two attempts looked
- * wrong. A rotated RIG means the icons need no per-icon geometry — they are a
- * plain row inside a box that happens to be turned. Rotating each piece
- * separately, which is what I was doing, gets the maths right and the drawing
- * wrong.
+ *   chute-back    the tube, WITH its open mouth        (behind the marks)
+ *   chute-stream  the connector marks, travelling
+ *   chute-front   the tube's NEAR LIP only             (in front of the marks)
  *
- * ── THE THREE THINGS THAT MADE MINE LOOK LIKE A TIN CAN ────────────────────
+ * A mark leaving the pipe passes IN FRONT of the far wall and BEHIND the near
+ * lip, which is what makes it read as coming out of a hole rather than sliding
+ * across a picture of one. With a single layer — which is what the last
+ * version had — the art is either entirely over the marks (they never appear)
+ * or entirely under them (they look stuck on).
  *
- *   1. SIZE. The reference draws its chute at 457px against a ~1400px page.
- *      Mine was 168px. A pipe that small is a lozenge.
- *   2. IT WAS PERFECTLY HORIZONTAL. The reference is at 43 degrees, which is
- *      what makes it read as a three-dimensional object rather than a sticker.
- *   3. THE WHOLE THING WAS ON SCREEN, back end included. The reference crops
- *      hard on the viewport edge so all you ever see is the mouth and a
- *      stretch of barrel — the pipe comes from somewhere, rather than being a
- *      finite object floating in the sky.
+ * WHICH FILE PLAYS WHICH PART, and it is the opposite of what the names
+ * suggest. `pipe-front.png` is the cylinder WITH the dark ellipse, so it is the
+ * one you must see through — it goes at the BACK. `pipe-back.png` is the plain
+ * body with no opening, which is exactly what a lip looks like, so it goes at
+ * the FRONT, masked down to its lower edge. Named for how they were exported
+ * rather than for the job they do.
  *
- * ── AND THE MARKS COME OUT OF IT ───────────────────────────────────────────
+ * ── AND THE RIG ────────────────────────────────────────────────────────────
  *
- * `pipe-front.png` is an opaque cylinder with an open mouth, so nothing can be
- * inside it. The marks emerge from BEHIND the mouth — the chute is painted
- * last, over the stream — and fly down the rig into the board, where the card
- * covers them. Pipes outside, icons in the gap, board in the middle: the
- * owner's sketch.
+ * One rotated container per chute, holding the art at one end and the stream
+ * running along its own axis — the reference's construction. Everything inside
+ * is axis-aligned; the container's rotation is what makes it diagonal.
  */
 
 /** Every other mark per side, so the two streams never carry the same logo. */
@@ -56,8 +50,8 @@ function Rig({ side }: { side: "left" | "right" }) {
 
   return (
     <div className="chute-rig" data-side={side}>
-      {/* The stream first: the chute is painted over it, so a mark emerges from
-          behind the lip rather than appearing on top of it. */}
+      <span aria-hidden className="chute-back" />
+
       <span className="chute-stream">
         <span className="chute-travel" data-side={side}>
           {marksFor(side).map((entry, i) => (
@@ -66,13 +60,13 @@ function Rig({ side }: { side: "left" | "right" }) {
               className="chute-mark"
               style={{ transform: `rotate(${counter + (i % 2 ? 7 : -7)}deg)` }}
             >
-              <SourceMark source={entry.source} size={52} className="stat-numeral" />
+              <SourceMark source={entry.source} size={56} className="stat-numeral" />
             </span>
           ))}
         </span>
       </span>
 
-      <span aria-hidden className="chute-mouth" />
+      <span aria-hidden className="chute-front" />
     </div>
   );
 }
@@ -85,5 +79,35 @@ export function Pipes() {
         <Rig side="right" />
       </div>
     </PauseOffscreen>
+  );
+}
+
+/**
+ * THE CLOUDS — drifting over the sky, and over the chutes.
+ *
+ * WHY THEY SIT IN FRONT OF THE PIPES rather than only behind them. The
+ * reference passes cloud in front of its chute, and that single overlap does
+ * more for the illusion than the pipe art does: something crossing in front of
+ * an object puts it in a SCENE — at a distance, with air between it and the
+ * viewer — instead of on a backdrop. One cloud behind and two in front is
+ * enough to say that.
+ *
+ * Their drift is slow enough to be noticed only if you stop and look at it,
+ * which is the right amount for something the eye should not be tracking.
+ */
+const CLOUDS: Array<{ src: string; className: string; style: React.CSSProperties }> = [
+  { src: "/cloud.png", className: "cloud cloud-far", style: { left: "-6%", top: "6%", width: "38rem" } },
+  { src: "/cloud1.png", className: "cloud cloud-near", style: { left: "-10%", top: "34%", width: "30rem" } },
+  { src: "/cloud.png", className: "cloud cloud-near", style: { right: "-8%", top: "26%", width: "34rem" } },
+];
+
+export function Clouds({ layer }: { layer: "behind" | "front" }) {
+  const want = layer === "behind" ? "cloud-far" : "cloud-near";
+  return (
+    <div aria-hidden className={`cloud-field pointer-events-none ${layer}`}>
+      {CLOUDS.filter((c) => c.className.includes(want)).map((c, i) => (
+        <span key={i} className={c.className} style={{ ...c.style, backgroundImage: `url(${c.src})` }} />
+      ))}
+    </div>
   );
 }

@@ -3,7 +3,7 @@ import { withAuth } from "@workos-inc/authkit-nextjs";
 import { ArrowRight } from "lucide-react";
 import { CONNECTOR_CATALOG } from "@/connectors/catalog";
 import { AppWindow } from "@/components/marketing/app-window";
-import { Pipes } from "@/components/marketing/pipes";
+import { Clouds, Pipes } from "@/components/marketing/pipes";
 import { Reveal } from "@/components/marketing/reveal";
 import { AiPanel } from "@/components/marketing/ai-panel";
 import { PillNav } from "@/components/marketing/pill-nav";
@@ -199,7 +199,12 @@ export default async function Home() {
                   64rem leaves 208, which is a chute's mouth plus the gap its
                   marks fly across. */}
               <figure className="relative mx-auto max-w-5xl -mb-40 sm:-mb-48">
+                {/* Behind the chutes, then the chutes, then in front of them —
+                    the front layer is the one that puts the pipes in a scene
+                    rather than on a backdrop. */}
+                <Clouds layer="behind" />
                 <Pipes />
+                <Clouds layer="front" />
 
                 {/**
                  * THE OVERLAP, AND THE ARITHMETIC BEHIND IT.
