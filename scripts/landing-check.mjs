@@ -369,14 +369,14 @@ for (const [w, h, name, theme] of [
     const sky = document.querySelector(".night-sky");
     add(sky.querySelector("h1 span"), "headline");
     add(sky.querySelector("p"), "paragraph");
-    /* A DATA ATTRIBUTE, NOT `.uppercase.tracking-widest`. The rebuild took the
-       tracked-out capitals off every eyebrow on the page, and that selector
-       would have quietly matched nothing from that commit onwards. A hook that
-       exists to be measured should not be a description of how the thing
-       currently looks. */
-    add(sky.querySelector("[data-hero-label]"), "reads-from label");
-    const ps = sky.querySelectorAll("p");
-    add(ps[ps.length - 1], "line under the CTA");
+    /* THE "READS FROM" LABEL AND THE LINE UNDER THE CTA WERE BOTH SAMPLED HERE
+       AND BOTH ARE GONE, removed from the hero at the owner's ask. The probes
+       come out with them rather than being re-pointed at whatever is nearest:
+       the marquee's wrapper carries no text of its own, so a probe aimed at it
+       would report "not measurable", and a check that keeps a hook alive by
+       moving it somewhere convenient is a check that passes by measuring
+       nothing. What remains in this half of the sky — the headline, the
+       paragraph and the connector chips — is still measured. */
     /**
      * A CHIP FROM THE MIDDLE OF THE TRACK, not the first one in the DOM.
      *

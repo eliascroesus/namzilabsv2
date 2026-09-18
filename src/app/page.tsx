@@ -5,6 +5,7 @@ import { CONNECTOR_CATALOG } from "@/connectors/catalog";
 import { AppWindow } from "@/components/marketing/app-window";
 import { ToolMarquee } from "@/components/marketing/marquee";
 import { PauseOffscreen } from "@/components/marketing/pause-offscreen";
+import { Reveal } from "@/components/marketing/reveal";
 import { AiPanel } from "@/components/marketing/ai-panel";
 import { PillNav } from "@/components/marketing/pill-nav";
 import { BrandMark } from "@/components/marketing/brand-mark";
@@ -113,13 +114,13 @@ function Cta({ href, children }: { href: string; children: React.ReactNode }) {
 /** A centred section head — the reference's shape, and the page's default. */
 function Head({ eyebrow, title, blurb }: { eyebrow: string; title: React.ReactNode; blurb?: string }) {
   return (
-    <div className="mx-auto max-w-2xl text-center">
+    <Reveal className="mx-auto max-w-2xl text-center">
       <p className="text-sm font-medium text-brand-800">{eyebrow}</p>
       <h2 className="font-marketing mt-3 text-display-lg font-bold leading-[1.08] tracking-tight text-balance text-foreground">
         {title}
       </h2>
       {blurb && <p className="mt-5 text-md leading-relaxed text-muted-foreground">{blurb}</p>}
-    </div>
+    </Reveal>
   );
 }
 
@@ -141,7 +142,7 @@ export default async function Home() {
         <section className="night-sky relative px-5 pb-16 pt-32 sm:px-8 sm:pb-20 sm:pt-36 lg:pt-44">
           <NightSky />
 
-          <div className="mx-auto w-full max-w-5xl text-center">
+          <div className="mx-auto w-full max-w-6xl text-center">
             {/**
              * SIX WORDS, TWO LINES, CENTRED.
              *
@@ -167,7 +168,14 @@ export default async function Home() {
                 blue by the time the last line of it lands — a ground that does
                 NOT follow the theme. `--foreground` would render this headline
                 in near-black on near-black for a light-theme visitor. */}
-            <h1 className="font-marketing text-balance text-banner font-bold leading-[0.95] tracking-[-0.03em] text-white">
+            {/* TWO LINES, AND THE SIZE IS WHAT DECIDES THAT. `text-banner` tops
+                out at 120px, and "Analyze all your data" set at 120px is about
+                1058px wide — wider than the 1024px container it was in, so the
+                line the markup asks for broke into two and the headline
+                rendered in three. Widening the container to `max-w-6xl` and
+                capping the face at 108px leaves ~130px of slack on the longest
+                line at 1440, which is enough that it cannot wrap back. */}
+            <h1 className="font-marketing text-balance text-[clamp(2.75rem,7.6vw,6.75rem)] font-bold leading-[0.95] tracking-[-0.03em] text-white">
               {/* THE HEADLINE NAMES THE JOB, NOT THE GRIEVANCE. It read "Your
                   tools disagree. This settles it." — a good line about a
                   problem, and one that leaves a visitor who has not yet felt
@@ -189,30 +197,29 @@ export default async function Home() {
               business.
             </p>
 
-            <div className="mt-9 flex flex-col items-center gap-4">
+            <div className="mt-10 flex justify-center">
               <Cta href={cta}>{ctaLabel}</Cta>
-              {/* The three objections somebody has before connecting a CRM,
-                  answered before they are asked and in six words. */}
-              <p className="text-sm font-medium text-white">
-                Read-only access · No warehouse · No SQL
-              </p>
             </div>
 
-            {/* ---- Reads from: the honest logo wall ---------------------- */}
+            {/* ---- The tools it reads ----------------------------------- */}
+            {/* BOTH LABELS CAME OFF at the owner's ask — "Read-only access · No
+                warehouse · No SQL" under the button, and "Reads from 32 tools,
+                including" over the ticker. The hero is three objects now
+                instead of five, and the marquee says what it is by being a row
+                of logos somebody recognises; a caption explaining that a row of
+                logos is a row of logos was the page talking to itself.
+
+                `landing-check` LOST A SAMPLE HERE and was edited to say so.
+                It measured this label's contrast; the label is gone, so the
+                probe is gone too rather than being re-pointed at the wrapper —
+                a `<div>` with no text of its own would have reported "not
+                measurable", and quietly re-hooking it somewhere else is how a
+                check ends up passing by measuring nothing. The connector chips
+                are still sampled, which is what covers this part of the sky. */}
             <div className="mt-16 sm:mt-20">
-              {/* `data-hero-label` is the hook `landing-check` samples. It is a
-                  data attribute rather than a class selector because the
-                  previous one — `.uppercase.tracking-widest` — described how
-                  the thing looked, and stopped matching the moment the
-                  tracked-out capitals came off. */}
-              <p data-hero-label className="text-sm font-medium text-white">
-                Reads from {CONNECTOR_CATALOG.length} tools, including
-              </p>
-              <div className="mt-5">
-                <PauseOffscreen>
-                  <ToolMarquee />
-                </PauseOffscreen>
-              </div>
+              <PauseOffscreen>
+                <ToolMarquee />
+              </PauseOffscreen>
             </div>
 
             {/* ---- The product ------------------------------------------- */}
@@ -276,15 +283,15 @@ export default async function Home() {
         </section>
 
         {/* ==== The receipts =============================================== */}
-        <section id="proof" className="mx-auto w-full max-w-6xl scroll-mt-28 px-5 py-20 sm:px-8 sm:py-28">
+        <section id="proof" className="glow-top mx-auto w-full max-w-6xl scroll-mt-28 px-5 py-20 sm:px-8 sm:py-28">
           <Head
             eyebrow="The receipts"
             title="Three tools. Three answers. One you can defend."
             blurb="None of them are lying — they are counting different things. The only useful answer is the one that shows how it was resolved."
           />
-          <div className="mt-14">
+          <Reveal className="mt-14" delay={80}>
             <Reconcile />
-          </div>
+          </Reveal>
         </section>
 
         {/* ==== How it works =============================================== */}
@@ -349,9 +356,9 @@ export default async function Home() {
             title="The same question, two ways"
             blurb="Nobody is promised a close rate here — no software can honestly do that. What changes is the work between the question and the answer."
           />
-          <div className="mt-14">
+          <Reveal className="mt-14" delay={80}>
             <Compare />
-          </div>
+          </Reveal>
         </section>
 
         {/* ==== Ask your AI ================================================ */}
@@ -426,15 +433,15 @@ export default async function Home() {
          * commercial decision rather than a design one. They live in a single
          * array for exactly that reason.
          */}
-        <section id="pricing" className="mx-auto w-full max-w-6xl scroll-mt-28 px-5 py-20 sm:px-8 sm:py-28">
+        <section id="pricing" className="glow-top mx-auto w-full max-w-6xl scroll-mt-28 px-5 py-20 sm:px-8 sm:py-28">
           <Head
             eyebrow="Pricing"
             title="Priced on tools, not on people"
             blurb="What costs us money is sweeping other companies' APIs, not the number of people looking at the answer — so the seats are generous and the ladder is built on how much you connect."
           />
-          <div className="mt-14">
+          <Reveal className="mt-14" delay={80}>
             <Pricing cta={cta} />
-          </div>
+          </Reveal>
         </section>
 
         {/* ==== Questions ================================================== */}
@@ -444,9 +451,9 @@ export default async function Home() {
             title="Before you connect a CRM"
             blurb="The questions worth asking of anything you are about to give read access to."
           />
-          <div className="mt-14">
+          <Reveal className="mt-14" delay={80}>
             <Faq />
-          </div>
+          </Reveal>
         </section>
 
         {/* ==== Closing ==================================================== */}

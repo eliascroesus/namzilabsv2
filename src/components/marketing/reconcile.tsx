@@ -1,4 +1,5 @@
 import { Check } from "lucide-react";
+import { CountUp } from "@/components/marketing/reveal";
 import { SourceMark } from "@/components/source-mark";
 
 /**
@@ -54,7 +55,13 @@ export function Reconcile() {
             {/* Muted ink: these are evidence, not the answer, and setting them
                 as loudly as the result would be the figure arguing with
                 itself. */}
-            <span className="stat-numeral shrink-0 text-display-xs leading-none text-muted-foreground">{s.count}</span>
+            {/* COUNTING UP, because the three disagreeing figures and the one
+                that resolves them are the only numbers on this page the reader
+                is meant to compare — and watching them arrive is what makes
+                them feel compared rather than listed. */}
+            <span className="stat-numeral shrink-0 text-display-xs leading-none text-muted-foreground">
+              <CountUp to={s.count} />
+            </span>
           </li>
         ))}
       </ul>
@@ -77,7 +84,9 @@ export function Reconcile() {
         </span>
 
         <span className="flex flex-col">
-          <span className="stat-numeral text-display-lg leading-none text-foreground">41</span>
+          <span className="stat-numeral text-display-lg leading-none text-foreground">
+            <CountUp to={41} />
+          </span>
           <span className="mt-2 text-sm text-muted-foreground">unique people who booked</span>
         </span>
 

@@ -1,45 +1,76 @@
 import { CONNECTOR_CATALOG } from "@/connectors/catalog";
 import { SourceMark } from "@/components/source-mark";
+import { PauseOffscreen } from "@/components/marketing/pause-offscreen";
 
 /**
- * EVERY TOOL IT READS, AS A WALL OF MARKS.
+ * EVERY TOOL IT READS, AS TWO ROWS RUNNING IN OPPOSITE DIRECTIONS.
  *
- * WHAT THIS REPLACES. The same list used to be three columns of name-plus-
- * description separated by hairlines — 42 entries, two lines of 14px grey each,
- * about 900px of uninterrupted small type. It was the least-looked-at block on
- * the page and also the most persuasive fact on it: the answer to "does it read
- * MY stack" is a logo somebody recognises, and recognition happens at a glance
- * or not at all. Reading 42 descriptions is not a glance.
+ * ── WHAT THIS REPLACES, TWICE ──────────────────────────────────────────────
  *
- * THE DESCRIPTION IS NOT GONE, it moved to the title attribute and to
- * `/docs/<source>`, where somebody who has already found their tool goes to
- * find out what exactly gets read from it. That is the right order: recognise,
- * then investigate.
+ * First it was 42 rows of name-plus-description in three columns: about 900px
+ * of uninterrupted 14px grey, and the least-looked-at block on the page.
  *
- * THE LIST IS THE CATALOGUE ITSELF, never a typed copy of it. An earlier
- * version of this page hard-coded four of the seven connectors that existed
- * then and had fallen behind before anybody noticed; the count in the heading
- * above it is computed from the same array, so the page cannot claim a tool
- * this product does not ship.
+ * Then it was a static 4x8 grid of logo tiles, which was better and still
+ * inert — thirty-two identical rectangles sitting perfectly still, which is a
+ * fair description of the whole page at that point.
+ *
+ * ── WHY MOTION IS THE RIGHT ANSWER SPECIFICALLY HERE ───────────────────────
+ *
+ * The question this section answers is "do you read MY stack", and that is
+ * answered by recognition — you are scanning for one logo, not reading a list.
+ * A moving row is scanned rather than read, which is what you want people
+ * doing; and thirty-two tools going past in both directions communicates
+ * ABUNDANCE in a way a tidy grid actively works against. A grid says "here are
+ * thirty-two things". Two rows sliding past each other say "there are a lot of
+ * these".
+ *
+ * OPPOSITE DIRECTIONS because two rows travelling the same way read as one
+ * block sliding, and the parallax between them is what makes it feel like
+ * depth rather than a conveyor.
+ *
+ * SPLIT IN HALF, NOT DUPLICATED, so no tool appears in both rows — a logo
+ * passing twice in opposite directions is the tell that it is a loop rather
+ * than a catalogue.
  */
-export function ToolGrid() {
+const HALF = Math.ceil(CONNECTOR_CATALOG.length / 2);
+const ROWS = [CONNECTOR_CATALOG.slice(0, HALF), CONNECTOR_CATALOG.slice(HALF)];
+
+function Row({ entries, reverse }: { entries: typeof CONNECTOR_CATALOG; reverse?: boolean }) {
+  /* Doubled so the loop has somewhere to travel to: the animation runs to
+     -50%, at which point the second copy sits exactly where the first began. */
+  const loop = [...entries, ...entries];
   return (
-    <ul className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
-      {CONNECTOR_CATALOG.map((entry) => (
-        <li key={entry.source}>
-          {/* HOVER RAISES THE EDGE, NOT THE FILL — the same rule the rail's
-              invite card follows. A tinted fill on hover across a grid this
-              dense reads as a selection somebody made rather than as the
-              cursor passing over. */}
+    <div className="marquee-track w-full overflow-hidden">
+      <div className={`marquee gap-3 py-1.5 ${reverse ? "marquee-reverse" : ""}`}>
+        {loop.map((entry, i) => (
           <span
+            /* The index is in the key because a doubled list has duplicate
+               sources, and duplicate keys are React silently reusing the wrong
+               node on any re-render. */
+            key={`${entry.source}-${i}`}
             title={entry.description}
-            className="flex min-w-0 items-center gap-2.5 rounded-2xl border border-border bg-card px-3 py-3 transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:border-brand-400"
+            className="flex shrink-0 items-center gap-2.5 rounded-2xl border border-border bg-card px-4 py-3"
           >
             <SourceMark source={entry.source} size={28} className="stat-numeral shrink-0" />
-            <span className="min-w-0 truncate text-sm font-medium text-foreground">{entry.name}</span>
+            <span className="whitespace-nowrap text-sm font-medium text-foreground">{entry.name}</span>
           </span>
-        </li>
-      ))}
-    </ul>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function ToolGrid() {
+  return (
+    /* PAUSED WHEN IT IS NOT ON SCREEN. Two rows of 64 chips animating forever
+       while somebody reads the FAQ two thousand pixels below is exactly the
+       kind of always-on compositing the scroll pass took off the hero. */
+    <PauseOffscreen>
+      <div className="flex flex-col gap-3">
+        {ROWS.map((entries, i) => (
+          <Row key={i} entries={entries} reverse={i === 1} />
+        ))}
+      </div>
+    </PauseOffscreen>
   );
 }

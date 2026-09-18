@@ -2564,6 +2564,83 @@ html.mix {
    */
 
   /**
+   * ── SCROLL MOTION ──────────────────────────────────────────────────────
+   *
+   * The state machine is two attributes, both set by `Reveal`:
+   *
+   *   (nothing)            the server's output, and what a dead bundle keeps
+   *   [data-reveal]        hidden — only ever applied off-screen
+   *   [data-shown="true"]  released
+   *
+   * 18px and 0.7s with a soft overshoot-free ease. Bigger travel reads as a
+   * slide and draws attention to itself; this reads as the page settling.
+   *
+   * ONLY `opacity` AND `transform` ARE ANIMATED, which is what lets the whole
+   * thing run on the compositor without touching layout — the same constraint
+   * the scroll pass imposed everywhere else on this page.
+   */
+  [data-reveal] {
+    opacity: 0;
+    transform: translate3d(0, 18px, 0);
+  }
+  [data-reveal][data-shown="true"] {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+    transition:
+      opacity 0.7s cubic-bezier(0.22, 0.61, 0.36, 1) var(--reveal-delay, 0ms),
+      transform 0.7s cubic-bezier(0.22, 0.61, 0.36, 1) var(--reveal-delay, 0ms);
+  }
+
+  /**
+   * THE CARD THAT ANSWERS A POINTER.
+   *
+   * Every card on this page was inert, which is half of why it read as a
+   * document rather than as software. One rule, applied to the six card
+   * families, so they cannot drift apart: the edge takes the brand, the whole
+   * thing rises 2px, and the lift deepens.
+   *
+   * The border is what MOVES — not the fill. A tinted fill on hover reads as a
+   * selection somebody made; a brightened edge reads as the cursor passing
+   * over, which is the rail's own rule and the one this product already
+   * follows.
+   */
+  .card-hoverable {
+    transition:
+      transform 0.25s cubic-bezier(0.22, 0.61, 0.36, 1),
+      border-color 0.25s cubic-bezier(0.22, 0.61, 0.36, 1),
+      box-shadow 0.25s cubic-bezier(0.22, 0.61, 0.36, 1);
+  }
+  @media (hover: hover) {
+    .card-hoverable:hover {
+      transform: translate3d(0, -2px, 0);
+      border-color: var(--color-brand-400);
+      box-shadow:
+        0 1px 2px 0 rgb(18 43 105 / 0.06),
+        0 10px 26px -8px rgb(18 43 105 / 0.16);
+    }
+  }
+
+  /**
+   * A BRAND GLOW BEHIND A SECTION — the page's only large-scale colour below
+   * the fold, and the thing that stops eight white sections reading as one.
+   *
+   * It is a background rather than an element so it costs no DOM and cannot be
+   * hovered, selected or read by anything. `-z-10` with the section isolated,
+   * for the same reason the starfield needs it.
+   */
+  .glow-top {
+    position: relative;
+    isolation: isolate;
+  }
+  .glow-top::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -10;
+    background: radial-gradient(60% 46% at 50% 0%, rgb(86 140 255 / 0.1), transparent 70%);
+  }
+
+  /**
    * ── THE LANDING PAGE'S OWN GROUND ──────────────────────────────────────
    *
    * THE PAGE IS WHITE HERE AND #F3F3F3 EVERYWHERE ELSE, at the owner's ask:
@@ -2916,6 +2993,13 @@ html.mix {
     animation-play-state: paused;
   }
 
+  /* THE SECOND ROW RUNS THE OTHER WAY. `animation-direction` rather than a
+     second keyframe set, so the two rows cannot drift out of sync with each
+     other's timing when one is edited. */
+  .marquee-reverse {
+    animation-direction: reverse;
+  }
+
   /* AND PAUSED WHEN NOBODY IS LOOKING AT IT. Set by `PauseOffscreen`, which
      watches the ticker with an IntersectionObserver — the animation is the
      only thing on this page that runs on its own, and it was running the whole
@@ -2971,6 +3055,13 @@ html.mix {
 @media (prefers-reduced-motion: reduce) {
   .marquee {
     animation: none !important;
+    transform: none !important;
+  }
+  /* A reveal that never fires must never have hidden anything. `Reveal` already
+     bails out before touching the DOM under this preference; this is the
+     belt-and-braces for a preference that flips mid-session. */
+  [data-reveal] {
+    opacity: 1 !important;
     transform: none !important;
   }
   /* The global reduce block clamps every animation to 0.01ms and one
