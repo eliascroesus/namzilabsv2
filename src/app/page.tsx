@@ -153,7 +153,7 @@ export default async function Home() {
          * the two one picture. `-mt-*` on the figure and `z-10` do that, and
          * the pipes' own heights are cut so none of them pokes out below.
          */}
-        <section className="cloud-sky relative overflow-x-clip px-5 pb-16 pt-28 sm:px-8 sm:pb-20 sm:pt-32 lg:pt-36">
+        <section className="cloud-sky relative overflow-x-clip px-5 pb-16 pt-24 sm:px-8 sm:pb-20 sm:pt-28 lg:pt-32">
           <div className="mx-auto w-full max-w-6xl">
             <div className="text-center">
               {/**
@@ -180,49 +180,47 @@ export default async function Home() {
               </div>
             </div>
 
-            {/* ---- the pipes, and the board they empty into --------------- */}
-            {/* PADDING, NOT A MARGIN ON THE CHILD, and this cost an hour.
-                The figure below used to carry `mt-60`, and this wrapper has no
-                padding or border of its own — so that margin COLLAPSED THROUGH
-                it and moved the wrapper's own top edge down by 240px. The pipe
-                field is `absolute top-0` against this box, so it started 240px
-                lower than intended: below the dashboard rather than above it,
-                which is why a field of seven tubes rendered as nothing at all.
-                Correct in the source, absent in the browser — the exact failure
-                `pnpm landing` measures the hero's geometry for. */}
-            <div className="relative mt-10 pt-28 sm:mt-12 sm:pt-56 lg:pt-72">
-              {/* `z-0`, NOT `-z-10`, AND THE DIFFERENCE IS THE WHOLE FIELD.
-                  `.cloud-sky` paints its join into the page with an `::after`
-                  at `z-index: -1`; at -10 the pipes sat UNDER that overlay, so
-                  the lower half of every tube was covered by the white fade and
-                  the field rendered as nothing at all. Zero puts them above the
-                  fade and still below the window, which is `z-10`. */}
-              <div className="pointer-events-none absolute inset-x-0 top-0 z-0 flex justify-center">
+            {/* ---- the board, and the pipes running into it ------------- */}
+            {/**
+             * THE PIPES LIVE INSIDE THE FIGURE, not in a box above it, and
+             * that is what makes the composition one object. Positioned
+             * against the figure, `top: 36%` is 36% of the DASHBOARD's height —
+             * so the runs enter its sides at a fixed point on the card however
+             * tall the card gets, instead of at a guessed distance from
+             * something else. They reach 12vw past the figure's edges, which
+             * clears the viewport on a centred `max-w-6xl`; the section clips
+             * the overflow.
+             */}
+            <div className="relative mt-12 sm:mt-14">
+              <figure className="relative -mb-40 sm:-mb-48">
                 <Pipes />
-              </div>
 
-              {/**
-               * THE OVERLAP, AND THE ARITHMETIC BEHIND IT.
-               *
-               * How far the window hangs below the sky is `|mb| - section pb`,
-               * and the section's bottom padding is what makes that
-               * subtraction happen at all: with `pb-0` the figure's negative
-               * bottom margin COLLAPSES THROUGH the section and becomes the
-               * section's own margin, so the sky ends level with the window
-               * and the overlap this composition is built on silently does
-               * nothing. It measured right in the source and wrong in the
-               * browser, which is why `pnpm landing` asserts the gap in
-               * pixels.
-               */}
-              {/* THE GAP BETWEEN THE PIPES' MOUTHS AND THE CARD IS THE PICTURE.
-                   At `mt-44` only 176px of a 500px tube was ever on screen and
-                   the field read as a texture under the button rather than as
-                   pipes arriving somewhere. This is the visible run, and every
-                   pipe is cut long enough to still vanish behind the card. */}
-              <figure className="relative z-10 -mb-40 sm:-mb-48">
-                <div className="lift-lg aspect-[4/3] w-full overflow-hidden rounded-3xl sm:aspect-video">
+                {/**
+                 * THE OVERLAP, AND THE ARITHMETIC BEHIND IT.
+                 *
+                 * How far the window hangs below the sky is `|mb| - section
+                 * pb`, and the section's bottom padding is what makes that
+                 * subtraction happen at all: with `pb-0` the figure's negative
+                 * bottom margin COLLAPSES THROUGH the section and becomes the
+                 * section's own margin, so the sky ends level with the window
+                 * and the overlap this composition is built on silently does
+                 * nothing. Correct in the source, absent in the browser —
+                 * which is why `pnpm landing` asserts the gap in pixels.
+                 */}
+                {/* `data-product-window` is what `landing-check` measures the
+                    ratio of. It used to find this by taking the figure's FIRST
+                    CHILD, which was true until the pipes became the first child
+                    and the check started measuring a 7rem strip — correctly
+                    failing, but for a reason that had nothing to do with the
+                    window. A hook that depends on sibling order is a hook that
+                    breaks the day the composition changes. */}
+                <div
+                  data-product-window
+                  className="lift-lg relative z-10 aspect-[4/3] w-full overflow-hidden rounded-3xl sm:aspect-video"
+                >
                   <AppWindow />
                 </div>
+
                 <figcaption className="sr-only">
                   The Namzilabs dashboard: leads, booked leads, calls showed, customers, revenue and average order
                   value, over a weekly revenue chart and a conversion funnel — each figure recomputed from the tools it

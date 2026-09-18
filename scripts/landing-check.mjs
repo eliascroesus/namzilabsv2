@@ -175,7 +175,15 @@ for (const [w, h, name, theme] of [
       const b = el.getBoundingClientRect();
       return { top: Math.round(b.top + scrollY), bottom: Math.round(b.bottom + scrollY) };
     };
-    const frame = fig.firstElementChild.getBoundingClientRect();
+    /* THE WINDOW BY NAME, not by position. This read `fig.firstElementChild`,
+       which was the product window right up until the pipe field was moved
+       inside the figure and became the first child — at which point the ratio
+       assertion was measuring a 7rem strip of pipe. It failed, which is the
+       system working, but the fix is to stop describing the element by where
+       it happens to sit among its siblings. */
+    const win = fig.querySelector("[data-product-window]");
+    if (!win) return null;
+    const frame = win.getBoundingClientRect();
     return {
       sky: box(sky),
       fig: box(fig),

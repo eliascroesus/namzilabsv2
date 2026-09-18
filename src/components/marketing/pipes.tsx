@@ -3,138 +3,106 @@ import { SourceMark } from "@/components/source-mark";
 import { PauseOffscreen } from "@/components/marketing/pause-offscreen";
 
 /**
- * THE PIPES — connector marks falling down glass tubes into the dashboard.
+ * THE PIPES — two troughs running in from the edges of the screen, carrying
+ * the connector marks into the dashboard.
  *
- * ── WHAT IT IS COPYING, AND WHAT IT DELIBERATELY IS NOT ────────────────────
+ * ── WHY THIS IS THE SECOND VERSION ─────────────────────────────────────────
  *
- * The reference the owner sent (wissly.framer.website) runs coloured app icons
- * down a bamboo chute laid diagonally across a photographic sky. The mechanism
- * is lovely and the meaning is nil: it is an education brand, bamboo is
- * pretty, and the icons are invented.
+ * The first was seven VERTICAL tubes standing above the board like organ
+ * pipes, and the owner's layout sketch is unambiguous that this is not it: two
+ * runs, horizontal, entering from the left and right edges at the board's own
+ * mid-height, with the marks travelling along them into its sides.
  *
- * Ours borrows the mechanism and gives it the product's own job. These are
- * VERTICAL — the owner's call, and the right one — they carry the REAL
- * connector marks out of `CONNECTOR_CATALOG`, and they run down BEHIND the
- * dashboard window rather than past it. Tools, through pipelines, into one
- * board. That is a sentence this page spends three sections making below the
- * fold, said here in a picture before a word is read.
+ * The sketch is also the better composition, and it is worth saying why rather
+ * than just complying. Vertical tubes ABOVE the card make the board look like
+ * something the pipes are pouring onto. Horizontal runs entering its SIDES make
+ * the board the thing they connect to — which is the actual relationship: the
+ * dashboard is not underneath the tools, it is what they join up into. It also
+ * uses the empty width either side of a centred card, which the vertical
+ * version left as dead sky.
  *
- * It is also the reason the composition holds together rather than being a
- * headline with an ornament next to it: the pipes have somewhere to GO.
+ * ── WHY THE TROUGH IS TWO LAYERS ───────────────────────────────────────────
  *
- * ── WHY THE FIELD IS SHAPED THE WAY IT IS ──────────────────────────────────
+ * A mark has to travel INSIDE the tube, so it needs a far wall behind it and a
+ * near lip in front of it. One image and the logos sit on top of a picture of a
+ * pipe — stickers on a tube rather than objects inside one. The reference
+ * builds it the same way and calls the halves "Bamboo Top" and "Bamboo Bottom".
  *
- * Seven pipes, of four different lengths, at four different speeds, starting at
- * four different offsets. Every one of those is doing the same job: a row of
- * identical tubes running in step reads as one striped object sliding, which
- * is exactly the flat, mechanical look this was meant to avoid. Uneven lengths
- * also let the field describe a soft arc — shorter at the edges, longer toward
- * the middle — so the eye is funnelled into the dashboard instead of being
- * held at the margins.
+ * ── WHY THE ART IS OPTIONAL ────────────────────────────────────────────────
  *
- * THE OUTER PIPES DROP AWAY ON SMALL SCREENS. Seven tubes behind a 390px phone
- * is a texture, not a diagram. THREE is the floor, not one: a single tube in
- * the middle of an empty sky reads as a stray object, and it takes at least
- * three before the eye sees "a set of pipes feeding a thing" rather than "a
- * cylinder".
+ * `pipe-back.png` and `pipe-front.png` are referenced from CSS as background
+ * layers over a drawn fallback. If they are absent the fallback is what shows
+ * and it is built to stand on its own; if they are present they paint over it.
+ * Neither state can break a build, so the art can land whenever it lands.
  */
-type Pipe = {
-  /** Height in rem. Every pipe is cut long enough to reach behind the
-   *  dashboard; the number only decides how far past it the tube runs, which
-   *  nobody sees. */
-  h: number;
-  /**
-   * How far down the field this tube's MOUTH starts, in rem — and this is the
-   * one that does visible work.
-   *
-   * Height cannot carry the field's shape, because every pipe disappears
-   * behind the same card: cutting one shorter changes only how much of it is
-   * hidden. The TOP is what the eye actually reads, so the outer tubes hang
-   * from the ceiling and the inner ones start progressively lower, which draws
-   * a shallow funnel pointing straight into the middle of the board.
-   */
-  top: number;
-  /** Seconds for one full cycle. Slower reads as heavier and further away. */
-  s: number;
-  /** Fraction of the cycle to start at, so no two pipes are ever in phase. */
-  offset: number;
-  hide?: string;
-};
-
-const PIPES: Pipe[] = [
-  { h: 34, top: 0, s: 26, offset: 0.62, hide: "hidden lg:flex" },
-  { h: 32, top: 2.5, s: 19, offset: 0.18, hide: "hidden md:flex" },
-  { h: 30, top: 4.5, s: 23, offset: 0.81 },
-  { h: 28, top: 6, s: 16, offset: 0.35 },
-  { h: 30, top: 4.5, s: 21, offset: 0.07 },
-  { h: 32, top: 2.5, s: 28, offset: 0.54, hide: "hidden md:flex" },
-  { h: 34, top: 0, s: 18, offset: 0.29, hide: "hidden lg:flex" },
-];
 
 /**
- * Which marks travel in which tube.
- *
- * THE CATALOGUE IS DEALT ROUND THE PIPES rather than each pipe getting the
- * same list: the same seven logos falling in seven columns is a wallpaper
- * pattern, and the whole claim being made here is that there are a LOT of
- * these. Stepping by the pipe count deals them like cards, so adjacent tubes
- * never carry the same mark at the same height.
+ * WHICH MARKS RIDE WHICH SIDE — every other one, so the two runs never carry
+ * the same logo at the same moment and the field reads as one catalogue split
+ * in half rather than as one list played twice.
  */
-function marksFor(index: number) {
-  const out = CONNECTOR_CATALOG.filter((_, i) => i % PIPES.length === index % PIPES.length);
-  /* Doubled, because `pipe-fall` runs a full -50% — the second copy has to be
+function marksFor(side: "left" | "right") {
+  const start = side === "left" ? 0 : 1;
+  const picked = CONNECTOR_CATALOG.filter((_, i) => i % 2 === start);
+  /* Doubled, because the travel runs a full -50%: the second copy has to be
      sitting exactly where the first began or the loop visibly jumps. */
-  return [...out, ...out];
+  return [...picked, ...picked];
+}
+
+function Run({ side }: { side: "left" | "right" }) {
+  return (
+    <div className="pipe-run absolute inset-y-0" data-side={side}>
+      {/* ── the far wall ─────────────────────────────────────────────────
+          Drawn first so everything else stacks on top of it. */}
+      <span aria-hidden className="pipe-back absolute inset-0" />
+
+      {/* ── what travels inside ──────────────────────────────────────────
+          THE MASK IS ON THE TRAVEL, NOT ON THE TUBE. The trough itself runs to
+          a hard edge — a pipe that fades out has no mouth — but a mark that
+          pops into existence at that edge reads as a glitch, so the marks
+          alone dissolve in over the first tenth of the run. */}
+      <span className="pipe-window absolute inset-x-0 top-1/2 -translate-y-1/2">
+        <span
+          className="pipe-travel flex items-center gap-10 sm:gap-14"
+          style={{
+            /* Inward on both sides: the left run travels right, the right run
+               travels left, and both arrive at the board. Two runs going the
+               same way would read as a conveyor passing through rather than as
+               two feeds converging. */
+            animationDirection: side === "left" ? "normal" : "reverse",
+            animationDuration: side === "left" ? "26s" : "31s",
+          }}
+        >
+          {marksFor(side).map((entry, i) => (
+            <span
+              key={`${entry.source}-${i}`}
+              /* A few degrees, alternating, so they read as objects being
+                 carried rather than a row of centred stickers. */
+              style={{ transform: `rotate(${i % 2 ? 7 : -7}deg)` }}
+              className="shrink-0"
+            >
+              <SourceMark source={entry.source} size={38} className="stat-numeral" />
+            </span>
+          ))}
+        </span>
+      </span>
+
+      {/* ── the near lip, over the marks ────────────────────────────────── */}
+      <span aria-hidden className="pipe-front absolute inset-0" />
+    </div>
+  );
 }
 
 export function Pipes() {
   return (
     <PauseOffscreen>
-      {/* `items-start` so the tubes hang from a common ceiling and differ at
-          the FOOT. Centring them would make the arc read as a bulge instead of
-          as a set of pipes of different depths reaching down toward the
-          board. */}
-      {/* THE FIELD SPANS THE BOARD, NOT THE MIDDLE THIRD. At `gap-7` the seven
-          tubes covered about 600px under a 1152px card, which read as a clump
-          of pipes standing near it rather than as a field feeding it. Widened
-          until the outer tubes sit close to the card's own edges, so the whole
-          width of the board is being fed. */}
-      <div aria-hidden className="flex items-start justify-center gap-5 sm:gap-10 lg:gap-16">
-        {PIPES.map((pipe, i) => (
-          <div
-            key={i}
-            className={`pipe w-12 shrink-0 sm:w-14 lg:w-[4.25rem] ${pipe.hide ?? "flex"}`}
-            style={{ height: `${pipe.h}rem`, marginTop: `${pipe.top}rem` }}
-          >
-            <div className="pipe-flow size-full">
-              <div
-                className="pipe-column items-center gap-6 py-6 sm:gap-8"
-                style={{
-                  ["--pipe-duration" as string]: `${pipe.s}s`,
-                  /* A NEGATIVE DELAY starts the animation mid-cycle on the
-                     first frame, rather than making the pipe wait its turn
-                     before anything moves. Positive delays would leave the
-                     field visibly filling up on load. */
-                  animationDelay: `-${(pipe.offset * pipe.s).toFixed(1)}s`,
-                }}
-              >
-                {marksFor(i).map((entry, k) => (
-                  <span
-                    key={`${entry.source}-${k}`}
-                    /* A few degrees of tilt, alternating, so the marks look
-                       like objects being carried rather than a column of
-                       centred stickers. The reference skews its icons for the
-                       same reason. */
-                    style={{ transform: `rotate(${k % 2 ? 6 : -6}deg)` }}
-                    className="shrink-0"
-                  >
-                    <SourceMark source={entry.source} size={34} className="stat-numeral" />
-                  </span>
-                ))}
-              </div>
-            </div>
-          </div>
-        ))}
+      {/* THE RUNS BLEED PAST THE VIEWPORT on their outer ends and past the
+          board's edge on their inner ones, so neither end is ever a visible
+          stop: the tube comes from off-screen and disappears behind the card.
+          The hero section clips the outer overflow. */}
+      <div aria-hidden className="pipe-field pointer-events-none absolute inset-x-0 z-0">
+        <Run side="left" />
+        <Run side="right" />
       </div>
     </PauseOffscreen>
   );

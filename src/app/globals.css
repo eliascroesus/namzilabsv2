@@ -2583,89 +2583,133 @@ html.mix {
   /**
    * ── THE PIPES ──────────────────────────────────────────────────────────
    *
-   * A GLASS TUBE, and the reason it is built from four layers rather than one
-   * fill is that a cylinder is a lighting problem, not a shape problem. A
-   * rounded rectangle with a flat fill reads as a rounded rectangle; what makes
-   * it read as a TUBE is that the light wraps round it — bright at the left
-   * shoulder, darkest at about two-thirds across, and a second weaker highlight
-   * on the far edge where the sky wraps round the back.
+   * Two horizontal troughs entering from the screen's edges and running behind
+   * the dashboard, with the connector marks travelling inside them. The shape
+   * is the owner's layout sketch; what makes it mean anything is that the page
+   * spends three sections below the fold saying "your tools feed one board",
+   * and this says it in a picture first.
    *
-   * WHY THIS IS NOT DECORATION HERE, which is the whole reason it earned a
-   * place. The reference (wissly.framer.website) runs app icons down a bamboo
-   * chute because the brand is about learning and bamboo is pretty. Ours
-   * carries the CONNECTOR MARKS — the actual tools this product reads — down
-   * into the dashboard sitting in front of them. Tools, through pipelines, into
-   * one board: that is not an ornament, it is a diagram of what the software
-   * does, and it says it before a word of the headline is read.
+   * WHY HORIZONTAL BEAT THE VERTICAL VERSION IT REPLACES: tubes standing ABOVE
+   * the card make the board look like something being poured onto. Runs
+   * entering its SIDES make the board the thing they connect to, which is the
+   * actual relationship — and they use the empty width either side of a centred
+   * card, which the vertical version left as dead sky.
+   *
+   * ── THE ART IS OPTIONAL AND THE FALLBACK IS NOT A PLACEHOLDER ──────────
+   *
+   * `pipe-back.png` and `pipe-front.png` are the far wall and the near lip. If
+   * they are missing, `background-image` silently paints nothing and the drawn
+   * layers underneath are what shows — so the page never ships broken and the
+   * art can arrive on its own schedule. `next/image` would have made a missing
+   * file a build error, which is the wrong trade for decoration.
+   *
+   * THE ART IS DRAWN UPRIGHT AND STRETCHED DOWN HERE. Both files are vertical
+   * cylinders; `background-size: 100% 100%` lays them into a horizontal box, so
+   * nothing has to be re-exported to change the composition's direction.
    */
-  .pipe {
-    position: relative;
-    overflow: hidden;
-    border-radius: 999px;
-    /* WHITE ENOUGH TO BE AN OBJECT. The first cut ran 28-72% white and
-       vanished: a translucent white tube on a pale blue sky is the same
-       brightness as the sky, so the only thing separating them was a 1px rim
-       nobody could see. A cylinder needs a real tonal range across its width —
-       near-opaque at the lit shoulder, genuinely darker at the turn — and on
-       THIS ground that range has to sit above the sky, not inside it. */
-    background:
-      linear-gradient(
-        90deg,
-        rgb(236 245 255 / 0.82) 0%,
-        rgb(255 255 255 / 0.98) 16%,
-        rgb(248 252 255 / 0.92) 40%,
-        rgb(150 186 226 / 0.62) 72%,
-        rgb(214 234 252 / 0.88) 92%,
-        rgb(178 208 238 / 0.7) 100%
-      );
-    box-shadow:
-      /* The rim, inside the tube rather than around it — a border would sit on
-         the silhouette and flatten the cylinder back into a rectangle. */
-      inset 0 0 0 1px rgb(255 255 255 / 0.95),
-      inset 0 20px 26px -20px rgb(255 255 255 / 0.95),
-      inset 0 -22px 28px -20px rgb(72 112 162 / 0.4),
-      /* And one OUTSIDE, so the tube casts onto the sky and reads as being in
-         front of it rather than printed on it. This is the marketing ladder,
-         not the app's — see `--lift-*`. */
-      0 12px 30px -14px rgb(30 64 120 / 0.28);
+  .pipe-field {
+    /* The run sits a little above the board's middle, which is where the sketch
+       puts it and where it has to be: dead centre would cut the card in half
+       visually, and an entry point reads better slightly high. */
+    top: 36%;
+    height: 7rem;
   }
-  /* The specular — a hard, narrow line of light down the near shoulder. It is
-     the single cheapest thing that turns a shape into a material. */
-  .pipe::before {
-    content: "";
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    left: 16%;
-    width: 8%;
-    border-radius: 999px;
-    background: linear-gradient(180deg, transparent, rgb(255 255 255 / 0.85) 12%, rgb(255 255 255 / 0.85) 88%, transparent);
-    pointer-events: none;
-  }
-  /* The mouth and the foot: the tube is open, so what travels inside it should
-     arrive and leave rather than pop. */
-  .pipe-flow {
-    mask-image: linear-gradient(180deg, transparent 0%, #000 12%, #000 86%, transparent 100%);
+  @media (min-width: 640px) {
+    .pipe-field {
+      height: 9rem;
+    }
   }
 
   /**
-   * WHAT TRAVELS DOWN A PIPE.
-   *
-   * The same doubled-list trick the horizontal marquee uses, turned ninety
-   * degrees: the column holds the set twice and runs to -50%, at which point
-   * the second copy is exactly where the first started and the loop is
-   * seamless. Duration is set per pipe so six of them never march in step —
-   * synchronised pipes read as one object sliding, which is the opposite of
-   * what a field of them is for.
+   * EACH RUN REACHES FROM OFF-SCREEN TO BEHIND THE CARD. `-12vw` on the outer
+   * end means the mouth is never on screen — a pipe with a visible end stops
+   * being a pipe and becomes a lozenge — and 54% on the inner end carries it
+   * four per cent past the centre line, comfortably behind a card that is
+   * always wider than that.
    */
-  .pipe-column {
-    display: flex;
-    flex-direction: column;
-    animation: pipe-fall var(--pipe-duration, 18s) linear infinite;
+  .pipe-run[data-side="left"] {
+    left: -12vw;
+    right: 54%;
+  }
+  .pipe-run[data-side="right"] {
+    right: -12vw;
+    left: 54%;
+  }
+
+  /**
+   * THE FAR WALL — the inside of the trough, the surface a mark is seen
+   * against. It is the DARKER of the two layers on purpose: an interior is in
+   * shadow, and if the back is as bright as the lip the tube reads as flat
+   * tape.
+   */
+  .pipe-back {
+    border-radius: 999px;
+    background-image: url("/pipe-back.png");
+    background-repeat: no-repeat;
+    background-size: 100% 100%;
+    background-color: color-mix(in oklab, #3f73e6 22%, white);
+    box-shadow:
+      inset 0 16px 24px -12px rgb(26 58 120 / 0.5),
+      inset 0 -10px 18px -10px rgb(26 58 120 / 0.32),
+      inset 0 0 0 1px rgb(255 255 255 / 0.55);
+  }
+
+  /**
+   * THE NEAR LIP — drawn OVER the marks, and mostly transparent through its
+   * middle so they show through it. The two bands of tone at the edges are what
+   * sell the curve: a cylinder seen side-on is bright along its upper shoulder,
+   * clear across the belly where you look straight through the glass, and
+   * shaded along the lower edge where it turns away.
+   */
+  .pipe-front {
+    border-radius: 999px;
+    pointer-events: none;
+    background-image: url("/pipe-front.png");
+    background-repeat: no-repeat;
+    background-size: 100% 100%;
+  }
+  .pipe-front::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(
+      180deg,
+      rgb(255 255 255 / 0.92) 0%,
+      rgb(255 255 255 / 0.5) 15%,
+      rgb(255 255 255 / 0.05) 33%,
+      rgb(255 255 255 / 0) 58%,
+      rgb(120 160 210 / 0.2) 82%,
+      rgb(86 124 180 / 0.4) 100%
+    );
+    /* The specular — a hard line of light along the upper shoulder, and the
+       cheapest thing on this page that turns a shape into a material. */
+    box-shadow: inset 0 3px 0 0 rgb(255 255 255 / 0.85);
+  }
+
+  /**
+   * THE WINDOW the marks travel through. Clipped to the tube's own radius so
+   * nothing rides outside the glass, and dissolved at both ends so a logo never
+   * blinks into existence at a hard edge.
+   */
+  .pipe-window {
+    height: 100%;
+    overflow: hidden;
+    border-radius: 999px;
+    mask-image: linear-gradient(90deg, transparent 0%, #000 9%, #000 91%, transparent 100%);
+  }
+
+  .pipe-travel {
+    width: max-content;
+    height: 100%;
+    padding-inline: 3rem;
+    animation-name: pipe-travel;
+    animation-timing-function: linear;
+    animation-iteration-count: infinite;
     will-change: transform;
     backface-visibility: hidden;
   }
-  [data-offscreen="true"] .pipe-column {
+  [data-offscreen="true"] .pipe-travel {
     animation-play-state: paused;
   }
 
@@ -3031,9 +3075,9 @@ html.mix {
   }
 }
 
-@keyframes pipe-fall {
+@keyframes pipe-travel {
   from {
-    transform: translate3d(0, -50%, 0);
+    transform: translate3d(-50%, 0, 0);
   }
   to {
     transform: translate3d(0, 0, 0);
@@ -3056,7 +3100,7 @@ html.mix {
    standing still at the start. */
 @media (prefers-reduced-motion: reduce) {
   .marquee,
-  .pipe-column {
+  .pipe-travel {
     animation: none !important;
     transform: none !important;
   }
