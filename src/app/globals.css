@@ -2533,147 +2533,140 @@ html.mix {
    * window straddles the join and any fixed colour there is a hairline of the
    * wrong blue across the full width in one theme or the other.
    */
-  .night-sky {
+  /**
+   * ── THE SKY IS A PHOTOGRAPH NOW ────────────────────────────────────────
+   *
+   * The owner supplied a watercolour cloud image and asked for it, replacing
+   * the painted sunrise. Two things about how it is wired matter more than the
+   * picture:
+   *
+   * 1. IT IS A CSS BACKGROUND, NOT `next/image`. A missing file in `next/image`
+   *    is a build error; a missing file in `background-image` simply does not
+   *    paint and the layer underneath shows through. So the gradient below the
+   *    URL is a real fallback, not decoration — the page ships and looks
+   *    deliberate whether or not `public/sky.jpg` exists yet. Hero imagery that
+   *    can break a deploy is not worth the twenty bytes it saves.
+   *
+   * 2. THE FOOT IS PAINTED BY `::after`, NOT BY THE IMAGE. The photo ends where
+   *    it ends; the page under it is `--background`, which is white in the
+   *    light theme and #121214 in the dark one. A fade to `var(--background)`
+   *    over the last 45% means the join is the same colour as whatever page it
+   *    is standing on, in either theme, without a second cut of the image —
+   *    and the product window straddles exactly that join.
+   */
+  .cloud-sky {
     position: relative;
     isolation: isolate;
-    background:
-      /* The glow the sun makes before it clears the horizon, centred under the
-         headline so the type has something to sit against. */
-      radial-gradient(64% 42% at 50% 46%, rgb(86 140 255 / 0.3), transparent 72%),
-      /* One cold highlight top-left, so the night is not a flat wash. */
-      radial-gradient(40% 30% at 12% 4%, rgb(120 160 255 / 0.14), transparent 70%),
-      linear-gradient(
-        180deg,
-        #070b18 0%,
-        #0b1430 16%,
-        #122350 34%,
-        /* #1D3A7E IS THE FLOOR ANY TEXT SITS ON — white is 11.4:1 here. */
-          #1d3a7e 60%,
-        #2f5bb8 70%,
-        #6d9ae8 84%,
-        var(--background) 100%
-      );
+    background-color: #cfe6fb;
+    background-image:
+      url("/sky.jpg"),
+      /* The fallback, and it is drawn to be a sky rather than to be a
+         placeholder: a warm break top-right where the sun would be, a cool
+         wash top-left, and the same pale foot the photograph has. */
+      radial-gradient(42% 34% at 78% 2%, rgb(255 253 246 / 0.9), transparent 64%),
+      radial-gradient(52% 40% at 12% 0%, rgb(255 255 255 / 0.55), transparent 70%),
+      linear-gradient(180deg, #56b2f2 0%, #8ccbf7 32%, #c2e2fb 62%, #eaf5fe 84%, #ffffff 100%);
+    background-repeat: no-repeat;
+    background-position: center top;
+    background-size: cover;
   }
-
-  /**
-   * The dark theme does not get a second cut, and that is the point of going
-   * night: the sky was already dark, so there is nothing to invert. Only the
-   * FOOT differs, and it differs on its own — the last stop is `--background`,
-   * which is near-white in the light theme and #121212 in the dark one, so the
-   * sunrise lands on whichever page it is standing on.
-   */
-
-  /**
-   * ── SCROLL MOTION ──────────────────────────────────────────────────────
-   *
-   * The state machine is two attributes, both set by `Reveal`:
-   *
-   *   (nothing)            the server's output, and what a dead bundle keeps
-   *   [data-reveal]        hidden — only ever applied off-screen
-   *   [data-shown="true"]  released
-   *
-   * 18px and 0.7s with a soft overshoot-free ease. Bigger travel reads as a
-   * slide and draws attention to itself; this reads as the page settling.
-   *
-   * ONLY `opacity` AND `transform` ARE ANIMATED, which is what lets the whole
-   * thing run on the compositor without touching layout — the same constraint
-   * the scroll pass imposed everywhere else on this page.
-   */
-  [data-reveal] {
-    opacity: 0;
-    transform: translate3d(0, 18px, 0);
-  }
-  [data-reveal][data-shown="true"] {
-    opacity: 1;
-    transform: translate3d(0, 0, 0);
-    transition:
-      opacity 0.7s cubic-bezier(0.22, 0.61, 0.36, 1) var(--reveal-delay, 0ms),
-      transform 0.7s cubic-bezier(0.22, 0.61, 0.36, 1) var(--reveal-delay, 0ms);
-  }
-
-  /**
-   * THE CARD THAT ANSWERS A POINTER.
-   *
-   * Every card on this page was inert, which is half of why it read as a
-   * document rather than as software. One rule, applied to the six card
-   * families, so they cannot drift apart: the edge takes the brand, the whole
-   * thing rises 2px, and the lift deepens.
-   *
-   * The border is what MOVES — not the fill. A tinted fill on hover reads as a
-   * selection somebody made; a brightened edge reads as the cursor passing
-   * over, which is the rail's own rule and the one this product already
-   * follows.
-   */
-  .card-hoverable {
-    transition:
-      transform 0.25s cubic-bezier(0.22, 0.61, 0.36, 1),
-      border-color 0.25s cubic-bezier(0.22, 0.61, 0.36, 1),
-      box-shadow 0.25s cubic-bezier(0.22, 0.61, 0.36, 1);
-  }
-  @media (hover: hover) {
-    .card-hoverable:hover {
-      transform: translate3d(0, -2px, 0);
-      border-color: var(--color-brand-400);
-      box-shadow:
-        0 1px 2px 0 rgb(18 43 105 / 0.06),
-        0 10px 26px -8px rgb(18 43 105 / 0.16);
-    }
-  }
-
-  /**
-   * A BRAND GLOW BEHIND A SECTION — the page's only large-scale colour below
-   * the fold, and the thing that stops eight white sections reading as one.
-   *
-   * It is a background rather than an element so it costs no DOM and cannot be
-   * hovered, selected or read by anything. `-z-10` with the section isolated,
-   * for the same reason the starfield needs it.
-   */
-  .glow-top {
-    position: relative;
-    isolation: isolate;
-  }
-  .glow-top::before {
+  /* The join into the page, in whichever theme the page happens to be. */
+  .cloud-sky::after {
     content: "";
     position: absolute;
     inset: 0;
-    z-index: -10;
-    background: radial-gradient(60% 46% at 50% 0%, rgb(86 140 255 / 0.1), transparent 70%);
+    z-index: -1;
+    pointer-events: none;
+    background: linear-gradient(180deg, transparent 52%, var(--background) 97%);
   }
 
   /**
-   * ── THE LANDING PAGE'S OWN GROUND ──────────────────────────────────────
+   * ── THE PIPES ──────────────────────────────────────────────────────────
    *
-   * THE PAGE IS WHITE HERE AND #F3F3F3 EVERYWHERE ELSE, at the owner's ask:
-   * "instead of the blue fading into this #F3F3F3 have it fade into #ffffff".
+   * A GLASS TUBE, and the reason it is built from four layers rather than one
+   * fill is that a cylinder is a lighting problem, not a shape problem. A
+   * rounded rectangle with a flat fill reads as a rounded rectangle; what makes
+   * it read as a TUBE is that the light wraps round it — bright at the left
+   * shoulder, darkest at about two-thirds across, and a second weaker highlight
+   * on the far edge where the sky wraps round the back.
    *
-   * IT IS DONE BY MOVING THE TOKEN, NOT BY PAINTING WHITE OVER THINGS, and
-   * that is what makes the seam safe. The sunrise's last gradient stop is
-   * `var(--background)` — so whatever this says, the hero's foot and the page
-   * under it are the same colour BY CONSTRUCTION. Hard-coding `#fff` in the
-   * gradient and `bg-white` on the sections would have been two numbers that
-   * have to be kept equal by hand, in two files, in two themes.
-   *
-   * THE BANDS HAD TO INVERT TO PAY FOR IT. The alternating sections were
-   * `bg-card`, which is #FFFFFF — white sections on an #F3F3F3 page. With the
-   * page itself white those bands vanished and the whole thing became one
-   * undifferentiated sheet, so the roles swap: the page takes white and the
-   * bands take the grey that used to be the page.
-   *
-   * THE DARK THEME IS UNTOUCHED. There is no "whiter" to go on #121214, the
-   * complaint was about a light-theme seam, and `--card` is already a step up
-   * from `--background` there — so the dark values simply restate what the
-   * theme already does, and the band keeps working in both.
+   * WHY THIS IS NOT DECORATION HERE, which is the whole reason it earned a
+   * place. The reference (wissly.framer.website) runs app icons down a bamboo
+   * chute because the brand is about learning and bamboo is pretty. Ours
+   * carries the CONNECTOR MARKS — the actual tools this product reads — down
+   * into the dashboard sitting in front of them. Tools, through pipelines, into
+   * one board: that is not an ornament, it is a diagram of what the software
+   * does, and it says it before a word of the headline is read.
    */
-  .lander {
-    --background: #ffffff;
-    --band: #f4f5f7;
+  .pipe {
+    position: relative;
+    overflow: hidden;
+    border-radius: 999px;
+    /* WHITE ENOUGH TO BE AN OBJECT. The first cut ran 28-72% white and
+       vanished: a translucent white tube on a pale blue sky is the same
+       brightness as the sky, so the only thing separating them was a 1px rim
+       nobody could see. A cylinder needs a real tonal range across its width —
+       near-opaque at the lit shoulder, genuinely darker at the turn — and on
+       THIS ground that range has to sit above the sky, not inside it. */
+    background:
+      linear-gradient(
+        90deg,
+        rgb(236 245 255 / 0.82) 0%,
+        rgb(255 255 255 / 0.98) 16%,
+        rgb(248 252 255 / 0.92) 40%,
+        rgb(150 186 226 / 0.62) 72%,
+        rgb(214 234 252 / 0.88) 92%,
+        rgb(178 208 238 / 0.7) 100%
+      );
+    box-shadow:
+      /* The rim, inside the tube rather than around it — a border would sit on
+         the silhouette and flatten the cylinder back into a rectangle. */
+      inset 0 0 0 1px rgb(255 255 255 / 0.95),
+      inset 0 20px 26px -20px rgb(255 255 255 / 0.95),
+      inset 0 -22px 28px -20px rgb(72 112 162 / 0.4),
+      /* And one OUTSIDE, so the tube casts onto the sky and reads as being in
+         front of it rather than printed on it. This is the marketing ladder,
+         not the app's — see `--lift-*`. */
+      0 12px 30px -14px rgb(30 64 120 / 0.28);
   }
-  .dark .lander {
-    --background: var(--color-neutral-950);
-    --band: #171717;
+  /* The specular — a hard, narrow line of light down the near shoulder. It is
+     the single cheapest thing that turns a shape into a material. */
+  .pipe::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 16%;
+    width: 8%;
+    border-radius: 999px;
+    background: linear-gradient(180deg, transparent, rgb(255 255 255 / 0.85) 12%, rgb(255 255 255 / 0.85) 88%, transparent);
+    pointer-events: none;
   }
-  .lander-band {
-    background: var(--band);
+  /* The mouth and the foot: the tube is open, so what travels inside it should
+     arrive and leave rather than pop. */
+  .pipe-flow {
+    mask-image: linear-gradient(180deg, transparent 0%, #000 12%, #000 86%, transparent 100%);
+  }
+
+  /**
+   * WHAT TRAVELS DOWN A PIPE.
+   *
+   * The same doubled-list trick the horizontal marquee uses, turned ninety
+   * degrees: the column holds the set twice and runs to -50%, at which point
+   * the second copy is exactly where the first started and the loop is
+   * seamless. Duration is set per pipe so six of them never march in step —
+   * synchronised pipes read as one object sliding, which is the opposite of
+   * what a field of them is for.
+   */
+  .pipe-column {
+    display: flex;
+    flex-direction: column;
+    animation: pipe-fall var(--pipe-duration, 18s) linear infinite;
+    will-change: transform;
+    backface-visibility: hidden;
+  }
+  [data-offscreen="true"] .pipe-column {
+    animation-play-state: paused;
   }
 
   /**
@@ -3038,6 +3031,15 @@ html.mix {
   }
 }
 
+@keyframes pipe-fall {
+  from {
+    transform: translate3d(0, -50%, 0);
+  }
+  to {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
 @keyframes marquee-scroll {
   from {
     transform: translate3d(0, 0, 0);
@@ -3053,7 +3055,8 @@ html.mix {
    pointlessly so: what somebody asking for less motion wants is the row
    standing still at the start. */
 @media (prefers-reduced-motion: reduce) {
-  .marquee {
+  .marquee,
+  .pipe-column {
     animation: none !important;
     transform: none !important;
   }

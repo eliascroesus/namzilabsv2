@@ -78,7 +78,7 @@ const ratio = (a, b) => {
  * never experiences — the same mistake `.marquee-track` made here twice.
  */
 const HIDE =
-  ".night-sky h1,.night-sky p,.marquee span > span,.sky-card h2,.sky-card p," +
+  ".cloud-sky h1,.cloud-sky p,.marquee span > span,.sky-card h2,.sky-card p," +
   ".sky-panel h2,.sky-panel p,.sky-panel li" +
   "{visibility:hidden!important}";
 
@@ -160,7 +160,7 @@ for (const [w, h, name, theme] of [
 
   // ── composition ──────────────────────────────────────────────────────────
   const geo = await page.evaluate(() => {
-    const sky = document.querySelector(".night-sky");
+    const sky = document.querySelector(".cloud-sky");
     const fig = sky?.querySelector("figure");
     /**
      * THE HEADING, NOT THE SECTION. The section under the hero starts where
@@ -220,7 +220,7 @@ for (const [w, h, name, theme] of [
        A literal there instead — the #C0D5FF this shipped with first — is a
        hairline of the wrong blue across the full width in one theme or both. */
     const seam = await page.evaluate(() => {
-      const sky = document.querySelector(".night-sky");
+      const sky = document.querySelector(".cloud-sky");
       const r = sky.getBoundingClientRect();
       const below = document.elementFromPoint(8, Math.min(innerHeight - 2, r.bottom + 8));
       const paint = (el) => {
@@ -366,7 +366,7 @@ for (const [w, h, name, theme] of [
         weight: Number(cs.fontWeight),
       });
     };
-    const sky = document.querySelector(".night-sky");
+    const sky = document.querySelector(".cloud-sky");
     add(sky.querySelector("h1 span"), "headline");
     add(sky.querySelector("p"), "paragraph");
     /* THE "READS FROM" LABEL AND THE LINE UNDER THE CTA WERE BOTH SAMPLED HERE

@@ -432,17 +432,6 @@ const RULES: Rule[] = [
       // a token would not make it theme-aware, it would make it the wrong
       // logo — which is the bug this file was rewritten to fix.
       "src/connectors/logos.ts": "official marks carry the fills they shipped with; a token here would redraw somebody else's logo",
-      /**
-       * AN ILLUSTRATION, WHICH IS THE SAME EXCEPTION AS A LOGO ONE LINE ABOVE.
-       * These are the star fills and the colour of the lines joining the
-       * constellation — the artwork, not a surface the theme is entitled to
-       * restyle. A star whose fill followed `--muted` would not be theme-aware,
-       * it would be the wrong picture. The SKY behind them is tokenised
-       * (`.night-sky`) and its foot is `--background`, so the one part that
-       * meets the page does follow the theme; stars are white at night in
-       * either one.
-       */
-      "src/components/marketing/night-sky.tsx": "the starfield artwork — star fills and the constellation's joins; a token here would redraw the illustration",
       // The Google "G" on the sign-in button, for the same reason: Google's
       // brand terms require the mark in its own four colours, and a token here
       // would be us redrawing it. Every other colour on that screen is a token.

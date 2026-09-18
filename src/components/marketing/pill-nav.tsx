@@ -65,13 +65,30 @@ const LINKS: Array<{ href: string; label: string }> = [
  * change with the theme, so neither may the control on it" — was true of the
  * old sky and is now exactly backwards.
  */
-const WHITE_CTA = "gap-1.5 rounded-full border-transparent bg-white text-neutral-950 hover:bg-brand-50";
+/**
+ * INK ON WHITE, AND THIS IS THE THIRD TIME THIS BAR HAS FLIPPED.
+ *
+ * It is worth writing down why, because the answer is not indecision: this
+ * capsule is STICKY, so it is the one object on the page that has to work over
+ * every ground the page has, and the page's first ground has changed twice. It
+ * was dark over a night sky and correct; it is light over a daylight cloud
+ * photograph and correct again.
+ *
+ * WHAT MAKES THE LIGHT VERSION SAFE FOR THE WHOLE DOCUMENT: below the hero the
+ * page is white or a pale band, so a white capsule with near-black links is at
+ * full contrast for the entire scroll; the only two dark surfaces it crosses
+ * are the assistant card and the closing card, and a bright bar over a deep
+ * blue card is legible in the other direction. The dark version had the harder
+ * job — it had to survive a near-white page — and it only ever managed it by
+ * being 76% opaque.
+ */
+const WHITE_CTA = "gap-1.5 rounded-full border-transparent bg-neutral-950 text-white hover:bg-neutral-800";
 
 /** The pill a nav link wears inside the capsule. */
 const PILL =
-  "inline-flex min-h-8 items-center whitespace-nowrap rounded-full px-4 py-1.5 text-sm font-medium text-white/80 " +
-  "transition-colors duration-(--duration-fast) hover:bg-white/15 hover:text-white " +
-  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white";
+  "inline-flex min-h-8 items-center whitespace-nowrap rounded-full px-4 py-1.5 text-sm font-medium text-neutral-700 " +
+  "transition-colors duration-(--duration-fast) hover:bg-neutral-950/6 hover:text-neutral-950 " +
+  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
 
 export function PillNav({ signedIn }: { signedIn: boolean }) {
   return (
@@ -108,32 +125,18 @@ export function PillNav({ signedIn }: { signedIn: boolean }) {
           // differently, rather than as a panel laid over the top. The blur is
           // what sells it — the clouds smear behind the bar as they pass under
           // it, which a flat fill cannot fake.
-          // DARK GLASS, AND IT WENT BACK TO DARK FOR A REASON WORTH KEEPING.
-          // It was a white capsule for exactly as long as the hero was a
-          // daylight sky. The hero is a sunrise now — near-black at the top —
-          // so a 55%-white bar over it rendered mid-grey with near-black links
-          // on it, and the first thing on the page was its least legible
-          // object.
-          //
-          // The deeper reason it cannot simply follow the sky: this bar is
-          // STICKY. It travels the whole document, over a night sky, four
-          // white sections and two blue cards, and the only bar that works
-          // over all six is one opaque enough to bring its own ground. 72%
-          // black is the figure that survived being measured on every one of
-          // them; the blur is what keeps it from reading as a slab.
-          //
-          // `blur-md` RATHER THAN `blur-xl`, AND THE FILL WENT UP TO 76% TO
-          // PAY FOR IT. This bar is sticky, so its backdrop is re-sampled on
-          // every scroll frame for the whole document, and a 24px radius is
-          // roughly four times the work of a 12px one. Four points of extra
-          // opacity buy back the legibility the smaller radius gives up, and
-          // cost nothing per frame.
-          "border border-white/10 bg-[color-mix(in_oklab,var(--color-neutral-950)_76%,transparent)] backdrop-blur-md",
+          // WHITE GLASS. See the note beside WHITE_CTA: the bar is sticky, the
+          // page under it is light for all but two cards, and the sky it
+          // starts on is a bright photograph. 88% white rather than a true
+          // glass pane because the clouds behind it have real contrast in
+          // them — at 55% the nav links sat on whatever cloud happened to be
+          // passing, which is a contrast that changes as you scroll.
+          "border border-white/80 bg-white/88 backdrop-blur-md",
         )}
       >
         <Link
           href="/"
-          className="font-marketing flex shrink-0 items-center gap-2 rounded-control text-lg font-bold tracking-tight text-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
+          className="font-marketing flex shrink-0 items-center gap-2 rounded-control text-lg font-bold tracking-tight text-neutral-950 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
         >
           <BrandMark className="size-6 shrink-0" />
           Namzilabs
@@ -174,7 +177,7 @@ export function PillNav({ signedIn }: { signedIn: boolean }) {
           <details className="group relative md:hidden">
             <summary
               aria-label="Open the menu"
-              className="flex size-9 cursor-pointer list-none items-center justify-center rounded-full text-white/80 transition-colors duration-(--duration-fast) hover:bg-white/15 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white [&::-webkit-details-marker]:hidden"
+              className="flex size-9 cursor-pointer list-none items-center justify-center rounded-full text-neutral-700 transition-colors duration-(--duration-fast) hover:bg-neutral-950/6 hover:text-neutral-950 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden"
             >
               <Menu className="size-5" aria-hidden />
             </summary>

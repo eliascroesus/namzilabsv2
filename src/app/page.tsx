@@ -3,14 +3,12 @@ import { withAuth } from "@workos-inc/authkit-nextjs";
 import { ArrowRight } from "lucide-react";
 import { CONNECTOR_CATALOG } from "@/connectors/catalog";
 import { AppWindow } from "@/components/marketing/app-window";
-import { ToolMarquee } from "@/components/marketing/marquee";
-import { PauseOffscreen } from "@/components/marketing/pause-offscreen";
+import { Pipes } from "@/components/marketing/pipes";
 import { Reveal } from "@/components/marketing/reveal";
 import { AiPanel } from "@/components/marketing/ai-panel";
 import { PillNav } from "@/components/marketing/pill-nav";
 import { BrandMark } from "@/components/marketing/brand-mark";
 import { ProblemGrid } from "@/components/marketing/problem";
-import { NightSky } from "@/components/marketing/night-sky";
 import { Pricing } from "@/components/marketing/pricing";
 import { FeatureRow } from "@/components/marketing/feature-row";
 import { ConnectShot } from "@/components/marketing/connect-shot";
@@ -78,11 +76,14 @@ export const metadata = {
 };
 
 /**
- * THE HERO'S PILL — WHITE, because the sky under it is night.
+ * THE HERO'S PILL — NEAR-BLACK, because the sky under it is daylight again.
  *
- * It was near-black for exactly as long as the hero was daylight. On a #070B18
- * sky a near-black button is a hole, and white is the only fill with a
- * guaranteed contrast against every stop the button could land on.
+ * It was white for exactly as long as the hero was a night sky, where a
+ * near-black button would have been a hole. On a bright cloud photograph the
+ * reverse holds and by a wider margin: white-on-white had the button
+ * dissolving into the clouds. The closing card keeps the WHITE version, and
+ * that is not an inconsistency — it sits on a deep blue card, which is the one
+ * dark ground left on the page.
  *
  * NOT `buttonVariants`. The kit's `lg` button is a 40px control built for a
  * form row, and this is a 52px marketing pill with a disc on the end of it —
@@ -95,13 +96,13 @@ function Cta({ href, children }: { href: string; children: React.ReactNode }) {
   return (
     <a
       href={href}
-      className="lift-md group inline-flex h-13 items-center gap-2 rounded-full bg-white pl-7 pr-2 text-button font-semibold text-neutral-950 transition-transform duration-(--duration-fast) ease-(--ease-standard) hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white motion-reduce:transition-none motion-reduce:hover:translate-y-0"
+      className="lift-md group inline-flex h-13 items-center gap-2 rounded-full bg-neutral-950 pl-7 pr-2 text-button font-semibold text-white transition-transform duration-(--duration-fast) ease-(--ease-standard) hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring motion-reduce:transition-none motion-reduce:hover:translate-y-0"
     >
       {children}
       {/* The disc gives the pill an interior, so it reads as an object rather
           than as a lozenge of ink. The arrow nudges on hover — the one moving
           thing on the page that answers a pointer. */}
-      <span className="flex size-9 items-center justify-center rounded-full bg-neutral-950/10">
+      <span className="flex size-9 items-center justify-center rounded-full bg-white/15">
         <ArrowRight
           aria-hidden
           className="size-4 transition-transform duration-(--duration-fast) ease-(--ease-standard) group-hover:translate-x-0.5 motion-reduce:transition-none"
@@ -135,115 +136,100 @@ export default async function Home() {
 
       <main id="main" className="flex-1">
         {/* ==== Hero ======================================================= */}
-        {/* NO `overflow-hidden` ON THE SECTION. The product window hangs out of
-            the bottom on purpose — that overlap is what makes it read as
-            sitting in FRONT of the page rather than as another block stacked
-            on it. The clouds do their own clipping from the inside. */}
-        <section className="night-sky relative px-5 pb-16 pt-32 sm:px-8 sm:pb-20 sm:pt-36 lg:pt-44">
-          <NightSky />
+        {/**
+         * THE COMPOSITION, AND WHY IT IS BUILT IN THIS ORDER.
+         *
+         * Three layers, back to front: the sky, the PIPES, and the dashboard.
+         * The pipes run down behind the window and stop at it, which is the
+         * whole idea — the connector marks fall out of the sky, down the
+         * tubes, and arrive in the board. The reference this came from
+         * (wissly.framer.website) runs app icons down a bamboo chute because
+         * bamboo suits an education brand; this page has a literal version of
+         * that picture available to it, so it uses the literal one.
+         *
+         * THE WINDOW HAS TO OVERLAP THE PIPES, not sit under them. If the
+         * tubes ended above the card the field reads as a decorative border
+         * and the card as an unrelated object; ending BEHIND it is what makes
+         * the two one picture. `-mt-*` on the figure and `z-10` do that, and
+         * the pipes' own heights are cut so none of them pokes out below.
+         */}
+        <section className="cloud-sky relative overflow-x-clip px-5 pb-16 pt-28 sm:px-8 sm:pb-20 sm:pt-32 lg:pt-36">
+          <div className="mx-auto w-full max-w-6xl">
+            <div className="text-center">
+              {/**
+               * NEAR-BLACK ON A BRIGHT SKY, and pinned rather than tokenised.
+               * The sky is a photograph — the same picture for everybody — so
+               * `--foreground` would render this headline white on white the
+               * moment a dark-theme visitor arrived. It is the same rule the
+               * connector chips follow and the opposite of the one the rest of
+               * the page follows, because the rest of the page sits on a
+               * ground that does follow the theme.
+               */}
+              <h1 className="font-marketing text-balance text-[clamp(2.75rem,7.6vw,6.75rem)] font-bold leading-[0.95] tracking-[-0.03em] text-neutral-950">
+                <span className="sm:block">Analyze all your data</span>{" "}
+                <span className="sm:block">in one place.</span>
+              </h1>
 
-          <div className="mx-auto w-full max-w-6xl text-center">
-            {/**
-             * SIX WORDS, TWO LINES, CENTRED.
-             *
-             * The line that was here ran "SEE ALL YOUR DATA / IN ONE PLACE" in
-             * capitals across the full width, with a sixty-word paragraph under
-             * it. It said nothing a competitor could not say.
-             *
-             * This one states the problem and the fix in the smallest number of
-             * words either fits in: the tools disagree — everybody with more
-             * than three of them knows this — and here is the thing that ends
-             * the argument. Written in sentence case, because it is a sentence.
-             */}
-            {/* THE SPANS ONLY BREAK FROM `sm` UP, and that is a phone bug
-                rather than a preference. `text-banner` bottoms out at 44px, and
-                "Your tools disagree." set at 44px in Outfit Bold is about
-                460px wide — on a 390px screen with 40px of gutter it pushed the
-                document to 414px and the whole page scrolled sideways, which
-                `pnpm landing` catches and no source check could. Forced as
-                blocks the line cannot wrap out of trouble; allowed to flow, it
-                sets itself in three or four and `text-balance` keeps them even. */}
-            {/* WHITE, NOT `--foreground`. Every word in this hero sits in the
-                top half of a sunrise, which is near-black at the top and brand
-                blue by the time the last line of it lands — a ground that does
-                NOT follow the theme. `--foreground` would render this headline
-                in near-black on near-black for a light-theme visitor. */}
-            {/* TWO LINES, AND THE SIZE IS WHAT DECIDES THAT. `text-banner` tops
-                out at 120px, and "Analyze all your data" set at 120px is about
-                1058px wide — wider than the 1024px container it was in, so the
-                line the markup asks for broke into two and the headline
-                rendered in three. Widening the container to `max-w-6xl` and
-                capping the face at 108px leaves ~130px of slack on the longest
-                line at 1440, which is enough that it cannot wrap back. */}
-            <h1 className="font-marketing text-balance text-[clamp(2.75rem,7.6vw,6.75rem)] font-bold leading-[0.95] tracking-[-0.03em] text-white">
-              {/* THE HEADLINE NAMES THE JOB, NOT THE GRIEVANCE. It read "Your
-                  tools disagree. This settles it." — a good line about a
-                  problem, and one that leaves a visitor who has not yet felt
-                  that problem with no idea what the product IS. This says what
-                  you do with it in five words; the disagreement argument now
-                  starts in the section built for it. */}
-              <span className="sm:block">Analyze all your data</span>{" "}
-              <span className="sm:block">in one place.</span>
-            </h1>
+              <p className="mx-auto mt-7 max-w-xl text-lg leading-relaxed text-neutral-800">
+                Build any metric you can describe — like Zapier, but for your data — and find every bottleneck in your
+                business.
+              </p>
 
-            {/* THE ZAPIER COMPARISON IS DOING WORK, not name-dropping. "Build
-                any metric" is abstract until somebody knows the SHAPE of the
-                thing — steps chained into a flow, assembled rather than
-                queried — and one familiar product carries that faster than a
-                paragraph can. It is comparative reference and claims no
-                affiliation. */}
-            <p className="mx-auto mt-7 max-w-xl text-lg leading-relaxed text-white/80">
-              Build any metric you can describe — like Zapier, but for your data — and find every bottleneck in your
-              business.
-            </p>
-
-            <div className="mt-10 flex justify-center">
-              <Cta href={cta}>{ctaLabel}</Cta>
-            </div>
-
-            {/* ---- The tools it reads ----------------------------------- */}
-            {/* BOTH LABELS CAME OFF at the owner's ask — "Read-only access · No
-                warehouse · No SQL" under the button, and "Reads from 32 tools,
-                including" over the ticker. The hero is three objects now
-                instead of five, and the marquee says what it is by being a row
-                of logos somebody recognises; a caption explaining that a row of
-                logos is a row of logos was the page talking to itself.
-
-                `landing-check` LOST A SAMPLE HERE and was edited to say so.
-                It measured this label's contrast; the label is gone, so the
-                probe is gone too rather than being re-pointed at the wrapper —
-                a `<div>` with no text of its own would have reported "not
-                measurable", and quietly re-hooking it somewhere else is how a
-                check ends up passing by measuring nothing. The connector chips
-                are still sampled, which is what covers this part of the sky. */}
-            <div className="mt-16 sm:mt-20">
-              <PauseOffscreen>
-                <ToolMarquee />
-              </PauseOffscreen>
-            </div>
-
-            {/* ---- The product ------------------------------------------- */}
-            {/**
-             * THE OVERLAP, AND THE ARITHMETIC BEHIND IT.
-             *
-             * How far the window hangs below the sky is `|mb| - section pb`,
-             * and the section's bottom padding is what makes that subtraction
-             * happen at all: with `pb-0` the figure's negative bottom margin
-             * COLLAPSES THROUGH the section and becomes the section's own
-             * margin, so the sky ends level with the window and the overlap
-             * this whole composition is built on silently does nothing. It
-             * measured right in the source and wrong in the browser, which is
-             * why `pnpm landing` asserts the gap in pixels.
-             */}
-            <figure className="relative z-10 mt-14 -mb-40 sm:mt-16 sm:-mb-48">
-              <div className="lift-lg aspect-[4/3] w-full overflow-hidden rounded-3xl sm:aspect-video">
-                <AppWindow />
+              <div className="mt-10 flex justify-center">
+                <Cta href={cta}>{ctaLabel}</Cta>
               </div>
-              <figcaption className="sr-only">
-                The Namzilabs dashboard: a board of metric tiles — meetings booked, pickup rate, speed to lead — each
-                recomputed from the tools it reads.
-              </figcaption>
-            </figure>
+            </div>
+
+            {/* ---- the pipes, and the board they empty into --------------- */}
+            {/* PADDING, NOT A MARGIN ON THE CHILD, and this cost an hour.
+                The figure below used to carry `mt-60`, and this wrapper has no
+                padding or border of its own — so that margin COLLAPSED THROUGH
+                it and moved the wrapper's own top edge down by 240px. The pipe
+                field is `absolute top-0` against this box, so it started 240px
+                lower than intended: below the dashboard rather than above it,
+                which is why a field of seven tubes rendered as nothing at all.
+                Correct in the source, absent in the browser — the exact failure
+                `pnpm landing` measures the hero's geometry for. */}
+            <div className="relative mt-10 pt-28 sm:mt-12 sm:pt-56 lg:pt-72">
+              {/* `z-0`, NOT `-z-10`, AND THE DIFFERENCE IS THE WHOLE FIELD.
+                  `.cloud-sky` paints its join into the page with an `::after`
+                  at `z-index: -1`; at -10 the pipes sat UNDER that overlay, so
+                  the lower half of every tube was covered by the white fade and
+                  the field rendered as nothing at all. Zero puts them above the
+                  fade and still below the window, which is `z-10`. */}
+              <div className="pointer-events-none absolute inset-x-0 top-0 z-0 flex justify-center">
+                <Pipes />
+              </div>
+
+              {/**
+               * THE OVERLAP, AND THE ARITHMETIC BEHIND IT.
+               *
+               * How far the window hangs below the sky is `|mb| - section pb`,
+               * and the section's bottom padding is what makes that
+               * subtraction happen at all: with `pb-0` the figure's negative
+               * bottom margin COLLAPSES THROUGH the section and becomes the
+               * section's own margin, so the sky ends level with the window
+               * and the overlap this composition is built on silently does
+               * nothing. It measured right in the source and wrong in the
+               * browser, which is why `pnpm landing` asserts the gap in
+               * pixels.
+               */}
+              {/* THE GAP BETWEEN THE PIPES' MOUTHS AND THE CARD IS THE PICTURE.
+                   At `mt-44` only 176px of a 500px tube was ever on screen and
+                   the field read as a texture under the button rather than as
+                   pipes arriving somewhere. This is the visible run, and every
+                   pipe is cut long enough to still vanish behind the card. */}
+              <figure className="relative z-10 -mb-40 sm:-mb-48">
+                <div className="lift-lg aspect-[4/3] w-full overflow-hidden rounded-3xl sm:aspect-video">
+                  <AppWindow />
+                </div>
+                <figcaption className="sr-only">
+                  The Namzilabs dashboard: leads, booked leads, calls showed, customers, revenue and average order
+                  value, over a weekly revenue chart and a conversion funnel — each figure recomputed from the tools it
+                  reads.
+                </figcaption>
+              </figure>
+            </div>
           </div>
         </section>
 
