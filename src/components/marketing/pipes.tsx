@@ -3,43 +3,43 @@ import { SourceMark } from "@/components/source-mark";
 import { PauseOffscreen } from "@/components/marketing/pause-offscreen";
 
 /**
- * THE CHUTES — two pipe mouths at the edges of the screen, pouring the
- * connector marks toward the dashboard.
+ * THE CHUTES — two angled pipes pouring the connector marks into the board.
  *
- * ── WHAT THE PREVIOUS VERSION GOT WRONG ────────────────────────────────────
+ * ── HOW THE REFERENCE ACTUALLY BUILDS THIS ─────────────────────────────────
  *
- * It put the marks INSIDE the tube, travelling along it. That is not what the
- * reference does and not what the owner's sketch shows, and once the real art
- * arrived it was obviously impossible: `pipe-front.png` is an opaque cylinder,
- * so anything "inside" was covered by it completely. What he saw was a stubby
- * green lozenge with nothing in it.
+ * Reading wissly.framer.website's markup settles what two rounds of guessing
+ * did not. It is ONE container with `transform: rotate(-43deg)` on it, holding:
+ * a chute at one end, a second chute at the other, and a vertical ticker
+ * running between them. Everything inside is axis-aligned; the container's
+ * rotation is what makes the whole assembly diagonal.
  *
- * ── WHAT THE ART ACTUALLY IS ───────────────────────────────────────────────
+ * That is the trick worth stealing, and it is why the last two attempts looked
+ * wrong. A rotated RIG means the icons need no per-icon geometry — they are a
+ * plain row inside a box that happens to be turned. Rotating each piece
+ * separately, which is what I was doing, gets the maths right and the drawing
+ * wrong.
  *
- * `pipe-front.png` is a cylinder WITH AN OPEN MOUTH — the dark ellipse at the
- * top is the hole you look into. `pipe-back.png` is the same cylinder without
- * it: a plain body. That is the reference's pair exactly ("Bamboo Top" and
- * "Bamboo Bottom"), and the way it composes is that the marks pour OUT of the
- * mouth and travel through OPEN SKY. Nothing is ever inside the tube.
+ * ── THE THREE THINGS THAT MADE MINE LOOK LIKE A TIN CAN ────────────────────
  *
- * So: a chute at each edge with its mouth turned inward, and the marks flying
- * from each mouth toward the board, where they disappear behind it. Which is
- * the sketch — the pipes outside, the icons in the gap, the board in the
- * middle.
+ *   1. SIZE. The reference draws its chute at 457px against a ~1400px page.
+ *      Mine was 168px. A pipe that small is a lozenge.
+ *   2. IT WAS PERFECTLY HORIZONTAL. The reference is at 43 degrees, which is
+ *      what makes it read as a three-dimensional object rather than a sticker.
+ *   3. THE WHOLE THING WAS ON SCREEN, back end included. The reference crops
+ *      hard on the viewport edge so all you ever see is the mouth and a
+ *      stretch of barrel — the pipe comes from somewhere, rather than being a
+ *      finite object floating in the sky.
  *
- * ── WHY THE ART IS ROTATED RATHER THAN RE-EXPORTED ─────────────────────────
+ * ── AND THE MARKS COME OUT OF IT ───────────────────────────────────────────
  *
- * Both files are drawn as upright cylinders. Rotating in CSS means the
- * composition's direction can change without anybody opening a design tool,
- * and means one file serves both sides — the right-hand chute is the same
- * image turned the other way.
+ * `pipe-front.png` is an opaque cylinder with an open mouth, so nothing can be
+ * inside it. The marks emerge from BEHIND the mouth — the chute is painted
+ * last, over the stream — and fly down the rig into the board, where the card
+ * covers them. Pipes outside, icons in the gap, board in the middle: the
+ * owner's sketch.
  */
 
-/**
- * WHICH MARKS POUR FROM WHICH SIDE — every other one, so the two streams never
- * carry the same logo at the same moment and the field reads as one catalogue
- * split in half rather than one list played twice.
- */
+/** Every other mark per side, so the two streams never carry the same logo. */
 function marksFor(side: "left" | "right") {
   const picked = CONNECTOR_CATALOG.filter((_, i) => i % 2 === (side === "left" ? 0 : 1));
   /* Doubled: the travel runs a full -50%, so the second copy has to sit exactly
@@ -47,53 +47,42 @@ function marksFor(side: "left" | "right") {
   return [...picked, ...picked];
 }
 
-function Chute({ side }: { side: "left" | "right" }) {
+function Rig({ side }: { side: "left" | "right" }) {
+  /* The rig is turned, so a mark inside it is turned too. Cancelling most of
+     that angle keeps the logos readable while leaving a few degrees of tilt —
+     the reference skews its icons rather than levelling them, and a perfectly
+     upright logo on a diagonal stream reads as pasted on. */
+  const counter = side === "left" ? -18 : 18;
+
   return (
-    <>
-      {/* ── the marks, BEHIND the chute ──────────────────────────────────
-          Drawn first so the chute's lip overlaps the mark currently leaving
-          it. That overlap is the only thing that makes them read as coming OUT
-          of the mouth rather than as passing in front of a picture of a pipe. */}
-      <span className="pipe-flow" data-side={side}>
-        <span className="pipe-travel" data-side={side}>
+    <div className="chute-rig" data-side={side}>
+      {/* The stream first: the chute is painted over it, so a mark emerges from
+          behind the lip rather than appearing on top of it. */}
+      <span className="chute-stream">
+        <span className="chute-travel" data-side={side}>
           {marksFor(side).map((entry, i) => (
             <span
               key={`${entry.source}-${i}`}
-              /* A few degrees, alternating, so they read as objects in flight
-                 rather than a row of centred stickers. */
-              style={{ transform: `rotate(${i % 2 ? 8 : -8}deg)` }}
-              className="pipe-mark"
+              className="chute-mark"
+              style={{ transform: `rotate(${counter + (i % 2 ? 7 : -7)}deg)` }}
             >
-              <SourceMark source={entry.source} size={44} className="stat-numeral" />
+              <SourceMark source={entry.source} size={52} className="stat-numeral" />
             </span>
           ))}
         </span>
       </span>
 
-      {/* ── the chute itself ─────────────────────────────────────────────
-          A fixed box holding the art, which is rotated inside it. The box is
-          the FOOTPRINT after rotation; the art inside carries the unrotated
-          dimensions. Doing it the other way round makes `contain` fit the
-          image to the box before the turn, which squashes it. */}
-      <span aria-hidden className="pipe-chute" data-side={side}>
-        <span className="pipe-art" />
-      </span>
-    </>
+      <span aria-hidden className="chute-mouth" />
+    </div>
   );
 }
 
 export function Pipes() {
   return (
     <PauseOffscreen>
-      {/* FULL-BLEED, NOT THE CARD'S WIDTH. The chutes belong at the SCREEN's
-          edges — on a 1440 laptop a `max-w-6xl` card leaves 144px either side,
-          which is less than one chute, so anchoring to the card would have
-          buried them under it. Anchored to the viewport they sit in the gap on
-          a wide display and bleed off the edge on a narrow one, which is the
-          right behaviour in both directions. The hero clips the overflow. */}
-      <div aria-hidden className="pipe-field pointer-events-none">
-        <Chute side="left" />
-        <Chute side="right" />
+      <div aria-hidden className="chute-field pointer-events-none">
+        <Rig side="left" />
+        <Rig side="right" />
       </div>
     </PauseOffscreen>
   );

@@ -2583,153 +2583,155 @@ html.mix {
   /**
    * ── THE CHUTES ─────────────────────────────────────────────────────────
    *
-   * Two pipe mouths at the screen's edges, pouring the connector marks toward
-   * the dashboard through open sky. See `pipes.tsx` for why nothing travels
-   * INSIDE the tube: `pipe-front.png` is an opaque cylinder, so the previous
-   * version's marks were covered by it completely.
+   * Two angled pipes pouring the connector marks into the board. See
+   * `pipes.tsx` for what reading the reference's markup settled; the short
+   * version is that it is ONE rotated container per chute, with everything
+   * inside it axis-aligned.
    *
-   * THE ART IS OPTIONAL. Both files are `background-image`, so a missing one
-   * paints nothing rather than failing a build — the marks still fly, they
-   * just fly out of nowhere. That is a degraded picture rather than a broken
-   * page, which is the trade this whole hero is wired for.
+   * THE RIG IS THE WHOLE MECHANISM. It is a long flat box with the chute at
+   * its outer end and the stream running along its length; rotating the box is
+   * what makes the assembly diagonal, and the pieces inside never have to know
+   * about the angle. Rotating each piece separately — which is what the last
+   * two versions did — gets the geometry right and the drawing wrong.
+   *
+   * THE ORIGIN IS THE INNER END, because that is the end that must not move:
+   * it is aimed at the card. Swinging the chute up from a fixed inner point
+   * keeps the stream pointed at the board whatever angle is chosen.
    */
-  /**
-   * THE FIELD IS THE CARD'S OWN BOX, and everything hangs off its edges.
-   *
-   * THE FIRST VERSION ANCHORED THE CHUTES TO THE VIEWPORT and they were
-   * invisible, for a reason arithmetic settles rather than taste: a
-   * `max-w-6xl` card on a 1440 laptop leaves 144px either side, and the chute
-   * plus its stream needed 350. Both chutes and both streams rendered
-   * perfectly — entirely behind the card, which sits above them at `z-10`.
-   *
-   * Anchored to the CARD instead (`right: 100%` / `left: 100%`), the mouth is
-   * always just outside its edge whatever the viewport does, and the body runs
-   * outward and off the screen — which is where a pipe's far end belongs
-   * anyway. The card also narrowed to `max-w-5xl` to buy the room: 208px a
-   * side instead of 144.
-   */
-  .pipe-field {
+  /* VIEWPORT-WIDE, so a rig can be anchored to the screen's edge rather than
+     to the card's. */
+  .chute-field {
     position: absolute;
-    inset-inline: 0;
-    top: 15%;
-    height: 10.5rem;
+    left: 50%;
+    width: 100vw;
+    transform: translateX(-50%);
+    top: 0;
+    height: 0;
     z-index: 0;
   }
-  @media (min-width: 1280px) {
-    .pipe-field {
-      height: 12rem;
+
+  /**
+   * THE RIG'S LENGTH DECIDES WHETHER THE MOUTH IS ON SCREEN, and the first
+   * cut got it wrong: at 42rem the far end sat 240px past the viewport's left
+   * edge, so all anybody saw was a green wedge in the corner with no opening
+   * in it. The length is now set so the mouth lands just inside the edge and
+   * the barrel runs off it — which is the reference's framing, and the reason
+   * its chute reads as arriving from somewhere.
+   */
+  .chute-rig {
+    position: absolute;
+    height: 14rem;
+    /* HIGH ENOUGH THAT THE RUN IS IN OPEN SKY. The rig is only visible where
+       it clears the card's top edge — everything below that line is behind a
+       board sitting at `z-10`. At `top: -1rem` the whole stream was under it
+       and the field rendered as two green wedges with nothing coming out of
+       them. */
+    top: -10rem;
+  }
+  @media (min-width: 1536px) {
+    /* More sky either side of the card on a wide display, so the chute can be
+       the size the reference draws it at. */
+    .chute-rig {
+      height: 17rem;
     }
   }
-
+  /* Clockwise from 9 o'clock lifts the far end; anticlockwise from 3 o'clock
+     does the same on the other side. Hence the opposite signs. */
   /**
-   * THE CHUTE'S FOOTPRINT — the box it occupies AFTER the art inside it has
-   * been turned. Its own aspect is the art's inverted: the drawing is 760x832
-   * upright, so laid on its side it is 832 long by 760 thick.
-   */
-  .pipe-chute {
-    position: absolute;
-    top: 50%;
-    height: 100%;
-    aspect-ratio: 832 / 760;
-    transform: translateY(-50%);
-  }
-  /* OUTSIDE THE CARD, WITH THE STREAM'S GAP BETWEEN. `right: 100%` puts the
-     chute's own right edge on the card's left edge; the margin then backs it
-     off by the width of the gap the marks fly across. Its far end runs off the
-     screen on a laptop, which is where a pipe's far end belongs — a chute with
-     a visible back end stops being a pipe and becomes a lozenge. */
-  .pipe-chute[data-side="left"] {
-    right: 100%;
-    margin-right: 6.5rem;
-  }
-  .pipe-chute[data-side="right"] {
-    left: 100%;
-    margin-left: 6.5rem;
-  }
-
-  /**
-   * THE ART, TURNED INSIDE ITS BOX.
+   * THE MOUTH IS ANCHORED TO THE SCREEN, THE PIVOT TO THE CARD — and it has to
+   * be both, which a single width cannot do.
    *
-   * It carries the UNROTATED dimensions — width and height swapped relative to
-   * the footprint — and is centred and then turned. Rotating the footprint
-   * instead would make `contain` fit the image before the turn, which is what
-   * squashes a cylinder into a lozenge.
+   * A fixed-length rig is wrong at one end or the other: at 26rem the mouth
+   * sat off-screen on a laptop, and on a 2560 display the whole barrel came
+   * into view — back end and all — which is the tin-can look this was meant to
+   * escape. Setting BOTH offsets lets the length be computed: the outer end is
+   * always a little past the viewport edge, the inner end is always behind the
+   * card, and the barrel simply gets longer on a wider screen. Which is what a
+   * pipe arriving from off-stage should do.
    */
-  .pipe-art {
+  .chute-rig[data-side="left"] {
+    left: -7rem;
+    right: calc(50% + 21rem);
+    transform-origin: 100% 50%;
+    transform: rotate(21deg);
+  }
+  .chute-rig[data-side="right"] {
+    right: -7rem;
+    left: calc(50% + 21rem);
+    transform-origin: 0 50%;
+    transform: rotate(-21deg);
+  }
+
+  /**
+   * THE MOUTH — at the rig's OUTER end, painted last so the marks emerge from
+   * behind its lip. The art is pre-rotated per side (`pipe-left.png` /
+   * `pipe-right.png`) rather than turned here: one less transform to reason
+   * about inside a box that is already rotated, and the aspect ratio then
+   * needs no inversion.
+   *
+   * MISSING FILE, NOTHING PAINTED. The marks still fly; they just fly out of
+   * nowhere. A degraded picture rather than a broken page.
+   */
+  .chute-mouth {
     position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 100cqh;
-    height: 100cqw;
-    background-image: url("/pipe-front.png");
+    top: 0;
+    bottom: 0;
+    aspect-ratio: 832 / 760;
     background-position: center;
     background-repeat: no-repeat;
     background-size: contain;
   }
-  /* `cqh`/`cqw` need a container to resolve against; without this they fall
-     back to nothing and the art collapses to zero. */
-  .pipe-chute {
-    container-type: size;
+  .chute-rig[data-side="left"] .chute-mouth {
+    left: 0;
+    background-image: url("/pipe-left.png");
   }
-  .pipe-chute[data-side="left"] .pipe-art {
-    /* The mouth is drawn at the TOP, so a quarter-turn clockwise points it
-       right — inward, toward the board. */
-    transform: translate(-50%, -50%) rotate(90deg);
-  }
-  .pipe-chute[data-side="right"] .pipe-art {
-    transform: translate(-50%, -50%) rotate(-90deg);
+  .chute-rig[data-side="right"] .chute-mouth {
+    right: 0;
+    background-image: url("/pipe-right.png");
   }
 
   /**
-   * THE STREAM. It starts at the chute's mouth and runs to the middle of the
-   * page, where the board covers it. Masked at the mouth end only: a mark
-   * should fade IN as it clears the lip, and should not fade out at the other
-   * end because it is not supposed to reach one — the card hides it.
+   * THE STREAM — from just inside the mouth to the rig's inner end, where the
+   * card covers it. Masked only at the mouth end: a mark fades in as it clears
+   * the lip and must NOT fade out at the other end, because it is not supposed
+   * to reach one.
    */
-  .pipe-flow {
+  .chute-stream {
     position: absolute;
-    top: 50%;
-    height: 5rem;
+    top: 0;
+    bottom: 0;
     overflow: hidden;
-    transform: translateY(-50%);
   }
-  /* THE GAP THE MARKS CROSS — from the chute's mouth to a little way behind
-     the card, so a mark is covered by the card rather than stopping at it.
-     Masked at the mouth end only: a mark fades IN as it clears the lip, and
-     must not fade out at the other end because it is not meant to reach one. */
-  .pipe-flow[data-side="left"] {
-    right: 100%;
-    width: 9.5rem;
-    margin-right: -2.5rem;
-    mask-image: linear-gradient(90deg, transparent 0%, #000 26%);
+  .chute-rig[data-side="left"] .chute-stream {
+    left: 11rem;
+    right: 0;
+    mask-image: linear-gradient(90deg, transparent 0%, #000 22%);
   }
-  .pipe-flow[data-side="right"] {
-    left: 100%;
-    width: 9.5rem;
-    margin-left: -2.5rem;
-    mask-image: linear-gradient(270deg, transparent 0%, #000 26%);
+  .chute-rig[data-side="right"] .chute-stream {
+    right: 11rem;
+    left: 0;
+    mask-image: linear-gradient(270deg, transparent 0%, #000 22%);
   }
 
-  .pipe-travel {
+  .chute-travel {
     display: flex;
     align-items: center;
-    gap: 2.25rem;
+    gap: 2rem;
     width: max-content;
     height: 100%;
-    animation: pipe-travel 24s linear infinite;
+    animation: pipe-travel 22s linear infinite;
     will-change: transform;
     backface-visibility: hidden;
   }
-  /* The right-hand stream runs the other way, and a little slower, so the two
-     sides are never in step. */
-  .pipe-travel[data-side="right"] {
+  /* The far side runs the other way, and slower, so the two are never in step. */
+  .chute-travel[data-side="right"] {
     animation-direction: reverse;
-    animation-duration: 29s;
+    animation-duration: 27s;
   }
-  .pipe-mark {
+  .chute-mark {
     flex-shrink: 0;
   }
-  [data-offscreen="true"] .pipe-travel {
+  [data-offscreen="true"] .chute-travel {
     animation-play-state: paused;
   }
 
