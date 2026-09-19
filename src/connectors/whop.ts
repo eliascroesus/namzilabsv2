@@ -29,6 +29,38 @@ import { parseDate } from "./field-utils";
 const API = "https://api.whop.com/api/v1";
 
 /**
+ * The Whop API version this connector is written against, sent on EVERY
+ * request as `Api-Version-Date`.
+ *
+ * WHY THIS EXISTS — it is the fix for an outage, and for the class of outage.
+ * Whop versions its API by date. Their overview page says an omitted header
+ * means "requests use the original 2025-01-01 shapes", but that is not what
+ * the live API does: unpinned callers are moved onto the NEWEST version, so
+ * every breaking change Whop ships lands on this connector the day it ships,
+ * with no deploy on our side. It has now broken the same way twice:
+ *
+ *  1. `company_id` was renamed to `account_id`, and the old name went from
+ *     working to `400 company_id is not supported; filter by account_id`.
+ *  2. `updated_after` was withdrawn from `/payments`, whose 400 says it
+ *     outright: `updated_after is not supported; not supported natively yet
+ *     — stay pinned before 2026-09-02-1 for it`. That killed every payments
+ *     sweep, because the payments walk is built on the update axis (see
+ *     PAYMENT_OVERLAP_MS) and sends `updated_after` on every page.
+ *
+ * Both were silent until a sweep 400'd. Pinning is what stops the third one:
+ * the request and response shapes are frozen at a version we have actually
+ * verified, so a Whop release can no longer change this connector's behaviour
+ * without someone here changing this line.
+ *
+ * WHY THIS VALUE. It must satisfy both constraints above at once — late
+ * enough that `account_id` is the accepted filter name, early enough that
+ * `/payments` still honours `updated_after` (i.e. before `2026-09-02-1`).
+ * `scripts/verify-whop.ts` probes the live API across candidate versions and
+ * is what this value was chosen from; re-run it before changing this.
+ */
+export const WHOP_API_VERSION = "2026-08-21-1";
+
+/**
  * Rows per page. Whop documents `first` with no stated maximum, and a live
  * probe could not settle one either — the sandbox validates the parameter's
  * TYPE (`first=abc` → 400 `parameter_invalid`) but accepted `first=1000`
@@ -53,8 +85,12 @@ const MAX_PAGES_PER_POLL = 20;
  * How far back a re-read reaches on every sweep, per collection.
  *
  * Payments MUTATE after the fact — a refund changes `refunded_amount` and the
- * status — and `/payments` exposes `updated_after`, so that collection is
- * walked on its UPDATE axis and no window is needed. `/memberships` documents
+ * status — and `/payments` exposes `updated_after` AT THE PINNED API VERSION
+ * (see WHOP_API_VERSION; newer versions have withdrawn it), so that collection
+ * is walked on its UPDATE axis and no window is needed. If that axis is ever
+ * refused anyway, the poll falls back to `created_after` with the membership
+ * overlap below — which is why this constant is read by both collections.
+ * `/memberships` documents
  * `created_after`/`created_before` and NO `updated_after` (verified on the
  * reference page), so a membership that changes status later cannot be found
  * by asking for new ones. Two things cover that: the `membership.*` webhooks,
@@ -165,15 +201,48 @@ function whopError(e: unknown): string | null {
   if (e.status === 404 || /not found/i.test(message)) {
     return `Whop could not find that company: ${message} Check the Company ID on this connection — it looks like biz_… and must be the company the API key belongs to.`;
   }
+  /**
+   * A parameter this connector sends is gone in the API version we are being
+   * served. This is the failure mode that has bitten twice (`company_id`, then
+   * `updated_after`) and it used to surface as a bare "HTTP 400" with the
+   * useful half of the sentence buried in the body. Whop states the remedy in
+   * its own message — "stay pinned before 2026-09-02-1 for it" — so the
+   * message is passed through verbatim and named for what it is.
+   */
+  const unsupported = /^(\w+) is not supported/i.exec(message);
+  if (unsupported) {
+    return (
+      `Whop no longer accepts the "${unsupported[1]}" parameter at API version ${WHOP_API_VERSION}: ${message} ` +
+      `This is a Whop API version change, not a problem with your key or company. ` +
+      `Fix it in src/connectors/whop.ts (WHOP_API_VERSION), verifying with \`pnpm tsx scripts/verify-whop.ts\`.`
+    );
+  }
   if (type === "invalid_request_error") return `Whop rejected the request: ${message}`;
   return null;
+}
+
+/**
+ * Does this error say Whop refused `param` as unsupported? Drives the payments
+ * fallback below.
+ *
+ * Checks the message as well as the raw body on purpose: `getJson` replaces the
+ * HttpError with a friendly Error before any caller sees it, and that friendly
+ * text quotes Whop's sentence verbatim — so both forms carry the phrase, and
+ * matching only `HttpError` would make this silently never fire.
+ */
+function rejectsParam(e: unknown, param: string): boolean {
+  const needle = new RegExp(`${param} is not supported`, "i");
+  if (e instanceof HttpError) return e.status === 400 && needle.test(e.body);
+  return e instanceof Error && needle.test(e.message);
 }
 
 async function getJson<T>(path: string, credentials?: Record<string, unknown> | null): Promise<T> {
   const key = str(credentials?.["apiKey"]);
   if (!key) throw new Error("Whop: this connection has no API key — open it and reconnect.");
   try {
-    return await fetchJson<T>(`${API}${path}`, { headers: { authorization: `Bearer ${key}` } });
+    return await fetchJson<T>(`${API}${path}`, {
+      headers: { authorization: `Bearer ${key}`, "Api-Version-Date": WHOP_API_VERSION },
+    });
   } catch (e) {
     const friendly = whopError(e);
     if (friendly) throw new Error(friendly);
@@ -317,10 +386,10 @@ export const whopConnector: Connector = {
     /** Walk one collection forward, oldest-first, until its pages run out. */
     const walk = async (
       kind: "payment" | "membership",
+      dateParam: "updated_after" | "created_after",
       sinceIso: string,
       cont: string | null | undefined,
     ): Promise<{ cont: string | null }> => {
-      const dateParam = kind === "payment" ? "updated_after" : "created_after";
       let after = cont ?? null;
 
       while (pagesLeft > 0) {
@@ -375,7 +444,39 @@ export const whopConnector: Connector = {
       return { cont: after };
     };
 
-    const pay = await walk("payment", since(cur.payHw, PAYMENT_OVERLAP_MS), cur.payCont);
+    /**
+     * Payments, on the update axis — with a fallback that keeps the collection
+     * syncing if that axis is taken away again.
+     *
+     * `WHOP_API_VERSION` is the real fix for the outage that prompted this, and
+     * on a version where `updated_after` is honoured this fallback never runs.
+     * It exists because the pin is a promise Whop has already broken once on
+     * this exact parameter: if the pinned version stops accepting it, the
+     * alternative to degrading is a connection that returns NOTHING, forever,
+     * until someone notices a 400 in a log.
+     *
+     * The degrade is the deal memberships already live with, and the same
+     * overlap buys the same property: walking `created_after` cannot find an
+     * old payment that was just refunded, so the window is widened from five
+     * minutes of clock skew to MEMBERSHIP_OVERLAP_MS, which re-reads the recent
+     * tail every sweep. Refunds older than that overlap are then the webhook's
+     * job alone — which is precisely why this is loud rather than quiet.
+     */
+    let pay: { cont: string | null };
+    try {
+      pay = await walk("payment", "updated_after", since(cur.payHw, PAYMENT_OVERLAP_MS), cur.payCont);
+    } catch (e) {
+      if (!rejectsParam(e, "updated_after")) throw e;
+      console.warn(
+        `[whop] Whop refused "updated_after" at Api-Version-Date ${WHOP_API_VERSION}; ` +
+          `falling back to created_after with a ${MEMBERSHIP_OVERLAP_MS / 86_400_000}-day overlap. ` +
+          `Payments refunded longer ago than that will be picked up by webhook only. ` +
+          `Re-pin WHOP_API_VERSION (scripts/verify-whop.ts) to restore the update axis.`,
+      );
+      // Restart this collection's walk: the continuation cursor belongs to the
+      // rejected query and means nothing under a different filter.
+      pay = await walk("payment", "created_after", since(cur.payHw, MEMBERSHIP_OVERLAP_MS), null);
+    }
     next.payCont = pay.cont;
     /**
      * The mark advances only when the walk FINISHED, and it advances to when
@@ -386,7 +487,7 @@ export const whopConnector: Connector = {
      */
     if (pay.cont == null) next.payHw = walkStart.toISOString();
 
-    const mem = await walk("membership", since(cur.memHw, MEMBERSHIP_OVERLAP_MS), cur.memCont);
+    const mem = await walk("membership", "created_after", since(cur.memHw, MEMBERSHIP_OVERLAP_MS), cur.memCont);
     next.memCont = mem.cont;
     if (mem.cont == null) next.memHw = walkStart.toISOString();
 

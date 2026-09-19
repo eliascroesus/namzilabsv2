@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createHmac, randomBytes } from "node:crypto";
-import { whopConnector } from "@/connectors/whop";
+import { whopConnector, WHOP_API_VERSION } from "@/connectors/whop";
 import { catalogEntry, syncGuarantee } from "@/connectors/catalog";
 import { pollOperation } from "@/lib/provider-gateway/operations";
 import { getConnector } from "@/connectors/registry";
@@ -456,5 +456,95 @@ describe("C21 — a pasted webhook secret becomes the connection's signing secre
     expect(stored.webhookSecret).toBe("leftover");
     // And nothing tried to press it into service as a signing secret either.
     expect(getSigningSecret(conn)).toBeNull();
+  });
+});
+
+/**
+ * API VERSION PINNING — the outage these tests exist for.
+ *
+ * Whop versions its API by date. This connector sent no version header, so it
+ * floated on whatever Whop shipped last, and the same failure landed twice:
+ * `company_id` was renamed to `account_id`, then `/payments` withdrew
+ * `updated_after` with `400 updated_after is not supported; not supported
+ * natively yet — stay pinned before 2026-09-02-1 for it`. Both took the
+ * connection from working to returning nothing, with no deploy on our side.
+ *
+ * The suite could not have caught either one — a stubbed fetch answers
+ * whatever it is asked — so these tests pin the two things that ARE ours: the
+ * header we send, and what we do when a parameter is refused anyway.
+ */
+describe("Whop API version pinning", () => {
+  /** Like `serve`, but records the HEADERS too — which is the whole point here. */
+  function serveWithHeaders(fail?: (url: string) => unknown) {
+    const calls: Array<{ url: string; headers: Record<string, string> }> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+        const url = String(input);
+        calls.push({ url, headers: (init?.headers ?? {}) as Record<string, string> });
+        const failure = fail?.(url);
+        if (failure) return jsonResponse(failure, 400);
+        return jsonResponse({ data: [], page_info: { has_next_page: false, end_cursor: null } });
+      }),
+    );
+    return calls;
+  }
+
+  it("sends the pinned Api-Version-Date on EVERY request", async () => {
+    const calls = serveWithHeaders();
+    await whopConnector.poll!({ connectionId: CONN, cursor: null, credentials: CREDS });
+
+    expect(calls.length).toBeGreaterThan(0);
+    // Both collections, not just payments: an unpinned membership request is
+    // how the `company_id` rename would have broken silently rather than loudly.
+    for (const c of calls) expect(c.headers["Api-Version-Date"]).toBe(WHOP_API_VERSION);
+  });
+
+  it("pins a version that still accepts updated_after — before Whop withdrew it", () => {
+    // The constraint is a sandwich: late enough for the `account_id` rename,
+    // strictly earlier than the version whose 400 says "stay pinned before
+    // 2026-09-02-1 for it". A bare date sorts correctly against that suffix.
+    expect(WHOP_API_VERSION < "2026-09-02-1").toBe(true);
+    expect(WHOP_API_VERSION >= "2026-07-01").toBe(true);
+  });
+
+  it("keeps payments flowing on created_after when updated_after is refused", async () => {
+    // Exactly the body the live API returned, verbatim.
+    const refusal = {
+      error: {
+        type: "bad_request",
+        message: "updated_after is not supported; not supported natively yet — stay pinned before 2026-09-02-1 for it",
+      },
+    };
+    const calls = serveWithHeaders((url) => (url.includes("updated_after=") ? refusal : null));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const cursor = JSON.stringify({ payHw: "2026-08-01T00:00:00.000Z", memHw: "2026-08-01T00:00:00.000Z" });
+
+    const res = await whopConnector.poll!({ connectionId: CONN, cursor, credentials: CREDS });
+
+    // The sweep completed instead of throwing — that is the difference between
+    // a degraded connection and a dead one.
+    expect(res.nextCursor).toBeTruthy();
+    const retried = calls.filter((c) => c.url.includes("/payments")).at(-1)!.url;
+    expect(retried).toContain("created_after=");
+    // And on the WIDE overlap: five minutes of clock skew would re-read almost
+    // nothing, so a refund would be missed on both axes at once.
+    expect(decodeURIComponent(retried)).toContain("2026-07-25");
+    // Loud, not quiet: a silent degrade is how this goes unnoticed for weeks.
+    expect(warn).toHaveBeenCalledOnce();
+    warn.mockRestore();
+  });
+
+  it("turns a withdrawn parameter into an instruction naming the version, not a bare HTTP 400", async () => {
+    // Memberships has no second axis to fall back to, so this one must surface.
+    serveWithHeaders((url) =>
+      url.includes("/memberships")
+        ? { error: { type: "bad_request", message: "created_after is not supported; filter by something else" } }
+        : null,
+    );
+
+    await expect(whopConnector.poll!({ connectionId: CONN, cursor: null, credentials: CREDS })).rejects.toThrow(
+      /created_after.*API version|API version.*created_after/s,
+    );
   });
 });
