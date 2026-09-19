@@ -202,7 +202,6 @@ const RULES: Rule[] = [
        * still capped at semibold everywhere it appears, including in the body
        * copy on these same pages.
        */
-      "src/app/page.tsx": "the marketing display face (Outfit) is set at 700; the app's Inter is still capped at semibold",
       "src/components/marketing/": "same — the landing page's display face, loaded for this route only",
     },
   },
@@ -489,6 +488,24 @@ const RULES: Rule[] = [
       // inside them. An allowlist entry that no longer suppresses anything is
       // an invitation to put something back under it.
       "src/app/dashboard/settings/RanksPanel.tsx": "a full-width card-header disclosure and the dashed New-rank ghost",
+      /**
+       * THE LANDING PAGE IS NOT THE APP, AND THAT IS THE WHOLE POINT OF IT.
+       *
+       * `/` is built from its own design system — pale ledger paper, four
+       * radii where the kit names one, a `verified` green that appears
+       * nowhere in the product — because it is an argument aimed at somebody
+       * who has not decided to care yet, not a surface somebody works in.
+       * Routing its controls through `Button` would mean taking the kit's
+       * height, radius, fill and focus ring and then overriding all four,
+       * which is a disguise rather than reuse.
+       *
+       * Narrowly scoped to this directory: a raw <button> anywhere else in
+       * `src/components/marketing` or in the app still fails. The three here
+       * are the nav's Menu and Close, and the receipt's figure trigger — a
+       * control whose cursor is `help` because it reveals rather than
+       * navigates, which is not one of Button's eight variants either.
+       */
+      "src/components/marketing/ledger": "the landing page's own design system: paper radii, a green that exists nowhere in the app, and a reveal control the kit has no variant for",
       /**
        * A SEGMENTED CONTROL, WHICH THE KIT DOES NOT HAVE. The billing toggle
        * is two options sharing one track, where the selected half is raised

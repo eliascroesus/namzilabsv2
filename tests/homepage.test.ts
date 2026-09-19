@@ -13,6 +13,15 @@ vi.mock("next/link", () => ({
   default: (props: any) => createElement("a", { href: props.href, className: props.className }, props.children),
 }));
 
+// next/font is a build-time transform with no runtime outside Next, so the
+// landing page's two faces are stubbed the same way next/link is above. The
+// page only ever reads `.variable` off them, which is the class name that
+// carries the CSS custom property.
+vi.mock("next/font/google", () => ({
+  Archivo: () => ({ variable: "ledger-sans", className: "ledger-sans" }),
+  Martian_Mono: () => ({ variable: "ledger-mono", className: "ledger-mono" }),
+}));
+
 import Home from "@/app/page";
 
 describe("homepage (logged out)", () => {

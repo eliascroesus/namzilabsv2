@@ -1,31 +1,30 @@
 /**
  * THE FRONT DOOR, MEASURED.
  *
- * The landing page is the one surface in this product with a coloured ground,
- * and a coloured ground is where contrast goes wrong silently: `text-white/70`
- * reads as a considered piece of hierarchy in the source and as 3.1:1 on the
- * screen. Nothing else in the repo can see that. `check-ui` reads class names,
- * the suite has no DOM, and `pnpm shadows`/`geometry`/`frame` all point at
- * `/design/*` routes that this page is not one of.
+ * Nothing else in this repository can see this page. `check-ui` reads class
+ * names and the landing page's are hashed CSS-module names; the vitest suite
+ * has no DOM; `pnpm geometry`, `frame` and `shadows` all point at `/design/*`
+ * routes that `/` is not one of. So a layout that collapses, ink that falls
+ * below 4.5:1, or a page that inverts in dark mode all ship green. This script
+ * is the only thing standing between those and production.
  *
- * It also measures the hero's COMPOSITION, because two of its three moving
- * parts are load-bearing and both broke once already:
+ * ═══ WHAT CHANGED WHEN THE LEDGER REPLACED THE SKY ═══
  *
- *   - the sky starts at y=0. A `sticky h-0` wrapper whose padding was on the
- *     OUTER box left a 16px white strip above the gradient.
- *   - the product window straddles the seam. With `pb-0` on the section, the
- *     figure's negative bottom margin collapsed through it, so the sky ended
- *     level with the card and the overlap did nothing — correct in the source,
- *     absent in the browser.
+ * The previous version of this file measured the sky hero: that the gradient
+ * started at y=0, that the product window straddled the seam, and it took
+ * contrast from PIXELS because that page was built from translucent ink
+ * (`text-white/85` has no colour of its own, so `getComputedStyle().color`
+ * returns an oklab triple that means nothing on its own).
  *
- * CONTRAST IS TAKEN FROM PIXELS, NOT FROM TOKENS, and the method matters.
- * Translucent ink has no colour of its own: `text-white/85` is whatever it
- * lands on, and reading `getComputedStyle().color` gets you `oklab(… / .85)`,
- * which two earlier versions of this parsed into near-black and then failed
- * everything for the wrong reason. So the page is photographed twice, with the
- * ink and without it, and the pixel inside each text box that differs MOST
- * between the frames is the middle of a glyph. That is the colour a reader
- * actually sees, over the ground actually behind it.
+ * The ledger has no translucent ink anywhere — every one of its twelve colours
+ * is an opaque literal — so contrast is computed from resolved colours and the
+ * nearest painted ancestor instead. That is not a weakening: it is exact for
+ * opaque fills and it reports WHICH pair failed, where the photograph method
+ * could only say that some box was too quiet.
+ *
+ * The one thing it still checks by photograph is the page's ground, because
+ * "does this page stay light when the app is in dark mode" is a question about
+ * what actually got painted.
  *
  * Usage: `pnpm dev` in one terminal, `pnpm landing` in another.
  * SHOT_BASE overrides http://localhost:3000. Exits non-zero on any failure.
@@ -49,244 +48,235 @@ const ratio = (a, b) => {
   const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m);
   return (x + 0.05) / (y + 0.05);
 };
-
-/**
- * Everything that sits on a coloured ground, hidden so the ground can be seen.
- *
- * `.marquee span > span` AND NOT `.marquee-track`, which is what this said
- * first and what made it lie for two rounds. Hiding the whole ticker takes the
- * CHIPS with it, so the "ground" behind a connector name sampled as raw sky and
- * the chip's own dark wash — the thing put there specifically to make the name
- * legible — was never measured. It reported 4.47:1 for text that is actually
- * at 6.9:1, and no amount of darkening the chip moved the number, which is the
- * tell: a measurement that does not respond to the fix is measuring something
- * else. Hiding the label and the mark leaves the pill itself painting.
- */
-const HIDE = ".hero-sky h1,.hero-sky p,.marquee span > span,.sky-card h2,.sky-card p{visibility:hidden!important}";
+const rgb = (s) => (s.match(/\d+(\.\d+)?/g) ?? []).slice(0, 3).map(Number);
 
 const browser = await chromium.launch();
 
-/**
- * THREE WIDTHS, AND BOTH THEMES AT THE WIDEST.
- *
- * The sky does NOT follow the theme — it is the same blue for everyone, because
- * a hero whose ground flips would need two sets of ink and two contrast
- * budgets. But the page UNDER it does, and the two surfaces meet: the
- * gradient's last stop is `var(--background)`, so a dark-mode visitor's hero
- * fades into #121212 where a light-mode visitor's fades into near-white. That
- * join is the one thing on this page whose appearance depends on the theme, and
- * it is right under the product window where the eye already is.
- */
-for (const [w, h, name, scheme] of [
-  [1440, 950, "desktop", "light"],
-  [1440, 950, "desktop dark", "dark"],
-  [834, 1100, "tablet", "light"],
-  [390, 844, "phone", "light"],
-]) {
-  console.log(`\n${name} ${w}x${h}`);
-  const page = await browser.newPage({ viewport: { width: w, height: h }, colorScheme: scheme });
+/* ── 1. The page renders, in three shapes, with nothing off the side ─────── */
+
+console.log("\nGeometry and overflow");
+
+const VIEWPORTS = [
+  { name: "XL 1440", width: 1440, height: 1000, rules: 5 },
+  { name: "MD 834", width: 834, height: 1100, rules: 3 },
+  { name: "XS 375", width: 375, height: 800, rules: 0 },
+];
+
+for (const vp of VIEWPORTS) {
+  const page = await browser.newPage({ viewport: { width: vp.width, height: vp.height } });
   const errors = [];
-  page.on("pageerror", (e) => errors.push(e.message));
+  page.on("pageerror", (e) => errors.push(String(e)));
+  page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
   await page.goto(BASE, { waitUntil: "networkidle" });
-  await page.evaluate(() => document.fonts.ready);
-  /* The ticker is mid-flight between the two frames, so a chip would be
-     compared against where it used to be and the "glyph" pixel would be an
-     anti-aliased edge. Stopping it is the difference between 2.6:1 and 6.2:1
-     for the same unchanged markup. */
-  await page.addStyleTag({ content: ".marquee{animation:none!important}" });
-  await page.waitForTimeout(700);
+  await page.waitForTimeout(3600); // the hero sequence ends at 3,340ms
 
-  // ── composition ──────────────────────────────────────────────────────────
-  const geo = await page.evaluate(() => {
-    const sky = document.querySelector(".hero-sky");
-    const fig = sky?.querySelector("figure");
-    /**
-     * THE HEADING, NOT THE SECTION. The section under the hero starts where
-     * the SKY ends, which is deliberately above the window's bottom edge — the
-     * whole point of the overlap — so measuring against its box top reports a
-     * negative clearance on every viewport and means nothing. What has to
-     * clear the window is the first thing you can actually see in there.
-     */
-    const next = sky?.nextElementSibling?.querySelector("h2");
-    if (!sky || !fig || !next) return null;
-    const box = (el) => {
-      const b = el.getBoundingClientRect();
-      return { top: Math.round(b.top + scrollY), bottom: Math.round(b.bottom + scrollY) };
-    };
-    const frame = fig.firstElementChild.getBoundingClientRect();
+  const m = await page.evaluate(() => {
+    const visibleRules = [...document.querySelectorAll('[class*="rules"] > div > span')].filter(
+      (n) => n.getBoundingClientRect().width > 0 && getComputedStyle(n).display !== "none",
+    );
+    // One zone's worth: the five rules repeat per rule-zone, so the count that
+    // matters is how many distinct x positions there are.
+    const xs = [...new Set(visibleRules.map((n) => Math.round(n.getBoundingClientRect().left)))].sort((a, b) => a - b);
     return {
-      sky: box(sky),
-      fig: box(fig),
-      next: box(next),
-      docWidth: document.documentElement.scrollWidth,
-      frameRatio: frame.width / frame.height,
-      sections: [...document.querySelectorAll("main section[id]")].map((n) => n.id),
+      scrollWidth: document.documentElement.scrollWidth,
+      inner: window.innerWidth,
+      ruleXs: xs,
+      h1Lines: document.querySelectorAll("h1 > span").length,
     };
   });
-  check(geo !== null, "the hero, its product window and the section under it all rendered");
-  if (geo) {
-    /* THE ORDER IS THE ARGUMENT. Problem, then proof, then how, then the AI,
-       then what it reads: each section only lands on somebody who has read the
-       one before it, and the anchors in the nav promise exactly this list. */
-    check(
-      JSON.stringify(geo.sections) === JSON.stringify(["problem", "proof", "how", "ai", "integrations"]),
-      "the page tells its story in order",
-      geo.sections.join(" → "),
-    );
-  }
-  if (geo) {
-    check(geo.sky.top === 0, "the sky starts at the very top of the page", `top=${geo.sky.top}px`);
-    const overlap = geo.fig.bottom - geo.sky.bottom;
-    check(overlap > 40, "the product window hangs below the sky's foot", `${overlap}px of overlap`);
-    check(geo.next.top - geo.fig.bottom > 24, "and still clears the heading under it", `${geo.next.top - geo.fig.bottom}px`);
-    // A page that scrolls sideways on a phone is the classic full-bleed bug.
-    check(geo.docWidth <= w + 1, "nothing pushes the page wider than the viewport", `${geo.docWidth} > ${w}`);
-    /* 16:9 FROM `sm` UP, 4:3 BELOW IT. The window used to be as tall as its
-       own content — 309px of board inside a 1152px card, a letterbox rather
-       than a screen — and the frame that fixes that is one class nothing else
-       would notice losing. 4:3 on a phone because a 390px-wide 16:9 box is
-       219px tall and the cards inside it stop being readable. */
-    const want = w >= 640 ? 16 / 9 : 4 / 3;
-    check(
-      Math.abs(geo.frameRatio - want) < 0.02,
-      `the product window is ${w >= 640 ? "16:9" : "4:3"}`,
-      `measured ${geo.frameRatio.toFixed(3)}, wanted ${want.toFixed(3)}`,
-    );
-    /* THE SEAM. The gradient's last stop is `var(--background)`, so the hero's
-       foot and the page under it should be the same colour to within rounding.
-       A literal there instead — the #C0D5FF this shipped with first — is a
-       hairline of the wrong blue across the full width in one theme or both. */
-    const seam = await page.evaluate(() => {
-      const sky = document.querySelector(".hero-sky");
-      const r = sky.getBoundingClientRect();
-      const below = document.elementFromPoint(8, Math.min(innerHeight - 2, r.bottom + 8));
-      const paint = (el) => {
-        for (let n = el; n; n = n.parentElement) {
-          const bg = getComputedStyle(n).backgroundColor;
-          if (bg && !/rgba?\([^)]*,\s*0\)/.test(bg) && bg !== "transparent") return bg;
-        }
-        return null;
-      };
-      return { foot: getComputedStyle(document.body).backgroundColor, page: paint(below) };
-    });
-    check(seam.page !== null, "the page under the hero paints a ground", JSON.stringify(seam));
-  }
 
-  // ── contrast ─────────────────────────────────────────────────────────────
-  const spots = await page.evaluate(() => {
-    const out = [];
-    const add = (el, label) => {
-      if (!el) return;
-      const r = el.getBoundingClientRect();
-      if (r.width < 4 || r.bottom < 2 || r.top > innerHeight - 2) return;
-      const cs = getComputedStyle(el);
-      out.push({
-        label,
-        box: {
-          x: Math.round(r.left),
-          y: Math.round(Math.max(0, r.top)),
-          w: Math.round(r.width),
-          h: Math.round(Math.min(r.height, innerHeight - r.top)),
-        },
-        size: parseFloat(cs.fontSize),
-        weight: Number(cs.fontWeight),
-      });
-    };
-    const sky = document.querySelector(".hero-sky");
-    add(sky.querySelector("h1 span"), "headline");
-    add(sky.querySelector("p"), "paragraph");
-    add(sky.querySelector(".uppercase.tracking-widest"), "reads-from label");
-    const ps = sky.querySelectorAll("p");
-    add(ps[ps.length - 1], "line under the CTA");
-    /**
-     * A CHIP FROM THE MIDDLE OF THE TRACK, not the first one in the DOM.
-     *
-     * `.marquee-track` fades its ends out with a mask — that is what makes a
-     * ticker read as continuous rather than as a clipped div — so the chip at
-     * x=0 is half transparent BY DESIGN, and measuring it reports the fade as
-     * a contrast bug. On a 390px viewport the first chip is inside that fade
-     * and came out at 4.47:1 while every chip anybody can actually read was
-     * over 6:1. So: the first chip whose centre is in the middle half of the
-     * viewport, which is the zone the mask leaves alone.
-     */
-    const chip = [...document.querySelectorAll(".marquee span span:last-child")].find((n) => {
-      const c = n.getBoundingClientRect();
-      const mid = c.left + c.width / 2;
-      return mid > innerWidth * 0.25 && mid < innerWidth * 0.75;
-    });
-    add(chip, "a connector name");
-    return out;
-  });
-  check(spots.length >= 4, "found the hero's text to measure", `${spots.length} elements`);
-
-  const withInk = (await page.screenshot({ clip: { x: 0, y: 0, width: w, height: h } })).toString("base64");
-  await page.addStyleTag({ content: HIDE });
-  await page.waitForTimeout(250);
-  const noInk = (await page.screenshot({ clip: { x: 0, y: 0, width: w, height: h } })).toString("base64");
-
-  const measured = await page.evaluate(
-    async ({ withInk, noInk, spots }) => {
-      const load = (b64) =>
-        new Promise((res) => {
-          const i = new Image();
-          i.onload = () => res(i);
-          i.src = `data:image/png;base64,${b64}`;
-        });
-      const [A, B] = await Promise.all([load(withInk), load(noInk)]);
-      const ctx = (img) => {
-        const c = document.createElement("canvas");
-        c.width = img.width;
-        c.height = img.height;
-        const g = c.getContext("2d", { willReadFrequently: true });
-        g.drawImage(img, 0, 0);
-        return g;
-      };
-      const ga = ctx(A);
-      const gb = ctx(B);
-      const k = A.width / innerWidth;
-      return spots.map((s) => {
-        const a = ga.getImageData(Math.round(s.box.x * k), Math.round(s.box.y * k), Math.max(1, Math.round(s.box.w * k)), Math.max(1, Math.round(s.box.h * k))).data;
-        const b = gb.getImageData(Math.round(s.box.x * k), Math.round(s.box.y * k), Math.max(1, Math.round(s.box.w * k)), Math.max(1, Math.round(s.box.h * k))).data;
-        let best = -1;
-        let ink = null;
-        let ground = null;
-        for (let i = 0; i < a.length; i += 4) {
-          const d = Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]);
-          if (d > best) {
-            best = d;
-            ink = [a[i], a[i + 1], a[i + 2]];
-            ground = [b[i], b[i + 1], b[i + 2]];
-          }
-        }
-        return { ink, ground, delta: best };
-      });
-    },
-    { withInk, noInk, spots },
+  check(m.scrollWidth <= m.inner + 1, `${vp.name}: nothing scrolls off the right`, `${m.scrollWidth} > ${m.inner}`);
+  check(
+    m.ruleXs.length === vp.rules,
+    `${vp.name}: ${vp.rules} column rule positions`,
+    `saw ${m.ruleXs.length} at ${m.ruleXs.join(", ")}`,
   );
+  check(errors.length === 0, `${vp.name}: no console errors`, errors.slice(0, 2).join(" | "));
 
-  spots.forEach((s, i) => {
-    const { ink, ground, delta } = measured[i];
-    /* Nothing changed inside the box: the selector found an element the hide
-       rule does not cover, so there is no glyph to measure and a pass here
-       would mean nothing. */
-    if (delta < 30) {
-      check(false, `${s.label} was measurable`, `only Δ${delta} between the two frames`);
-      return;
-    }
-    const r = ratio(ink, ground);
-    // WCAG 1.4.3: 3:1 for large text (>=24px, or >=18.66px bold), else 4.5:1.
-    const large = s.size >= 24 || (s.size >= 18.66 && s.weight >= 700);
-    const need = large ? 3 : 4.5;
-    check(r >= need, `${s.label} is legible on the sky`, `${r.toFixed(2)}:1, needs ${need} at ${s.size}px/${s.weight}`);
-  });
+  // The rules are the page's spine: at XL they must land on the 12-column
+  // grid, not merely exist. c1, c4, c7, c10 and the right edge of c12.
+  if (vp.rules === 5) {
+    const pad = Math.max(80, (vp.width - 1272) / 2);
+    const want = [0, 3, 6, 9].map((i) => pad + i * 108).concat(pad + 1272);
+    const off = m.ruleXs.map((x, i) => Math.abs(x - want[i])).filter((d) => d > 2);
+    check(off.length === 0, `${vp.name}: rules sit on the 12-column grid`, `want ${want.join(", ")}`);
+  }
 
-  check(errors.length === 0, "no uncaught page errors", errors.join(" · "));
+  if (vp.width === 1440) {
+    check(m.h1Lines === 3, "headline breaks at fixed points, not on reflow", `${m.h1Lines} lines`);
+  }
   await page.close();
 }
 
-await browser.close();
-if (fails.length) {
-  console.log(`\nFAIL — ${fails.length}: ${fails.join(", ")}`);
-  process.exit(1);
+/* ── 2. The two faces the design depends on actually arrived ─────────────── */
+
+console.log("\nTypography");
+
+const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+await page.goto(BASE, { waitUntil: "networkidle" });
+await page.waitForTimeout(3600);
+
+const type = await page.evaluate(() => {
+  const h1 = getComputedStyle(document.querySelector("h1"));
+  const figure = [...document.querySelectorAll("span")].find((n) =>
+    getComputedStyle(n).fontFamily.includes("Martian"),
+  );
+  return {
+    archivo: document.fonts.check('600 68px Archivo'),
+    martian: document.fonts.check('600 56px "Martian Mono"'),
+    h1Family: h1.fontFamily,
+    // The width axis is the whole reason this page needs no display face; if
+    // `axes: ["wdth"]` ever falls out of the font call this silently reverts
+    // to 100% and every heading quietly narrows.
+    h1Stretch: h1.fontStretch,
+    figureFound: Boolean(figure),
+    figureTabular: figure ? getComputedStyle(figure).fontVariantNumeric : "",
+  };
+});
+
+check(type.archivo, "Archivo loaded", type.h1Family);
+check(type.martian, "Martian Mono loaded");
+check(type.h1Stretch === "112%", "the headline keeps its width axis", `font-stretch: ${type.h1Stretch}`);
+check(type.figureFound, "figures are set in Martian Mono");
+check(type.figureTabular.includes("tabular-nums"), "figures are tabular", type.figureTabular);
+
+/* ── 3. Ink clears 4.5:1 on the ground it actually lands on ──────────────── */
+
+console.log("\nContrast");
+
+const contrast = await page.evaluate(() => {
+  const painted = (node) => {
+    for (let n = node; n; n = n.parentElement) {
+      const bg = getComputedStyle(n).backgroundColor;
+      if (bg && bg !== "rgba(0, 0, 0, 0)" && bg !== "transparent") return bg;
+    }
+    return "rgb(255, 255, 255)";
+  };
+  const out = [];
+  for (const node of document.querySelectorAll("p, h1, h2, h3, span, a, li, dt, dd, text")) {
+    const text = node.textContent?.trim() ?? "";
+    if (!text || node.children.length > 0) continue;
+    const cs = getComputedStyle(node);
+    const size = parseFloat(cs.fontSize);
+    if (size < 10) continue;
+    const box = node.getBoundingClientRect();
+    if (box.width < 4 || box.height < 4) continue;
+    out.push({
+      text: text.slice(0, 34),
+      color: cs.color,
+      bg: painted(node),
+      size,
+      weight: Number(cs.fontWeight),
+    });
+  }
+  return out;
+});
+
+let worst = { r: 99, what: "" };
+const failures = [];
+for (const s of contrast) {
+  const r = (() => {
+    const f = (c) => ((c /= 255) <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+    const L = ([x, y, z]) => 0.2126 * f(x) + 0.7152 * f(y) + 0.0722 * f(z);
+    const a = L((s.color.match(/\d+(\.\d+)?/g) ?? []).slice(0, 3).map(Number));
+    const b = L((s.bg.match(/\d+(\.\d+)?/g) ?? []).slice(0, 3).map(Number));
+    const [hi, lo] = [a, b].sort((m, n) => n - m);
+    return (hi + 0.05) / (lo + 0.05);
+  })();
+  // WCAG large-text threshold: 18.66px at 700, or 24px at any weight.
+  const large = s.size >= 24 || (s.size >= 18.66 && s.weight >= 700);
+  const need = large ? 3 : 4.5;
+  if (r < worst.r) worst = { r, what: `${s.text} (${s.color} on ${s.bg}, ${s.size}px)` };
+  if (r < need) failures.push(`${s.text} — ${r.toFixed(2)}:1, needs ${need} (${s.color} on ${s.bg}, ${s.size}px)`);
 }
-console.log("\nPASS — the front door holds its shape and every word on it can be read.");
+
+check(failures.length === 0, `${contrast.length} text runs clear WCAG AA`, failures.slice(0, 4).join("  ·  "));
+console.log(`        lowest passing: ${worst.r.toFixed(2)}:1 — ${worst.what}`);
+
+/* ── 4. The page is light even when the app is dark ──────────────────────── */
+
+console.log("\nTheme isolation");
+
+// `colorScheme` does NOT switch this app's theme — next-themes reads a stored
+// preference and stamps a class on <html> — so a headless dark check that does
+// not write localStorage is just re-testing light. That mistake shipped once.
+const dark = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+await dark.addInitScript(() => window.localStorage.setItem("theme", "dark"));
+await dark.goto(BASE, { waitUntil: "networkidle" });
+await dark.waitForTimeout(1200);
+
+const themed = await dark.evaluate(() => ({
+  htmlClass: document.documentElement.className,
+  pageBg: getComputedStyle(document.querySelector("main").parentElement).backgroundColor,
+  headingColor: getComputedStyle(document.querySelector("h1")).color,
+}));
+
+check(/dark/.test(themed.htmlClass), "the app really is in dark mode for this check", themed.htmlClass || "(no class)");
+check(themed.pageBg === "rgb(238, 241, 234)", "the landing ground stays ledger paper", themed.pageBg);
+check(themed.headingColor === "rgb(21, 36, 27)", "the headline stays ledger ink", themed.headingColor);
+
+await dark.close();
+
+/* ── 5. The three interactions the page's argument depends on ────────────── */
+
+console.log("\nInteraction");
+
+const figure = page.locator('button[aria-label*="show receipt"]');
+await figure.scrollIntoViewIfNeeded();
+await figure.click();
+await page.waitForTimeout(500);
+check(await page.locator('[role="region"][aria-label*="Receipt"]').isVisible(), "a figure opens its receipt");
+
+await page.keyboard.press("Escape");
+await page.waitForTimeout(300);
+check(
+  (await page.locator('[role="region"][aria-label*="Receipt"]').count()) === 0,
+  "Escape closes the receipt",
+);
+check(await figure.evaluate((n) => n === document.activeElement), "and focus returns to the figure");
+
+const rows = page.locator('ul li[class*="sourceRow"]');
+const total = await rows.count();
+await page.locator('input[type="search"]').fill("cal");
+await page.waitForTimeout(300);
+const after = await rows.count();
+const struck = await page.locator('li[class*="sourceStruck"]').count();
+check(after === total, "searching strikes sources off rather than hiding them", `${total} → ${after}`);
+check(struck > 0 && struck < total, "and some, not all, are struck", `${struck} of ${total}`);
+
+await page.close();
+
+/* ── 6. Reduced motion gets the conclusion, not a faster performance ─────── */
+
+console.log("\nReduced motion");
+
+const still = await browser.newPage({ viewport: { width: 1440, height: 1000 }, reducedMotion: "reduce" });
+await still.goto(BASE, { waitUntil: "networkidle" });
+await still.waitForTimeout(400); // deliberately BEFORE the sequence would end
+
+const final = await still.evaluate(() => {
+  const resolved = document.querySelector('[class*="heroResolved"]');
+  const strike = document.querySelector('[class*="strike"]');
+  return {
+    figure: resolved?.textContent?.match(/\b41\b/) ? "41" : resolved?.textContent ?? "",
+    resolvedOpacity: resolved ? getComputedStyle(resolved).opacity : "0",
+    strikeScale: strike ? getComputedStyle(strike).transform : "none",
+    railAnimation: getComputedStyle(document.querySelector('[class*="railTrack"]')).animationName,
+  };
+});
+
+check(final.figure === "41", "the hero figure reads its final value at once", final.figure);
+check(Number(final.resolvedOpacity) === 1, "the resolved row is already in place", final.resolvedOpacity);
+const xScale = Math.hypot(...(final.strikeScale.match(/-?\d+(\.\d+)?/g) ?? [0, 0]).slice(0, 2).map(Number));
+check(Math.abs(xScale - 1) < 0.02, "the struck rows are already struck", `x-scale ${xScale.toFixed(3)} from ${final.strikeScale}`);
+check(final.railAnimation === "none", "the source rail does not scroll", final.railAnimation);
+
+await still.close();
+await browser.close();
+
+console.log(
+  fails.length === 0
+    ? "\nPASS — the front door measures up.\n"
+    : `\nFAIL — ${fails.length}:\n${fails.map((f) => `  · ${f}`).join("\n")}\n`,
+);
+process.exit(fails.length === 0 ? 0 : 1);
