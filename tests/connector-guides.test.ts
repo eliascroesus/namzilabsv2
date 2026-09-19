@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { CONNECTOR_CATALOG } from "@/connectors/catalog";
+import { parseGuideText } from "@/components/guide-text";
 
 /**
  * THE SETUP GUIDES, HELD TO THE FORM THEY DESCRIBE.
@@ -82,4 +83,76 @@ describe("connector setup guides", () => {
       });
     });
   }
+});
+
+/**
+ * LINKS IN GUIDE TEXT.
+ *
+ * A step's most useful sentence is "go to this exact page", and as plain text
+ * that is a URL the reader retypes and gets wrong. `GuideText` turns
+ * `[label](https://url)` into an anchor — which means a malformed link now
+ * fails in the quietest possible way: it renders as its own literal source,
+ * brackets and all, and looks like clumsy prose rather than a bug.
+ *
+ * These walk every guide in the catalog, so a link added to any connector later
+ * is held to the same shape without anyone remembering to come back here.
+ */
+describe("guide links", () => {
+  const allText = CONNECTOR_CATALOG.filter((e) => e.guide).flatMap((e) => {
+    const g = e.guide!;
+    const blocks = g.fields.flatMap((f) => [...f.steps, ...(f.note ? [f.note] : [])]);
+    const hook = g.webhook ? [...g.webhook.steps, ...(g.webhook.note ? [g.webhook.note] : [])] : [];
+    return [...blocks, ...hook].map((text) => ({ source: e.source, text }));
+  });
+
+  it("leaves no half-written link rendering as literal brackets", () => {
+    for (const { source, text } of allText) {
+      // Any `](` that the link pattern did NOT consume is a link that will
+      // print its own syntax on the page.
+      const leftover = text.replace(/\[([^\]]+)\]\((https:\/\/[^\s)]+)\)/g, "");
+      expect(leftover.includes("]("), `${source}: "${text}" has a link that will not render`).toBe(false);
+    }
+  });
+
+  it("points every link at https, never at a scheme that can run", () => {
+    for (const { source, text } of allText) {
+      for (const m of text.matchAll(/\[[^\]]+\]\(([^\s)]+)\)/g)) {
+        expect(m[1].startsWith("https://"), `${source}: link "${m[1]}" is not https`).toBe(true);
+      }
+    }
+  });
+
+  it("gives Notion a clickable route to the token rather than one to retype", () => {
+    // Sabotage: drop the anchors back to plain text and this names it.
+    const steps = CONNECTOR_CATALOG.find((e) => e.source === "notion")!.guide!.fields[0].steps;
+    const links = steps.flatMap((s) => [...s.matchAll(/\[[^\]]+\]\((https:\/\/[^\s)]+)\)/g)].map((m) => m[1]));
+    expect(links.some((h) => h.includes("notion.so/developers/tokens"))).toBe(true);
+  });
+});
+
+describe("parseGuideText", () => {
+  it("splits prose from links and keeps both in order", () => {
+    expect(parseGuideText("Open [here](https://x.com/a) and copy it.")).toEqual([
+      { text: "Open " },
+      { label: "here", href: "https://x.com/a" },
+      { text: " and copy it." },
+    ]);
+  });
+
+  it("leaves plain prose entirely alone", () => {
+    expect(parseGuideText("No links at all.")).toEqual([{ text: "No links at all." }]);
+  });
+
+  it("refuses a scheme that can run, leaving it as visible text", () => {
+    // Not a security boundary — these strings are ours — but a typo that
+    // produced a javascript: anchor would be invisible in review.
+    const out = parseGuideText("Click [x](javascript:alert(1)) now");
+    expect(out.every((s) => !("href" in s))).toBe(true);
+  });
+
+  it("returns the same answer twice — the /g lastIndex trap", () => {
+    const s = "a [one](https://x.com/1) b [two](https://x.com/2)";
+    expect(parseGuideText(s)).toEqual(parseGuideText(s));
+    expect(parseGuideText(s).filter((x) => "href" in x)).toHaveLength(2);
+  });
 });

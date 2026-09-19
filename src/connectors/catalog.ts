@@ -1943,12 +1943,17 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
            * granting read access. Sharing is not an optional extra here; it is
            * step five of getting the connection to see anything at all.
            */
+          /**
+           * THE ROUTE IS A LINK, NOT A SENTENCE TO RETYPE. `[label](url)` is
+           * rendered by `GuideText`; the two addresses below are the ones
+           * Notion's own pages name, checked on the date in `readOn`.
+           */
           steps: [
-            "Open notion.so/profile/integrations and choose New integration.",
+            "Open [notion.so/developers/tokens](https://www.notion.so/developers/tokens) — the page Notion’s own docs send you to — and choose New integration. ([Their walkthrough](https://developers.notion.com/docs/create-a-notion-integration), if you want it alongside.)",
             "Give it a name you will recognise later — “Namzilabs” does the job — and pick the workspace it should read.",
             "Set its capabilities to Read content. It never needs to write, or to see user emails.",
-            "Copy the Internal Integration Secret and paste it here.",
-            "Now open the database you want to read, in Notion.",
+            "Copy the Internal Integration Secret — it starts with ntn_ — and paste it here.",
+            "Now open the database you want to read, in Notion. It has to be a database (a table, board, or calendar view), not an ordinary page.",
             "Use the ••• menu at its top right and choose Connections → Add connections.",
             "Pick the integration you just made, and confirm.",
             "Back here, choose that database in the flow’s Get data step.",

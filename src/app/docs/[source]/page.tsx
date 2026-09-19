@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { GuideText } from "@/components/guide-text";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CONNECTOR_CATALOG, catalogEntry } from "@/connectors/catalog";
@@ -89,11 +90,11 @@ export default async function ConnectorDocsPage({ params }: { params: Promise<{ 
             {field.steps.map((step, i) => (
               <li key={i} className="flex gap-3 text-sm text-foreground">
                 <span className="stat-numeral shrink-0 text-xs text-muted-foreground">{i + 1}</span>
-                <span>{step}</span>
+                <span><GuideText>{step}</GuideText></span>
               </li>
             ))}
           </ol>
-          {field.note && <p className="mt-3 text-xs text-muted-foreground">{field.note}</p>}
+          {field.note && <p className="mt-3 text-xs text-muted-foreground"><GuideText>{field.note}</GuideText></p>}
         </section>
       ))}
 
@@ -104,11 +105,11 @@ export default async function ConnectorDocsPage({ params }: { params: Promise<{ 
             {guide.webhook.steps.map((step, i) => (
               <li key={i} className="flex gap-3 text-sm text-foreground">
                 <span className="stat-numeral shrink-0 text-xs text-muted-foreground">{i + 1}</span>
-                <span>{step}</span>
+                <span><GuideText>{step}</GuideText></span>
               </li>
             ))}
           </ol>
-          {guide.webhook.note && <p className="mt-3 text-xs text-muted-foreground">{guide.webhook.note}</p>}
+          {guide.webhook.note && <p className="mt-3 text-xs text-muted-foreground"><GuideText>{guide.webhook.note}</GuideText></p>}
         </section>
       )}
 
