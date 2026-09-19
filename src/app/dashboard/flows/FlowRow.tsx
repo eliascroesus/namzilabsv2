@@ -13,7 +13,7 @@ import { useRouter } from "next/navigation";
 import { SourceMark } from "@/components/source-mark";
 import { formatDate, formatTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { deleteFlowAction, duplicateFlowAction, setFlowEnabledAction } from "./actions";
+import { deleteFlowAction, duplicateFlowAction, renameFlowAction, setFlowEnabledAction } from "./actions";
 import type { FlowState } from "@/lib/flow/store";
 
 export type FlowListItem = {
@@ -229,6 +229,43 @@ function Row({ flow }: { flow: FlowListItem }) {
   const [confirming, setConfirming] = useState(false);
   const [pending, startTransition] = useTransition();
   const router = useRouter();
+
+  /**
+   * RENAMING WITHOUT OPENING THE FLOW.
+   *
+   * The name was a link and nothing else, so changing a typo in one meant
+   * opening the builder, renaming in its toolbar, and coming back — three
+   * navigations to edit one string, on the page where you can already
+   * duplicate and delete.
+   *
+   * `name` is held locally and optimistically: `renameFlowAction` has no
+   * result channel (it throws), and re-rendering the row from the server for
+   * every keystroke-committed rename would make the list jump. On failure the
+   * old name comes back, which is the only honest thing to show when the save
+   * did not happen.
+   */
+  const [name, setName] = useState(flow.name);
+  const [renaming, setRenaming] = useState(false);
+
+  const commitRename = (next: string) => {
+    const trimmed = next.trim();
+    setRenaming(false);
+    // Unchanged, or emptied entirely: nothing to save. The server would coerce
+    // "" to "Untitled flow", which is a rename nobody asked for.
+    if (!trimmed || trimmed === name) return;
+    const previous = name;
+    setName(trimmed);
+    setError(null);
+    startTransition(async () => {
+      try {
+        await renameFlowAction(flow.id, trimmed);
+      } catch (e) {
+        // The rank gate throws rather than returning — see renameFlowAction.
+        setName(previous);
+        setError(e instanceof Error ? e.message : String(e));
+      }
+    });
+  };
   const meta = STATE_META[state];
   const edited = new Date(flow.updatedAt);
 
@@ -315,12 +352,40 @@ function Row({ flow }: { flow: FlowListItem }) {
 
               THE VIOLET IS ON THIS ELEMENT rather than inherited, so the name
               and the row's fill ease together on the same duration. */}
-          <Link
-            href={`/dashboard/flows/${flow.id}`}
-            className="block truncate rounded-control text-md font-semibold text-foreground transition-colors duration-(--duration-fast) ease-(--ease-standard) after:absolute after:inset-0 after:content-[''] group-hover:text-accent-foreground"
-          >
-            {flow.name}
-          </Link>
+          {renaming ? (
+            /**
+             * ABOVE THE ROW'S OWN LINK, not inside it. The anchor below
+             * stretches itself over the whole row with `after:inset-0`, so an
+             * input rendered without `relative z-10` is covered by it — every
+             * click lands on the link and navigates away mid-rename.
+             */
+            <Input
+              autoFocus
+              defaultValue={name}
+              aria-label="Flow name"
+              className="relative z-10 h-8 text-md font-semibold"
+              onClick={(e) => e.stopPropagation()}
+              onBlur={(e) => commitRename(e.currentTarget.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  commitRename(e.currentTarget.value);
+                } else if (e.key === "Escape") {
+                  e.preventDefault();
+                  // Blur would otherwise fire next and commit the very edit
+                  // Escape just abandoned.
+                  setRenaming(false);
+                }
+              }}
+            />
+          ) : (
+            <Link
+              href={`/dashboard/flows/${flow.id}`}
+              className="block truncate rounded-control text-md font-semibold text-foreground transition-colors duration-(--duration-fast) ease-(--ease-standard) after:absolute after:inset-0 after:content-[''] group-hover:text-accent-foreground"
+            >
+              {name}
+            </Link>
+          )}
           {/* THE SECOND LINE IS THE WHOLE OF WHAT THE FLOW IS: how big it is,
               what it reads, and when it was last touched — the three facts the
               card spent two separate zones saying. Same order of precedence
@@ -400,6 +465,18 @@ function Row({ flow }: { flow: FlowListItem }) {
           // the list resizing under the cursor at the one moment you are being
           // asked to aim.
           <span className={cn(COL.actions, "relative z-10 flex items-center justify-end gap-0.5")}>
+            {/* Rename sits FIRST, beside the name it edits rather than beside
+                the destructive pair. Escape abandons, Enter and blur commit. */}
+            <Button
+              variant="ghost"
+              size="iconSm"
+              onClick={() => setRenaming(true)}
+              disabled={pending || renaming}
+              title="Rename"
+              aria-label="Rename"
+            >
+              <PencilLine />
+            </Button>
             <Button variant="ghost" size="iconSm" onClick={duplicate} disabled={pending} title="Duplicate" aria-label="Duplicate">
               <Copy />
             </Button>

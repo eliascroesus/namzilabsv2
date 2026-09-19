@@ -126,6 +126,7 @@ import { NodeIcon } from "./icons";
 import { FlowToolbar } from "./FlowToolbar";
 import { ConfigPanel, type StepRef } from "./ConfigPanel";
 import { NodeLibraryModal, anchorFromRect, type PickerAnchor } from "./NodeLibraryModal";
+import { readNodeClipboard, writeNodeClipboard, useNodeClipboard } from "./node-clipboard";
 import { ReviewPublishModal, type Endpoint } from "./ReviewPublishModal";
 
 export type { ConnMeta };
@@ -325,6 +326,8 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
   const [pendingDelete, setPendingDelete] = useState<{ message: string; run: () => void } | null>(null);
   /** Transient notice: a step delete (with Undo), or a flow-action error (without). */
   const [toast, setToast] = useState<{ message: string; undoable?: boolean } | null>(null);
+  /** What is on the step clipboard, live — so the picker offers it the moment another tab copies. */
+  const clipboard = useNodeClipboard();
   /** Running a whole flow: which step number we are on, out of how many. */
 
   const past = useRef<Array<{ nodes: FNode[]; edges: Edge[] }>>([]);
@@ -441,7 +444,17 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
    * they meant.
    */
   const createNode = useCallback(
-    (type: NodeType, ctx: LibraryCtx, configOverride?: Record<string, unknown>) => {
+    (
+      type: NodeType,
+      ctx: LibraryCtx,
+      configOverride?: Record<string, unknown>,
+      /**
+       * A pasted step arrives with a name it already had and a `dirty` flag it
+       * has earned: its settings came from another flow, so the card must read
+       * as needing a Test rather than as freshly configured here.
+       */
+      seed?: { label?: string; dirty?: boolean },
+    ) => {
       commit();
       const id = `${type}_${Math.random().toString(36).slice(2, 8)}`;
       let position = { x: 140 + (nodes.length % 4) * 40, y: 90 + nodes.length * 70 };
@@ -456,7 +469,12 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
       }
 
       const config = { ...defaultConfig(type), ...(configOverride ?? {}) };
-      const newNode: FNode = { id, type, position, data: { config, lastTest: null, dirty: false } };
+      const newNode: FNode = {
+        id,
+        type,
+        position,
+        data: { config, lastTest: null, dirty: seed?.dirty ?? false, ...(seed?.label ? { label: seed.label } : {}) },
+      };
 
       // A Paths hub auto-creates one "Path conditions" (Filter) step per branch, so the
       // canvas splits into labeled lanes the moment you add it (Zapier-style). When the
@@ -1042,6 +1060,70 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
   );
 
   /**
+   * COPY A STEP TO THE CLIPBOARD, and paste it into any flow that is open.
+   *
+   * What travels is the step's shape and its settings. What does NOT travel is
+   * everything that only means something in the flow it came from:
+   *  - `lastTest` is a run against ANOTHER flow's records, so a pasted card
+   *    would claim a result it never produced here;
+   *  - a Calculate step's A and B inputs are EDGES to other steps, and those
+   *    ids do not exist on the far side — so the copy arrives with its two
+   *    slots empty, visibly needing to be pointed at numbers in this flow;
+   *  - a Filter's conditions name fields produced upstream. Paste it into a
+   *    flow fed by a different app and those fields may simply not be there.
+   *    Nothing can detect that from the clipboard alone, which is why the
+   *    pasted step is marked dirty: the card asks to be tested rather than
+   *    looking settled.
+   */
+  const copyNode = useCallback(
+    (id: string) => {
+      const node = nodes.find((n) => n.id === id);
+      if (!node) return;
+      const title = nodeTitle(String(node.type) as NodeType, node.data);
+      const ok = writeNodeClipboard({
+        type: String(node.type),
+        label: typeof node.data.label === "string" ? node.data.label : undefined,
+        config: (node.data.config ?? {}) as Record<string, unknown>,
+        title,
+        fromFlowId: flowId,
+      });
+      setToast({
+        message: ok
+          ? `“${title}” copied. Paste it from + Add next step, here or in another flow.`
+          : "This browser is blocking site data, so the step could not be copied.",
+      });
+    },
+    [nodes, flowId],
+  );
+
+  /**
+   * PASTE, WIRED THE WAY A DUPLICATE IS.
+   *
+   * `createNode` already knows how a new step joins the flow from a given
+   * context — after a step, onto an edge, or as its own lane for a Get data
+   * step — so paste hands it the clipboard's type and config rather than
+   * inventing a second placement rule that could disagree with the first.
+   *
+   * Branch ids are regenerated for the same reason `duplicateNode` regenerates
+   * them: a Split's handles are referenced by the edges hanging off it, and two
+   * hubs sharing a path id in one flow would cross their branches.
+   */
+  const pasteNode = useCallback(
+    (ctx: LibraryCtx) => {
+      const clip = readNodeClipboard();
+      if (!clip) return;
+      const cfg = { ...clip.config } as Record<string, unknown> & { paths?: Array<{ id: string }>; fallbackId?: string };
+      if (clip.type === "paths") {
+        cfg.paths = (cfg.paths ?? []).map((p) => ({ ...p, id: `p${Math.random().toString(36).slice(2, 7)}` }));
+        if (cfg.fallbackId) cfg.fallbackId = `p${Math.random().toString(36).slice(2, 7)}`;
+      }
+      createNode(clip.type as NodeType, ctx, cfg, { label: clip.label, dirty: true });
+    },
+    [createNode],
+  );
+
+
+  /**
    * Set while a Test is being abandoned, so its late result is dropped instead
    * of landing on a card the user has moved on from. A ref, not state: the
    * running `testNode` closure has to read the CURRENT value, not the one that
@@ -1452,6 +1534,53 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
   // Managed top-to-bottom layout + per-node status + terminal add points (no free placement).
   const layout = useMemo(() => computeVerticalLayout(nodes, edges), [nodes, edges]);
   const terminals = useMemo(() => terminalIds(nodes, edges), [nodes, edges]);
+
+  /**
+   * ⌘C / ⌘V ON THE CANVAS.
+   *
+   * GUARDED ON THE EVENT TARGET, not on a flag we maintain. The builder is full
+   * of inputs — every config field, the rename box, the picker's search — and a
+   * shortcut that fired while someone was copying TEXT out of a condition would
+   * silently replace their clipboard step and paste a card they never asked
+   * for. If the event came from a field or anything contenteditable, this is
+   * not ours.
+   *
+   * Copy also defers to a real text selection: ⌘C with words highlighted means
+   * copy the words, wherever the caret happens to be.
+   */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
+      const t = e.target as HTMLElement | null;
+      if (t?.closest("input, textarea, select, [contenteditable='true']")) return;
+      const k = e.key.toLowerCase();
+      if (k === "c") {
+        if (!selectedId) return;
+        if ((window.getSelection()?.toString() ?? "") !== "") return;
+        e.preventDefault();
+        copyNode(selectedId);
+      } else if (k === "v") {
+        if (!readNodeClipboard()) return;
+        e.preventDefault();
+        /**
+         * WHERE AN UNANCHORED PASTE LANDS. The selected step is the anchor when
+         * there is one — the same place Duplicate puts a copy. With nothing
+         * selected, a flow with exactly ONE end has only one sensible answer,
+         * so the step joins it. With several ends there is no honest guess, and
+         * silently picking one would attach the step to a branch the user was
+         * not looking at — so it is said out loud instead.
+         */
+        const anchorId = selectedId ?? (terminals.size === 1 ? [...terminals][0] : null);
+        if (!anchorId && terminals.size > 1) {
+          setToast({ message: "Select the step to paste after — this flow has more than one end." });
+          return;
+        }
+        pasteNode(anchorId ? { fromNodeId: anchorId } : null);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selectedId, copyNode, pasteNode, terminals]);
 
   // Endpoints (terminals, excluding legacy Output nodes) each become a dashboard
   // metric at Review & publish — a flow with un-recombined Paths has several.
@@ -1916,6 +2045,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
             onAddFrom: addFromNode,
             onDeleteNode: requestDelete,
             onDuplicateNode: duplicateNode,
+            onCopyNode: copyNode,
             beingDragged: dragging === n.id,
             /**
              * The terminal "Add next step" steps aside while a card is being
@@ -1931,7 +2061,7 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
           },
         };
       }),
-    [nodes, layout, terminals, stepNoById, inDegreeById, inHandlesById, usedHandles, addFromNode, testingId, requestDelete, duplicateNode, selectedId, metricByNode, refLineById, supersededById, dragging, dropSlot, splitGroupIds],
+    [nodes, layout, terminals, stepNoById, inDegreeById, inHandlesById, usedHandles, addFromNode, testingId, requestDelete, duplicateNode, copyNode, selectedId, metricByNode, refLineById, supersededById, dragging, dropSlot, splitGroupIds],
   );
 
   // Only the flow's chain edges are drawn — a compare step's number references are
@@ -2225,6 +2355,10 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
           anchor={library.anchor}
           anchorSelector={library.anchorSelector}
           onClose={() => setLibrary({ open: false, ctx: null, anchor: null, anchorSelector: null })}
+          paste={clipboard ? { title: clipboard.title, type: clipboard.type, onPaste: () => {
+            pasteNode(library.ctx);
+            setLibrary({ open: false, ctx: null, anchor: null, anchorSelector: null });
+          } } : null}
           onPick={(entry) => {
             createNode(entry.type, library.ctx, entry.config);
             setLibrary({ open: false, ctx: null, anchor: null, anchorSelector: null });

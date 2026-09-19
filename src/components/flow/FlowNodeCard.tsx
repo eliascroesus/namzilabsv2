@@ -18,7 +18,7 @@ import { Popover } from "./controls/Popover";
 // hidden — they only anchor the edge geometry, they are not interactive affordances.
 const HIDDEN_HANDLE: CSSProperties = { opacity: 0, pointerEvents: "none", width: 6, height: 6, minWidth: 0, minHeight: 0, border: "none" };
 
-/** The kebab (⋮) menu on each card: Duplicate + Delete. Replaces the panel's Step options. */
+/** The kebab (⋮) menu on each card: Copy + Duplicate + Delete. Replaces the panel's Step options. */
 function NodeMenu({ id, data }: { id: string; data: NodeData }) {
   const [open, setOpen] = useState(false);
   return (
@@ -43,6 +43,21 @@ function NodeMenu({ id, data }: { id: string; data: NodeData }) {
       }
     >
       <div className="nodrag p-1 text-sm">
+        {/* COPY SITS ABOVE DUPLICATE because it is the same act aimed further:
+            Duplicate puts the step beside itself, Copy puts it on a clipboard
+            any open flow can paste from. Pairing them keeps "I want another one
+            of these" in one place instead of hiding half of it in a shortcut. */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpen(false);
+            data.onCopyNode?.(id);
+          }}
+          className="block w-full rounded-control px-2 py-1.5 text-left transition-colors hover:bg-muted"
+        >
+          Copy
+        </button>
         <button
           type="button"
           onClick={(e) => {

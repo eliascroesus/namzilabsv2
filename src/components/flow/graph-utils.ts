@@ -25,6 +25,7 @@ export type NodeData = {
   onAddFrom?: (sourceNodeId: string, sourceHandle?: string | null, anchor?: { x: number; y: number; leftX?: number }) => void;
   onDeleteNode?: (id: string) => void;
   onDuplicateNode?: (id: string) => void;
+  onCopyNode?: (id: string) => void;
   [k: string]: unknown;
 };
 export type FNode = Node<NodeData>;
