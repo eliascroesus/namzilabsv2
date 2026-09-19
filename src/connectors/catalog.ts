@@ -1860,6 +1860,113 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
     commonFields: ["_airtable.createdTime"],
   },
   {
+    source: "notion",
+    name: "Notion",
+    brand: { color: "#000000", short: "No" },
+    description: "Rows of one Notion database — a pipeline, a content calendar, a tracker, whatever the table models.",
+    docs: {
+      url: "https://developers.notion.com/reference/query-a-data-source",
+      readOn: "2026-09-19",
+      webhooks: "https://developers.notion.com/reference/webhooks",
+    },
+    connect: "apiKey",
+    instant: false,
+    poll: true,
+    /**
+     * Whole-resource mirror, and unlike Airtable this was a CHOICE rather than a
+     * constraint. Notion's query endpoint does support a `last_edited_time`
+     * filter, so a cheaper incremental walk was available — but a query returns
+     * live rows only, so a row moved to Notion's trash simply stops appearing
+     * and an incremental walk would never see it go. That is the Google Calendar
+     * bug exactly (cancelled meetings counted for ever, an acceptance rate
+     * reading 2 of 7 against five real meetings). Absence from a complete read
+     * is the only deletion evidence this API gives, and absence is what
+     * `retireAbsent` consumes.
+     */
+    sync: "mirror",
+    syncNote:
+      "Each sweep re-reads the whole database, up to 5,000 rows; a larger database mirrors only its first 5,000 rows, in Notion's own order.",
+    autoWebhook: false,
+    /**
+     * FALSE BY CHOICE. Notion HAS webhooks, but a subscription is created in
+     * Notion's own dashboard rather than over the API, and it is armed by a
+     * one-time `verification_token` the user would have to copy back here. That
+     * is a two-place setup for a source the poll already covers, so the inbound
+     * path is deferred and `verifySignature` fails closed meanwhile.
+     */
+    verified: { live: null },
+    /**
+     * developers.notion.com/reference/request-limits (read 19 Sep 2026): "180
+     * requests per minute (an average of 3 per second)" for every plan below
+     * Business/Enterprise, which get 600. The LOWER figure is declared because
+     * it is the one most customers actually have, and over-declaring would let
+     * the ledger authorise a sweep the provider then 429s. Notion sends both a
+     * `Retry-After` header and `additional_data.retry_after`, which the shared
+     * http-client already honours.
+     */
+    rateLimits: { "api.request": { requestsPerMinute: 180 } },
+    credentialFields: [
+      {
+        key: "apiKey",
+        label: "Internal integration secret",
+        placeholder: "ntn_…",
+      },
+    ],
+    // Which database is chosen inside each flow's Get data step.
+    flowFields: [
+      {
+        key: "dataSourceId",
+        label: "Database",
+        required: true,
+        dynamic: true,
+        placeholder: "Choose a database…",
+        hint: "Each step reads one database. Only databases you have added the connection to will appear.",
+      },
+    ],
+    hiddenFields: ["_notion.id", "_notion.dataSourceId", "_notion.properties"],
+    commonFields: ["_notion.url", "_notion.created_time", "_notion.last_edited_time"],
+    guide: {
+      readOn: "2026-09-19",
+      fields: [
+        {
+          key: "apiKey",
+          title: "An internal integration secret",
+          /**
+           * ONE FLOW, NOT TWO, and the second half is the half that matters.
+           *
+           * These steps ran as two sections at first — the token under this
+           * field, the sharing under `guide.webhook` — which the docs page
+           * renders beneath a hard-coded "Instant updates" heading. That put
+           * Notion's permission model under a title promising something this
+           * source does not do (`instant: false`), so a user following it would
+           * have been told they were switching on live updates while actually
+           * granting read access. Sharing is not an optional extra here; it is
+           * step five of getting the connection to see anything at all.
+           */
+          steps: [
+            "Open notion.so/profile/integrations and choose New integration.",
+            "Give it a name you will recognise later — “Namzilabs” does the job — and pick the workspace it should read.",
+            "Set its capabilities to Read content. It never needs to write, or to see user emails.",
+            "Copy the Internal Integration Secret and paste it here.",
+            "Now open the database you want to read, in Notion.",
+            "Use the ••• menu at its top right and choose Connections → Add connections.",
+            "Pick the integration you just made, and confirm.",
+            "Back here, choose that database in the flow’s Get data step.",
+          ],
+          /**
+           * THE STEP EVERYONE MISSES, said where they will hit it. A Notion
+           * integration starts with access to NOTHING — the token is valid and
+           * the database list is simply empty until a human adds it to a
+           * database, which reads as a broken connection rather than an
+           * unfinished one.
+           */
+          note:
+            "Steps 5-7 are Notion’s own permission model, not a Namzilabs step: an integration reads only what it has been added to, so until you do them the database list here will be empty even though the token is valid. Adding it to a page adds it to everything nested underneath, so sharing a parent page covers the databases inside it.",
+        },
+      ],
+    },
+  },
+  {
     source: "mailchimp",
     name: "Mailchimp",
     description: "Contacts joining an audience, dated by when they confirmed their opt-in, with the status they hold now.",

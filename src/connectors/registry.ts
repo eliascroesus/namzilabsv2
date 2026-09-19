@@ -26,6 +26,7 @@ import { thrivecartConnector } from "./thrivecart";
 import { retellConnector } from "./retell";
 import { customerioConnector } from "./customerio";
 import { airtableConnector } from "./airtable";
+import { notionConnector } from "./notion";
 
 import { mailchimpConnector } from "./mailchimp";
 
@@ -75,6 +76,7 @@ for (const connector of [
   retellConnector,
   customerioConnector,
   airtableConnector,
+  notionConnector,
   mailchimpConnector,
   woocommerceConnector,
   shopifyConnector,
