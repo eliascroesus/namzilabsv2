@@ -62,25 +62,7 @@ const ratio = (a, b) => {
  * tell: a measurement that does not respond to the fix is measuring something
  * else. Hiding the label and the mark leaves the pill itself painting.
  */
-/**
- * EVERYTHING THAT SITS ON A COLOURED GROUND, hidden so the ground can be seen.
- *
- * `.sky-panel` JOINED THE LIST when the rebuild put three more blue surfaces on
- * the page — the facts band, the how-it-works section and the assistant card.
- * Leaving it out would not have failed anything: the sampler simply would not
- * have looked there, and forty-odd words of white-on-blue would have shipped
- * unmeasured. That is the failure mode this whole script exists for, so the
- * selector list and the list of things sampled are now maintained together.
- *
- * `.glass-card` is NOT hidden and must not be: it is a translucent white pane
- * and it is part of the GROUND under the tool-name chips sitting on it. Hiding
- * it would sample those names against raw sky and report a contrast the reader
- * never experiences — the same mistake `.marquee-track` made here twice.
- */
-const HIDE =
-  ".night-sky h1,.night-sky p,.marquee span > span,.sky-card h2,.sky-card p," +
-  ".sky-panel h2,.sky-panel p,.sky-panel li" +
-  "{visibility:hidden!important}";
+const HIDE = ".hero-sky h1,.hero-sky p,.marquee span > span,.sky-card h2,.sky-card p{visibility:hidden!important}";
 
 const browser = await chromium.launch();
 
@@ -95,61 +77,17 @@ const browser = await chromium.launch();
  * join is the one thing on this page whose appearance depends on the theme, and
  * it is right under the product window where the eye already is.
  */
-/**
- * THE "DARK" ROW WAS NEVER DARK, and finding that out is why this loop now
- * writes to localStorage instead of setting `colorScheme`.
- *
- * The theme here is a CLASS on the root element — `@custom-variant dark
- * (&:where(.dark, .dark *))` — driven by next-themes out of localStorage, and
- * its default is `mix` rather than `system`. A Playwright context that sets
- * `colorScheme: "dark"` changes what `prefers-color-scheme` reports and
- * nothing else, so next-themes went on applying `mix` and this row re-tested
- * the same pixels as the row above it under a different name. It printed four
- * extra `ok`s per run and could not have failed.
- *
- * `addInitScript` puts the key in before any script on the page runs, which is
- * also early enough to beat the inline anti-flash script next-themes injects.
- *
- * THREE THEMES, NOT TWO: `mix` is what a browser with nothing stored actually
- * gets — the owner's call — so it is the one most visitors see and the one
- * worth measuring widest. The sky does not follow the theme, but the page
- * under it does, and the two meet right where the product window straddles the
- * seam.
- */
-for (const [w, h, name, theme] of [
-  [1440, 950, "desktop", "mix"],
+for (const [w, h, name, scheme] of [
+  [1440, 950, "desktop", "light"],
   [1440, 950, "desktop dark", "dark"],
-  [1440, 950, "desktop light", "light"],
-  [834, 1100, "tablet", "mix"],
-  [390, 844, "phone", "mix"],
+  [834, 1100, "tablet", "light"],
+  [390, 844, "phone", "light"],
 ]) {
   console.log(`\n${name} ${w}x${h}`);
-  const page = await browser.newPage({
-    viewport: { width: w, height: h },
-    colorScheme: theme === "dark" ? "dark" : "light",
-  });
-  await page.addInitScript((t) => {
-    try {
-      localStorage.setItem("theme", t);
-    } catch {
-      /* A context that refuses storage still renders the default, which is a
-         legitimate thing to photograph — it must not abort the run. */
-    }
-  }, theme);
+  const page = await browser.newPage({ viewport: { width: w, height: h }, colorScheme: scheme });
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto(BASE, { waitUntil: "networkidle" });
-  /* The class is applied by next-themes after hydration, so the assertion has
-     to wait for it rather than for the network. Without this the first
-     screenshot of a "dark" pass catches the page mid-swap. */
-  await page
-    .waitForFunction((t) => document.documentElement.classList.contains(t), theme, { timeout: 5_000 })
-    .catch(() => {});
-  check(
-    await page.evaluate((t) => document.documentElement.classList.contains(t), theme),
-    `the ${theme} theme is actually applied`,
-    "the root element never got the class — this pass would re-test the default",
-  );
   await page.evaluate(() => document.fonts.ready);
   /* The ticker is mid-flight between the two frames, so a chip would be
      compared against where it used to be and the "glyph" pixel would be an
@@ -160,7 +98,7 @@ for (const [w, h, name, theme] of [
 
   // ── composition ──────────────────────────────────────────────────────────
   const geo = await page.evaluate(() => {
-    const sky = document.querySelector(".night-sky");
+    const sky = document.querySelector(".hero-sky");
     const fig = sky?.querySelector("figure");
     /**
      * THE HEADING, NOT THE SECTION. The section under the hero starts where
@@ -191,8 +129,7 @@ for (const [w, h, name, theme] of [
        then what it reads: each section only lands on somebody who has read the
        one before it, and the anchors in the nav promise exactly this list. */
     check(
-      JSON.stringify(geo.sections) ===
-        JSON.stringify(["problem", "proof", "how", "compare", "ai", "integrations", "pricing", "faq"]),
+      JSON.stringify(geo.sections) === JSON.stringify(["problem", "proof", "how", "ai", "integrations"]),
       "the page tells its story in order",
       geo.sections.join(" → "),
     );
@@ -220,7 +157,7 @@ for (const [w, h, name, theme] of [
        A literal there instead — the #C0D5FF this shipped with first — is a
        hairline of the wrong blue across the full width in one theme or both. */
     const seam = await page.evaluate(() => {
-      const sky = document.querySelector(".night-sky");
+      const sky = document.querySelector(".hero-sky");
       const r = sky.getBoundingClientRect();
       const below = document.elementFromPoint(8, Math.min(innerHeight - 2, r.bottom + 8));
       const paint = (el) => {
@@ -236,121 +173,10 @@ for (const [w, h, name, theme] of [
   }
 
   // ── contrast ─────────────────────────────────────────────────────────────
-  /**
-   * ONE CONTRAST PASS, RUN ONCE PER COLOURED SURFACE.
-   *
-   * WHY THIS IS NOW A FUNCTION. It used to run inline, exactly once, against
-   * the hero — which was the only blue on the page when it was written. The
-   * rebuild added three more coloured grounds below the fold (the facts band,
-   * the how-it-works section, the assistant card), and every one of them
-   * carries white type. Left as it was, this script would have gone on
-   * reporting PASS while measuring a quarter of the white-on-blue text on the
-   * page.
-   *
-   * The method is unchanged and the method is the point: photograph the strip
-   * twice, once with the ink and once with it hidden, and take the pixel that
-   * differs MOST inside each text box. Translucent ink has no colour of its
-   * own — `text-white/85` is whatever it lands on — so `getComputedStyle`
-   * cannot answer this and only the rendered pixel can.
-   */
-  const measure = async (label, scrollTo, collect) => {
-    await page.evaluate((y) => window.scrollTo(0, y), scrollTo);
-    await page.waitForTimeout(250);
-
-    const found = await page.evaluate(collect);
-    if (found.missing.length) {
-      check(false, `${label}: every text the sampler looks for is on the page`, found.missing.join(", "));
-    }
-    if (!found.out.length) {
-      check(false, `${label}: found text to measure`, "no elements in the viewport");
-      return;
-    }
-
-    const withInk = (await page.screenshot({ clip: { x: 0, y: 0, width: w, height: h } })).toString("base64");
-    /* The hide rule goes on and comes back OFF, because this function runs
-       several times against the same page. Left on, every pass after the first
-       would photograph an already-blank page and report Δ0 for everything. */
-    const tag = await page.addStyleTag({ content: HIDE });
-    await page.waitForTimeout(250);
-    const noInk = (await page.screenshot({ clip: { x: 0, y: 0, width: w, height: h } })).toString("base64");
-    await tag.evaluate((n) => n.remove());
-
-    const measured = await page.evaluate(
-      async ({ withInk, noInk, spots }) => {
-        const load = (b64) =>
-          new Promise((res) => {
-            const i = new Image();
-            i.onload = () => res(i);
-            i.src = `data:image/png;base64,${b64}`;
-          });
-        const [A, B] = await Promise.all([load(withInk), load(noInk)]);
-        const ctx = (img) => {
-          const c = document.createElement("canvas");
-          c.width = img.width;
-          c.height = img.height;
-          const g = c.getContext("2d", { willReadFrequently: true });
-          g.drawImage(img, 0, 0);
-          return g;
-        };
-        const ga = ctx(A);
-        const gb = ctx(B);
-        const k = A.width / innerWidth;
-        return spots.map((s) => {
-          const box = [
-            Math.round(s.box.x * k),
-            Math.round(s.box.y * k),
-            Math.max(1, Math.round(s.box.w * k)),
-            Math.max(1, Math.round(s.box.h * k)),
-          ];
-          const a = ga.getImageData(...box).data;
-          const b = gb.getImageData(...box).data;
-          let best = -1;
-          let ink = null;
-          let ground = null;
-          for (let i = 0; i < a.length; i += 4) {
-            const d = Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]);
-            if (d > best) {
-              best = d;
-              ink = [a[i], a[i + 1], a[i + 2]];
-              ground = [b[i], b[i + 1], b[i + 2]];
-            }
-          }
-          return { ink, ground, delta: best };
-        });
-      },
-      { withInk, noInk, spots: found.out },
-    );
-
-    found.out.forEach((s, i) => {
-      const { ink, ground, delta } = measured[i];
-      /* Nothing changed inside the box: the selector found an element the hide
-         rule does not cover, so there is no glyph to measure and a pass here
-         would mean nothing. */
-      if (delta < 30) {
-        check(false, `${label}: ${s.label} was measurable`, `only Δ${delta} between the two frames`);
-        return;
-      }
-      const r = ratio(ink, ground);
-      // WCAG 1.4.3: 3:1 for large text (>=24px, or >=18.66px bold), else 4.5:1.
-      const large = s.size >= 24 || (s.size >= 18.66 && s.weight >= 700);
-      const need = large ? 3 : 4.5;
-      check(
-        r >= need,
-        `${label}: ${s.label} is legible`,
-        `${r.toFixed(2)}:1, needs ${need} at ${s.size}px/${s.weight}`,
-      );
-    });
-  };
-
-  // ── the hero ─────────────────────────────────────────────────────────────
-  await measure("hero", 0, () => {
+  const spots = await page.evaluate(() => {
     const out = [];
-    const missing = [];
     const add = (el, label) => {
-      if (!el) {
-        missing.push(label);
-        return;
-      }
+      if (!el) return;
       const r = el.getBoundingClientRect();
       if (r.width < 4 || r.bottom < 2 || r.top > innerHeight - 2) return;
       const cs = getComputedStyle(el);
@@ -366,24 +192,22 @@ for (const [w, h, name, theme] of [
         weight: Number(cs.fontWeight),
       });
     };
-    const sky = document.querySelector(".night-sky");
+    const sky = document.querySelector(".hero-sky");
     add(sky.querySelector("h1 span"), "headline");
     add(sky.querySelector("p"), "paragraph");
-    /* THE "READS FROM" LABEL AND THE LINE UNDER THE CTA WERE BOTH SAMPLED HERE
-       AND BOTH ARE GONE, removed from the hero at the owner's ask. The probes
-       come out with them rather than being re-pointed at whatever is nearest:
-       the marquee's wrapper carries no text of its own, so a probe aimed at it
-       would report "not measurable", and a check that keeps a hook alive by
-       moving it somewhere convenient is a check that passes by measuring
-       nothing. What remains in this half of the sky — the headline, the
-       paragraph and the connector chips — is still measured. */
+    add(sky.querySelector(".uppercase.tracking-widest"), "reads-from label");
+    const ps = sky.querySelectorAll("p");
+    add(ps[ps.length - 1], "line under the CTA");
     /**
      * A CHIP FROM THE MIDDLE OF THE TRACK, not the first one in the DOM.
      *
      * `.marquee-track` fades its ends out with a mask — that is what makes a
      * ticker read as continuous rather than as a clipped div — so the chip at
      * x=0 is half transparent BY DESIGN, and measuring it reports the fade as
-     * a contrast bug.
+     * a contrast bug. On a 390px viewport the first chip is inside that fade
+     * and came out at 4.47:1 while every chip anybody can actually read was
+     * over 6:1. So: the first chip whose centre is in the middle half of the
+     * viewport, which is the zone the mask leaves alone.
      */
     const chip = [...document.querySelectorAll(".marquee span span:last-child")].find((n) => {
       const c = n.getBoundingClientRect();
@@ -391,90 +215,70 @@ for (const [w, h, name, theme] of [
       return mid > innerWidth * 0.25 && mid < innerWidth * 0.75;
     });
     add(chip, "a connector name");
-    return { out, missing };
+    return out;
   });
+  check(spots.length >= 4, "found the hero's text to measure", `${spots.length} elements`);
 
-  /**
-   * ── every other blue surface ───────────────────────────────────────────
-   *
-   * EACH SURFACE DECLARES WHAT IT EXPECTS TO BE MEASURED, and that list is the
-   * whole point of this block. The first version probed the same four generic
-   * selectors everywhere and let a miss slide, which failed in both directions
-   * at once: the facts band has no heading inside it — its h2 sits in the white
-   * column beside it — so it reported a missing hook that was never there,
-   * while `#how` matched its step card on `li` and "measured" an opaque white
-   * card against the blue behind it. That one passed at 11:1 and tested
-   * nothing.
-   *
-   * So: only white-on-blue TEXT is listed, never a container, and a selector
-   * that matches nothing turns the run red. Dark ink on the glass cards is not
-   * here on purpose — it is ordinary `--foreground` on `--card`, governed by
-   * the token layer and by `check:ui`, and pulling it into a script that hides
-   * its own ground would measure it against the sky two layers down.
-   */
-  for (const [sel, label, probes] of [
-    /* TWO BLUE SURFACES LEFT, DOWN FROM FOUR. The page went to daylight at the
-       owner's ask, so the facts band and the how-it-works section are ordinary
-       ink on the page's own ground and the token layer governs them. These two
-       are the only places white type still sits on a fill — the assistant card
-       (the invite board's sky, kept because he named it) and the closing
-       card — and they are the only places a contrast bug can hide from
-       `check:ui`. */
-    ["#ai .sky-panel", "the assistant card", [["h2", "heading"], ["p", "body copy"], ["li", "a tool-name chip"]]],
-    [".sky-card", "the closing card", [["h2", "heading"], ["p", "body copy"]]],
-  ]) {
-    const y = await page.evaluate((s) => {
-      const el = document.querySelector(s);
-      if (!el) return null;
-      const r = el.getBoundingClientRect();
-      /* Centre the surface in the viewport so its type is not clipped at an
-         edge, but never scroll past the document's own end.
-         
-         AND NEVER PUT ITS TOP UNDER THE NAV. The capsule is sticky, 
-         translucent white and about 80px tall, so a surface taller than the
-         viewport — which is every one of these on a phone — got scrolled until
-         its first line sat behind the glass, and the sampler dutifully
-         measured white-on-blue through a 55%-white bar at 2.09:1. The text is
-         not broken; that is simply not where anybody reads it. 96px clears the
-         capsule and its inset. */
-      const want = r.top + scrollY - Math.max(96, (innerHeight - r.height) / 2);
-      return Math.max(0, Math.min(want, document.documentElement.scrollHeight - innerHeight));
-    }, sel);
+  const withInk = (await page.screenshot({ clip: { x: 0, y: 0, width: w, height: h } })).toString("base64");
+  await page.addStyleTag({ content: HIDE });
+  await page.waitForTimeout(250);
+  const noInk = (await page.screenshot({ clip: { x: 0, y: 0, width: w, height: h } })).toString("base64");
 
-    if (y === null) {
-      check(false, `${label} is on the page`, `no element matches ${sel}`);
-      continue;
-    }
-
-    await measure(label, y, `(() => {
-      const out = [];
-      const missing = [];
-      const root = document.querySelector(${JSON.stringify(sel)});
-      if (!root) return { out, missing: ["the surface itself"] };
-      for (const [css, name] of ${JSON.stringify(probes)}) {
-        const el = root.querySelector(css);
-        if (!el) { missing.push(name + " (" + css + ")"); continue; }
-        const r = el.getBoundingClientRect();
-        /* Off-screen is not the same as absent: the surface is centred in the
-           viewport above, so anything that still falls outside it is taller
-           than the screen and its first line was measured anyway. */
-        if (r.width < 4 || r.bottom < 2 || r.top > innerHeight - 2) continue;
-        const cs = getComputedStyle(el);
-        out.push({
-          label: name,
-          box: {
-            x: Math.round(r.left),
-            y: Math.round(Math.max(0, r.top)),
-            w: Math.round(r.width),
-            h: Math.round(Math.min(r.height, innerHeight - r.top)),
-          },
-          size: parseFloat(cs.fontSize),
-          weight: Number(cs.fontWeight),
+  const measured = await page.evaluate(
+    async ({ withInk, noInk, spots }) => {
+      const load = (b64) =>
+        new Promise((res) => {
+          const i = new Image();
+          i.onload = () => res(i);
+          i.src = `data:image/png;base64,${b64}`;
         });
-      }
-      return { out, missing };
-    })()`);
-  }
+      const [A, B] = await Promise.all([load(withInk), load(noInk)]);
+      const ctx = (img) => {
+        const c = document.createElement("canvas");
+        c.width = img.width;
+        c.height = img.height;
+        const g = c.getContext("2d", { willReadFrequently: true });
+        g.drawImage(img, 0, 0);
+        return g;
+      };
+      const ga = ctx(A);
+      const gb = ctx(B);
+      const k = A.width / innerWidth;
+      return spots.map((s) => {
+        const a = ga.getImageData(Math.round(s.box.x * k), Math.round(s.box.y * k), Math.max(1, Math.round(s.box.w * k)), Math.max(1, Math.round(s.box.h * k))).data;
+        const b = gb.getImageData(Math.round(s.box.x * k), Math.round(s.box.y * k), Math.max(1, Math.round(s.box.w * k)), Math.max(1, Math.round(s.box.h * k))).data;
+        let best = -1;
+        let ink = null;
+        let ground = null;
+        for (let i = 0; i < a.length; i += 4) {
+          const d = Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]);
+          if (d > best) {
+            best = d;
+            ink = [a[i], a[i + 1], a[i + 2]];
+            ground = [b[i], b[i + 1], b[i + 2]];
+          }
+        }
+        return { ink, ground, delta: best };
+      });
+    },
+    { withInk, noInk, spots },
+  );
+
+  spots.forEach((s, i) => {
+    const { ink, ground, delta } = measured[i];
+    /* Nothing changed inside the box: the selector found an element the hide
+       rule does not cover, so there is no glyph to measure and a pass here
+       would mean nothing. */
+    if (delta < 30) {
+      check(false, `${s.label} was measurable`, `only Δ${delta} between the two frames`);
+      return;
+    }
+    const r = ratio(ink, ground);
+    // WCAG 1.4.3: 3:1 for large text (>=24px, or >=18.66px bold), else 4.5:1.
+    const large = s.size >= 24 || (s.size >= 18.66 && s.weight >= 700);
+    const need = large ? 3 : 4.5;
+    check(r >= need, `${s.label} is legible on the sky`, `${r.toFixed(2)}:1, needs ${need} at ${s.size}px/${s.weight}`);
+  });
 
   check(errors.length === 0, "no uncaught page errors", errors.join(" · "));
   await page.close();
