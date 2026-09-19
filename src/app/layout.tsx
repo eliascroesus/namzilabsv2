@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { IBM_Plex_Mono, Inter, Outfit } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
 
 /**
@@ -33,54 +33,6 @@ import "./globals.css";
  */
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
 
-/**
- * THE SECOND FAMILY, AND WHY THE ARGUMENT ABOVE DOES NOT COVER IT.
- *
- * Everything above is about the INTERFACE, and it still holds: a board of
- * numbers separates chrome from figure with size and nothing else, and a
- * display face in there would be decoration wearing a job title.
- *
- * The landing page is not the interface. Its job is to be looked at by
- * somebody who has not decided to care yet, and the owner's verdict on the
- * version set entirely in Inter was that it "looks like an AI website" — which
- * is a fair reading of a page whose only typographic idea is size. A neutral
- * grotesque at three weights is what every generated page uses, because it is
- * what you reach for when you have not chosen anything.
- *
- * Outfit is geometric where Inter is neutral: single-storey `g`, a straight
- * diagonal tail on the `y`, circular bowls. It carries the reference the owner
- * handed over (themochi.app) closely enough to read as the same decision, and
- * it is unmistakably NOT the default.
- *
- * TWO WEIGHTS ONLY, and loaded for one route. 600 and 700 are what the
- * headlines use; shipping the variable range would be four times the bytes for
- * weights nothing calls. It is scoped to `--font-marketing`, which only `/`
- * spends — the app never resolves this variable, so a dashboard still makes
- * exactly one font request.
- */
-const outfit = Outfit({ subsets: ["latin"], weight: ["600", "700"], variable: "--font-outfit", display: "swap" });
-
-/**
- * THE THIRD FAMILY, AND IT HAS ONE JOB.
- *
- * Mono on this page means "a machine produced this figure and you can check
- * it" — the numbers inside a receipt, the record counts, the metric values.
- * Nothing else. Not labels, not nav, not prices, which are set by a person.
- * The moment it is used for texture the semantic is gone and it is just
- * another face.
- *
- * WHY IT IS LOADED RATHER THAN USING `--font-mono`. That token is a system
- * stack — SF Mono on a Mac, Consolas on Windows, Liberation Mono on Linux —
- * with different widths and different figure shapes. Fine for an API key in a
- * settings field; wrong for the one element the whole page is built around,
- * which has to look the same to everybody and has to hold a column of digits
- * in vertical alignment. Plex Mono is the more clerical of the two obvious
- * choices, which suits a receipt better than a code face does.
- *
- * TWO WEIGHTS, latin only, marketing-scoped like Outfit: nothing inside the
- * app resolves `--font-plex`, so a dashboard still makes one font request.
- */
-const plex = IBM_Plex_Mono({ subsets: ["latin"], weight: ["400", "500"], variable: "--font-plex", display: "swap" });
 
 import { ThemeProvider } from "@/components/theme";
 import { InputModality } from "@/components/input-modality";
@@ -166,7 +118,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     // On a Mac that resolves to SF Pro and looks nearly right, which is why it
     // survived: it was wrong on every other platform and nothing failed.
     // Measured with getComputedStyle, not inferred.
-    <html lang="en" className={`${inter.variable} ${outfit.variable} ${plex.variable}`} suppressHydrationWarning>
+    <html lang="en" className={inter.variable} suppressHydrationWarning>
       <body>
         {/* WHICH DEVICE IS DRIVING, stamped on <html> for globals.css to read.
             It renders nothing; it exists so the shared focus ring can stay off

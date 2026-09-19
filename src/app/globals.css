@@ -203,7 +203,13 @@
      is not the interface. Nothing inside the product resolves this variable,
      so a dashboard still makes exactly one font request. */
   /* prettier-ignore */
-  --font-marketing: var(--font-outfit, "Outfit"), var(--font-inter, "Inter"), system-ui, sans-serif;
+  /* ONE FAMILY, at the owner's ask. The landing page ran Outfit for display
+     and IBM Plex Mono for computed figures; the brief calls the rounded face
+     too soft for a headline at 88px and asks for a single tight grotesk. Inter
+     is one, it holds 700 at that size, and it carries tabular figures — so the
+     receipt's number column still aligns without a second face. Both extra
+     fonts came out of layout.tsx: the page now makes one font request. */
+  --font-marketing: var(--font-inter, "Inter"), system-ui, -apple-system, sans-serif;
   /* IDs, API keys, webhook URLs, code. System mono — nothing to load, and
      technical strings stop wearing the browser's fallback serif-mono mix. */
   --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
@@ -2536,137 +2542,288 @@ html.mix {
   /**
    * ══ THE LANDING PAGE'S OWN LAYER ═══════════════════════════════════════
    *
-   * Everything below is scoped to `.lander` and exists for one route. The app
-   * resolves none of it.
+   * Scoped to `.lander`, for one route. The app resolves none of it.
    *
-   * THE SUBJECT IS ARITHMETIC YOU CAN CHECK, and the palette comes from that
-   * rather than from "analytics" in general: paper, ink, one deep block to
-   * break the rhythm, one accent, and one amber that means exactly one thing.
-   * The sky photograph and the green tubes are gone — they belonged to a
-   * different product than the rest of the page.
+   * WARM PAPER, NOT COLD WHITE — the owner's call, and the reference set's
+   * (Base44, Zapier). It is a two-point shift off white; enough that the page
+   * reads as printed rather than as an app window, not so far that it becomes
+   * the cream-and-serif look every generated page reaches for.
    */
   .lander {
-    --background: #ffffff;
-    /* THE ONE RECESSED TONE. Cool rather than cream: this is a machine's
-       output, and a warm paper would both fight the amber and land the page in
-       the stationery-and-serif look that every generated page reaches for. */
-    --paper-sunk: #f4f5f7;
-    --ink: #0b1020;
-    /* THE ONLY MUTED INK, and the fix for the contrast failures: the clause
-       text was running around 3.1:1. This is 6.4:1 on paper. */
-    --ink-muted: #5a6070;
-    --ink-deep: #0e1a3d;
-    --rule: #e4e6eb;
-    /* Amber marks excluded or incomplete data inside a receipt. It appears
-       nowhere else on the page, which is what makes it mean something. */
-    --amber: #b45309;
-    --amber-on-deep: #f0a35c;
-  }
-  .dark .lander {
-    --background: var(--color-neutral-950);
-    --paper-sunk: #171717;
-    --ink: #f2f3f5;
-    --ink-muted: #9aa0ad;
-    --rule: #2a2a2a;
-    --amber: #f5a524;
-  }
+    --paper: #f7f6f3;
+    --card: #ffffff;
+    --ink: #111318;
+    /* THE LIGHTEST GREY ALLOWED ANYWHERE. Several greys on the page this
+       replaces were far paler and genuinely hard to read; this is 7.1:1 on
+       Paper, and nothing may go under it. */
+    --ink-muted: #5a5f68;
+    --blue: #2f4ff0;
+    --haze: #e7ecfd;
+    --night: #0b1020;
+    --line: #e4e2dc;
 
-  /**
-   * ── THE FULL-BLEED BLOCK ───────────────────────────────────────────────
-   *
-   * The brief asked for these to stay dark in both themes; the owner agreed
-   * they should not. On a #121214 page a #0E1A3D block is two dark tones side
-   * by side and the break in rhythm — the entire reason the section is
-   * full-bleed — simply disappears. So in the dark theme the block LIGHTENS
-   * instead: same hue, raised a step. The pulse survives; only its direction
-   * flips.
-   */
-  .ink-block {
-    background: var(--ink-deep);
-    --ink: #ffffff;
-    --ink-muted: #a9b4d0;
-    --rule: rgb(255 255 255 / 0.14);
-    --paper-sunk: rgb(255 255 255 / 0.05);
-    --amber: var(--amber-on-deep);
+    --background: var(--paper);
+    /* Content column and gutters, set once so no section can invent its own. */
+    --col: 1240px;
+    --gut: 20px;
+    /* THE ONE SHADOW ON THE PAGE. Product screenshots only — it is what lifts
+       them off the Haze panel behind them. Cards get a hairline and nothing
+       else; a page where everything floats has no hierarchy left to spend. */
+    --lift: 0 24px 60px rgb(17 19 24 / 0.1);
+
+    background: var(--paper);
     color: var(--ink);
   }
-  .dark .ink-block {
-    background: #1b2a52;
+  @media (min-width: 900px) {
+    .lander {
+      --gut: 48px;
+    }
   }
-
-  /* ── type ─────────────────────────────────────────────────────────────
-     Three families, three jobs. Outfit displays, Inter reads, Plex counts. */
-  .t-display-xl {
-    font-family: var(--font-marketing);
-    font-size: clamp(3.25rem, 8vw, 7.5rem);
-    font-weight: 700;
-    letter-spacing: -0.04em;
-    line-height: 0.92;
-  }
-  .t-display-lg {
-    font-family: var(--font-marketing);
-    font-size: clamp(2.25rem, 5.4vw, 4.5rem);
-    letter-spacing: -0.03em;
-    line-height: 1.02;
-  }
-  /* THE CEILING IS 2.5rem, NOT 3, AND THE GRID SET IT. The claim track is
-     five of twelve columns — 480px at the 72rem max — and "Ten tools. Ten
-     dashboards." at 48px needs about 520, so every H2 with a manual line break
-     wrapped into four ragged lines instead of the two it was written as. The
-     type serves the spine rather than the other way round. */
-  .t-display-md {
-    font-family: var(--font-marketing);
-    font-size: clamp(1.75rem, 3vw, 2.5rem);
-    font-weight: 700;
-    letter-spacing: -0.025em;
-    line-height: 1.08;
-  }
-  .t-body-lg {
-    font-size: 1.125rem;
-    line-height: 1.6;
-    max-width: 65ch;
-  }
-  .t-label {
-    font-size: 0.875rem;
-    font-weight: 500;
-    color: var(--color-brand-800);
-  }
-  .ink-block .t-label {
-    color: #9dbdf0;
+  .dark .lander {
+    --paper: var(--color-neutral-950);
+    --card: #17181c;
+    --ink: #f4f4f5;
+    --ink-muted: #a1a5ad;
+    --haze: #161b2e;
+    --line: #2a2a2c;
   }
 
   /**
-   * ── THE FIGURES ────────────────────────────────────────────────────────
+   * ── THE TWO TONAL BREAKS ───────────────────────────────────────────────
    *
-   * `tabular-nums` is not a nicety here. The working lines are a subtraction
-   * read vertically, and proportional digits put the 1s and the 7s in
-   * different places down the column, which breaks the one thing the layout
-   * exists to show.
+   * Night for the receipts and the closing, Blue for the assistant. Both run
+   * edge to edge; their contents sit on the same 1240px column as everything
+   * else, which is what keeps a full-bleed block part of the page rather than
+   * an interruption in it.
+   *
+   * They redefine the tokens rather than overriding colours at call sites, so
+   * a card, a rule or a muted line inside one is written exactly as it is on
+   * Paper and simply resolves differently.
    */
-  .t-num {
-    font-family: var(--font-plex), ui-monospace, monospace;
-    font-feature-settings: "tnum";
-    font-variant-numeric: tabular-nums;
+  .block-night {
+    --paper: var(--night);
+    --card: #ffffff;
+    --ink: #ffffff;
+    --ink-muted: #9aa1b4;
+    --line: rgb(255 255 255 / 0.14);
+    background: var(--night);
+    color: var(--ink);
   }
-  .t-figure-xl {
-    font-size: clamp(4rem, 9vw, 7.5rem);
-    font-weight: 500;
+  .block-blue {
+    --paper: var(--blue);
+    --card: #ffffff;
+    --ink: #ffffff;
+    --ink-muted: rgb(255 255 255 / 0.78);
+    --line: rgb(255 255 255 / 0.22);
+    background: var(--blue);
+    color: var(--ink);
+  }
+
+  /* ── rhythm ───────────────────────────────────────────────────────────── */
+  .lander-col {
+    width: 100%;
+    max-width: var(--col);
+    margin-inline: auto;
+    padding-inline: var(--gut);
+  }
+  .sec {
+    padding-block: 88px;
+  }
+  .sec-bleed {
+    padding-block: 104px;
+  }
+  @media (min-width: 900px) {
+    .sec {
+      padding-block: 140px;
+    }
+    .sec-bleed {
+      padding-block: 180px;
+    }
+  }
+
+  /**
+   * ── TYPE ───────────────────────────────────────────────────────────────
+   *
+   * Fixed steps rather than a fluid clamp, because the whole effect depends on
+   * the GAP between the headline and everything else — and a clamp closes that
+   * gap on exactly the screens where it matters most. Two breakpoints, the
+   * numbers the brief specifies.
+   */
+  .t-hero {
+    font-size: 42px;
+    font-weight: 700;
+    letter-spacing: -0.035em;
+    line-height: 1;
+  }
+  .t-close {
+    font-size: 46px;
+    font-weight: 700;
+    letter-spacing: -0.035em;
+    line-height: 1;
+  }
+  .t-sec {
+    font-size: 32px;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    line-height: 1.05;
+  }
+  .t-step {
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+  }
+  .t-figure {
+    font-size: 44px;
+    font-weight: 700;
     letter-spacing: -0.03em;
     line-height: 1;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
   }
-  .t-figure-md {
-    font-size: clamp(2.5rem, 4.5vw, 3rem);
-    font-weight: 500;
-    letter-spacing: -0.02em;
-    line-height: 1;
+  @media (min-width: 900px) {
+    .t-hero {
+      font-size: 88px;
+    }
+    .t-close {
+      font-size: 104px;
+    }
+    .t-sec {
+      font-size: 56px;
+    }
+    .t-step {
+      font-size: 30px;
+    }
+    .t-figure {
+      font-size: 72px;
+    }
   }
-  /* 14px, and the floor is 13 — the smallest type on the page, and it must
-     stay readable at 380px. Below that the receipt drops lines rather than
-     shrinking them. */
-  .t-working {
-    font-size: 0.875rem;
+  .t-stand {
+    font-size: 17px;
+    line-height: 1.55;
+    color: var(--ink-muted);
+    /* 62 CHARACTERS, not 65 — the measure the brief sets, and the one thing on
+       this page that is a readability rule rather than a taste. */
+    max-width: 62ch;
+  }
+  @media (min-width: 900px) {
+    .t-stand {
+      font-size: 19px;
+    }
+  }
+  .t-body {
+    font-size: 16px;
+    line-height: 1.6;
+    max-width: 62ch;
+  }
+  @media (min-width: 900px) {
+    .t-body {
+      font-size: 17px;
+    }
+  }
+  .t-small {
+    font-size: 14px;
     line-height: 1.5;
   }
+  /* Section labels: small, sentence case, blue. Never tracked-out capitals. */
+  .t-label {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--blue);
+  }
+  .block-night .t-label {
+    color: #8fa4ff;
+  }
+  .block-blue .t-label {
+    color: rgb(255 255 255 / 0.7);
+  }
+  .t-num {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+
+  /* ── shape ────────────────────────────────────────────────────────────── */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+  }
+
+  /**
+   * A CARD ON A FULL-BLEED BLOCK IS A LIGHT CARD.
+   *
+   * The block redefines `--ink` to white so its own type reads; a card sitting
+   * on it needs those tokens back, or its contents are white on white. Resetting
+   * the four inside the card means the receipt is written exactly the same way
+   * on Paper and on Night and simply resolves differently — which is the whole
+   * reason the tokens are scoped rather than the colours being set at call
+   * sites.
+   *
+   * It is also the ONLY white card on a dark ground anywhere on the page, and
+   * that is what makes the resolved figure land.
+   */
+  .block-night .card,
+  .block-blue .card {
+    --ink: #111318;
+    --ink-muted: #5a5f68;
+    --line: #e4e2dc;
+    background: #ffffff;
+    color: var(--ink);
+  }
+
+  /**
+   * ── THE SCREENSHOT TREATMENT ───────────────────────────────────────────
+   *
+   * A Haze panel, the shot oversized inside it and running off ONE edge, and
+   * the page's only shadow underneath it. The bleed is the point: a picture
+   * that fits neatly inside its frame reads as an illustration OF the product,
+   * one that runs past the frame reads as a window ONTO it.
+   *
+   * `overflow: hidden` on the panel is what crops it, and the shot is given a
+   * width greater than 100% so there is something to crop.
+   */
+  .haze {
+    position: relative;
+    overflow: hidden;
+    border-radius: 16px;
+    background: linear-gradient(160deg, var(--haze) 0%, color-mix(in oklab, var(--haze) 70%, var(--card)) 100%);
+    padding: 24px 0 0 24px;
+  }
+  @media (min-width: 900px) {
+    .haze {
+      padding: 56px 0 0 56px;
+    }
+  }
+  /* Mobile drops the padding so the shot stays as large as the screen allows —
+     at 380px a 24px inset is a fifth of the legibility. */
+  @media (max-width: 599.98px) {
+    .haze {
+      padding: 16px 0 0 16px;
+    }
+  }
+  .haze-shot {
+    width: 128%;
+    max-width: none;
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--card);
+    border: 1px solid var(--line);
+    box-shadow: var(--lift);
+  }
+  /* The hero's panel crops from the bottom instead: the shot runs off the foot
+     of the screen, which is what invites the scroll. */
+  .haze-hero {
+    padding: 24px 24px 0;
+  }
+  @media (min-width: 900px) {
+    .haze-hero {
+      padding: 56px 56px 0;
+    }
+  }
+  .haze-hero .haze-shot {
+    width: 100%;
+  }
+
   /**
    * ══ THE RECEIPT ════════════════════════════════════════════════════════
    *
@@ -2694,7 +2851,7 @@ html.mix {
     justify-content: space-between;
     gap: 1rem;
     padding-bottom: 0.75rem;
-    border-bottom: 1px solid var(--rule);
+    border-bottom: 1px solid var(--line);
   }
   .receipt-brand {
     font-size: 0.875rem;
@@ -2735,7 +2892,7 @@ html.mix {
   .receipt-working {
     margin-top: 1.5rem;
     padding-top: 1rem;
-    border-top: 1px solid var(--rule);
+    border-top: 1px solid var(--line);
   }
   .receipt-line {
     display: grid;
@@ -2759,16 +2916,20 @@ html.mix {
      which is what makes "what we threw away" the most visually distinct fact
      on the site. The marker is a shape, not just a colour — colour alone is
      not a signal somebody with a colour-vision deficiency can read. */
-  .receipt-line[data-excluded] .receipt-n,
+  /* NO AMBER. The new palette has none, so the excluded line is ordinary
+     muted text and the sentence beside it does the work: "excluded — no email
+     to match on" says what happened without needing a colour to carry it. The
+     marker shape stays, because a row that is subtracted rather than added
+     should still be findable at a glance. */
   .receipt-line[data-excluded] .receipt-what {
-    color: var(--amber);
+    color: var(--ink-muted);
   }
   .receipt-mark {
     width: 0.375rem;
     height: 0.375rem;
     flex-shrink: 0;
     transform: translateY(-0.0625rem) rotate(45deg);
-    background: var(--amber);
+    background: var(--ink-muted);
   }
 
   /* The answer, separated from its working by a rule rather than by being
@@ -2776,7 +2937,7 @@ html.mix {
   .receipt-line[data-total] {
     margin-top: 0.375rem;
     padding-top: 0.625rem;
-    border-top: 1px solid var(--rule);
+    border-top: 1px solid var(--line);
     font-weight: 500;
   }
   .receipt-line[data-total] .receipt-what {
@@ -2809,7 +2970,7 @@ html.mix {
    */
   .ledger {
     --num-col: 7rem;
-    border-top: 1px solid var(--rule);
+    border-top: 1px solid var(--line);
   }
   .ledger-row {
     display: grid;
@@ -2820,7 +2981,7 @@ html.mix {
     gap: 0.25rem 1.5rem;
     align-items: baseline;
     padding-block: 1.125rem;
-    border-bottom: 1px solid var(--rule);
+    border-bottom: 1px solid var(--line);
   }
   /* FOUR COLUMNS FROM `md`, TWO LINES BELOW IT. The clause is a full sentence
      and a third of 380px turns it into four lines of two words, so on a phone
@@ -2896,54 +3057,15 @@ html.mix {
     color: var(--ink);
   }
 
-  /* ── the proof strip ──────────────────────────────────────────────────── */
-  .stat-strip {
-    display: grid;
-    border-block: 1px solid var(--rule);
-  }
-  @media (min-width: 768px) {
-    .stat-strip {
-      grid-template-columns: repeat(3, 1fr);
-    }
-    .stat-cell + .stat-cell {
-      border-left: 1px solid var(--rule);
-      padding-left: 2.5rem;
-    }
-  }
-  .stat-cell {
-    padding-block: 1.75rem;
-  }
-  .stat-cell + .stat-cell {
-    border-top: 1px solid var(--rule);
-  }
-  @media (min-width: 768px) {
-    .stat-cell + .stat-cell {
-      border-top: 0;
-    }
-  }
-  .stat-head {
-    font-family: var(--font-marketing);
-    font-size: 1.5rem;
-    font-weight: 700;
-    letter-spacing: -0.02em;
-    color: var(--ink);
-  }
-  .stat-body {
-    margin-top: 0.375rem;
-    font-size: 0.9375rem;
-    color: var(--ink-muted);
-    max-width: 34ch;
-  }
-
   /* ── tool chips ───────────────────────────────────────────────────────── */
   .tool-chip {
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
     padding: 0.5rem 0.875rem;
-    border: 1px solid var(--rule);
-    border-radius: 999px;
-    font-size: 0.875rem;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    font-size: 14px;
     font-weight: 500;
     color: var(--ink);
     white-space: nowrap;
@@ -2964,36 +3086,6 @@ html.mix {
     opacity: 0.7;
   }
 
-  /* ── the two-way comparison, divided by one hairline ──────────────────── */
-  .compare-grid {
-    display: grid;
-    gap: 2.5rem;
-  }
-  @media (min-width: 768px) {
-    .compare-grid {
-      grid-template-columns: 1fr 1fr;
-      gap: 0;
-    }
-    .compare-col + .compare-col {
-      border-left: 1px solid var(--rule);
-      padding-left: 3rem;
-    }
-  }
-  .compare-col + .compare-col {
-    border-top: 1px solid var(--rule);
-    padding-top: 2.5rem;
-  }
-  @media (min-width: 768px) {
-    .compare-col + .compare-col {
-      border-top: 0;
-      padding-top: 0;
-    }
-  }
-  @media (min-width: 768px) {
-    .compare-col:first-child {
-      padding-right: 3rem;
-    }
-  }
   /* ── buttons ──────────────────────────────────────────────────────────
      Two shapes, no arrow glyphs in any label: an arrow appended to button
      text is one of the tells this page is avoiding. */
@@ -3003,9 +3095,12 @@ html.mix {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    height: 2.875rem;
-    padding-inline: 1.5rem;
-    border-radius: 999px;
+    height: 48px;
+    padding-inline: 22px;
+    /* 8px, not a pill. The brief sets one radius per object class — 16 for
+       cards, 12 for screenshots, 8 for buttons and chips — and a capsule
+       button next to a 16px card is a fourth radius nobody chose. */
+    border-radius: 8px;
     font-size: 0.9375rem;
     font-weight: 600;
     white-space: nowrap;
@@ -3015,19 +3110,21 @@ html.mix {
       color 0.18s ease;
   }
   .btn-sm {
-    height: 2.25rem;
-    padding-inline: 1rem;
-    font-size: 0.875rem;
+    height: 38px;
+    padding-inline: 14px;
+    font-size: 14px;
   }
+  /* BLUE, NOT INK. The brand colour carries the primary action everywhere it
+     appears; ink is for type. */
   .btn-solid {
-    background: var(--ink);
-    color: var(--background);
+    background: var(--blue);
+    color: #ffffff;
   }
   .btn-solid:hover {
-    background: color-mix(in oklab, var(--ink) 86%, var(--background));
+    background: color-mix(in oklab, var(--blue) 88%, #000);
   }
   .btn-ghost {
-    border: 1px solid var(--rule);
+    border: 1px solid var(--line);
     color: var(--ink);
   }
   .btn-ghost:hover {
@@ -3037,7 +3134,7 @@ html.mix {
      disappears into the panel it is sitting on. */
   .btn-solid-invert {
     background: var(--background);
-    color: var(--ink-deep);
+    color: var(--night);
   }
   .dark .btn-solid-invert {
     background: var(--ink);
@@ -3067,8 +3164,8 @@ html.mix {
       border-color 0.2s ease;
   }
   .site-nav[data-solid] {
-    background: var(--background);
-    border-bottom-color: var(--rule);
+    background: var(--paper);
+    border-bottom-color: var(--line);
   }
   .site-nav-inner {
     display: flex;
@@ -3157,7 +3254,7 @@ html.mix {
     z-index: 60;
     min-width: 12rem;
     padding: 0.5rem;
-    border: 1px solid var(--rule);
+    border: 1px solid var(--line);
     border-radius: 0.875rem;
     background: var(--background);
   }
@@ -3169,12 +3266,12 @@ html.mix {
     color: var(--ink);
   }
   .site-menu-link:hover {
-    background: var(--paper-sunk);
+    background: var(--haze);
   }
 
   /* ── the hero ─────────────────────────────────────────────────────────── */
   .hero-block {
-    background: var(--background);
+    background: var(--paper);
   }
   /**
    * THE RECEIPT IS CROPPED BY THE SECTION, NOT BY THE VIEWPORT.
@@ -3203,25 +3300,25 @@ html.mix {
   /* Real product UI, large and cropped to the part being discussed — never a
      whole screenshot scaled down. The overflow is the crop. */
   .step-visual {
-    border: 1px solid var(--rule);
+    border: 1px solid var(--line);
     border-radius: 1rem;
     overflow: hidden;
     background: var(--background);
   }
-  .ink-block .step-visual {
+  .block-night .step-visual {
     background: rgb(255 255 255 / 0.04);
   }
 
   /* ── the MCP list ─────────────────────────────────────────────────────── */
   .mcp-list {
     margin-top: 2rem;
-    border-top: 1px solid var(--rule);
+    border-top: 1px solid var(--line);
   }
   .mcp-row {
     display: grid;
     gap: 0.25rem;
     padding-block: 0.875rem;
-    border-bottom: 1px solid var(--rule);
+    border-bottom: 1px solid var(--line);
   }
   @media (min-width: 560px) {
     .mcp-row {
@@ -3236,10 +3333,10 @@ html.mix {
 
   /* ── the FAQ ──────────────────────────────────────────────────────────── */
   .faq {
-    border-top: 1px solid var(--rule);
+    border-top: 1px solid var(--line);
   }
   .faq-item {
-    border-bottom: 1px solid var(--rule);
+    border-bottom: 1px solid var(--line);
   }
   .faq-trigger {
     display: flex;
@@ -3283,7 +3380,7 @@ html.mix {
     align-items: center;
     gap: 0.25rem;
     padding: 0.25rem;
-    border: 1px solid var(--rule);
+    border: 1px solid var(--line);
     border-radius: 999px;
   }
   .pricing-toggle-on {
@@ -3312,11 +3409,11 @@ html.mix {
       padding: 2rem;
     }
     .pricing-col + .pricing-col {
-      border-left: 1px solid var(--rule);
+      border-left: 1px solid var(--line);
     }
   }
   .pricing-col + .pricing-col {
-    border-top: 1px solid var(--rule);
+    border-top: 1px solid var(--line);
   }
   @media (min-width: 1024px) {
     .pricing-col + .pricing-col {
@@ -3344,6 +3441,265 @@ html.mix {
   }
   .foot-link:hover {
     color: var(--ink);
+  }
+  /**
+   * ── THE DRAWN BOARD ────────────────────────────────────────────────────
+   *
+   * The hero's product shot. Composition and chrome copied from the real
+   * dashboard; palette and figures are the page's own. See `board-shot.tsx`
+   * for why it is drawn rather than photographed.
+   *
+   * IT IS SIZED IN px, NOT rem. Everything in here is a picture of an
+   * interface, and an interface does not grow with a marketing page's type
+   * scale — scaling it with the root would make the "screenshot" look like a
+   * zoomed browser rather than like software.
+   */
+  .board {
+    background: var(--card);
+    color: var(--ink);
+    min-width: 900px;
+  }
+  .board-bar {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    padding: 14px 18px 10px;
+  }
+  .board-title {
+    font-size: 15px;
+    font-weight: 600;
+  }
+  .board-range,
+  .board-bar-right {
+    font-size: 11px;
+    color: var(--ink-muted);
+  }
+  .board-bar-right {
+    margin-left: auto;
+  }
+  .board-tabs {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 18px 10px;
+    border-bottom: 1px solid var(--line);
+  }
+  .board-tab {
+    padding: 4px 10px;
+    border-radius: 8px;
+    font-size: 11px;
+    color: var(--ink-muted);
+  }
+  .board-tab[data-on] {
+    background: color-mix(in oklab, var(--blue) 10%, transparent);
+    color: var(--blue);
+    font-weight: 500;
+  }
+  .board-tabs-right {
+    margin-left: auto;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 4px 10px;
+    font-size: 11px;
+    color: var(--ink-muted);
+  }
+  .board-body {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px 18px 18px;
+  }
+  .board-scores {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 10px;
+  }
+  .board-rates {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+  .board-cell {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px 12px;
+  }
+  .board-cell-label {
+    display: block;
+    font-size: 11px;
+    color: var(--ink-muted);
+  }
+  .board-cell-value {
+    display: block;
+    margin-top: 2px;
+    font-size: 19px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+  .board-chart {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 12px 14px 10px;
+  }
+  .board-chart-figure {
+    display: block;
+    margin-top: 2px;
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+  .board-bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 6px;
+    height: 132px;
+    margin-top: 12px;
+  }
+  .board-bar-col {
+    flex: 1;
+    min-width: 0;
+    border-radius: 3px 3px 0 0;
+    background: var(--blue);
+  }
+  .board-axis {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 6px;
+    font-size: 10px;
+    color: var(--ink-muted);
+  }
+
+  /**
+   * THE HERO'S CROP. The shot runs off the foot of the screen, which is what
+   * invites the scroll — at a fixed height, because the stat band sits
+   * directly beneath and a viewport-derived crop would move it with the window.
+   */
+  .hero-crop {
+    max-height: 340px;
+    overflow: hidden;
+  }
+  @media (min-width: 900px) {
+    .hero-crop {
+      max-height: 520px;
+    }
+  }
+
+  /**
+   * ── THE TWO-WAY COMPARISON ─────────────────────────────────────────────
+   *
+   * Two cards, and the TONE carries the argument rather than an icon: the
+   * left is Paper-toned with its items muted, the right is a white card with a
+   * blue left edge and full-contrast items. Crosses and ticks would say the
+   * same thing twice and shout the first half of it.
+   */
+  .compare-grid {
+    display: grid;
+    gap: 20px;
+  }
+  @media (min-width: 900px) {
+    .compare-grid {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+  .compare-col {
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 28px;
+  }
+  .compare-col[data-tone="hand"] {
+    background: color-mix(in oklab, var(--ink) 3%, var(--paper));
+  }
+  .compare-col[data-tone="us"] {
+    background: var(--card);
+    border-left: 3px solid var(--blue);
+  }
+
+  /* ── the stat band ────────────────────────────────────────────────────── */
+  .stat-strip {
+    display: grid;
+    border-block: 1px solid var(--line);
+  }
+  @media (min-width: 768px) {
+    .stat-strip {
+      grid-template-columns: repeat(3, 1fr);
+    }
+    .stat-cell + .stat-cell {
+      border-left: 1px solid var(--line);
+      padding-left: 40px;
+    }
+  }
+  .stat-cell {
+    padding-block: 40px;
+  }
+  .stat-cell + .stat-cell {
+    border-top: 1px solid var(--line);
+  }
+  @media (min-width: 768px) {
+    .stat-cell + .stat-cell {
+      border-top: 0;
+    }
+  }
+  .stat-head {
+    font-size: 44px;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  @media (min-width: 900px) {
+    .stat-head {
+      font-size: 72px;
+    }
+  }
+  .stat-body {
+    margin-top: 12px;
+    font-size: 14px;
+    color: var(--ink-muted);
+    max-width: 30ch;
+  }
+
+  /**
+   * ── THE INTEGRATION ROWS ───────────────────────────────────────────────
+   *
+   * Two rows travelling in opposite directions, both edges masked into Paper so
+   * the loop has no visible seam — the old row clipped a name mid-word at its
+   * right edge, which reads as a rendering fault on the one page arguing that
+   * this product reads other companies' tools correctly.
+   *
+   * Under `prefers-reduced-motion` the whole thing becomes a wrapped static
+   * grid rather than a stopped ticker: a frozen marquee is a row with its right
+   * half missing.
+   */
+  .tool-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .tool-track {
+    overflow: hidden;
+    mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
+  }
+  .tool-run {
+    display: flex;
+    width: max-content;
+    gap: 12px;
+    animation: tool-scroll 64s linear infinite;
+    will-change: transform;
+  }
+  .tool-run[data-dir="back"] {
+    animation-direction: reverse;
+    animation-duration: 78s;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .tool-track {
+      overflow: visible;
+      mask-image: none;
+    }
+    .tool-run {
+      width: auto;
+      flex-wrap: wrap;
+      animation: none;
+    }
   }
 
 
@@ -3707,6 +4063,15 @@ html.mix {
 @keyframes rail-invite-spin {
   to {
     --nz-beam: 360deg;
+  }
+}
+
+@keyframes tool-scroll {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-50%, 0, 0);
   }
 }
 

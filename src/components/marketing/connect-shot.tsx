@@ -45,14 +45,17 @@ export function ConnectShot() {
             </span>
 
             {row.state === "done" ? (
-              <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-success-soft">
-                <Check className="size-3.5 text-success" />
+              /* NO GREEN ANYWHERE ON THIS PAGE, at the owner's ask — so a
+                 connected row is marked in the brand blue rather than in the
+                 product's own success colour. */
+              <span className="flex size-6 shrink-0 items-center justify-center rounded-full" style={{ background: "color-mix(in oklab, var(--blue) 12%, transparent)" }}>
+                <Check className="size-3.5" style={{ color: "var(--blue)" }} />
               </span>
             ) : row.state === "syncing" ? (
               /* The one moving thing in the picture, and it is moving because
                  the sentence it illustrates is about not having to wait for
                  it. `motion-reduce` stops it for anyone who asked. */
-              <Loader2 className="size-4 shrink-0 animate-spin text-brand-400 motion-reduce:animate-none" />
+              <Loader2 className="size-4 shrink-0 animate-spin motion-reduce:animate-none" style={{ color: "var(--blue)" }} />
             ) : (
               <span
                 className={cn(

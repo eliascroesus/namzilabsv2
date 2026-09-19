@@ -2,7 +2,8 @@ import Link from "next/link";
 import { withAuth } from "@workos-inc/authkit-nextjs";
 import { CONNECTOR_CATALOG } from "@/connectors/catalog";
 import { PillNav } from "@/components/marketing/pill-nav";
-import { SectionShell } from "@/components/marketing/shell";
+import { BoardShot } from "@/components/marketing/board-shot";
+import { SectionShell, HazeShot } from "@/components/marketing/shell";
 import { Receipt } from "@/components/marketing/receipt";
 import { LedgerRow } from "@/components/marketing/ledger-row";
 import { StatDivider } from "@/components/marketing/stat-divider";
@@ -148,20 +149,22 @@ export default async function Home() {
 
       <main id="main" className="flex-1">
         {/* ══ HERO — centred, and one of only two centred blocks ═══════════ */}
-        <section className="hero-block px-5 pt-32 sm:px-8 lg:pt-40">
-          <div className="mx-auto w-full max-w-[72rem] text-center">
-            {/* TWO LINES, ONE SENTENCE EACH, SAME SIZE. The second is a
-                qualification of the first rather than decoration, so it takes
-                a lighter weight and the muted ink instead of a smaller step —
-                which is the distinction the two-tone pattern exists to make. */}
-            <h1 className="t-display-lg mx-auto max-w-[20ch] text-balance" style={{ color: "var(--ink)" }}>
-              <span className="block font-bold">One number, from every tool you already use.</span>
-              <span className="mt-2 block font-normal" style={{ color: "var(--ink-muted)" }}>
+        <section className="hero-block">
+          <div className="lander-col pt-28 text-center lg:pt-36">
+            {/* TWO LINES, ONE SENTENCE EACH, SAME SIZE. The second qualifies
+                the first rather than decorating it, so it takes the muted ink
+                and not a smaller step — the distinction the two-tone pattern
+                exists to make. This sentence was previously hiding in the
+                browser tab and the footer while the visible headline said
+                something forty other companies also say. */}
+            <h1 className="t-hero mx-auto max-w-[17ch]">
+              <span className="block">One number, from every tool you already use.</span>
+              <span className="block" style={{ color: "var(--ink-muted)" }}>
                 With the arithmetic shown underneath it.
               </span>
             </h1>
 
-            <p className="t-body-lg mx-auto mt-8" style={{ color: "var(--ink-muted)" }}>
+            <p className="t-stand mx-auto mt-8">
               Namzilabs reads your calendar, CRM, outreach tools and payments directly, matches the same person across
               them, and gives you one figure your whole team can defend.
             </p>
@@ -175,51 +178,39 @@ export default async function Home() {
               </a>
             </div>
 
-            <p className="mt-5 text-sm" style={{ color: "var(--ink-muted)" }}>
+            <p className="t-small mt-5" style={{ color: "var(--ink-muted)" }}>
               14 days free, no card. Read-only access to every tool it reads.
             </p>
           </div>
 
-          {/* The nav flips to opaque when this passes out of view. One pixel,
-              at the hero's foot — correct however the headline wraps, and two
-              observer callbacks instead of a scroll listener running forever. */}
+          {/* The nav flips to Paper when this leaves the top of the viewport. */}
           <div id="nav-sentinel" aria-hidden className="h-px w-full" />
 
-          {/* THE HERO IS THE RECEIPT, not a shrunken screenshot. It is cropped
-              at a FIXED section height rather than by the viewport: the proof
-              strip sits directly beneath it, and a viewport-relative crop
-              would move that strip with the window and shift the layout. */}
-          <div className="hero-receipt">
-            <div className="mx-auto w-full max-w-[72rem]">
-              <div className="mx-auto w-full max-w-[38rem]">
-                <Receipt size="xl" reveal />
-              </div>
+          {/* THE SHOT RUNS OFF THE FOOT OF THE SCREEN. Cropped at a fixed
+              height rather than a viewport-relative one: the stat band sits
+              directly beneath, and a viewport-derived crop would move it with
+              the window and shift the layout. */}
+          <div className="lander-col mt-14 lg:mt-20">
+            <div className="hero-crop">
+              <HazeShot hero>
+                <BoardShot />
+              </HazeShot>
             </div>
           </div>
         </section>
 
-        {/* ══ PROOF STRIP ══════════════════════════════════════════════════ */}
-        <div className="px-5 sm:px-8">
-          <div className="mx-auto w-full max-w-[72rem]">
-            <StatDivider
-              facts={[
-                { head: `${TOOLS} tools`, body: "read directly, through each tool’s own API" },
-                { head: "Every 10 minutes", body: "every published figure recomputes on its own" },
-                /* THE WORDING CHANGED FROM THE BRIEF, and the owner agreed.
-                   "Never writes — no connector in this product can change a
-                   record" invites a reader to go and check, and two connectors
-                   (Close, Calendly) POST to create a webhook subscription in
-                   the customer's account. No connector changes a RECORD, so the
-                   original sentence was defensible — but the proof strip is
-                   where a security reviewer looks, and a claim that needs a
-                   lawyer is the wrong claim for this page. */
-                { head: "Reads only", body: "it never edits your data — no connector can change a record" },
-              ]}
-            />
-            {/* Renders nothing while the array is empty. No placeholder brands,
-                no greyed-out "your logo here". */}
-            <CustomerLogos customers={[]} />
-          </div>
+        {/* ══ THE STAT BAND ═══════════════════════════════════════════════ */}
+        <div className="lander-col">
+          <StatDivider
+            facts={[
+              { head: `${TOOLS}`, body: "tools read directly, through each tool’s own API" },
+              { head: "10 min", body: "every published figure recomputes on its own" },
+              { head: "0", body: "connectors that can write to your tools" },
+            ]}
+          />
+          {/* Renders nothing while the array is empty. No placeholder brands,
+              no greyed-out "your logo here". */}
+          <CustomerLogos customers={[]} />
         </div>
 
         {/* ══ THE PROBLEM ══════════════════════════════════════════════════ */}
@@ -253,7 +244,7 @@ export default async function Home() {
         {/* ══ THE RECEIPTS — the first break in the paper rhythm ═══════════ */}
         <SectionShell
           id="proof"
-          tone="ink"
+          tone="night"
           label="The receipts"
           title={
             <>
@@ -278,8 +269,14 @@ export default async function Home() {
               ))}
             </ul>
 
+            {/* THE ONLY WHITE CARD ON A DARK GROUND ON THE PAGE. The receipt
+                is the thing this section exists to show, and lifting it onto
+                white is what separates the answer from the three opinions
+                beside it. */}
             <div className="lg:col-span-6 lg:col-start-7">
-              <Receipt />
+              <div className="card p-7 lg:p-9">
+                <Receipt />
+              </div>
             </div>
           </div>
         </SectionShell>
@@ -312,7 +309,7 @@ export default async function Home() {
                 </div>
 
                 <div className={i % 2 ? "lg:col-span-6 lg:col-start-1 lg:row-start-1" : "lg:col-span-6 lg:col-start-7"}>
-                  <div className="step-visual">{step.visual}</div>
+                  <HazeShot>{step.visual}</HazeShot>
                 </div>
               </li>
             ))}
@@ -322,29 +319,32 @@ export default async function Home() {
         {/* ══ WHAT CHANGES ═════════════════════════════════════════════════ */}
         <SectionShell
           id="compare"
-          tone="sunk"
           label="What changes"
           title="The same question, two ways"
           standfirst="Nobody is promised a close rate here — no software can honestly do that. What changes is the work between the question and the answer."
         >
           <div className="compare-grid">
             {[
-              { head: "Reconciling by hand", when: "Every week, usually on a Friday", items: BY_HAND, muted: true },
-              { head: "With Namzilabs", when: "Once, when you connect it", items: WITH_US, muted: false },
+              { tone: "hand", head: "Reconciling by hand", when: "Every week, usually on a Friday", items: BY_HAND },
+              { tone: "us", head: "With Namzilabs", when: "Once, when you connect it", items: WITH_US },
             ].map((col) => (
-              <div key={col.head} className="compare-col">
-                <p className="text-lg font-semibold" style={{ color: col.muted ? "var(--ink-muted)" : "var(--ink)" }}>
+              <div key={col.head} className="compare-col" data-tone={col.tone}>
+                <p className="t-step" style={{ color: col.tone === "hand" ? "var(--ink-muted)" : "var(--ink)" }}>
                   {col.head}
                 </p>
-                <p className="mt-1 text-sm" style={{ color: "var(--ink-muted)" }}>
+                <p className="t-small mt-2" style={{ color: "var(--ink-muted)" }}>
                   {col.when}
                 </p>
-                <ul className="mt-6 flex flex-col gap-3">
+                {/* NO TICKS AND NO CROSSES. The tonal difference between the
+                    two cards already says which one you want; a column of
+                    green ticks beside a column of red crosses says it twice
+                    and shouts the half nobody needs. */}
+                <ul className="mt-7 flex flex-col gap-3.5">
                   {col.items.map((item) => (
                     <li
                       key={item}
-                      className="text-[0.9375rem] leading-relaxed"
-                      style={{ color: col.muted ? "var(--ink-muted)" : "var(--ink)" }}
+                      className="t-body"
+                      style={{ color: col.tone === "hand" ? "var(--ink-muted)" : "var(--ink)" }}
                     >
                       {item}
                     </li>
@@ -356,7 +356,7 @@ export default async function Home() {
         </SectionShell>
 
         {/* ══ ASK YOUR AI — the second full-bleed block ════════════════════ */}
-        <SectionShell id="ai" tone="ink" label="Ask your AI" title="Opinions are cheap. Give it the numbers.">
+        <SectionShell id="ai" tone="blue" label="Ask your AI" title="Opinions are cheap. Give it the numbers.">
           <div className="grid gap-12 lg:grid-cols-12 lg:gap-10">
             <div className="lg:col-span-5">
               <p className="text-[1.0625rem] leading-relaxed" style={{ color: "var(--ink-muted)" }}>
@@ -380,7 +380,9 @@ export default async function Home() {
             </div>
 
             <div className="lg:col-span-6 lg:col-start-7">
-              <AiPanel />
+              <div className="card p-5 lg:p-6">
+                <AiPanel />
+              </div>
             </div>
           </div>
         </SectionShell>
@@ -392,24 +394,34 @@ export default async function Home() {
           title={`${TOOLS} tools, read directly`}
           standfirst="No warehouse in between, no nightly export to babysit. Missing one? A custom webhook takes events from anything that can POST."
         >
-          {/* A WRAPPED GRID, NOT A MARQUEE. The old ticker clipped mid-word at
-              its right edge when static, and a scrolling row of names is a
-              thing you cannot read on a page whose question is "do you read MY
-              stack" — which is answered by scanning, not by waiting. Nothing
-              moves and nothing is ever cut. */}
-          <ul className="flex flex-wrap gap-2.5">
-            {CONNECTOR_CATALOG.map((entry) => (
-              <li key={entry.source}>
-                <ToolChip source={entry.source} name={entry.name} />
-              </li>
-            ))}
-          </ul>
+          {/* TWO ROWS, OPPOSITE DIRECTIONS, both edges masked into Paper so
+              the loop has no seam. The row this replaces clipped a name
+              mid-word at its right edge. Under `prefers-reduced-motion` the CSS
+              turns the whole thing into a wrapped static grid rather than a
+              stopped ticker — a frozen marquee is a row with its right half
+              missing. */}
+          <div className="tool-rows">
+            {[0, 1].map((row) => {
+              const half = CONNECTOR_CATALOG.filter((_, i) => i % 2 === row);
+              /* Doubled, because the travel runs a full -50%: the second copy
+                 has to sit exactly where the first began or the loop jumps. */
+              const loop = [...half, ...half];
+              return (
+                <div key={row} className="tool-track">
+                  <div className="tool-run" data-dir={row === 1 ? "back" : undefined}>
+                    {loop.map((entry, i) => (
+                      <ToolChip key={`${entry.source}-${i}`} source={entry.source} name={entry.name} />
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </SectionShell>
 
         {/* ══ PRICING ══════════════════════════════════════════════════════ */}
         <SectionShell
           id="pricing"
-          tone="sunk"
           label="Pricing"
           title="Priced on tools, not on people"
           standfirst="What costs us money is sweeping other companies’ APIs, not the number of people looking at the answer — so the seats are generous and the ladder is built on how much you connect."
@@ -432,17 +444,14 @@ export default async function Home() {
         </SectionShell>
 
         {/* ══ CLOSING — the second and last centred block ══════════════════ */}
-        <section className="ink-block px-5 py-28 text-center sm:px-8 lg:py-40">
-          <div className="mx-auto w-full max-w-[72rem]">
-            {/* THE LARGEST TYPE ANYWHERE ON THE PAGE, larger than the H1. */}
-            <p className="t-display-xl text-balance" style={{ color: "var(--ink)" }}>
-              Stop reconciling by hand.
-            </p>
-            <p className="mx-auto mt-6 text-lg" style={{ color: "var(--ink-muted)" }}>
-              Connect one tool and build your first metric in an afternoon.
-            </p>
+        <section className="block-night sec-bleed text-center">
+          <div className="lander-col">
+            {/* THE LARGEST TYPE ANYWHERE ON THE PAGE, larger than the H1, so
+                the page ends louder than it began. */}
+            <p className="t-close">Stop reconciling by hand.</p>
+            <p className="t-stand mx-auto mt-6">Connect one tool and build your first metric in an afternoon.</p>
             <div className="mt-10 flex justify-center">
-              <a href={cta} className="btn-solid">
+              <a href={cta} className="btn-solid-invert">
                 {ctaLabel}
               </a>
             </div>
@@ -450,12 +459,12 @@ export default async function Home() {
         </section>
       </main>
 
-      <footer className="px-5 sm:px-8" style={{ borderTop: "1px solid var(--rule)" }}>
-        <div className="mx-auto w-full max-w-[72rem] py-14">
+      <footer style={{ borderTop: "1px solid var(--line)" }}>
+        <div className="lander-col py-16">
           <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.6fr)_repeat(3,minmax(0,1fr))] lg:gap-8">
             <div className="max-w-xs">
               <span
-                className="font-marketing flex items-center gap-2 text-lg font-bold tracking-tight"
+                className="flex items-center gap-2 text-lg font-bold tracking-tight"
                 style={{ color: "var(--ink)" }}
               >
                 <BrandMark className="size-6 shrink-0" />
@@ -512,7 +521,7 @@ export default async function Home() {
 
           <div
             className="mt-12 flex flex-wrap items-center justify-between gap-4 pt-6 text-sm"
-            style={{ borderTop: "1px solid var(--rule)", color: "var(--ink-muted)" }}
+            style={{ borderTop: "1px solid var(--line)", color: "var(--ink-muted)" }}
           >
             <span>&copy; {new Date().getFullYear()} Namzilabs</span>
             <span>Read-only access to every tool it reads.</span>

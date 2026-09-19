@@ -66,7 +66,7 @@ export function AiPanel() {
         </p>
 
         <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <Check className="size-3.5 shrink-0 text-success" />
+          <Check className="size-3.5 shrink-0" style={{ color: "var(--blue)" }} />
           Read-only, and every figure is a metric you published
         </span>
       </div>

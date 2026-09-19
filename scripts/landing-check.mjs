@@ -61,7 +61,7 @@ const ratio = (a, b) => {
  * matching must turn the run red rather than shrink it.
  */
 const HIDE = `
-  .lander h1, .lander h1 span, .t-body-lg, .ledger-clause, .ledger-figure,
+  .lander h1, .lander h1 span, .t-stand, .ledger-clause, .ledger-figure,
   .receipt-n, .receipt-what, .receipt-figure, .stat-body, .faq-answer
   { visibility: hidden !important }
 `;
@@ -128,22 +128,40 @@ for (const [w, h, name, theme] of [
     return {
       navSticky: of(".site-nav", "position"),
       figureSize: parseFloat(of(".receipt-figure", "fontSize") || "0"),
-      figureMono: of(".receipt-figure", "fontFamily") || "",
-      inkBlock: of(".ink-block", "backgroundColor") || "",
+      figureNum: of(".receipt-figure", "fontVariantNumeric") || "",
+      oneFamily: new Set(
+        [".lander h1", ".t-stand", ".receipt-figure", ".ledger-figure"].map((q) =>
+          (of(q, "fontFamily") || "").split(",")[0].trim(),
+        ),
+      ).size,
+      inkBlock: of(".block-night", "backgroundColor") || "",
       ledgerGrid: of(".ledger-row", "display"),
       btn: of(".btn-solid", "borderRadius") || "",
+      /* THE ONE SHADOW ON THE PAGE, and the check that it is the only one:
+         cards get a hairline and nothing else. */
+      shot: of(".haze-shot", "boxShadow") || "",
+      cardShadow: of(".card", "boxShadow") || "",
     };
   });
   check(landed.navSticky === "sticky", "the page's own stylesheet is applied — the nav is sticky", `got ${landed.navSticky}`);
   check(landed.figureSize > 36, "the receipt's figure is at display scale", `${landed.figureSize}px`);
-  check(/plex|mono/i.test(landed.figureMono), "the figure is set in the mono face", landed.figureMono.slice(0, 40));
+  /* TABULAR FIGURES, NOT A MONO FACE. The page went to one family at the
+     owner's ask; what the receipt's number column actually needs is fixed-width
+     digits, which Inter carries — so the requirement survives the face change
+     and the check follows it rather than the font name. */
+  check(/tabular/.test(landed.figureNum), "the figures are tabular", landed.figureNum);
+  check(landed.oneFamily === 1, "the page is set in one family", `${landed.oneFamily} families across headline, prose and figures`);
   check(
     landed.inkBlock !== "rgba(0, 0, 0, 0)" && landed.inkBlock !== "",
     "the full-bleed block paints a ground",
     landed.inkBlock,
   );
   check(landed.ledgerGrid === "grid", "the ledger rows are laid out on their grid", `got ${landed.ledgerGrid}`);
-  check(parseFloat(landed.btn) > 100, "the buttons are pills", landed.btn);
+  check(landed.shot !== "none" && landed.shot !== "", "the product shot is lifted off its panel", landed.shot.slice(0, 40));
+  check(landed.cardShadow === "none", "cards carry a hairline and no shadow", landed.cardShadow.slice(0, 40));
+  /* 8px, not a capsule: one radius per object class — 16 cards, 12
+     screenshots, 8 buttons and chips. */
+  check(parseFloat(landed.btn) === 8, "the buttons carry the 8px radius", landed.btn);
 
   // ── structure ────────────────────────────────────────────────────────────
   const shape = await page.evaluate(() => ({
@@ -183,7 +201,11 @@ for (const [w, h, name, theme] of [
       })),
     })),
   );
-  check(sums.length === 3, "the receipt appears three times", `${sums.length}`);
+  /* TWICE, NOT THREE TIMES. The hero's visual is the dashboard now — the
+     receipt holds the proof section and step three. The count is pinned
+     because a receipt quietly disappearing is exactly the kind of regression
+     that leaves the page's argument with nothing behind it. */
+  check(sums.length === 2, "the receipt appears in both places it should", `${sums.length}`);
   sums.forEach((r, i) => {
     const [arrived, excluded, considered, matched, unique] = r.lines.map((l) => l.n);
     check(
@@ -226,10 +248,10 @@ for (const [w, h, name, theme] of [
       });
     };
     add(".lander h1 span", "the headline");
-    add(".t-body-lg", "a standfirst");
+    add(".t-stand", "a standfirst");
     add(".ledger-clause", "a ledger clause");
-    add(".ink-block .receipt-line:not([data-excluded]) .receipt-what", "a working line on the dark block");
-    add(".ink-block .receipt-line[data-excluded] .receipt-what", "the excluded line's amber");
+    add(".block-night .receipt-line:not([data-excluded]) .receipt-what", "a working line on the dark block");
+    add(".block-night .receipt-line[data-excluded] .receipt-what", "the excluded line");
     add(".stat-body", "a proof-strip fact");
     return { out, missing };
   });

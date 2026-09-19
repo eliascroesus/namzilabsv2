@@ -3,18 +3,15 @@ import { cn } from "@/lib/utils";
 /**
  * THE SPINE.
  *
- * Every section on this page sits on one 12-column grid: the claim on columns
- * 1–5, the evidence on 6–12. Not 6/6 — equal halves read as a comparison
- * table, and this page is making an argument, not drawing a spec sheet.
+ * One 1240px column, one set of gutters, one section rhythm — 140px of air on
+ * Paper, 180px on a full-bleed block. Owned here so no section can invent its
+ * own spacing, which is how a page ends up with four different section heights
+ * nobody chose.
  *
- * THE PADDING RHYTHM LIVES HERE AND NOWHERE ELSE. The old page set its own
- * `py-*` on every section, which is how a page ends up with four different
- * section heights nobody chose. One component owns it, so spacing cannot
- * drift.
- *
- * ONLY THE HERO AND THE CLOSING BLOCK ARE CENTRED. Everything else is
- * asymmetric, because the previous page was centred everywhere and that is the
- * single biggest reason it read as templated.
+ * FULL-BLEED MEANS THE GROUND, NOT THE CONTENT. A Night or Blue block runs
+ * edge to edge, but what sits inside it stays on the same 1240px column as
+ * everything else. That is the difference between a tonal break that belongs
+ * to the page and one that reads as an interruption in it.
  */
 export function SectionShell({
   id,
@@ -24,51 +21,71 @@ export function SectionShell({
   tone = "paper",
   children,
   className,
+  headClassName,
 }: {
   id?: string;
   label: string;
   title: React.ReactNode;
   standfirst?: string;
-  /** `ink` is the full-bleed break in the paper rhythm. */
-  tone?: "paper" | "sunk" | "ink";
+  tone?: "paper" | "night" | "blue";
   children?: React.ReactNode;
   className?: string;
+  headClassName?: string;
 }) {
+  const bleed = tone !== "paper";
   return (
     <section
       id={id}
       className={cn(
-        "scroll-mt-24 px-5 py-24 sm:px-8 lg:py-40",
-        tone === "ink" && "ink-block",
-        tone === "sunk" && "bg-[var(--paper-sunk)]",
+        "scroll-mt-20",
+        bleed ? "sec-bleed" : "sec",
+        tone === "night" && "block-night",
+        tone === "blue" && "block-blue",
         className,
       )}
     >
-      <div className="mx-auto w-full max-w-[72rem]">
-        {/* The head is the spine's first row: claim left, standfirst right. */}
-        <div className="grid gap-x-8 gap-y-5 lg:grid-cols-12">
-          <div className="lg:col-span-5">
-            {/* SENTENCE CASE, NOT A TRACKED-OUT CAPITALISED EYEBROW — the
-                convention the page already had, and the one the brief keeps. */}
-            <p className="t-label">{label}</p>
-            {/* NO `text-balance`. Every H2 on this page carries its own line
-                breaks from the copy, and the balancer re-breaks them — it
-                turned a deliberate two-line heading into three ragged ones. A
-                manual break and an automatic balancer are two answers to the
-                same question. */}
-            <h2 className="t-display-md mt-3" style={{ color: "var(--ink)" }}>
-              {title}
-            </h2>
-          </div>
-          {standfirst && (
-            <p className="t-body-lg lg:col-span-6 lg:col-start-7 lg:self-end" style={{ color: "var(--ink-muted)" }}>
-              {standfirst}
-            </p>
-          )}
+      <div className="lander-col">
+        <div className={cn("max-w-[52rem]", headClassName)}>
+          {/* Small, sentence case, blue. Never tracked-out capitals — that is
+              the commonest tell of a page nobody art-directed. */}
+          <p className="t-label">{label}</p>
+          <h2 className="t-sec mt-4">{title}</h2>
+          {standfirst && <p className="t-stand mt-6">{standfirst}</p>}
         </div>
 
-        {children && <div className="mt-14 lg:mt-20">{children}</div>}
+        {children && <div className="mt-16 lg:mt-24">{children}</div>}
       </div>
     </section>
+  );
+}
+
+/**
+ * THE SCREENSHOT TREATMENT — a Haze panel with the product oversized inside it,
+ * running off one edge, and the page's only shadow underneath.
+ *
+ * THE BLEED IS THE WHOLE IDEA. A picture that fits neatly inside its frame
+ * reads as an illustration OF the product; one that runs past the frame reads
+ * as a window ONTO it, and the page is simply too small to hold the thing.
+ * Stripe and Lovable both crop this way and it is most of why their product
+ * shots look like software rather than like marketing.
+ *
+ * It also buys legibility, which is the real complaint the old page had: a
+ * whole dashboard at 50% inside a column is a picture of a dashboard with
+ * nothing readable in it.
+ */
+export function HazeShot({
+  children,
+  hero = false,
+  className,
+}: {
+  children: React.ReactNode;
+  /** The hero's panel crops from the FOOT rather than the side. */
+  hero?: boolean;
+  className?: string;
+}) {
+  return (
+    <div className={cn("haze", hero && "haze-hero", className)}>
+      <div className="haze-shot">{children}</div>
+    </div>
   );
 }
