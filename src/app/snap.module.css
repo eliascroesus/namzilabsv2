@@ -40,19 +40,11 @@
      Same hue, walked down to clear 4.5:1 on canvas, plate AND lift. */
   --ink-35: #6e6e80;
 
-  /* ── Source identity (§6.1). A source keeps its colour everywhere. ────── */
-  --src-coral: #ff7a59;
-  --src-lemon: #ffc93c;
-  --src-mint: #3fcf9a;
-  --src-sky: #4c9fff;
-  --src-lilac: #9b7bff;
-  --src-slate: #7c8aa5;
-  --src-coral-tint: #ffe9e3;
-  --src-lemon-tint: #fff4dc;
-  --src-mint-tint: #e2f8f0;
-  --src-sky-tint: #e4f0ff;
-  --src-lilac-tint: #eee9ff;
-  --src-slate-tint: #eaedf2;
+  /* Source colours are NOT declared here any more. Every connector carries
+     its real brand colour from CONNECTOR_CATALOG, painted by the product's own
+     `SourceMark` — so Calendly is Calendly blue on the landing page and in the
+     flows list, and a connector added to the catalogue arrives here correctly
+     with no edit to this file. */
 
   --good: #16a34a;
   --flag: #f0553d;
@@ -84,7 +76,11 @@
   color-scheme: light;
   background: var(--canvas);
   color: var(--ink);
-  font-family: var(--snap-sans), "Figtree", system-ui, sans-serif;
+  /* NO `font-family`. `body` sets `var(--font-sans)` — Inter, self-hosted by
+     next/font in the root layout — and the landing page now inherits it, so
+     the marketing page and the product read as one thing. This also removes a
+     second webfont from the critical path of the page whose headline IS the
+     LCP element. */
   font-size: 17px;
   line-height: 28px;
   font-variant-numeric: tabular-nums lining-nums;
@@ -99,7 +95,7 @@
 }
 
 .page ::selection {
-  background: var(--src-lilac-tint);
+  background: var(--color-brand-100);
   color: var(--ink);
 }
 
@@ -181,7 +177,9 @@
 /* Section padding is per-section (§4) rather than a global constant. That
    variation IS the rhythm — uniform padding is a large part of what makes a
    page feel mechanical. */
-.s01 { padding-block: 168px 120px; }
+/* Was 168px, which existed to clear a nav pill that is no longer there on
+   first paint — the header now arrives only after the source rail. */
+.s01 { padding-block: 96px 120px; }
 .s03 { padding-block: 144px; }
 .s04 { padding-block: 144px 120px; }
 .s05 { padding-block: 144px; }
@@ -233,8 +231,13 @@
   padding-inline: 32px;
   border: none;
   border-radius: 999px;
-  background: var(--ink);
-  color: var(--lift);
+  /* THE KIT'S BLUE, not this page's ink. `--color-brand-400` is #568CFF and
+     `#1F1F1F` under it measures 5.18:1 — the pairing the brand kit solved and
+     the reason the ink on a blue fill is near-black rather than the reflex
+     white, which is 3.18:1 and unreadable at any size. Ramp values rather
+     than `--primary`, because a ramp step cannot be re-pointed by a theme. */
+  background: var(--color-brand-400);
+  color: #1f1f1f;
   box-shadow: var(--sh-md);
   font-family: inherit;
   font-size: 16px;
@@ -249,12 +252,13 @@
 }
 
 .btn:hover {
-  background: var(--ink-hover);
+  background: var(--color-brand-300);
   box-shadow: var(--sh-lg);
   transform: translateY(-2px);
 }
 
 .btn:active {
+  background: var(--color-brand-500);
   transform: translateY(1px);
   box-shadow: var(--sh-sm);
 }
@@ -268,11 +272,11 @@
 
 .btnOnDark {
   background: var(--lift);
-  color: var(--ink);
+  color: #1f1f1f;
   box-shadow: var(--sh-lg);
 }
 
-.btnOnDark:hover { background: #f2f1f7; box-shadow: var(--sh-xl); }
+.btnOnDark:hover { background: var(--color-brand-50); box-shadow: var(--sh-xl); }
 .btnOnDark:focus-visible { outline-color: var(--lift); }
 
 /* A text button whose hover affordance is a pill scaling in behind it — no
@@ -332,23 +336,9 @@
    Marks (§6.7)
    ────────────────────────────────────────────────────────────────────────── */
 
-/* A rounded square in the source's colour. Used where a brand wordmark is
-   unavailable — which, for redistribution reasons, is most of them. */
-.squircle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  border-radius: 14px;
-  color: var(--lift);
-  font-weight: 800;
-  line-height: 1;
-  letter-spacing: -0.02em;
-}
-
-/* Lemon and mint are light enough that white on them fails; §6.1 assigns ink
-   to exactly those two. */
-.onLight { color: var(--ink); }
+/* Layout-only hooks the landing page hangs on the product's SourceMark. Its
+   colour, glyph and letters are deliberately not this file's business. */
+.mark { transition: transform var(--t-control) var(--snapIn); }
 
 .tick { flex: none; color: var(--good); }
 .tickOnDark { color: #5ee9a0; }
@@ -395,8 +385,17 @@
   color-scheme: light;
   color: var(--ink);
   font-family: var(--snap-sans), "Figtree", system-ui, sans-serif;
-  transition: height var(--t-control) var(--quick), background-color var(--t-control) var(--quick);
+  transition:
+    height var(--t-control) var(--quick),
+    background-color var(--t-control) var(--quick),
+    opacity var(--t-control) var(--quick),
+    transform var(--t-control) var(--snapIn);
 }
+
+/* It drops in rather than fading: a header that materialises in place reads as
+   a rendering fault, and one that arrives from above reads as arriving. */
+.navHidden { opacity: 0; transform: translateX(-50%) translateY(-24px); pointer-events: none; }
+.navShown { opacity: 1; transform: translateX(-50%) translateY(0); }
 
 .navScrolled { height: 54px; background: rgba(255, 255, 255, 0.84); }
 
@@ -675,11 +674,11 @@
   width: 440px;
   height: 168px;
   padding: 24px 28px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 28px;
-  background: var(--ink);
   box-shadow: var(--sh-xl);
   color: var(--lift);
+  overflow: hidden;
   z-index: 3;
   opacity: 0;
   transform: scale(0.88);
@@ -689,12 +688,12 @@
 @keyframes resolveIn { to { opacity: 1; transform: scale(1); } }
 
 .resolvedTop { display: flex; align-items: center; gap: 10px; }
-.resolvedMark { width: 26px; height: 26px; border-radius: 9px; background: rgba(255, 255, 255, 0.16); }
+.resolvedMark { width: 26px; height: 26px; border-radius: 9px; background: rgba(255, 255, 255, 0.22); }
 .resolvedName { font-size: 16px; font-weight: 700; }
 .resolvedTick { margin-left: auto; }
 .resolvedFigure { display: flex; align-items: baseline; gap: 10px; margin-top: 8px; }
-.resolvedUnit { color: rgba(255, 255, 255, 0.55); }
-.resolvedSub { margin-top: 8px; color: rgba(255, 255, 255, 0.45); }
+.resolvedUnit { color: rgba(255, 255, 255, 0.8); }
+.resolvedSub { margin-top: 8px; color: rgba(255, 255, 255, 0.75); }
 
 /* One ring pulse out of the card's centre, once. */
 .pulse {
@@ -822,8 +821,7 @@
 
 .srcRow:last-child { border-bottom: none; }
 .srcRow:hover { background: #fafafc; }
-.srcRow:hover .squircle { transform: rotate(-6deg); }
-.srcRow .squircle { transition: transform var(--t-control) var(--snapIn); }
+.srcRow:hover .mark { transform: rotate(-6deg); }
 
 .srcName { display: block; }
 .srcLabel { display: block; line-height: 20px; color: var(--ink-35); }
@@ -974,34 +972,41 @@
    S06 / S10 — The two dark panels, and the only two.
    ────────────────────────────────────────────────────────────────────────── */
 
+/**
+ * THE TWO DARK PANELS ARE THE PRODUCT'S OWN BLUE.
+ *
+ * They were ink-black. The owner asked for the landing page to read as the
+ * same product as the app, so they now carry `.sky-card` and `.sky-panel` from
+ * globals.css — the same surfaces the invite-and-earn board and the
+ * get-started card wear — and this rule deliberately declares NO background,
+ * so the class underneath it does the painting.
+ *
+ * WHICH CLASS GOES WHERE IS A CONTRAST DECISION, NOT A STYLE ONE, and the kit
+ * already worked it out: `.sky-card` opens to #3F73E6, where white is 4.36:1 —
+ * safe only where the type sits in the top half, which is the closing CTA.
+ * S06's text runs to the bottom edge, so it takes `.sky-panel`, which never
+ * goes lighter than #2B53AE (white 7.1:1).
+ */
 .darkPanel {
   position: relative;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 32px;
-  background: var(--ink);
   box-shadow: var(--sh-xl);
   overflow: hidden;
-  /* §6.1's inversion table, declared once and inherited by both panels. */
+  /* The inversion table, re-solved for a blue ground rather than a black one:
+     white ink, and two alpha steps that stay legible over #2B53AE. */
   --d-fg: #ffffff;
-  --d-60: #a3a3b4;
-  --d-35: #7d7d91;
-  --d-edge: rgba(255, 255, 255, 0.12);
-  --d-good: #5ee9a0;
-  --d-flag: #ff7a63;
+  --d-60: rgba(255, 255, 255, 0.85);
+  /* 0.75 is the kit's own figure for the smallest legible ink on a sky
+     panel: 4.79:1 over #2B53AE. 0.7 measures 4.39 and fails. */
+  --d-35: rgba(255, 255, 255, 0.75);
+  --d-edge: rgba(255, 255, 255, 0.24);
+  --d-good: #7ef0b5;
+  --d-flag: #ffb4a3;
   color: var(--d-fg);
 }
 
 /* An internal bloom, because a large flat black panel reads as a hole. */
-.panelBloom {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  filter: blur(80px);
-}
-
-.panelBloomLilac { background: radial-gradient(40% 40% at 78% 15%, rgba(230, 224, 255, 0.1), transparent 70%); }
-.panelBloomPeach { background: radial-gradient(50% 50% at 20% 80%, rgba(255, 227, 208, 0.08), transparent 70%); }
-
 .s06Panel { padding: 96px 80px; }
 
 .s06Grid {
@@ -1182,7 +1187,7 @@
 /* Non-matches are NOT hidden. The grid keeps its shape, so the effect is the
    list visibly narrowing around the answer rather than jumping. */
 .indexDim { opacity: 0.22; transform: scale(0.97); }
-.indexHit .squircle { animation: pop 300ms var(--snapIn); }
+.indexHit .mark { animation: pop 300ms var(--snapIn); }
 
 @keyframes pop {
   0% { transform: scale(1); }
@@ -1244,7 +1249,8 @@
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  opacity: 0.22;
+  background: #ffffff;
+  opacity: 0.32;
   animation: driftDot 6s ease-in-out infinite;
 }
 
@@ -1311,7 +1317,7 @@
   .page { --pad: 64px; --gutter: 20px; }
 
   .d0 { font-size: 84px; line-height: 80px; }
-  .s01 { padding-block: 144px 96px; }
+  .s01 { padding-block: 88px 96px; }
   .s03, .s05, .s06 { padding-block: 120px; }
   .s04 { padding-block: 120px 96px; }
   .s07 { padding-block: 120px; }
@@ -1336,7 +1342,7 @@
   .f2 { font-size: 52px; line-height: 52px; }
   .f3 { font-size: 32px; line-height: 36px; }
 
-  .s01 { padding-block: 120px 80px; }
+  .s01 { padding-block: 80px 80px; }
   .s03, .s05, .s06 { padding-block: 96px; }
   .s04 { padding-block: 96px 80px; }
   .s07 { padding-block: 96px; }
@@ -1345,7 +1351,7 @@
   .s10 { padding-block: 80px 96px; }
 
   /* Nav: the pill spans the container and the links collapse to a word. */
-  .nav { left: 24px; right: 24px; transform: none; min-width: 0; max-width: none; width: auto; padding-left: 20px; }
+  .nav, .navShown { left: 24px; right: 24px; transform: none; min-width: 0; max-width: none; width: auto; padding-left: 20px; }
   .navLinks, .navLogin { display: none; }
   .menuBtn { display: inline-flex; }
 
@@ -1414,13 +1420,14 @@
   .ask:nth-child(n + 3) { padding-top: 40px; border-top: 1px solid var(--edge); }
 
   .s10Panel { height: auto; padding: 80px 40px; }
+  .navHidden { transform: translateY(-24px); }
   .footerTop { flex-direction: column; }
 }
 
 @media (max-width: 767px) {
   .page { --pad: 24px; --gutter: 16px; }
 
-  .d0 { font-size: min(44px, 10.9vw); line-height: min(44px, 10.9vw); letter-spacing: -0.03em; }
+  .d0 { font-size: min(44px, 10.1vw); line-height: min(44px, 10.1vw); letter-spacing: -0.03em; }
   .d1 { font-size: 36px; line-height: 38px; }
   .d2 { font-size: 32px; line-height: 34px; }
   .d3 { font-size: 24px; line-height: 30px; }
@@ -1430,7 +1437,7 @@
   .f2 { font-size: 40px; line-height: 40px; }
   .f3 { font-size: 28px; line-height: 32px; }
 
-  .s01 { padding-block: 80px 64px; }
+  .s01 { padding-block: 64px 64px; }
   .s03, .s05, .s06, .s07 { padding-block: 64px; }
   .s04 { padding-block: 64px; }
   .s08 { padding-block: 64px; }
@@ -1555,7 +1562,7 @@
 
 /* The drawn canvas: its fills live here so the component carries no hex and
    `check-ui`'s colour rules stay armed over every .tsx in the repo. */
-.shotCanvas { display: block; width: 100%; aspect-ratio: 16 / 9; font-family: var(--snap-sans), "Figtree", system-ui, sans-serif; }
+.shotCanvas { display: block; width: 100%; aspect-ratio: 16 / 9; }
 .shotWire { fill: none; stroke: var(--ink); stroke-width: 2; opacity: 0.16; }
 .shotNode { fill: var(--lift); stroke: var(--edge); filter: drop-shadow(0 4px 10px rgba(20, 20, 28, 0.06)); }
 .shotGround { fill: var(--lift); }

@@ -1,5 +1,5 @@
 import styles from "@/app/snap.module.css";
-import { Squircle } from "./marks";
+import { Mark } from "./marks";
 
 /**
  * S02 — the full-bleed band, flush against the hero above it and the
@@ -16,10 +16,10 @@ import { Squircle } from "./marks";
  * further down the page. The section still carries an accessible name so it
  * can be skipped rather than waded through.
  */
-export function SourceRail({ sources, count }: { sources: Array<{ name: string; short?: string }>; count: number }) {
+export function SourceRail({ sources, count, id }: { sources: Array<{ source: string; name: string }>; count: number; id?: string }) {
   const items = sources.map((source) => (
     <span className={styles.railPill} key={source.name}>
-      <Squircle name={source.name} short={source.short} size={28} />
+      <Mark source={source.source} size={28} radius="50%" />
       {source.name}
     </span>
   ));
@@ -27,7 +27,7 @@ export function SourceRail({ sources, count }: { sources: Array<{ name: string; 
   return (
     <>
       <p className={`${styles.caption} ${styles.railLeadMobile}`}>Reads directly from {count} sources.</p>
-      <section className={styles.rail} aria-label={`Reads directly from ${count} sources`}>
+      <section id={id} className={styles.rail} aria-label={`Reads directly from ${count} sources`}>
         <span className={styles.railLead}>Reads directly from {count} sources.</span>
         <span className={styles.railDivider} aria-hidden />
         <div className={styles.railViewport} aria-hidden>

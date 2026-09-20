@@ -1,84 +1,61 @@
+import { SourceMark } from "@/components/source-mark";
+import { sourceStyle } from "@/components/flow/controls/source-style";
 import styles from "@/app/snap.module.css";
 
 /**
- * COLOUR MEANS SOURCE. INK MEANS ANSWER.
+ * THE SOURCE MARKS ARE THE PRODUCT'S OWN, NOT THE LANDING PAGE'S.
  *
- * Five named sources own a colour each and keep it in every section they
- * appear in — hero chip, disagreement row, rail pill, source index — so the
- * reader learns the mapping without being taught it. Everything else is
- * slate. That is the whole point of the palette: colour is the PROBLEM (five
- * tools, five partial answers) and ink is the ANSWER, which is why a source
- * colour may never fill a button and a resolved figure may never be anything
- * but ink.
+ * This file used to draw its own coloured squircles holding two letters, in a
+ * five-colour palette invented for the marketing page. That made every app the
+ * same object in a different colour — and the product already solves this
+ * properly: eighteen of the thirty-three connectors ship a real mark (Simple
+ * Icons and official files, committed by `scripts/fetch-logos.mjs`), drawn
+ * BARE in the brand's own colour, and the other fifteen keep a brand-coloured
+ * tile with their two letters because a glyph carries a silhouette and an
+ * abbreviation does not.
  *
- * `onLight` is not a style preference. Lemon and mint are bright enough that
- * white on them fails contrast outright, so §6.1 assigns ink to exactly those
- * two — and getting it wrong produces an initials tile that reads as a blank
- * coloured dot, which is precisely the bug this product had in its own
- * connector list.
+ * So the landing page now calls `SourceMark` — the same component the flows
+ * list and the activity feed use. Calendly's blue C is recognised before any
+ * label is read, which is the entire job this element has on a page whose
+ * second question is "is my stack in there?". It also means a connector added
+ * to the catalogue arrives on the marketing page with its real mark, with no
+ * edit here at all.
+ *
+ * `radius` is opened for the rail's pills; everything else about the mark —
+ * its colour, its glyph, its letters — is deliberately not this file's
+ * business.
  */
-const SOURCE_COLOURS: Record<string, { token: string; onLight: boolean }> = {
-  Calendly: { token: "--src-coral", onLight: false },
-  "Google Sheets": { token: "--src-lemon", onLight: true },
-  Stripe: { token: "--src-mint", onLight: true },
-  "Close CRM": { token: "--src-sky", onLight: false },
-  Instantly: { token: "--src-lilac", onLight: false },
-};
-
-export function sourceColour(name: string) {
-  return SOURCE_COLOURS[name] ?? { token: "--src-slate", onLight: false };
-}
-
-/** The initials a squircle carries, from the catalogue's own short code. */
-function initials(name: string, short?: string) {
-  if (short) return short.toUpperCase();
-  const words = name.replace(/[^A-Za-z ]/g, "").split(" ").filter(Boolean);
-  return (words.length > 1 ? words[0][0] + words[1][0] : name.slice(0, 2)).toUpperCase();
-}
-
-/**
- * The source squircle — a rounded square in the source's colour holding two
- * letters. Deliberately NOT the product's own `SourceMark`, which paints each
- * connector in its real brand colour: that is right inside the app, where a
- * row is recognised by shape before it is read, and wrong here, where the
- * five colours have been reassigned to carry an argument.
- */
-export function Squircle({
-  name,
-  short,
+export function Mark({
+  source,
   size = 40,
+  radius,
   className,
 }: {
-  name: string;
-  short?: string;
+  source: string;
   size?: number;
+  radius?: number | string;
   className?: string;
 }) {
-  const { token, onLight } = sourceColour(name);
-  return (
-    <span
-      aria-hidden
-      className={`${styles.squircle} ${onLight ? styles.onLight : ""} ${className ?? ""}`}
-      style={{
-        width: size,
-        height: size,
-        borderRadius: Math.round(size * 0.35),
-        background: `var(${token})`,
-        fontSize: Math.round(size * 0.34),
-      }}
-    >
-      {initials(name, short)}
-    </span>
-  );
+  return <SourceMark source={source} size={size} radius={radius} className={className} />;
 }
 
 /**
- * The tick. Drawn rather than imported, at 2.5px with round caps — one of the
- * page's two marks, and the only icon set it has.
+ * A connector's own brand colour, from the catalogue.
+ *
+ * The hero chips carry a coloured shadow, and it has to be the colour of the
+ * logo sitting on the card — an invented palette under a real mark reads as
+ * two different brands on one object.
+ */
+export function brandColour(source: string): string {
+  return sourceStyle(source).color;
+}
+
+/**
+ * The tick. Drawn rather than imported, at 2.5px with round caps.
  *
  * It is never the sole carrier of a meaning: every matched state pairs it with
  * a word, so the state survives for a reader who cannot separate the green
- * from the ink. §10 lists that as a requirement, not a preference.
+ * from the ink.
  */
 export function Tick({ size = 16, onDark = false }: { size?: number; onDark?: boolean }) {
   return (
@@ -96,9 +73,8 @@ export function Tick({ size = 16, onDark = false }: { size?: number; onDark?: bo
 }
 
 /**
- * The logo mark: two white dots on an ink squircle that merge into one when
- * the nav is hovered. Two become one — the product, stated in a logo. §3 caps
- * the page's wit here and nowhere else.
+ * The logo mark: two dots that merge into one when the nav is hovered. Two
+ * become one — the product, stated in a logo.
  */
 export function LogoMark() {
   return (

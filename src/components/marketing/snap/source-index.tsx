@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import styles from "@/app/snap.module.css";
-import { Squircle } from "./marks";
+import { Mark } from "./marks";
 
-type Source = { name: string; short?: string; blurb: string };
+type Source = { source: string; name: string; blurb: string };
 
 /**
  * S08 — an index, not a card grid.
@@ -88,7 +88,7 @@ export function SourceIndex({
               aria-hidden={dim || undefined}
             >
               <div className={styles.indexTop}>
-                <Squircle name={source.name} short={source.short} size={32} />
+                <Mark source={source.source} size={32} className={styles.mark} />
                 <span className={`${styles.h4} ${styles.indexName}`}>{source.name}</span>
               </div>
               <p className={`${styles.bodyS} ${styles.indexDesc}`}>{source.blurb}</p>

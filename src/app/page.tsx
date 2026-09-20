@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { Figtree } from "next/font/google";
 import { withAuth } from "@workos-inc/authkit-nextjs";
 import { CONNECTOR_CATALOG } from "@/connectors/catalog";
 import styles from "./snap.module.css";
@@ -9,7 +8,7 @@ import { ReceiptTabs, type Metric } from "@/components/marketing/snap/receipt-ta
 import { SourceIndex } from "@/components/marketing/snap/source-index";
 import { CountUp } from "@/components/marketing/snap/count-up";
 import { CanvasShot } from "@/components/marketing/snap/canvas-shot";
-import { Squircle, Tick, LogoMark } from "@/components/marketing/snap/marks";
+import { Mark, brandColour, Tick, LogoMark } from "@/components/marketing/snap/marks";
 
 /**
  * THE FRONT DOOR — "Snap".
@@ -57,19 +56,18 @@ import { Squircle, Tick, LogoMark } from "@/components/marketing/snap/marks";
  */
 
 /**
- * ONE FAMILY, LOADED HERE RATHER THAN IN THE ROOT LAYOUT.
+ * THE APP'S OWN FACE, INHERITED RATHER THAN LOADED.
  *
- * next/font scopes a face to the component that imports it, so Figtree ships
- * with `/` and with nothing else: the app keeps Inter, layout.tsx is
- * untouched, and no dashboard, form or legal page pays for a font it never
- * renders. Putting it in the layout would be one line shorter and would add a
- * family to every route in the product.
+ * This page shipped with Figtree of its own, on the argument that a marketing
+ * page should not wear the product's chrome. The owner's call went the other
+ * way: the landing page should read as the same product, so it takes
+ * `--font-sans` — Inter, already self-hosted by next/font in the root layout —
+ * by simply not declaring a family of its own.
  *
- * There is NO second face and no monospace. Figures are Figtree 800 with
- * tabular numerals — a wide mono on a figure is what made an earlier build
- * read as a tax form rather than as a product.
+ * That is one fewer webfont on the page's critical path, and the hero headline
+ * is the LCP element, so it is also the cheapest performance win available
+ * here. Figures keep `tabular-nums`, which is the kit's own rule for numerals.
  */
-const figtree = Figtree({ subsets: ["latin"], display: "swap", variable: "--snap-sans" });
 
 export const metadata = {
   title: "Namzilabs — your best metrics live between your tools",
@@ -89,11 +87,11 @@ export const metadata = {
  * column is a list, and three plus an answer is a story.
  */
 const CHIPS = [
-  { name: "Calendly", short: "Ca", desc: "invitee-created events", figure: "41", x: 24, y: 40, rot: -4, drop: false },
-  { name: "Stripe", short: "St", desc: "payments matched to a meeting", figure: "29", x: 908, y: 16, rot: 3, drop: true },
-  { name: "Google Sheets", short: "GS", desc: "the sheet kept by hand", figure: "44", x: 8, y: 300, rot: 3.5, drop: false },
-  { name: "Close CRM", short: "Cl", desc: "meetings logged to a lead", figure: "38", x: 898, y: 272, rot: -3, drop: false },
-  { name: "Instantly", short: "In", desc: "replies that booked something", figure: "12", x: 466, y: 352, rot: -2, drop: true },
+  { source: "calendly", name: "Calendly", desc: "invitee-created events", figure: "41", x: 24, y: 40, rot: -4, drop: false },
+  { source: "stripe", name: "Stripe", desc: "payments matched to a meeting", figure: "29", x: 908, y: 16, rot: 3, drop: true },
+  { source: "gsheets", name: "Google Sheets", desc: "the sheet kept by hand", figure: "44", x: 8, y: 300, rot: 3.5, drop: false },
+  { source: "close", name: "Close CRM", desc: "meetings logged to a lead", figure: "38", x: 898, y: 272, rot: -3, drop: false },
+  { source: "instantly", name: "Instantly", desc: "replies that booked something", figure: "12", x: 466, y: 352, rot: -2, drop: true },
 ];
 
 /**
@@ -106,12 +104,12 @@ const CHIPS = [
  * without accusing anyone.
  */
 const DISAGREEMENT = [
-  { name: "Calendly", short: "Ca", label: "Meetings booked", figure: "41", clause: "but not which ones showed up" },
-  { name: "Close CRM", short: "Cl", label: "Deals created", figure: "18", clause: "but not what they cost to get" },
-  { name: "Instantly", short: "In", label: "Replies", figure: "112", clause: "but not which became revenue" },
-  { name: "Stripe", short: "St", label: "Revenue", figure: "$48.2k", clause: "but not which campaign earned it" },
-  { name: "Google Sheets", short: "GS", label: "Rows, kept by hand", figure: "2,130", clause: "but not until Friday" },
-  { name: "Aircall", short: "Ai", label: "Calls connected", figure: "306", clause: "but not against how many leads" },
+  { source: "calendly", name: "Calendly", label: "Meetings booked", figure: "41", clause: "but not which ones showed up" },
+  { source: "close", name: "Close CRM", label: "Deals created", figure: "18", clause: "but not what they cost to get" },
+  { source: "instantly", name: "Instantly", label: "Replies", figure: "112", clause: "but not which became revenue" },
+  { source: "stripe", name: "Stripe", label: "Revenue", figure: "$48.2k", clause: "but not which campaign earned it" },
+  { source: "gsheets", name: "Google Sheets", label: "Rows, kept by hand", figure: "2,130", clause: "but not until Friday" },
+  { source: "aircall", name: "Aircall", label: "Calls connected", figure: "306", clause: "but not against how many leads" },
 ];
 
 const STEPS = [
@@ -233,12 +231,20 @@ const CONNECTORS = [
   "M600 352 L600 300",
 ];
 
+/**
+ * The closing panel's five drifting dots — the hero's chips reduced to their
+ * essence, so the page closes on the image it opened with.
+ *
+ * They are white rather than source-coloured now that the panel is the
+ * product's blue: a brand colour at a third of an opacity over #2B53AE is mud,
+ * and five muddy dots read as compression artefacts rather than as objects.
+ */
 const CTA_DOTS = [
-  { token: "--src-coral", left: "16%", top: "20%", delay: "0ms" },
-  { token: "--src-lemon", left: "31%", top: "13%", delay: "800ms" },
-  { token: "--src-mint", left: "62%", top: "16%", delay: "1600ms" },
-  { token: "--src-sky", left: "78%", top: "25%", delay: "2400ms" },
-  { token: "--src-lilac", left: "47%", top: "10%", delay: "3200ms" },
+  { id: "a", left: "16%", top: "20%", delay: "0ms" },
+  { id: "b", left: "31%", top: "13%", delay: "800ms" },
+  { id: "c", left: "62%", top: "16%", delay: "1600ms" },
+  { id: "d", left: "78%", top: "25%", delay: "2400ms" },
+  { id: "e", left: "47%", top: "10%", delay: "3200ms" },
 ];
 
 export default async function Home() {
@@ -253,18 +259,18 @@ export default async function Home() {
   const ctaLabel = "Connect your first tool";
 
   const sources = CONNECTOR_CATALOG.map((entry) => ({
+    source: entry.source,
     name: entry.name,
-    short: entry.brand?.short,
     blurb: entry.description,
   }));
 
   return (
-    <div className={`${styles.page} ${figtree.variable}`}>
+    <div className={styles.page}>
       <div className={styles.backdrop} aria-hidden />
       <div className={styles.bloom} aria-hidden />
       <div className={styles.grain} aria-hidden />
 
-      <SnapNav cta={cta} ctaLabel={ctaLabel} />
+      <SnapNav cta={cta} ctaLabel={ctaLabel} revealAfter="#rail" />
 
       <main id="main" className={styles.clip}>
         {/* ══ S01 · Hero — centred, floating, full bloom ═══════════════════
@@ -314,7 +320,7 @@ export default async function Home() {
               ))}
             </svg>
 
-            {CHIPS.map((chip, i) => (
+            {CHIPS.map((chip) => (
               <div
                 key={chip.name}
                 className={`${styles.chip} ${styles.chipRest} ${chip.drop ? styles.chipDrop : ""}`}
@@ -323,14 +329,12 @@ export default async function Home() {
                     left: chip.x,
                     top: chip.y,
                     "--rot-base": `${chip.rot}deg`,
-                    animationDelay: `${980 + i * 100}ms, 3000ms, ${3400 + i * 800}ms`,
-                    boxShadow: `var(--sh-md), 0 8px 24px color-mix(in srgb, var(--src-${
-                      ["coral", "mint", "lemon", "sky", "lilac"][i]
-                    }) 26%, transparent)`,
+                    animationDelay: `${980 + CHIPS.indexOf(chip) * 100}ms, 3000ms, ${3400 + CHIPS.indexOf(chip) * 800}ms`,
+                    boxShadow: `var(--sh-md), 0 8px 24px color-mix(in srgb, ${brandColour(chip.source)} 26%, transparent)`,
                   } as React.CSSProperties
                 }
               >
-                <Squircle name={chip.name} short={chip.short} size={40} />
+                <Mark source={chip.source} size={40} className={styles.mark} />
                 {/* Name and figure share a row so the figure sits on the
                     source's own baseline; the description wraps beneath both
                     rather than shoving the figure off-centre when it runs to
@@ -346,7 +350,7 @@ export default async function Home() {
             ))}
 
             {/* The one still, certain object in a field of moving ones. */}
-            <div className={styles.resolved}>
+            <div className={`sky-panel ${styles.resolved}`}>
               <div className={styles.resolvedTop}>
                 <span className={styles.resolvedMark} aria-hidden />
                 <span className={styles.resolvedName}>Namzilabs</span>
@@ -369,23 +373,24 @@ export default async function Home() {
 
         <div className={styles.belowFold}>
           {/* ══ S02 · Source rail — full bleed, thin, flush ════════════════ */}
-          <SourceRail sources={sources} count={CONNECTOR_CATALOG.length} />
+          <SourceRail sources={sources} count={CONNECTOR_CATALOG.length} id="rail" />
 
           {/* ══ S03 · The disagreement — sticky column, one tall stack ═════
               The densest section on the page, directly after the airiest. */}
           <section className={`${styles.container} ${styles.s03}`}>
             <div className={styles.splitGrid}>
               <div className={styles.stickyCol}>
-                <h2 className={styles.d2}>Three tools. Three answers. None of them wrong.</h2>
+                <h2 className={styles.d2}>Ten tools. Ten dashboards. One number, built from all of them.</h2>
                 <p className={`${styles.bodyM} ${styles.stickyLead}`}>
-                  Each one is telling the truth about its own slice. None of them can see the other two.
+                  Each one tells the truth about its own slice and cannot see the other nine. Namzilabs reads them
+                  together.
                 </p>
               </div>
 
               <div className={styles.stack}>
                 {DISAGREEMENT.map((row) => (
                   <div className={styles.srcRow} key={row.name}>
-                    <Squircle name={row.name} short={row.short} size={44} />
+                    <Mark source={row.source} size={44} className={styles.mark} />
                     <span>
                       <span className={`${styles.h4} ${styles.srcName}`}>{row.name}</span>
                       <span className={`${styles.bodyS} ${styles.srcLabel}`}>{row.label}</span>
@@ -446,8 +451,7 @@ export default async function Home() {
               The loudest claim on the page makes no noise, and the contrast
               against the animated hero is the point. */}
           <section className={`${styles.container} ${styles.s06}`}>
-            <div className={`${styles.darkPanel} ${styles.s06Panel}`}>
-              <div className={`${styles.panelBloom} ${styles.panelBloomLilac}`} aria-hidden />
+            <div className={`sky-panel ${styles.darkPanel} ${styles.s06Panel}`}>
               <div className={styles.s06Grid}>
                 <div className={styles.s06Copy}>
                   <h2 className={styles.d2}>It tells you when it can&rsquo;t see everything.</h2>
@@ -563,14 +567,13 @@ export default async function Home() {
               dots, drifting on the same loop as the hero chips, reduced to
               their essence. This is the only decoration approved anywhere. */}
           <section className={`${styles.container} ${styles.s10}`}>
-            <div className={`${styles.darkPanel} ${styles.s10Panel}`}>
-              <div className={`${styles.panelBloom} ${styles.panelBloomPeach}`} aria-hidden />
+            <div className={`sky-panel ${styles.darkPanel} ${styles.s10Panel}`}>
               {CTA_DOTS.map((dot) => (
                 <span
-                  key={dot.token}
+                  key={dot.id}
                   className={styles.ctaDot}
                   aria-hidden
-                  style={{ left: dot.left, top: dot.top, background: `var(${dot.token})`, animationDelay: dot.delay }}
+                  style={{ left: dot.left, top: dot.top, animationDelay: dot.delay }}
                 />
               ))}
 

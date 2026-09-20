@@ -118,12 +118,16 @@ await page.waitForTimeout(3600);
 
 const rhythm = await page.evaluate(() => {
   const sections = [...document.querySelectorAll("main > section, main > div > section")];
-  const isDark = (n) => {
-    // A dark section is one whose own panel is painted ink.
-    const panel = n.querySelector('[class*="darkPanel"]');
-    if (!panel) return false;
-    return getComputedStyle(panel).backgroundColor === "rgb(20, 20, 28)";
-  };
+  /**
+   * A "dark" SECTION is one built around a deep panel — not merely one that
+   * contains a blue object. Two near-misses to avoid: since the brand kit's
+   * blue arrived the panels paint a GRADIENT, so `backgroundColor` is
+   * transparent and colour-matching counts none of them; and the hero's
+   * resolved card wears the same `.sky-panel`, so matching that class alone
+   * counts three. The section-level wrapper is what actually says "this
+   * section is the dark beat in the rhythm".
+   */
+  const isDark = (n) => Boolean(n.querySelector('[class*="darkPanel"]'));
   const fullBleed = sections.filter((n) => Math.round(n.getBoundingClientRect().width) >= window.innerWidth);
   const dark = sections.filter(isDark);
   // Only headings in LIGHT sections count: the dark closing panel centres
@@ -183,12 +187,47 @@ check(type.monoCount === 0, "no monospace anywhere on the page", `${type.monoCou
 console.log("\nContrast");
 
 const runs = await page.evaluate(() => {
+  /**
+   * THE GROUND A RUN OF TEXT ACTUALLY LANDS ON.
+   *
+   * Two things defeat the naive version, and both arrived with the brand kit's
+   * blue panels:
+   *
+   * 1. `.sky-card` and `.sky-panel` paint a GRADIENT. Their computed
+   *    `backgroundColor` is transparent, so walking up for the first painted
+   *    ancestor sails straight past them and reports the page's pale canvas —
+   *    which would score white-on-blue as white-on-white and fail everything
+   *    for the wrong reason. Each one's LIGHTEST stop is used instead, which is
+   *    the worst case for white ink and the value the kit itself reasons about:
+   *    #3F73E6 for the card, #2B53AE for the panel.
+   * 2. Those panels set their ink in rgba. Translucent ink has no colour of its
+   *    own — `rgba(255,255,255,0.7)` is whatever it lands on — so it is
+   *    composited over the ground before anything is measured. Reading the
+   *    first three numbers and calling it white is how a 2.9:1 label passes.
+   */
+  const SKY_CARD = [63, 115, 230];
+  const SKY_PANEL = [43, 83, 174];
   const painted = (node) => {
+    // Walk OUTWARDS and stop at the first thing that actually paints — which
+    // may be a white button sitting on top of a sky panel. Testing for the
+    // panel first reported the panel's blue under the button's own fill and
+    // failed a control that is perfectly legible.
     for (let n = node; n; n = n.parentElement) {
+      if (n.classList?.contains("sky-panel")) return SKY_PANEL;
+      if (n.classList?.contains("sky-card")) return SKY_CARD;
       const bg = getComputedStyle(n).backgroundColor;
-      if (bg && bg !== "rgba(0, 0, 0, 0)" && bg !== "transparent") return bg;
+      if (!bg || bg === "rgba(0, 0, 0, 0)" || bg === "transparent") continue;
+      const p = (bg.match(/[\d.]+/g) ?? []).map(Number);
+      if (p.length >= 4 && p[3] === 0) continue;
+      return p.slice(0, 3);
     }
-    return "rgb(255, 255, 255)";
+    return [255, 255, 255];
+  };
+  /** Composite a possibly-translucent ink over the ground behind it. */
+  const over = (colour, ground) => {
+    const p = (colour.match(/[\d.]+/g) ?? []).map(Number);
+    const a = p.length >= 4 ? p[3] : 1;
+    return [0, 1, 2].map((i) => p[i] * a + ground[i] * (1 - a));
   };
   const out = [];
   for (const node of document.querySelectorAll("p, h1, h2, h3, span, a, li, dt, dd, button, input")) {
@@ -207,28 +246,36 @@ const runs = await page.evaluate(() => {
     const size = parseFloat(cs.fontSize);
     const box = node.getBoundingClientRect();
     if (size < 10 || box.width < 4 || box.height < 4) continue;
-    const colour = node.tagName === "INPUT" ? "" : cs.color;
-    out.push({ text: text.slice(0, 32), colour, bg: painted(node), size, weight: Number(cs.fontWeight) });
+    if (node.tagName === "INPUT") continue;
+    const ground = painted(node);
+    out.push({
+      text: text.slice(0, 32),
+      colour: over(cs.color, ground),
+      raw: cs.color,
+      bg: ground,
+      size,
+      weight: Number(cs.fontWeight),
+    });
   }
   return out;
 });
 
-const lum = (s) => {
-  const [r, g, b] = (s.match(/\d+(\.\d+)?/g) ?? []).slice(0, 3).map(Number);
+const lum = ([r, g, b]) => {
   const f = (c) => ((c /= 255) <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
   return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
 };
+const show = (c) => `rgb(${c.map((n) => Math.round(n)).join(", ")})`;
 
 let worst = { r: 99, what: "" };
 const bad = [];
 for (const s of runs) {
-  if (!s.colour) continue;
   const [hi, lo] = [lum(s.colour), lum(s.bg)].sort((a, b) => b - a);
   const r = (hi + 0.05) / (lo + 0.05);
   const large = s.size >= 24 || (s.size >= 18.66 && s.weight >= 700);
   const need = large ? 3 : 4.5;
-  if (r < worst.r) worst = { r, what: `${s.text} (${s.colour} on ${s.bg}, ${s.size}px)` };
-  if (r < need) bad.push(`${s.text} — ${r.toFixed(2)}:1 needs ${need} (${s.colour} on ${s.bg}, ${s.size}px)`);
+  const where = `${s.raw} over ${show(s.bg)}, ${s.size}px`;
+  if (r < worst.r) worst = { r, what: `${s.text} (${where})` };
+  if (r < need) bad.push(`${s.text} — ${r.toFixed(2)}:1 needs ${need} (${where})`);
 }
 
 check(bad.length === 0, `${runs.length} text runs clear WCAG AA`, bad.slice(0, 4).join("  ·  "));
@@ -292,6 +339,26 @@ await tabs.nth(1).focus();
 await page.keyboard.press("ArrowRight");
 await page.waitForTimeout(400);
 check((await tabs.nth(2).getAttribute("aria-selected")) === "true", "arrow keys move between tabs");
+
+// The nav's arrival is a user-visible behaviour with no other guard: it is
+// hidden on first paint so the hero owns the top of the screen, and it has to
+// be there by the time the reader is past the rail — including for somebody
+// who lands at a restored scroll position rather than scrolling to it.
+await page.evaluate(() => window.scrollTo(0, 0));
+await page.waitForTimeout(500);
+check(
+  (await page.locator("header").evaluate((n) => getComputedStyle(n).opacity)) === "0",
+  "the nav is absent while the hero owns the screen",
+);
+await page.evaluate(() => {
+  const rail = document.querySelector("#rail");
+  window.scrollTo(0, (rail?.getBoundingClientRect().bottom ?? 0) + window.scrollY + 200);
+});
+await page.waitForTimeout(600);
+check(
+  (await page.locator("header").evaluate((n) => getComputedStyle(n).opacity)) === "1",
+  "and arrives once the reader is past the source rail",
+);
 
 const cells = page.locator('ul[class*="index"] > li');
 const total = await cells.count();
