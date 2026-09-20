@@ -55,8 +55,24 @@ for (const vp of [
 ]) {
   const page = await browser.newPage({ viewport: { width: vp.width, height: vp.height } });
   const errors = [];
+  /**
+   * THE HERO SHOT IS OPTIONAL, AND ITS ABSENCE IS NOT A BUG.
+   *
+   * `public/dashboard.png` is a file the owner drops in; until it exists the
+   * page requests it, gets a 404 and falls back to the drawn card, which is
+   * the designed behaviour. The browser still logs "Failed to load resource"
+   * for it, so that ONE line is set aside — but narrowly: every other console
+   * error still fails, and the missing URLs are asserted separately below, so
+   * a genuinely broken asset cannot hide behind this.
+   */
+  const missingAssets = [];
+  page.on("response", (r) => r.status() >= 400 && missingAssets.push(`${r.status()} ${new URL(r.url()).pathname}`));
   page.on("pageerror", (e) => errors.push(String(e)));
-  page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
+  page.on("console", (m) => {
+    if (m.type() !== "error") return;
+    if (/Failed to load resource/.test(m.text())) return; // asserted by URL instead
+    errors.push(m.text());
+  });
   await settle(page, BASE);
   await page.waitForTimeout(3600); // the hero sequence ends at ~3.4s
 
@@ -86,6 +102,12 @@ for (const vp of [
   check(m.scrollWidth <= m.inner + 1, `${vp.name}: the page does not scroll sideways`, `${m.scrollWidth} > ${m.inner}`);
   check(m.blown.length === 0, `${vp.name}: no grid or row blows past its container`, m.blown.slice(0, 3).join(" · "));
   check(errors.length === 0, `${vp.name}: no console errors`, errors.slice(0, 2).join(" | "));
+
+  const unexpected = missingAssets.filter((a) => !a.endsWith("/dashboard.png"));
+  check(unexpected.length === 0, `${vp.name}: no unexpected missing assets`, unexpected.slice(0, 3).join(", "));
+  if (missingAssets.length > unexpected.length) {
+    console.log("        (public/dashboard.png is absent — the hero is showing its drawn fallback, by design)");
+  }
   if (vp.width === 1440) check(m.h1Lines === 3, "the headline breaks on three fixed lines", `${m.h1Lines}`);
 
   if (vp.width === 375) {

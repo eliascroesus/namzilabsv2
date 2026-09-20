@@ -8,6 +8,7 @@ import { ReceiptTabs, type Metric } from "@/components/marketing/snap/receipt-ta
 import { SourceIndex } from "@/components/marketing/snap/source-index";
 import { CountUp } from "@/components/marketing/snap/count-up";
 import { CanvasShot } from "@/components/marketing/snap/canvas-shot";
+import { DashboardShot } from "@/components/marketing/snap/dashboard-shot";
 import { Mark, brandColour, Tick, LogoMark } from "@/components/marketing/snap/marks";
 
 /**
@@ -91,7 +92,7 @@ const CHIPS = [
   { source: "stripe", name: "Stripe", desc: "payments matched to a meeting", figure: "29", x: 908, y: 16, rot: 3, drop: true },
   { source: "gsheets", name: "Google Sheets", desc: "the sheet kept by hand", figure: "44", x: 8, y: 300, rot: 3.5, drop: false },
   { source: "close", name: "Close CRM", desc: "meetings logged to a lead", figure: "38", x: 898, y: 272, rot: -3, drop: false },
-  { source: "instantly", name: "Instantly", desc: "replies that booked something", figure: "12", x: 466, y: 352, rot: -2, drop: true },
+  { source: "instantly", name: "Instantly", desc: "replies that booked something", figure: "12", x: 466, y: 352, rot: -2, drop: true, centre: true },
 ];
 
 /**
@@ -323,7 +324,7 @@ export default async function Home() {
             {CHIPS.map((chip) => (
               <div
                 key={chip.name}
-                className={`${styles.chip} ${styles.chipRest} ${chip.drop ? styles.chipDrop : ""}`}
+                className={`${styles.chip} ${styles.chipRest} ${chip.drop ? styles.chipDrop : ""} ${"centre" in chip && chip.centre ? styles.chipCentre : ""}`}
                 style={
                   {
                     left: chip.x,
@@ -349,7 +350,12 @@ export default async function Home() {
               </div>
             ))}
 
-            {/* The one still, certain object in a field of moving ones. */}
+            {/* THE CENTREPIECE: a real screenshot of the board when
+                `public/dashboard.png` exists, and this drawn card when it does
+                not. Both states are a finished composition, so the page is
+                never mid-way through becoming something. */}
+            <DashboardShot
+              fallback={
             <div className={`sky-panel ${styles.resolved}`}>
               <div className={styles.resolvedTop}>
                 <span className={styles.resolvedMark} aria-hidden />
@@ -366,6 +372,8 @@ export default async function Home() {
               </div>
               <p className={`${styles.caption} ${styles.resolvedSub}`}>123 in · 82 matched · 41 unique</p>
             </div>
+              }
+            />
 
             <span className={styles.pulse} aria-hidden />
           </div>

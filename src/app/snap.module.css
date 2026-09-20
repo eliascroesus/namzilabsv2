@@ -1569,3 +1569,53 @@
 .shotChipNeutral { fill: #f4f4f7; }
 .shotLabel { fill: var(--ink-35); }
 .shotValue { fill: var(--ink); }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   The hero's dashboard shot, when `public/dashboard.png` exists.
+
+   The stage reacts with `:has()` rather than with lifted state: if the file is
+   missing the component renders the drawn card instead, `.dashboardShot` is
+   not in the tree, none of these rules match, and the hero is exactly the
+   composition it was. One source of truth, no flag to keep in sync.
+   ────────────────────────────────────────────────────────────────────────── */
+
+.dashboardShot {
+  position: absolute;
+  left: 50%;
+  top: 24px;
+  z-index: 3;
+  width: 620px;
+  max-width: 100%;
+  height: auto;
+  /* Capped so the stage does not have to grow for it, and `contain` so an
+     image of any proportion is fitted rather than cropped or stretched —
+     measured at 620 × 412, which is what the existing 460px stage holds with
+     the chips still clear of it. */
+  max-height: 412px;
+  object-fit: contain;
+  transform: translateX(-50%);
+  border: 1px solid var(--edge);
+  border-radius: 20px;
+  box-shadow: var(--sh-xl);
+  background: var(--lift);
+}
+
+/* The centre chip steps out of the way: four chips framing a shot is a
+   composition; five, with one underneath it, is a collision. The stage does
+   NOT grow — the image is capped to the height it already has, so growing it
+   only added 148px of dead canvas under the composition. */
+.stage:has(.dashboardShot) .chipCentre { display: none; }
+
+/* The connectors were drawn for the card's footprint and would visibly miss a
+   picture of a different size. They come back once the real image's
+   proportions are known. */
+.stage:has(.dashboardShot) .connectors { display: none; }
+
+@media (max-width: 1279px) {
+  .dashboardShot { width: 540px; max-height: 372px; }
+}
+
+@media (max-width: 1023px) {
+  /* The stage is a grid below LG, so the shot stops being positioned. */
+  .dashboardShot { position: static; width: 100%; max-height: none; transform: none; grid-column: 1 / -1; }
+}
