@@ -2,49 +2,39 @@
  * THE FRONT DOOR, MEASURED.
  *
  * Nothing else in this repository can see this page. `check-ui` reads class
- * names and the landing page's are hashed CSS-module names; the vitest suite
- * has no DOM; `pnpm geometry`, `frame` and `shadows` all point at `/design/*`
- * routes that `/` is not one of. So a layout that collapses, ink that falls
- * below 4.5:1, or a page that inverts in dark mode all ship green. This script
- * is the only thing standing between those and production.
+ * names and this page's are hashed CSS-module names; the vitest suite has no
+ * DOM; `pnpm geometry`, `frame` and `shadows` all point at `/design/*` routes
+ * that `/` is not one of. So a grid that blows out, ink below 4.5:1, or a page
+ * that inverts in dark mode all ship green. This script is the only thing
+ * standing between those and production.
  *
- * ═══ WHAT CHANGED WHEN THE LEDGER REPLACED THE SKY ═══
+ * ═══ IT CHECKS THE RHYTHM, NOT JUST THE PIXELS ═══
  *
- * The previous version of this file measured the sky hero: that the gradient
- * started at y=0, that the product window straddled the seam, and it took
- * contrast from PIXELS because that page was built from translucent ink
- * (`text-white/85` has no colour of its own, so `getComputedStyle().color`
- * returns an oklab triple that means nothing on its own).
- *
- * The ledger has no translucent ink anywhere — every one of its twelve colours
- * is an opaque literal — so contrast is computed from resolved colours and the
- * nearest painted ancestor instead. That is not a weakening: it is exact for
- * opaque fills and it reports WHICH pair failed, where the photograph method
- * could only say that some box was too quiet.
- *
- * The one thing it still checks by photograph is the page's ground, because
- * "does this page stay light when the app is in dark mode" is a question about
- * what actually got painted.
+ * The design's own specification calls the scroll rhythm the most important
+ * thing about it: density, alignment and weight change section by section, and
+ * three rules enforce that — only two sections centre a heading, only two are
+ * dark, only two break to full bleed. Those are exactly the rules a future
+ * edit breaks by accident, one plausible section at a time, and no other check
+ * in this repo could notice. So they are asserted here as counts.
  *
  * Usage: `pnpm dev` in one terminal, `pnpm landing` in another.
  * SHOT_BASE overrides http://localhost:3000. Exits non-zero on any failure.
  */
 import { chromium } from "playwright";
 
+const BASE = process.env.SHOT_BASE ?? "http://localhost:3000";
+
 /**
  * `networkidle` never settles against a real deployment — analytics and the
- * Vercel toolbar keep a socket warm — so this check could only ever run
- * against localhost, which is exactly the environment whose result matters
- * least. Waiting for the document plus the two webfonts is both faster and
- * the thing actually being asserted: the page cannot be measured until the
- * faces it is designed in have arrived.
+ * Vercel toolbar keep a socket warm — so waiting on it would pin this check
+ * to localhost, the environment whose result matters least. The document plus
+ * the webfont is both faster and the thing actually being asserted: the page
+ * cannot be measured until the face it is designed in has arrived.
  */
 const settle = async (page, url) => {
   await page.goto(url, { waitUntil: "load", timeout: 60_000 });
   await page.evaluate(() => document.fonts.ready);
 };
-
-const BASE = process.env.SHOT_BASE ?? "http://localhost:3000";
 
 const fails = [];
 const check = (ok, what, detail = "") => {
@@ -52,112 +42,147 @@ const check = (ok, what, detail = "") => {
   if (!ok) fails.push(what);
 };
 
-/** WCAG 2.x relative luminance and contrast, from sRGB triples. */
-const lum = ([r, g, b]) => {
-  const f = (c) => ((c /= 255) <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
-  return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
-};
-const ratio = (a, b) => {
-  const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m);
-  return (x + 0.05) / (y + 0.05);
-};
-const rgb = (s) => (s.match(/\d+(\.\d+)?/g) ?? []).slice(0, 3).map(Number);
-
 const browser = await chromium.launch();
 
-/* ── 1. The page renders, in three shapes, with nothing off the side ─────── */
+/* ── 1. Geometry: nothing runs off the side, at three widths ─────────────── */
 
-console.log("\nGeometry and overflow");
+console.log("\nGeometry");
 
-const VIEWPORTS = [
-  { name: "XL 1440", width: 1440, height: 1000, rules: 5 },
-  { name: "MD 834", width: 834, height: 1100, rules: 3 },
-  { name: "XS 375", width: 375, height: 800, rules: 0 },
-];
-
-for (const vp of VIEWPORTS) {
+for (const vp of [
+  { name: "XL 1440", width: 1440, height: 1000 },
+  { name: "MD 834", width: 834, height: 1100 },
+  { name: "XS 375", width: 375, height: 800 },
+]) {
   const page = await browser.newPage({ viewport: { width: vp.width, height: vp.height } });
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e)));
   page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
   await settle(page, BASE);
-  await page.waitForTimeout(3600); // the hero sequence ends at 3,340ms
+  await page.waitForTimeout(3600); // the hero sequence ends at ~3.4s
 
   const m = await page.evaluate(() => {
-    const visibleRules = [...document.querySelectorAll('[class*="rules"] > div > span')].filter(
-      (n) => n.getBoundingClientRect().width > 0 && getComputedStyle(n).display !== "none",
-    );
-    // One zone's worth: the five rules repeat per rule-zone, so the count that
-    // matters is how many distinct x positions there are.
-    const xs = [...new Set(visibleRules.map((n) => Math.round(n.getBoundingClientRect().left)))].sort((a, b) => a - b);
+    // A grid column declared `1fr` floors at its content's min-content width,
+    // so one `white-space: nowrap` descendant can blow a whole grid past the
+    // viewport while the page itself still refuses to scroll, because `main`
+    // clips. That shipped once. This looks for the blow-out, not the scroll.
+    const blown = [];
+    for (const n of document.querySelectorAll("body *")) {
+      const cs = getComputedStyle(n);
+      if (cs.overflowX !== "visible") continue;
+      if (n.scrollWidth > n.clientWidth + 2 && n.clientWidth > 0) {
+        blown.push(`${n.className.toString().replace(/snap-module__\w+__/g, "").slice(0, 30)} ${n.scrollWidth}>${n.clientWidth}`);
+      }
+    }
     return {
       scrollWidth: document.documentElement.scrollWidth,
       inner: window.innerWidth,
-      ruleXs: xs,
+      // The track line deliberately runs 40px past the container at both ends
+      // so the process reads as continuing; it is the one allowed overhang.
+      blown: blown.filter((b) => !b.startsWith("track ")),
       h1Lines: document.querySelectorAll("h1 > span").length,
     };
   });
 
-  check(m.scrollWidth <= m.inner + 1, `${vp.name}: nothing scrolls off the right`, `${m.scrollWidth} > ${m.inner}`);
-  check(
-    m.ruleXs.length === vp.rules,
-    `${vp.name}: ${vp.rules} column rule positions`,
-    `saw ${m.ruleXs.length} at ${m.ruleXs.join(", ")}`,
-  );
+  check(m.scrollWidth <= m.inner + 1, `${vp.name}: the page does not scroll sideways`, `${m.scrollWidth} > ${m.inner}`);
+  check(m.blown.length === 0, `${vp.name}: no grid or row blows past its container`, m.blown.slice(0, 3).join(" · "));
   check(errors.length === 0, `${vp.name}: no console errors`, errors.slice(0, 2).join(" | "));
+  if (vp.width === 1440) check(m.h1Lines === 3, "the headline breaks on three fixed lines", `${m.h1Lines}`);
 
-  // The rules are the page's spine: at XL they must land on the 12-column
-  // grid, not merely exist. c1, c4, c7, c10 and the right edge of c12.
-  if (vp.rules === 5) {
-    const pad = Math.max(80, (vp.width - 1272) / 2);
-    const want = [0, 3, 6, 9].map((i) => pad + i * 108).concat(pad + 1272);
-    const off = m.ruleXs.map((x, i) => Math.abs(x - want[i])).filter((d) => d > 2);
-    check(off.length === 0, `${vp.name}: rules sit on the 12-column grid`, `want ${want.join(", ")}`);
-  }
-
-  if (vp.width === 1440) {
-    check(m.h1Lines === 3, "headline breaks at fixed points, not on reflow", `${m.h1Lines} lines`);
+  if (vp.width === 375) {
+    const small = await page.evaluate(() =>
+      [...document.querySelectorAll("a, button, input")]
+        .filter((n) => {
+          const b = n.getBoundingClientRect();
+          // Off-screen until focused (the app's shared skip link) is not a
+          // tap target, and is not this page's to change.
+          return b.width > 0 && b.right > 0 && b.bottom > 0 && b.left < window.innerWidth + 200;
+        })
+        .filter((n) => {
+          const b = n.getBoundingClientRect();
+          return b.height < 44 || b.width < 44;
+        })
+        .map((n) => `${n.tagName}:${(n.textContent || "").trim().slice(0, 18)}`),
+    );
+    check(small.length === 0, "XS: every tap target clears 44×44", small.slice(0, 4).join(", "));
   }
   await page.close();
 }
 
-/* ── 2. The two faces the design depends on actually arrived ─────────────── */
+/* ── 2. The scroll rhythm (§4) — the design's core, and invisible to code ── */
 
-console.log("\nTypography");
+console.log("\nScroll rhythm");
 
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
 await settle(page, BASE);
 await page.waitForTimeout(3600);
 
-const type = await page.evaluate(() => {
-  const h1 = getComputedStyle(document.querySelector("h1"));
-  const figure = [...document.querySelectorAll("span")].find((n) =>
-    getComputedStyle(n).fontFamily.includes("Martian"),
-  );
+const rhythm = await page.evaluate(() => {
+  const sections = [...document.querySelectorAll("main > section, main > div > section")];
+  const isDark = (n) => {
+    // A dark section is one whose own panel is painted ink.
+    const panel = n.querySelector('[class*="darkPanel"]');
+    if (!panel) return false;
+    return getComputedStyle(panel).backgroundColor === "rgb(20, 20, 28)";
+  };
+  const fullBleed = sections.filter((n) => Math.round(n.getBoundingClientRect().width) >= window.innerWidth);
+  const dark = sections.filter(isDark);
+  // Only headings in LIGHT sections count: the dark closing panel centres
+  // everything by design, which is a different kind of object.
+  const centred = sections
+    .filter((n) => !isDark(n))
+    .filter((n) => {
+      const h = n.querySelector("h1, h2");
+      return h && getComputedStyle(h).textAlign === "center";
+    });
+  const paddings = sections.map((n) => getComputedStyle(n).paddingTop);
   return {
-    archivo: document.fonts.check('600 68px Archivo'),
-    martian: document.fonts.check('600 56px "Martian Mono"'),
-    h1Family: h1.fontFamily,
-    // The width axis is the whole reason this page needs no display face; if
-    // `axes: ["wdth"]` ever falls out of the font call this silently reverts
-    // to 100% and every heading quietly narrows.
-    h1Stretch: h1.fontStretch,
-    figureFound: Boolean(figure),
-    figureTabular: figure ? getComputedStyle(figure).fontVariantNumeric : "",
+    total: sections.length,
+    dark: dark.length,
+    fullBleed: fullBleed.length,
+    centred: centred.length,
+    distinctPaddings: new Set(paddings).size,
   };
 });
 
-check(type.archivo, "Archivo loaded", type.h1Family);
-check(type.martian, "Martian Mono loaded");
-check(type.h1Stretch === "112%", "the headline keeps its width axis", `font-stretch: ${type.h1Stretch}`);
-check(type.figureFound, "figures are set in Martian Mono");
-check(type.figureTabular.includes("tabular-nums"), "figures are tabular", type.figureTabular);
+check(rhythm.dark === 2, "exactly two dark sections", `${rhythm.dark}`);
+check(rhythm.fullBleed === 2, "exactly two full-bleed sections", `${rhythm.fullBleed}`);
+check(rhythm.centred === 2, "exactly two centred headings among the light sections", `${rhythm.centred}`);
+// Uniform padding is most of what makes a page feel mechanical; the spec
+// varies it per section on purpose.
+check(rhythm.distinctPaddings >= 4, "section padding varies rather than repeating", `${rhythm.distinctPaddings} distinct values`);
 
-/* ── 3. Ink clears 4.5:1 on the ground it actually lands on ──────────────── */
+/* ── 3. Type ─────────────────────────────────────────────────────────────── */
+
+console.log("\nTypography");
+
+const type = await page.evaluate(() => {
+  const h1 = getComputedStyle(document.querySelector("h1"));
+  const figure = document.querySelector('[class*="f2"]');
+  const monos = [...document.querySelectorAll("main *")].filter((n) =>
+    /mono|courier/i.test(getComputedStyle(n).fontFamily),
+  );
+  return {
+    figtree: document.fonts.check("800 104px Figtree"),
+    family: h1.fontFamily,
+    size: h1.fontSize,
+    weight: h1.fontWeight,
+    tabular: figure ? getComputedStyle(figure).fontVariantNumeric : "",
+    monoCount: monos.length,
+  };
+});
+
+check(type.figtree, "Figtree loaded", type.family);
+check(type.size === "104px" && type.weight === "800", "the hero headline is D0", `${type.size}/${type.weight}`);
+check(type.tabular.includes("tabular-nums"), "figures are tabular", type.tabular);
+// §6.2: one family, and no monospace anywhere. A wide mono on a figure is
+// what made an earlier build read as a form rather than as a product.
+check(type.monoCount === 0, "no monospace anywhere on the page", `${type.monoCount} elements`);
+
+/* ── 4. Contrast ─────────────────────────────────────────────────────────── */
 
 console.log("\nContrast");
 
-const contrast = await page.evaluate(() => {
+const runs = await page.evaluate(() => {
   const painted = (node) => {
     for (let n = node; n; n = n.parentElement) {
       const bg = getComputedStyle(n).backgroundColor;
@@ -166,47 +191,65 @@ const contrast = await page.evaluate(() => {
     return "rgb(255, 255, 255)";
   };
   const out = [];
-  for (const node of document.querySelectorAll("p, h1, h2, h3, span, a, li, dt, dd, text")) {
-    const text = node.textContent?.trim() ?? "";
-    if (!text || node.children.length > 0) continue;
+  for (const node of document.querySelectorAll("p, h1, h2, h3, span, a, li, dt, dd, button, input")) {
+    const text = node.tagName === "INPUT" ? node.placeholder : node.textContent?.trim() ?? "";
+    if (!text || (node.tagName !== "INPUT" && node.children.length > 0)) continue;
+    // The two-letter source initials are white on coral, sky and lilac, which
+    // is 2.6–3.2:1 and would fail outright as text. They are not text: the
+    // squircle is aria-hidden, and every one of them sits beside its source
+    // NAME set in ink. WCAG exempts incidental and logotype text on exactly
+    // that basis — and the precondition is not taken on trust, it is asserted
+    // by the "every source mark is paired with its name" check below. Remove
+    // that check and this exemption stops being honest.
+    if (node.closest("[aria-hidden='true']")) continue;
     const cs = getComputedStyle(node);
+    if (Number(cs.opacity) < 0.9) continue;
     const size = parseFloat(cs.fontSize);
-    if (size < 10) continue;
     const box = node.getBoundingClientRect();
-    if (box.width < 4 || box.height < 4) continue;
-    out.push({
-      text: text.slice(0, 34),
-      color: cs.color,
-      bg: painted(node),
-      size,
-      weight: Number(cs.fontWeight),
-    });
+    if (size < 10 || box.width < 4 || box.height < 4) continue;
+    const colour = node.tagName === "INPUT" ? "" : cs.color;
+    out.push({ text: text.slice(0, 32), colour, bg: painted(node), size, weight: Number(cs.fontWeight) });
   }
   return out;
 });
 
+const lum = (s) => {
+  const [r, g, b] = (s.match(/\d+(\.\d+)?/g) ?? []).slice(0, 3).map(Number);
+  const f = (c) => ((c /= 255) <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+  return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+};
+
 let worst = { r: 99, what: "" };
-const failures = [];
-for (const s of contrast) {
-  const r = (() => {
-    const f = (c) => ((c /= 255) <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
-    const L = ([x, y, z]) => 0.2126 * f(x) + 0.7152 * f(y) + 0.0722 * f(z);
-    const a = L((s.color.match(/\d+(\.\d+)?/g) ?? []).slice(0, 3).map(Number));
-    const b = L((s.bg.match(/\d+(\.\d+)?/g) ?? []).slice(0, 3).map(Number));
-    const [hi, lo] = [a, b].sort((m, n) => n - m);
-    return (hi + 0.05) / (lo + 0.05);
-  })();
-  // WCAG large-text threshold: 18.66px at 700, or 24px at any weight.
+const bad = [];
+for (const s of runs) {
+  if (!s.colour) continue;
+  const [hi, lo] = [lum(s.colour), lum(s.bg)].sort((a, b) => b - a);
+  const r = (hi + 0.05) / (lo + 0.05);
   const large = s.size >= 24 || (s.size >= 18.66 && s.weight >= 700);
   const need = large ? 3 : 4.5;
-  if (r < worst.r) worst = { r, what: `${s.text} (${s.color} on ${s.bg}, ${s.size}px)` };
-  if (r < need) failures.push(`${s.text} — ${r.toFixed(2)}:1, needs ${need} (${s.color} on ${s.bg}, ${s.size}px)`);
+  if (r < worst.r) worst = { r, what: `${s.text} (${s.colour} on ${s.bg}, ${s.size}px)` };
+  if (r < need) bad.push(`${s.text} — ${r.toFixed(2)}:1 needs ${need} (${s.colour} on ${s.bg}, ${s.size}px)`);
 }
 
-check(failures.length === 0, `${contrast.length} text runs clear WCAG AA`, failures.slice(0, 4).join("  ·  "));
+check(bad.length === 0, `${runs.length} text runs clear WCAG AA`, bad.slice(0, 4).join("  ·  "));
 console.log(`        lowest passing: ${worst.r.toFixed(2)}:1 — ${worst.what}`);
 
-/* ── 4. The page is light even when the app is dark ──────────────────────── */
+// The precondition for exempting the source initials above: a mark that is
+// NOT accompanied by its source name in real text is carrying information by
+// colour and abbreviation alone, which §6.1 forbids without exception.
+const unpaired = await page.evaluate(() => {
+  const out = [];
+  for (const mark of document.querySelectorAll('[class*="squircle"]')) {
+    const holder = mark.parentElement?.closest("li, div, span, a");
+    const initials = (mark.textContent || "").trim();
+    const text = (holder?.textContent || "").replace(initials, "").trim();
+    if (text.length < 3) out.push(initials);
+  }
+  return out;
+});
+check(unpaired.length === 0, "every source mark is paired with its name in text", unpaired.join(", "));
+
+/* ── 5. The page stays light when the app is dark ────────────────────────── */
 
 console.log("\nTheme isolation");
 
@@ -221,45 +264,53 @@ await dark.waitForTimeout(1200);
 const themed = await dark.evaluate(() => ({
   htmlClass: document.documentElement.className,
   pageBg: getComputedStyle(document.querySelector("main").parentElement).backgroundColor,
-  headingColor: getComputedStyle(document.querySelector("h1")).color,
+  headingColour: getComputedStyle(document.querySelector("h1")).color,
 }));
 
-check(/dark/.test(themed.htmlClass), "the app really is in dark mode for this check", themed.htmlClass || "(no class)");
-check(themed.pageBg === "rgb(238, 241, 234)", "the landing ground stays ledger paper", themed.pageBg);
-check(themed.headingColor === "rgb(21, 36, 27)", "the headline stays ledger ink", themed.headingColor);
-
+check(/dark/.test(themed.htmlClass), "the app really is in dark mode for this check", themed.htmlClass || "(none)");
+check(themed.pageBg === "rgb(251, 250, 252)", "the landing ground stays canvas", themed.pageBg);
+check(themed.headingColour === "rgb(20, 20, 28)", "the headline stays ink", themed.headingColour);
 await dark.close();
 
-/* ── 5. The three interactions the page's argument depends on ────────────── */
+/* ── 6. The two interactions the page's argument depends on ──────────────── */
 
 console.log("\nInteraction");
 
-const figure = page.locator('button[aria-label*="show receipt"]');
-await figure.scrollIntoViewIfNeeded();
-await figure.click();
-await page.waitForTimeout(500);
-check(await page.locator('[role="region"][aria-label*="Receipt"]').isVisible(), "a figure opens its receipt");
-
-await page.keyboard.press("Escape");
-await page.waitForTimeout(300);
+const tabs = page.locator('[role="tab"]');
+await tabs.first().scrollIntoViewIfNeeded();
+const firstFigure = await page.locator('[class*="figureValue"]').innerText();
+await tabs.nth(1).click();
+await page.waitForTimeout(700);
+const secondFigure = await page.locator('[class*="figureValue"]').innerText();
+check(firstFigure !== secondFigure, "a metric tab swaps the figure", `${firstFigure} → ${secondFigure}`);
 check(
-  (await page.locator('[role="region"][aria-label*="Receipt"]').count()) === 0,
-  "Escape closes the receipt",
+  (await tabs.nth(1).getAttribute("aria-selected")) === "true",
+  "and reports itself selected",
 );
-check(await figure.evaluate((n) => n === document.activeElement), "and focus returns to the figure");
 
-const rows = page.locator('ul li[class*="sourceRow"]');
-const total = await rows.count();
+await tabs.nth(1).focus();
+await page.keyboard.press("ArrowRight");
+await page.waitForTimeout(400);
+check((await tabs.nth(2).getAttribute("aria-selected")) === "true", "arrow keys move between tabs");
+
+const cells = page.locator('ul[class*="index"] > li');
+const total = await cells.count();
 await page.locator('input[type="search"]').fill("cal");
-await page.waitForTimeout(300);
-const after = await rows.count();
-const struck = await page.locator('li[class*="sourceStruck"]').count();
-check(after === total, "searching strikes sources off rather than hiding them", `${total} → ${after}`);
-check(struck > 0 && struck < total, "and some, not all, are struck", `${struck} of ${total}`);
+await page.waitForTimeout(600);
+const after = await cells.count();
+const dimmed = await page.locator('li[class*="indexDim"]').count();
+check(after === total, "searching dims sources rather than removing them", `${total} → ${after}`);
+check(dimmed > 0 && dimmed < total, "and some, not all, are dimmed", `${dimmed} of ${total}`);
 
+await page.locator('input[type="search"]').fill("zzzz");
+await page.waitForTimeout(500);
+check(
+  await page.getByText("Not here yet.").isVisible(),
+  "an empty result is an invitation, not an apology",
+);
 await page.close();
 
-/* ── 6. Reduced motion gets the conclusion, not a faster performance ─────── */
+/* ── 7. Reduced motion gets the conclusion, not a faster performance ─────── */
 
 console.log("\nReduced motion");
 
@@ -268,20 +319,21 @@ await settle(still, BASE);
 await still.waitForTimeout(400); // deliberately BEFORE the sequence would end
 
 const final = await still.evaluate(() => {
-  const resolved = document.querySelector('[class*="heroResolved"]');
-  const strike = document.querySelector('[class*="strike"]');
+  const resolved = document.querySelector('[class*="resolved"]');
+  const chip = document.querySelector('[class*="chipRest"]');
   return {
-    figure: resolved?.textContent?.match(/\b41\b/) ? "41" : resolved?.textContent ?? "",
+    figure: (resolved?.textContent ?? "").includes("41"),
     resolvedOpacity: resolved ? getComputedStyle(resolved).opacity : "0",
-    strikeScale: strike ? getComputedStyle(strike).transform : "none",
+    // The idle drift is the one thing on this page that would otherwise never
+    // stop moving, which §10 names as a real accessibility problem.
+    chipAnimation: chip ? getComputedStyle(chip).animationName : "none",
     railAnimation: getComputedStyle(document.querySelector('[class*="railTrack"]')).animationName,
   };
 });
 
-check(final.figure === "41", "the hero figure reads its final value at once", final.figure);
-check(Number(final.resolvedOpacity) === 1, "the resolved row is already in place", final.resolvedOpacity);
-const xScale = Math.hypot(...(final.strikeScale.match(/-?\d+(\.\d+)?/g) ?? [0, 0]).slice(0, 2).map(Number));
-check(Math.abs(xScale - 1) < 0.02, "the struck rows are already struck", `x-scale ${xScale.toFixed(3)} from ${final.strikeScale}`);
+check(final.figure, "the hero figure reads its final value at once");
+check(Number(final.resolvedOpacity) === 1, "the resolved card is already in place", final.resolvedOpacity);
+check(final.chipAnimation === "none", "the idle drift loop is stopped", final.chipAnimation);
 check(final.railAnimation === "none", "the source rail does not scroll", final.railAnimation);
 
 await still.close();

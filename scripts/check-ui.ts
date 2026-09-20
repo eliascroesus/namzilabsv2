@@ -491,21 +491,22 @@ const RULES: Rule[] = [
       /**
        * THE LANDING PAGE IS NOT THE APP, AND THAT IS THE WHOLE POINT OF IT.
        *
-       * `/` is built from its own design system — pale ledger paper, four
-       * radii where the kit names one, a `verified` green that appears
-       * nowhere in the product — because it is an argument aimed at somebody
+       * `/` is built from its own design system — five source colours
+       * resolving into ink, pills where the kit names one radius, a shadow
+       * ladder the product retired — because it is an argument aimed at
+       * somebody
        * who has not decided to care yet, not a surface somebody works in.
        * Routing its controls through `Button` would mean taking the kit's
        * height, radius, fill and focus ring and then overriding all four,
        * which is a disguise rather than reuse.
        *
        * Narrowly scoped to this directory: a raw <button> anywhere else in
-       * `src/components/marketing` or in the app still fails. The three here
-       * are the nav's Menu and Close, and the receipt's figure trigger — a
-       * control whose cursor is `help` because it reveals rather than
-       * navigates, which is not one of Button's eight variants either.
+       * `src/components/marketing` or in the app still fails. The ones here
+       * are the nav's Menu and Close, and S05's metric tabs — a real
+       * `role="tablist"` with arrow-key navigation, which is not one of
+       * Button's eight variants either.
        */
-      "src/components/marketing/ledger": "the landing page's own design system: paper radii, a green that exists nowhere in the app, and a reveal control the kit has no variant for",
+      "src/components/marketing/snap": "the landing page's own design system: pill radii, a five-colour source palette that exists nowhere in the app, and a real tablist the kit has no variant for",
       /**
        * A SEGMENTED CONTROL, WHICH THE KIT DOES NOT HAVE. The billing toggle
        * is two options sharing one track, where the selected half is raised

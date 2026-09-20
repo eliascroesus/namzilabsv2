@@ -18,18 +18,30 @@ vi.mock("next/link", () => ({
 // page only ever reads `.variable` off them, which is the class name that
 // carries the CSS custom property.
 vi.mock("next/font/google", () => ({
-  Archivo: () => ({ variable: "ledger-sans", className: "ledger-sans" }),
-  Martian_Mono: () => ({ variable: "ledger-mono", className: "ledger-mono" }),
+  Figtree: () => ({ variable: "snap-sans", className: "snap-sans" }),
 }));
 
 import Home from "@/app/page";
 
 describe("homepage (logged out)", () => {
-  it("renders and links to /sign-in and /sign-up (no dashboard link)", async () => {
+  /**
+   * The invariant is that a logged-out visitor is offered a way to SIGN UP
+   * and a way to LOG IN, and is never handed a dashboard link they cannot
+   * use — that last one is what caused a 500 once, when the page called the
+   * PKCE URL helpers during render instead of only reading `user`.
+   *
+   * It used to assert `/sign-in` specifically, because that was the path the
+   * marketing nav happened to use. The nav now links `/login` directly rather
+   * than through the redirect, which is one hop fewer for a real person;
+   * `/sign-in` still redirects for old invite emails and bookmarks, and
+   * tests/auth-routes.test.ts is what guarantees that, independently of which
+   * path this page chooses today.
+   */
+  it("offers sign-up and log-in, and no dashboard link", async () => {
     const element = await Home();
     const html = renderToStaticMarkup(element);
-    expect(html).toContain('href="/sign-in"');
     expect(html).toContain('href="/sign-up"');
+    expect(html).toMatch(/href="\/(login|sign-in)"/);
     expect(html).not.toContain('href="/dashboard"');
   });
 });

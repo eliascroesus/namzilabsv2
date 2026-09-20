@@ -1,103 +1,75 @@
 import Link from "next/link";
-import { Archivo, Martian_Mono } from "next/font/google";
+import { Figtree } from "next/font/google";
 import { withAuth } from "@workos-inc/authkit-nextjs";
 import { CONNECTOR_CATALOG } from "@/connectors/catalog";
-import styles from "./ledger.module.css";
-import { LedgerNav } from "@/components/marketing/ledger/nav";
-import { SourceRail } from "@/components/marketing/ledger/rail";
-import { Steps } from "@/components/marketing/ledger/steps";
-import { ReceiptFigure } from "@/components/marketing/ledger/receipt";
-import { SourceSearch } from "@/components/marketing/ledger/source-search";
-import { CountUp } from "@/components/marketing/ledger/count-up";
-import { CanvasShot } from "@/components/marketing/ledger/canvas-shot";
-import { Tick, SourceTile } from "@/components/marketing/ledger/marks";
+import styles from "./snap.module.css";
+import { SnapNav } from "@/components/marketing/snap/nav";
+import { SourceRail } from "@/components/marketing/snap/rail";
+import { ReceiptTabs, type Metric } from "@/components/marketing/snap/receipt-tabs";
+import { SourceIndex } from "@/components/marketing/snap/source-index";
+import { CountUp } from "@/components/marketing/snap/count-up";
+import { CanvasShot } from "@/components/marketing/snap/canvas-shot";
+import { Squircle, Tick, LogoMark } from "@/components/marketing/snap/marks";
 
 /**
- * THE FRONT DOOR, BUILT AS A LEDGER.
+ * THE FRONT DOOR — "Snap".
  *
- * ═══ WHY THIS PAGE DOES NOT LOOK LIKE THE PRODUCT ═══
+ * ═══ THE CONCEPT, IN ONE SENTENCE ═══
  *
- * Namzilabs is not a dashboard product, it is an AUDIT product: its claim is
- * that a number can be CHECKED. So the visual world is not the world of BI
- * software — glowing charts on dark glass, which is what the previous page and
- * every competitor reach for — it is the world of reconciliation. Ruled
- * columns, greenbar paper, tick marks, corrections in red, footnotes that say
- * where a figure came from. Used as a substrate and never as a costume: a
- * visitor should not think "retro", they should think "this was made by people
- * who care whether the number is right".
+ * Five tools each hold a piece of an answer; they snap together into one.
+ * Scattered and colourful resolves into single and certain. Every source owns
+ * a bright colour and they float, tilted, separate; the thing that reconciles
+ * them is a solid ink-black card holding one number. COLOUR IS THE PROBLEM.
+ * INK IS THE ANSWER. That is not a skin over the argument, it IS the argument,
+ * which is why a source colour may never fill a button and a resolved figure
+ * may never be anything but ink.
  *
- * ═══ THE FIVE PRINCIPLES, BECAUSE THEY ARE WHAT A FUTURE EDIT WILL BREAK ═══
+ * ═══ THE SCROLL RHYTHM, WHICH IS THE PART A FUTURE EDIT WILL BREAK ═══
  *
- *  1. PAPER IS SQUARE, SOFTWARE IS ROUND. A sheet of paper has a 0px radius; a
- *     crop of the actual product UI has 12px. Radius carries MEANING here. It
- *     is not a style setting to be harmonised later.
- *  2. LEFT-ALIGNED, RULED, COLUMNAR. Figures right-align inside their column,
- *     as they do in any ledger. Exactly one element on the page is centred and
- *     it is the closing panel.
- *  3. STRUCTURE ENCODES INFORMATION. A rule appears where there is a column
- *     boundary; a footnote marker appears only where a receipt genuinely
- *     exists. No divider and no label on this page is decorative.
- *  4. SPEND THE BOLDNESS ONCE. The hero reconciliation is the memorable thing.
- *     If a later section starts competing with it, cut the later section back.
- *  5. RED INK MEANS DISAGREEMENT. `correction` marks records that disagree, do
- *     not match, or are missing. Never an emphasis colour, never a heading,
- *     never a button.
+ * A landing page is read as one continuous experience. If every section is a
+ * centred heading over a grid of cards, it reads as generated no matter how
+ * good the palette is. So density, alignment and weight change as you scroll:
  *
- * ═══ WHAT THIS PAGE REFUSES TO DO, AND WHY EACH ONE IS LISTED ═══
+ *   big · thin · dense · wide · medium · heavy · quiet · wide · thin · heavy
  *
- * Every item below is a plausible default that would make the page generic:
- * fade-up-on-scroll section entrances, hover lifts on cards, a row of
- * identical rounded cards with identical shadows, a tracked-out ALL-CAPS
- * eyebrow above each heading, an arrow glyph after a button label, monospace
- * for small labels, gradients as decoration, a "Trusted by" logo wall, star
- * ratings, invented testimonials. None of them are here. The page has ONE
- * orchestrated sequence (the hero, once, never replayed) and ONE ambient loop
- * (the source rail). Everything else moves only when a person does something.
+ * No two neighbours match, and three rules enforce it:
  *
- * ═══ AND WHAT IT REFUSES TO CLAIM ═══
+ *   1. ONLY S01 and S07 centre their heading. Everything else is left-aligned
+ *      at the container's left edge.
+ *   2. ONLY S06 and S10 are dark, and three light sections separate them.
+ *   3. ONLY S02 and S08 break the container to full bleed, and they sit at
+ *      opposite ends of the page.
  *
- * There is no social proof on this page because there are no customers to
- * count yet. The source list and its count are read from CONNECTOR_CATALOG
- * rather than typed, so the page cannot advertise an integration the product
- * does not ship; the closing stats are four facts this repository can be
- * checked against. A landing page is the easiest place in a product to lie and
- * the most expensive place to be caught.
+ * Section padding is per-section rather than a global constant for the same
+ * reason. Adding a fourth centred heading, a third dark panel or a uniform
+ * `py-32` would undo more of this design than changing the palette would.
+ *
+ * ═══ WHAT IS DELIBERATELY ABSENT ═══
+ *
+ * No fade-up-on-scroll entrance on any section — sections are simply present
+ * when reached, and that single rule does more to separate a designed page
+ * from a generated one than anything else here. No parallax. No glassmorphism
+ * beyond the nav pill. No linear top-to-bottom gradient; atmosphere is radial
+ * blooms. No emoji, mascot, 3D render, stock photo, star rating, press badge
+ * or testimonial — there are no customers to count yet, so the page counts
+ * none. The source list and its count are read from CONNECTOR_CATALOG rather
+ * than typed, so the page cannot advertise an integration that does not ship.
  */
-/**
- * TWO FAMILIES, TWO JOBS, AND THEY ARE LOADED HERE RATHER THAN IN THE ROOT
- * LAYOUT — which is the load-bearing part of this declaration.
- *
- * next/font scopes a face to the component that imports it, so these two ship
- * with `/` and with nothing else. The app keeps Inter, the root layout is
- * untouched, and no other route pays for a font it never renders. Putting them
- * in layout.tsx would have been one line shorter and would have added two
- * families to every dashboard, form and legal page in the product.
- *
- * ARCHIVO IS HERE FOR ITS WIDTH AXIS, which is why `axes: ["wdth"]` is not
- * optional garnish: next/font ships only `wght` by default to keep the file
- * small, and without `wdth` every `font-stretch` in the stylesheet silently
- * does nothing. The hero sets 112, section headings 108, body 100 — one family
- * doing two visually distinct jobs is the whole reason this page needs no
- * separate display face.
- *
- * MARTIAN MONO IS FOR NUMERALS ONLY — figures, currency, dates, counts. Never
- * a heading, never a button, and above all never a small label: a tracked-out
- * monospace label above a heading is the single most recognisable tell of a
- * generated page, and this one does not have a single one.
- */
-const archivo = Archivo({
-  subsets: ["latin"],
-  axes: ["wdth"],
-  display: "swap",
-  variable: "--ledger-sans",
-});
 
-const martianMono = Martian_Mono({
-  subsets: ["latin"],
-  weight: ["400", "600"],
-  display: "swap",
-  variable: "--ledger-mono",
-});
+/**
+ * ONE FAMILY, LOADED HERE RATHER THAN IN THE ROOT LAYOUT.
+ *
+ * next/font scopes a face to the component that imports it, so Figtree ships
+ * with `/` and with nothing else: the app keeps Inter, layout.tsx is
+ * untouched, and no dashboard, form or legal page pays for a font it never
+ * renders. Putting it in the layout would be one line shorter and would add a
+ * family to every route in the product.
+ *
+ * There is NO second face and no monospace. Figures are Figtree 800 with
+ * tabular numerals — a wide mono on a figure is what made an earlier build
+ * read as a tax form rather than as a product.
+ */
+const figtree = Figtree({ subsets: ["latin"], display: "swap", variable: "--snap-sans" });
 
 export const metadata = {
   title: "Namzilabs — your best metrics live between your tools",
@@ -106,35 +78,40 @@ export const metadata = {
 };
 
 /**
- * The hero instrument. Four sources disagreeing, then the resolution.
+ * The hero's five chips. Positions, rotations and figures are all specified
+ * rather than chosen: the tilts are small (2–4°) because anything larger
+ * reads as decoration instead of as objects that have not been squared up
+ * yet, and the arithmetic reconciles on purpose — 123 records in, 82 of them
+ * the same people seen twice, 41 left. A demo whose numbers do not add up is
+ * a demo of exactly the problem this product claims to fix.
  *
- * The arithmetic reconciles on purpose: 123 records arrive, 82 of them are the
- * same people seen twice, 41 remain. A demo whose numbers do not add up is a
- * demo of exactly the problem this product claims to fix.
- *
- * `struck` marks the two rows the reconciliation crosses out — Close's 38 and
- * the hand-kept sheet's 44 are the same meetings Calendly already counted.
+ * `drop` marks the two that leave at phone width: five chips in a single
+ * column is a list, and three plus an answer is a story.
  */
-const HERO_ROWS = [
-  { name: "Calendly", short: "Ca", desc: "invitee-created events", figure: "41", struck: false },
-  { name: "Close CRM", short: "Cl", desc: "meetings logged to a lead", figure: "38", struck: true },
-  { name: "Google Sheets", short: "GS", desc: "the sheet the team keeps by hand", figure: "44", struck: true },
-  { name: "Instantly", short: "In", desc: "replies that booked something", figure: "12", struck: false },
+const CHIPS = [
+  { name: "Calendly", short: "Ca", desc: "invitee-created events", figure: "41", x: 24, y: 40, rot: -4, drop: false },
+  { name: "Stripe", short: "St", desc: "payments matched to a meeting", figure: "29", x: 908, y: 16, rot: 3, drop: true },
+  { name: "Google Sheets", short: "GS", desc: "the sheet kept by hand", figure: "44", x: 8, y: 300, rot: 3.5, drop: false },
+  { name: "Close CRM", short: "Cl", desc: "meetings logged to a lead", figure: "38", x: 898, y: 272, rot: -3, drop: false },
+  { name: "Instantly", short: "In", desc: "replies that booked something", figure: "12", x: 466, y: 352, rot: -2, drop: true },
 ];
 
 /**
- * S03. Six tools, six partial truths, and the clause that makes each one
- * useless on its own — which is the section's whole argument: the problem is
- * not "I lack a dashboard", it is "my tools disagree and I cannot adjudicate
- * it".
+ * S03. Six tools, six partial truths.
+ *
+ * The clause is a neutral line with a small dot rather than a red strike
+ * through the row, and the reason is in the heading directly above it: these
+ * tools are not WRONG, they are partial. A strike reads as an error and would
+ * contradict the sentence the reader just finished. The dot marks an absence
+ * without accusing anyone.
  */
 const DISAGREEMENT = [
-  { name: "Calendly", short: "Ca", knows: "Meetings booked", figure: "41", cant: "but not which ones showed up" },
-  { name: "Close CRM", short: "Cl", knows: "Deals created", figure: "18", cant: "but not what they cost to get" },
-  { name: "Instantly", short: "In", knows: "Replies", figure: "112", cant: "but not which became revenue" },
-  { name: "Stripe", short: "St", knows: "Revenue", figure: "$48.2k", cant: "but not which campaign earned it" },
-  { name: "Google Sheets", short: "GS", knows: "Rows, kept by hand", figure: "2,130", cant: "but not until Friday" },
-  { name: "Aircall", short: "Ai", knows: "Calls connected", figure: "306", cant: "but not against how many leads" },
+  { name: "Calendly", short: "Ca", label: "Meetings booked", figure: "41", clause: "but not which ones showed up" },
+  { name: "Close CRM", short: "Cl", label: "Deals created", figure: "18", clause: "but not what they cost to get" },
+  { name: "Instantly", short: "In", label: "Replies", figure: "112", clause: "but not which became revenue" },
+  { name: "Stripe", short: "St", label: "Revenue", figure: "$48.2k", clause: "but not which campaign earned it" },
+  { name: "Google Sheets", short: "GS", label: "Rows, kept by hand", figure: "2,130", clause: "but not until Friday" },
+  { name: "Aircall", short: "Ai", label: "Calls connected", figure: "306", clause: "but not against how many leads" },
 ];
 
 const STEPS = [
@@ -152,19 +129,51 @@ const STEPS = [
   },
 ];
 
-const RECEIPT_LINES = [
-  { key: "Sources read", value: "Calendly, Close CRM, Google Sheets" },
-  { key: "Last computed", value: "2 minutes ago" },
-  { key: "Records in", value: "123" },
-  { key: "Matched as the same person", value: "82" },
-  { key: "Excluded", value: "0" },
+const METRICS: Metric[] = [
+  {
+    tab: "Meetings held",
+    figure: "41",
+    value: 41,
+    kind: "count",
+    lines: [
+      { key: "Sources read", value: "Calendly, Close CRM, Google Sheets" },
+      { key: "Last computed", value: "2 minutes ago" },
+      { key: "Records in", value: "123" },
+      { key: "Matched as the same person", value: "82" },
+      { key: "Excluded", value: "0" },
+    ],
+    note: "Three sources disagreed on the count. 82 records described the same 41 meetings, so each was counted once, on the earliest timestamp any source recorded for it.",
+  },
+  {
+    tab: "Cost per held meeting",
+    figure: "$86.40",
+    value: 86.4,
+    kind: "currency",
+    lines: [
+      { key: "Sources read", value: "Stripe, Instantly, Calendly" },
+      { key: "Last computed", value: "2 minutes ago" },
+      { key: "Records in", value: "418" },
+      { key: "Matched as the same person", value: "129" },
+      { key: "Excluded", value: "6" },
+    ],
+    note: "Spend divided by the meetings two sources agree actually happened. Six charges were left out — four refunds and two test payments — because counting them would have made the number look better than it is.",
+  },
+  {
+    tab: "Speed to lead",
+    figure: "8m 39s",
+    value: 519,
+    kind: "duration",
+    lines: [
+      { key: "Sources read", value: "Instantly, Close CRM" },
+      { key: "Last computed", value: "9 minutes ago" },
+      { key: "Records in", value: "312" },
+      { key: "Matched as the same person", value: "0" },
+      { key: "Excluded", value: "14" },
+    ],
+    note: "Nothing needed matching here — both sources key on the same lead. 14 replies are excluded because nobody has answered them yet, and counting an unanswered reply as instant would flatter the figure.",
+  },
 ];
 
-/**
- * S07's panel is a designed representation of a chat exchange, not a live one.
- * The figures in it are the same ones the hero reconciles, so a reader who
- * scrolled past both is not handed two different stories about one workspace.
- */
 const AI_METRICS = [
   { name: "Close rate", was: "was 27.4%", now: "20.0%" },
   { name: "Show-up rate", was: "unchanged", now: "69%" },
@@ -172,17 +181,15 @@ const AI_METRICS = [
 ];
 
 /**
- * S09. Four facts, and the reason each of these rather than a customer count:
- * every one is checkable against this repository. The source count is COMPUTED
- * so it cannot fall behind the catalogue; ten minutes is the materialise
- * sweep's real cadence; the other two are promises the product either honours
- * or does not.
+ * S09. Four objections, answered immediately before the call to action and
+ * without a heading — this is a footnote to the whole page, not a new claim,
+ * and giving it a `D2` would make it one.
  */
-const FACTS = [
-  { figure: `${CONNECTOR_CATALOG.length}`, label: "Sources it reads, directly" },
-  { figure: "10 min", label: "How often a published metric recomputes" },
-  { figure: "0", label: "Lines of SQL you write" },
-  { figure: "Read-only", label: "The access it asks your tools for" },
+const ASKS = [
+  { title: "Read-only", body: "It reads. It never writes, never edits, never deletes. The access it asks for cannot change anything inside your tools." },
+  { title: "No warehouse", body: "Nothing to provision and nothing to pay for by the query. Connect a tool and the records start arriving." },
+  { title: "No SQL", body: "Build a metric by dragging steps onto a canvas, and test it against real rows before you publish it." },
+  { title: "Leave anytime", body: "Disconnect a tool and keep every figure it already produced. Nothing you built is held hostage." },
 ];
 
 const FOOTER_GROUPS = [
@@ -191,19 +198,22 @@ const FOOTER_GROUPS = [
     links: [
       { label: "How it works", href: "#how-it-works" },
       { label: "Receipts", href: "#receipts" },
-      { label: "Docs", href: "/docs" },
+      { label: "Ask your AI", href: "#ask-your-ai" },
     ],
   },
   {
     title: "Sources",
     links: [
       { label: "All sources", href: "#sources" },
-      { label: "Integrations", href: "/integrations" },
+      { label: "Request a source", href: "/docs" },
     ],
   },
   {
     title: "Company",
-    links: [{ label: "Sign in", href: "/sign-in" }],
+    links: [
+      { label: "Docs", href: "/docs" },
+      { label: "Log in", href: "/login" },
+    ],
   },
   {
     title: "Legal",
@@ -214,396 +224,388 @@ const FOOTER_GROUPS = [
   },
 ];
 
-/** The five vertical rules: left edge of c1, c4, c7, c10, right edge of c12. */
-function ColumnRules({ hero = false }: { hero?: boolean }) {
-  return (
-    <div className={`${styles.rules} ${hero ? styles.rulesHero : ""}`} aria-hidden>
-      <div className={styles.rulesInner}>
-        <span className={styles.rule} style={{ gridColumn: 1 }} />
-        <span className={styles.rule} style={{ gridColumn: 4 }} />
-        <span className={styles.rule} style={{ gridColumn: 7 }} />
-        <span className={styles.rule} style={{ gridColumn: 10 }} />
-        <span className={`${styles.rule} ${styles.ruleEnd}`} style={{ gridColumn: 12 }} />
-      </div>
-    </div>
-  );
-}
+/** The five connectors, chip edge to the card's nearest edge. */
+const CONNECTORS = [
+  "M292 86 C 340 86, 340 160, 380 160",
+  "M908 62 C 860 62, 860 160, 820 160",
+  "M276 346 C 330 346, 330 272, 380 272",
+  "M898 318 C 860 318, 860 272, 820 272",
+  "M600 352 L600 300",
+];
+
+const CTA_DOTS = [
+  { token: "--src-coral", left: "16%", top: "20%", delay: "0ms" },
+  { token: "--src-lemon", left: "31%", top: "13%", delay: "800ms" },
+  { token: "--src-mint", left: "62%", top: "16%", delay: "1600ms" },
+  { token: "--src-sky", left: "78%", top: "25%", delay: "2400ms" },
+  { token: "--src-lilac", left: "47%", top: "10%", delay: "3200ms" },
+];
 
 export default async function Home() {
   const { user } = await withAuth();
 
   // The LABEL never changes — "Connect your first tool" is the one action this
   // page exists to produce, and swapping it for "Go to dashboard" mid-scroll
-  // would be two different pages depending on a cookie. Where it POINTS does
-  // change, because sending a signed-in reader back through sign-up is a
-  // dead end rather than a message.
+  // makes it two different pages depending on a cookie. Where it POINTS does
+  // change, because sending a signed-in reader back through sign-up is a dead
+  // end rather than a message.
   const cta = user ? "/dashboard" : "/sign-up";
   const ctaLabel = "Connect your first tool";
 
   const sources = CONNECTOR_CATALOG.map((entry) => ({
     name: entry.name,
-    // `brand` is optional on a catalogue entry, so the two-letter tile falls
-    // back to deriving its own initials rather than rendering an empty square.
     short: entry.brand?.short,
     blurb: entry.description,
   }));
 
   return (
-    <div className={`${styles.page} ${archivo.variable} ${martianMono.variable}`}>
+    <div className={`${styles.page} ${figtree.variable}`}>
       <div className={styles.backdrop} aria-hidden />
-      <LedgerNav cta={cta} ctaLabel={ctaLabel} />
+      <div className={styles.bloom} aria-hidden />
+      <div className={styles.grain} aria-hidden />
+
+      <SnapNav cta={cta} ctaLabel={ctaLabel} />
 
       <main id="main" className={styles.clip}>
-        {/* ═══ Rule zone one: S01 through S05 ═══════════════════════════════
-            The five vertical rules run unbroken from the top of the hero to
-            the bottom of the receipt section. That continuity is what makes
-            five sections read as one long ruled sheet rather than a stack of
-            unrelated blocks — and it is why the zone is a wrapper rather than
-            a per-section background. */}
-        <div className={styles.ruleZone}>
-          <ColumnRules />
+        {/* ══ S01 · Hero — centred, floating, full bloom ═══════════════════
+            Height is AUTO. A viewport-fraction height is what produced 700px
+            of dead canvas in an earlier build: the section is as tall as the
+            headline, the stage and the air between them, and no taller. */}
+        <section className={`${styles.container} ${styles.s01}`}>
+          <div className={`${styles.narrowBlock} ${styles.centre}`}>
+            {/* Three fixed lines. Letting this reflow puts a single word on
+                its own line at some widths, which reads as a typesetting
+                accident rather than as a sentence. */}
+            <h1 className={styles.d0}>
+              <span className={styles.heroLine}>
+                <span>Your best metrics</span>
+              </span>
+              <span className={styles.heroLine}>
+                <span>live between</span>
+              </span>
+              <span className={styles.heroLine}>
+                <span>your tools.</span>
+              </span>
+            </h1>
 
-          {/* ── S01 · Hero ─────────────────────────────────────────────── */}
-          <section className={`${styles.container} ${styles.hero}`}>
-            <ColumnRules hero />
-            <div className={styles.heroGrid}>
-              <div className={styles.heroCopy}>
-                {/* ═══ THREE FIXED LINES AT 68px, AND THE SPEC ASKED FOR TWO AT 76 ═══
-                    
-                    Those two instructions cannot both be obeyed, and the
-                    numbers say so rather than taste. Measured in the browser
-                    with the real face: at D1's 76px/wdth 112, "live between
-                    your tools." sets 873px wide. The headline block is c1–c6,
-                    which is 612px, and the hero instrument starts at c7 —
-                    x=732 — so anything wider than 648px runs under it. The
-                    largest size at which the specified TWO lines fit 612px is
-                    50px, which is 4px off D2 and destroys the hierarchy the
-                    hero exists to create.
-
-                    So the break moved instead of the scale: three lines at
-                    68px, every one of them fixed, none of them reflowing.
-                    That keeps the headline nearly twice D2, keeps the block
-                    inside c1–c6, keeps the instrument at c7 with its bleed,
-                    and is the same three-line treatment the spec already
-                    calls for at SM. Flagged rather than silently resolved —
-                    if the intent was the full-width two-line setting, the
-                    instrument has to move down and the hero stops being a
-                    side-by-side composition. */}
-                <h1 className={`${styles.d1} ${styles.measureWide}`}>
-                  <span className={styles.heroLine}>
-                    <span>Your best metrics</span>
-                  </span>
-                  <span className={styles.heroLine}>
-                    <span>live between</span>
-                  </span>
-                  <span className={styles.heroLine}>
-                    <span>your tools.</span>
-                  </span>
-                </h1>
-
-                <p className={`${styles.bodyL} ${styles.heroSub}`}>
-                  <strong>Calendly</strong> holds part of the answer. <strong>Close</strong> holds another part.{" "}
-                  {/* One line on purpose: a wrap after a closing tag leaves the following space for a
-                      transform to decide, which tests/jsx-whitespace.test.ts exists to stop. */}
-                  <strong>Stripe</strong> holds the rest. Namzilabs reads all of them, matches the records that are the same person, and builds the number none of them can.
-                </p>
-
-                <div className={styles.heroActions}>
-                  <Link className={styles.btn} href={cta} id="hero-cta">
-                    <span>{ctaLabel}</span>
-                  </Link>
-                  <Link className={styles.textBtn} href="#receipts">
-                    See a live metric
-                  </Link>
-                </div>
-
-                <p className={`${styles.caption} ${styles.heroReassurance}`}>
-                  Read-only. Disconnect any tool and keep what it sent.
-                </p>
-              </div>
-
-              <div className={styles.heroInstrument}>
-                <div className={`${styles.rows} ${styles.heroStack}`}>
-                  {/* The match lines: row 1's figure to row 2's, and row 2's to
-                      row 4's, curving left into the margin. They are the only
-                      thing on the page that draws a relationship between two
-                      figures, which is precisely what the product does.
-
-                      They attach at the figure column's LEFT edge (x=160 of
-                      260) rather than its right, so the curve bows into the
-                      empty margin instead of arcing back across the numerals
-                      it is supposed to be pointing at. */}
-                  <svg className={styles.matchLines} viewBox="0 0 260 288" preserveAspectRatio="none" aria-hidden>
-                    <path className={styles.matchPath} d="M160 36 C 112 36, 112 108, 160 108" />
-                    <path className={styles.matchPath} d="M160 108 C 84 108, 84 252, 160 252" />
-                  </svg>
-
-                  {HERO_ROWS.map((row) => (
-                    <div
-                      className={`${styles.row} ${styles.heroRow} ${row.struck ? styles.heroStruck : ""}`}
-                      key={row.name}
-                    >
-                      <span className={styles.rowContent}>
-                        <SourceTile name={row.name} short={row.short} />
-                        <span className={styles.rowName}>{row.name}</span>
-                        <span className={styles.rowDesc}>{row.desc}</span>
-                        <span className={`${styles.fig} ${styles.f4} ${styles.rowFigure}`}>{row.figure}</span>
-                      </span>
-                      {row.struck ? <span className={styles.strike} aria-hidden /> : null}
-                    </div>
-                  ))}
-                </div>
-
-                <div className={`${styles.row} ${styles.rowResolved} ${styles.heroResolved}`}>
-                  <span className={styles.rowContent}>
-                    <SourceTile name="Namzilabs" short="Nz" />
-                    <span className={styles.rowName}>Namzilabs</span>
-                    <span className={styles.rowDesc}>123 in · 82 matched · 41 unique</span>
-                    <Tick draw />
-                    <span
-                      className={`${styles.fig} ${styles.rowFigure} ${styles.heroResolvedFigure}`}
-                      aria-label="41 meetings"
-                    >
-                      <CountUp to={41} delay={2900} />
-                    </span>
-                  </span>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* ── S02 · Source rail ──────────────────────────────────────── */}
-          <SourceRail sources={sources} count={CONNECTOR_CATALOG.length} />
-
-          {/* ── S03 · The disagreement ─────────────────────────────────── */}
-          <section className={`${styles.container} ${styles.section}`}>
-            <h2 className={`${styles.d2} ${styles.span7}`}>Three tools. Three answers. None of them wrong.</h2>
-            <div className={styles.headingRule} aria-hidden />
-            <p className={`${styles.bodyM} ${styles.lead} ${styles.measure} ${styles.dim}`}>
-              Calendly counts the invite. Close counts what a rep logged. The sheet counts what somebody typed on
-              Friday. Each one is telling the truth about its own slice, and none of them can see the other two. So the
-              question you actually have — what did that campaign earn, which channel is carrying the month, what a held
-              meeting costs you — has no home. Answering it means exporting four CSVs and hoping the names line up.
+            <p className={`${styles.bodyL} ${styles.heroSub}`}>
+              <strong>Calendly</strong> holds part of the answer. <strong>Close</strong> holds another part.{" "}
+              <strong>Stripe</strong> holds the rest. Namzilabs reads all of them, matches the records that are the same person, and builds the number none of them can.
             </p>
 
-            <div className={`${styles.rows} ${styles.table}`}>
-              {DISAGREEMENT.map((row, index) => (
-                <div
-                  className={`${styles.row} ${index % 2 === 1 ? styles.rowBanded : ""}`}
-                  key={row.name}
-                >
-                  <span className={styles.rowContent}>
-                    <SourceTile name={row.name} short={row.short} />
-                    <span className={styles.rowName}>{row.name}</span>
-                    <span className={styles.rowDesc}>{row.knows}</span>
-                    {/* The slash is not decoration: no state on this page is
-                        carried by colour alone, so the red clause travels with
-                        a mark a reader who cannot see the red still gets. */}
-                    <span className={styles.cantTell}>
-                      <span className={styles.slash} aria-hidden />
-                      {row.cant}
-                    </span>
-                    <span className={`${styles.fig} ${styles.f4} ${styles.rowFigure}`}>{row.figure}</span>
-                  </span>
-                </div>
+            <div className={styles.heroActions}>
+              <Link className={styles.btn} href={cta}>
+                {ctaLabel}
+              </Link>
+              <Link className={styles.textBtn} href="#receipts">
+                <span>See a live metric</span>
+              </Link>
+            </div>
+
+            <p className={`${styles.caption} ${styles.heroReassurance}`}>
+              Read-only. Disconnect any tool and keep what it sent.
+            </p>
+          </div>
+
+          <div className={styles.stage}>
+            <svg className={styles.connectors} viewBox="0 0 1200 460" fill="none" aria-hidden>
+              {CONNECTORS.map((d) => (
+                <path key={d} className={styles.connector} d={d} />
               ))}
-            </div>
-          </section>
+            </svg>
 
-          {/* ── S04 · How it works ─────────────────────────────────────── */}
-          <section className={`${styles.container} ${styles.section}`} id="how-it-works">
-            <h2 className={`${styles.d2} ${styles.span8}`}>Connected on Monday. Defensible by Friday.</h2>
-            <div className={styles.headingRule} aria-hidden />
-
-            <Steps steps={STEPS} />
-
-            <div className={styles.shotRow}>
-              <p className={`${styles.caption} ${styles.note}`}>
-                A published metric recomputes every 10 minutes.
-                <span className={styles.noteRule} aria-hidden />
-              </p>
-              <div className={styles.shot}>
-                <CanvasShot />
+            {CHIPS.map((chip, i) => (
+              <div
+                key={chip.name}
+                className={`${styles.chip} ${styles.chipRest} ${chip.drop ? styles.chipDrop : ""}`}
+                style={
+                  {
+                    left: chip.x,
+                    top: chip.y,
+                    "--rot-base": `${chip.rot}deg`,
+                    animationDelay: `${980 + i * 100}ms, 3000ms, ${3400 + i * 800}ms`,
+                    boxShadow: `var(--sh-md), 0 8px 24px color-mix(in srgb, var(--src-${
+                      ["coral", "mint", "lemon", "sky", "lilac"][i]
+                    }) 26%, transparent)`,
+                  } as React.CSSProperties
+                }
+              >
+                <Squircle name={chip.name} short={chip.short} size={40} />
+                {/* Name and figure share a row so the figure sits on the
+                    source's own baseline; the description wraps beneath both
+                    rather than shoving the figure off-centre when it runs to
+                    two lines. */}
+                <span className={styles.chipBody}>
+                  <span className={styles.chipHead}>
+                    <span className={styles.h4}>{chip.name}</span>
+                    <span className={styles.f4}>{chip.figure}</span>
+                  </span>
+                  <span className={`${styles.caption} ${styles.chipDesc}`}>{chip.desc}</span>
+                </span>
               </div>
-            </div>
-          </section>
+            ))}
 
-          {/* ── S05 · The receipt ──────────────────────────────────────── */}
-          <section className={`${styles.container} ${styles.section}`} id="receipts">
-            <h2 className={`${styles.d2} ${styles.span7}`}>Every number shows its working.</h2>
-            <div className={styles.headingRule} aria-hidden />
-
-            <ReceiptFigure
-              lead={
-                <p className={`${styles.bodyM} ${styles.lead} ${styles.dim}`}>
-                  Click any figure and the arithmetic opens beside it: the sources it read, the moment it read them, the
-                  records it treated as the same person, and the ones it deliberately left out. When someone asks where
-                  a number came from, the answer is a click rather than an afternoon.
-                </p>
-              }
-              label="Meetings held, last 7 days"
-              value="41"
-              marker={1}
-              metric="Meetings held"
-              lines={RECEIPT_LINES}
-              note="Three sources disagreed on the count. 82 records described the same 41 meetings, so each was counted once, on the earliest timestamp any source recorded for it."
-            />
-          </section>
-        </div>
-
-        {/* ── S06 · Honest incompleteness ──────────────────────────────────
-            The one dark section on the page, deliberately outside every rule
-            zone: the rules stop at the bottom of S05 and do not resume until
-            S08, so this reads as a pause in the page's rhythm rather than as
-            another entry in it. It is also completely still. The loudest claim
-            on the page makes no noise. */}
-        <section className={styles.dark}>
-          <div className={`${styles.container} ${styles.darkGrid}`}>
-            <div className={styles.darkCopy}>
-              <h2 className={styles.d2}>It tells you when it can&rsquo;t see everything.</h2>
-              <p className={`${styles.d2} ${styles.statement}`}>
-                Covering <span className={styles.fig}>12</span> of <span className={styles.fig}>90</span> days.
-              </p>
-              <p className={`${styles.bodyM} ${styles.darkBody}`}>
-                Most tools fill a gap with a guess and let the chart look finished. When Namzilabs hasn&rsquo;t read far
-                enough back yet, or a source has gone quiet, the metric says so on its face. A number you can trust is
-                one that admits what it doesn&rsquo;t know.
-              </p>
-            </div>
-
-            <div className={styles.field}>
-              <div className={styles.fieldGrid} aria-hidden>
-                {Array.from({ length: 90 }, (_, index) =>
-                  index < 12 ? (
-                    <span className={`${styles.cell} ${styles.cellRead}`} key={index}>
-                      <Tick size={10} />
-                    </span>
-                  ) : (
-                    <span className={styles.cell} key={index} />
-                  ),
-                )}
-                <span className={styles.fieldBoundary} />
+            {/* The one still, certain object in a field of moving ones. */}
+            <div className={styles.resolved}>
+              <div className={styles.resolvedTop}>
+                <span className={styles.resolvedMark} aria-hidden />
+                <span className={styles.resolvedName}>Namzilabs</span>
+                <span className={styles.resolvedTick}>
+                  <Tick size={20} onDark />
+                </span>
               </div>
-              <p className={`${styles.caption} ${styles.fieldLabel}`}>78 days not yet read.</p>
+              <div className={styles.resolvedFigure}>
+                <span className={styles.f2}>
+                  <CountUp to={41} from={0} delay={2480} />
+                </span>
+                <span className={`${styles.bodyS} ${styles.resolvedUnit}`}>meetings held</span>
+              </div>
+              <p className={`${styles.caption} ${styles.resolvedSub}`}>123 in · 82 matched · 41 unique</p>
             </div>
+
+            <span className={styles.pulse} aria-hidden />
           </div>
         </section>
 
-        {/* ── S07 · Ask your AI ────────────────────────────────────────────
-            Short on purpose: it is a capability, not the pitch. No heading
-            rule under the heading either — this section is quieter than the
-            three above it by design. */}
-        <section className={`${styles.container} ${styles.section}`}>
-          <div className={styles.aiGrid}>
-            <div className={styles.aiCopy}>
+        <div className={styles.belowFold}>
+          {/* ══ S02 · Source rail — full bleed, thin, flush ════════════════ */}
+          <SourceRail sources={sources} count={CONNECTOR_CATALOG.length} />
+
+          {/* ══ S03 · The disagreement — sticky column, one tall stack ═════
+              The densest section on the page, directly after the airiest. */}
+          <section className={`${styles.container} ${styles.s03}`}>
+            <div className={styles.splitGrid}>
+              <div className={styles.stickyCol}>
+                <h2 className={styles.d2}>Three tools. Three answers. None of them wrong.</h2>
+                <p className={`${styles.bodyM} ${styles.stickyLead}`}>
+                  Each one is telling the truth about its own slice. None of them can see the other two.
+                </p>
+              </div>
+
+              <div className={styles.stack}>
+                {DISAGREEMENT.map((row) => (
+                  <div className={styles.srcRow} key={row.name}>
+                    <Squircle name={row.name} short={row.short} size={44} />
+                    <span>
+                      <span className={`${styles.h4} ${styles.srcName}`}>{row.name}</span>
+                      <span className={`${styles.bodyS} ${styles.srcLabel}`}>{row.label}</span>
+                    </span>
+                    <span className={`${styles.f3} ${styles.srcFigure}`}>{row.figure}</span>
+                    <span className={`${styles.bodyS} ${styles.srcClause}`}>
+                      <span className={styles.flagDot} aria-hidden />
+                      {row.clause}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          {/* ══ S04 · How it works — one horizontal track ══════════════════ */}
+          <section className={`${styles.container} ${styles.s04}`} id="how-it-works">
+            <h2 className={styles.d2}>Connected on Monday. Defensible by Friday.</h2>
+
+            <div className={styles.track}>
+              {/* The line fades at both ends, so it reads as a continuing
+                  process rather than as a bounded progress bar. It does NOT
+                  draw on scroll — that is an entrance animation wearing a
+                  progress indicator's clothes. */}
+              <div className={styles.trackLine} aria-hidden />
+              <ol className={styles.nodes}>
+                {STEPS.map((step, i) => (
+                  <li className={styles.step} key={step.title}>
+                    <span className={styles.node} aria-hidden>
+                      {i + 1}
+                    </span>
+                    <h3 className={`${styles.d3} ${styles.stepTitle}`}>{step.title}</h3>
+                    <p className={`${styles.bodyS} ${styles.stepBody}`}>{step.body}</p>
+                  </li>
+                ))}
+              </ol>
+            </div>
+
+            <figure className={styles.shot}>
+              <CanvasShot />
+            </figure>
+            <p className={`${styles.caption} ${styles.shotNote}`}>A published metric recomputes every 10 minutes.</p>
+          </section>
+
+          {/* ══ S05 · The receipt — off-centre pair, tabbed ════════════════ */}
+          <section className={`${styles.container} ${styles.s05}`} id="receipts">
+            <h2 className={styles.d2}>Every number shows its working.</h2>
+            <p className={`${styles.bodyM} ${styles.measure}`} style={{ marginTop: 20, color: "var(--ink-60)" }}>
+              The arithmetic sits beside the number, always: which sources it read, when it read them, what it matched,
+              and what it deliberately left out.
+            </p>
+
+            <ReceiptTabs metrics={METRICS} />
+          </section>
+
+          {/* ══ S06 · Honest incompleteness — dark panel, split ════════════
+              The first of exactly two dark sections, and completely still.
+              The loudest claim on the page makes no noise, and the contrast
+              against the animated hero is the point. */}
+          <section className={`${styles.container} ${styles.s06}`}>
+            <div className={`${styles.darkPanel} ${styles.s06Panel}`}>
+              <div className={`${styles.panelBloom} ${styles.panelBloomLilac}`} aria-hidden />
+              <div className={styles.s06Grid}>
+                <div className={styles.s06Copy}>
+                  <h2 className={styles.d2}>It tells you when it can&rsquo;t see everything.</h2>
+                  <p className={`${styles.d2} ${styles.statement}`}>
+                    Covering <span className={styles.f1}>12</span> of <span className={styles.f1}>90</span> days.
+                  </p>
+                  <p className={`${styles.bodyM} ${styles.s06Body}`}>
+                    Most tools fill a gap with a guess and let the chart look finished. When Namzilabs hasn&rsquo;t read
+                    far enough back yet, or a source has gone quiet, the metric says so on its face. A number you can
+                    trust is one that admits what it doesn&rsquo;t know.
+                  </p>
+                </div>
+
+                <div className={styles.field}>
+                  {/* One element with one description: ninety individually
+                      announced dots is noise, and the sentence carries the
+                      same information the grid does. */}
+                  <div
+                    className={styles.fieldGrid}
+                    role="img"
+                    aria-label="12 of 90 days read, 78 days not yet read"
+                  >
+                    {Array.from({ length: 90 }, (_, i) =>
+                      i < 12 ? (
+                        <span className={`${styles.dot} ${styles.dotRead}`} key={i}>
+                          <Tick size={12} />
+                        </span>
+                      ) : (
+                        <span className={styles.dot} key={i} />
+                      ),
+                    )}
+                    <span className={styles.fieldBoundary} aria-hidden />
+                  </div>
+                  <p className={`${styles.caption} ${styles.fieldLabel}`}>78 days not yet read.</p>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* ══ S07 · Ask your AI — quiet centre, maximum air ══════════════
+              The page's exhale after the dark panel, and the only section
+              besides the hero with a centred heading. */}
+          <section className={`${styles.container} ${styles.s07}`} id="ask-your-ai">
+            <div className={`${styles.narrowBlock} ${styles.centre}`}>
               <h2 className={styles.d2}>Opinions are cheap. Give it the numbers.</h2>
-              <p className={`${styles.bodyM} ${styles.lead} ${styles.dim}`}>
+              <p className={`${styles.bodyM} ${styles.dim}`} style={{ maxWidth: 640, margin: "20px auto 0" }}>
                 Connect Claude or ChatGPT to your workspace and it reads your published metrics directly. The same
-                figures you see on the board, not a screenshot you pasted and not a guess. Ask what changed, ask what to
-                do about it, and the answer arrives with the arithmetic attached.
+                figures you see on the board, not a screenshot you pasted and not a guess.
               </p>
-              <p className={`${styles.bodyS} ${styles.faint}`} style={{ marginTop: 20 }}>
+              <p className={`${styles.bodyS} ${styles.aiNote}`}>
                 Read-only, scoped to one workspace, switched on per person.
               </p>
             </div>
 
-            <div className={styles.aiPanelCell}>
-              <div className={styles.aiPanel}>
-                <p className={`${styles.bodyM} ${styles.aiQuestion}`}>Why did our close rate drop last week?</p>
-                <p className={`${styles.caption} ${styles.aiReading}`}>Reading 3 metrics from Namzilabs</p>
+            {/* A still image of a conversation. A typewriter effect would
+                undercut the one claim this section makes — that these are
+                real published figures rather than a performance. */}
+            <div className={styles.aiPanel}>
+              <p className={`${styles.bodyS} ${styles.bubble}`}>Why did our close rate drop last week?</p>
 
-                <div className={styles.aiMetrics}>
-                  {AI_METRICS.map((metric) => (
-                    <div className={styles.aiMetric} key={metric.name}>
-                      <span className={styles.bodyS}>{metric.name}</span>
-                      <span className={`${styles.caption} ${styles.aiMetricWas}`}>{metric.was}</span>
-                      <span className={`${styles.fig} ${styles.f4}`}>{metric.now}</span>
-                    </div>
-                  ))}
-                </div>
+              <p className={`${styles.caption} ${styles.aiReading}`}>
+                <span className={styles.goodDot} aria-hidden />
+                Reading 3 metrics from Namzilabs
+              </p>
 
-                <p className={`${styles.bodyS} ${styles.aiAnswer}`}>
-                  Show-up rate held, so it isn&rsquo;t the calls. Speed to lead went from 8m 39s to 31m 12s on Tuesday,
-                  the same day two reps were out. Close rate tracks that, not lead quality.
-                </p>
-
-                <p className={`${styles.caption} ${styles.aiFoot}`}>
-                  <Tick />
-                  Read-only, and every figure is a metric you published.
-                </p>
+              <div className={styles.aiMetrics}>
+                {AI_METRICS.map((metric) => (
+                  <div className={styles.aiMetric} key={metric.name}>
+                    <span className={`${styles.bodyS} ${styles.aiMetricName}`}>{metric.name}</span>
+                    <span className={`${styles.bodyS} ${styles.aiMetricWas}`}>{metric.was}</span>
+                    <span className={styles.f4}>{metric.now}</span>
+                  </div>
+                ))}
               </div>
+
+              <p className={`${styles.bodyS} ${styles.aiAnswer}`}>
+                Show-up rate held, so it isn&rsquo;t the calls. Speed to lead went from 8m 39s to 31m 12s on Tuesday,
+                the same day two reps were out. Close rate tracks that, not lead quality.
+              </p>
+
+              <span className={`${styles.badge} ${styles.aiFoot}`}>
+                <Tick size={14} />
+                Read-only, and every figure is a metric you published.
+              </span>
             </div>
-          </div>
-        </section>
-
-        {/* ═══ Rule zone two: S08 and S09 ═══════════════════════════════ */}
-        <div className={styles.ruleZone}>
-          <ColumnRules />
-
-          {/* ── S08 · Sources ────────────────────────────────────────── */}
-          <section className={`${styles.container} ${styles.section}`} id="sources">
-            <h2 className={`${styles.d2} ${styles.span7}`}>The list is the whole list.</h2>
-            <div className={styles.headingRule} aria-hidden />
-            <p className={`${styles.bodyM} ${styles.lead} ${styles.measure} ${styles.dim}`}>
-              Every source below is one this product reads today, in production, with its own connector — not a logo on
-              a roadmap. Type to find yours. What doesn&rsquo;t match gets crossed off rather than hidden, so you can
-              always see what you&rsquo;re choosing between.
-            </p>
-
-            <SourceSearch sources={sources} />
           </section>
 
-          {/* ── S09 · The four facts ─────────────────────────────────── */}
-          <section className={`${styles.container} ${styles.section}`}>
-            <h2 className={`${styles.d2} ${styles.span7}`}>Four numbers about us, checkable like the rest.</h2>
-            <div className={styles.headingRule} aria-hidden />
+          {/* ══ S08 · The 33 sources — full-bleed plate, flat index ════════ */}
+          <section className={styles.plate} id="sources">
+            <div className={`${styles.container} ${styles.s08}`}>
+              <SourceIndex sources={sources} cta={cta} ctaLabel={ctaLabel} />
+            </div>
+          </section>
 
-            <div className={styles.stats}>
-              {FACTS.map((fact) => (
-                <div className={styles.stat} key={fact.label}>
-                  <p className={`${styles.fig} ${styles.f3} ${styles.statFigure}`}>{fact.figure}</p>
-                  <p className={`${styles.bodyS} ${styles.statLabel}`}>{fact.label}</p>
+          {/* ══ S09 · What it asks of you — one inline row, no heading ═════ */}
+          <section className={`${styles.container} ${styles.s09}`}>
+            <div className={styles.asksRule} aria-hidden />
+            <div className={styles.asks}>
+              {ASKS.map((ask) => (
+                <div className={styles.ask} key={ask.title}>
+                  <div className={styles.askTop}>
+                    <Tick />
+                    <h3 className={styles.h4}>{ask.title}</h3>
+                  </div>
+                  <p className={`${styles.bodyS} ${styles.askBody}`}>{ask.body}</p>
                 </div>
               ))}
             </div>
           </section>
-        </div>
 
-        {/* ── S10 · Closing ──────────────────────────────────────────────
-            The one centred element on the page, and unruled: after eleven
-            left-aligned sections a centred block reads as the document
-            finishing rather than as a change of mind. */}
-        <section className={`${styles.container} ${styles.closing}`}>
-          <div className={styles.closingPanel}>
-            <h2 className={styles.d2}>Stop reconciling by hand.</h2>
-            <p className={`${styles.bodyL} ${styles.closingBody}`}>
-              Connect one tool and build your first metric this afternoon. The second one takes minutes, because the
-              hard part was never the chart.
-            </p>
-            <div className={styles.closingActions}>
-              <Link className={styles.btn} href={cta}>
-                <span>{ctaLabel}</span>
-              </Link>
+          {/* ══ S10 · Final CTA — dark panel, centred ══════════════════════
+              The page closes on the image it opened with: five source-coloured
+              dots, drifting on the same loop as the hero chips, reduced to
+              their essence. This is the only decoration approved anywhere. */}
+          <section className={`${styles.container} ${styles.s10}`}>
+            <div className={`${styles.darkPanel} ${styles.s10Panel}`}>
+              <div className={`${styles.panelBloom} ${styles.panelBloomPeach}`} aria-hidden />
+              {CTA_DOTS.map((dot) => (
+                <span
+                  key={dot.token}
+                  className={styles.ctaDot}
+                  aria-hidden
+                  style={{ left: dot.left, top: dot.top, background: `var(${dot.token})`, animationDelay: dot.delay }}
+                />
+              ))}
+
+              <h2 className={`${styles.d1} ${styles.s10Heading}`}>Stop reconciling by hand.</h2>
+              <p className={`${styles.bodyL} ${styles.s10Sub}`}>
+                Connect one tool and build your first metric this afternoon.
+              </p>
+              <div className={styles.s10Actions}>
+                <Link className={`${styles.btn} ${styles.btnOnDark} ${styles.btnLarge}`} href={cta}>
+                  {ctaLabel}
+                </Link>
+              </div>
+              <p className={`${styles.caption} ${styles.s10Foot}`}>
+                Read-only access. Disconnect any tool and keep what it sent.
+              </p>
             </div>
-            <p className={`${styles.caption} ${styles.closingFoot}`}>
-              Read-only access. Disconnect any tool and keep what it sent.
-            </p>
-          </div>
-        </section>
+          </section>
+        </div>
       </main>
 
-      {/* ── S11 · Footer ─────────────────────────────────────────────── */}
-      <footer className={styles.footer}>
+      {/* ══ S11 · Footer ════════════════════════════════════════════════ */}
+      <footer className={`${styles.belowFold} ${styles.footer}`}>
         <div className={styles.container}>
           <div className={styles.footerTop}>
-            <span className={styles.wordmark}>Namzilabs</span>
+            <span className={styles.footerBrand}>
+              <LogoMark />
+              <span className={styles.wordmark}>Namzilabs</span>
+            </span>
             <div className={styles.footerGroups}>
               {FOOTER_GROUPS.map((group) => (
                 <div key={group.title}>
                   <p className={`${styles.caption} ${styles.footerTitle}`}>{group.title}</p>
                   <ul className={styles.footerList}>
                     {group.links.map((link) => (
-                      <li key={link.href}>
+                      <li key={link.label}>
                         <Link className={styles.footerLink} href={link.href}>
                           {link.label}
                         </Link>

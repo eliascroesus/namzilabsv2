@@ -1,0 +1,1564 @@
+/**
+ * SNAP — the landing page's design system, v3, and nobody else's.
+ *
+ * Five tools each hold a piece of an answer; they snap together into one.
+ * That sentence is the product and it is the entire visual language: scattered
+ * and colourful resolves into single and certain. Colour is the PROBLEM —
+ * every source owns one — and ink is the ANSWER. The palette carries the
+ * argument rather than decorating it, which is why a source colour may never
+ * fill a button and a resolved figure may never be anything but ink.
+ *
+ * ═══ WHY THIS LIVES IN A MODULE AND NOT IN globals.css ═══
+ *
+ * Unchanged from the build this replaces, and still the load-bearing decision:
+ * this page deliberately contradicts the app's brand kit. It has its own
+ * palette, its own type ramp, four radii where the kit names one, and a
+ * shadow ladder the product retired on purpose. Those are right for a
+ * marketing page and wrong for the product, so they are sealed inside a CSS
+ * Module whose class names are hashed and whose custom properties are declared
+ * on `.page` rather than `:root`. Nothing outside this file can reach them and
+ * this file cannot reach anything outside `/`.
+ *
+ * It is also what keeps the page out of dark mode. The app runs next-themes
+ * with a `.dark` class on <html>; every colour below is an opaque literal,
+ * `color-scheme` is pinned light, and a fixed backdrop paints over the themed
+ * <body>, so `/` renders identically whatever the rest of the product wears.
+ */
+
+.page {
+  /* ── Canvas and ink (§6.1) ────────────────────────────────────────────── */
+  --canvas: #fbfafc;
+  --plate: #f5f4f9;
+  --lift: #ffffff;
+  --edge: #ecebf2;
+  --ink: #14141c;
+  --ink-hover: #22222e;
+  --ink-60: #5c5c6b;
+  /* §6.1 names #9494A3. Measured on canvas that is 3.02:1 — and §10 calls
+     contrast a requirement rather than a preference, while the page uses this
+     token for lines like the hero's reassurance that appear nowhere else.
+     Same hue, walked down to clear 4.5:1 on canvas, plate AND lift. */
+  --ink-35: #6e6e80;
+
+  /* ── Source identity (§6.1). A source keeps its colour everywhere. ────── */
+  --src-coral: #ff7a59;
+  --src-lemon: #ffc93c;
+  --src-mint: #3fcf9a;
+  --src-sky: #4c9fff;
+  --src-lilac: #9b7bff;
+  --src-slate: #7c8aa5;
+  --src-coral-tint: #ffe9e3;
+  --src-lemon-tint: #fff4dc;
+  --src-mint-tint: #e2f8f0;
+  --src-sky-tint: #e4f0ff;
+  --src-lilac-tint: #eee9ff;
+  --src-slate-tint: #eaedf2;
+
+  --good: #16a34a;
+  --flag: #f0553d;
+
+  /* ── Elevation (§6.4). Nothing on this page sits flat. ────────────────── */
+  --sh-sm: 0 1px 2px rgba(20, 20, 28, 0.04), 0 4px 10px rgba(20, 20, 28, 0.05);
+  --sh-md: 0 2px 4px rgba(20, 20, 28, 0.04), 0 10px 24px rgba(20, 20, 28, 0.07);
+  --sh-lg: 0 4px 8px rgba(20, 20, 28, 0.05), 0 20px 48px rgba(20, 20, 28, 0.1);
+  --sh-xl: 0 8px 16px rgba(20, 20, 28, 0.06), 0 32px 72px rgba(20, 20, 28, 0.12);
+
+  /* ── Motion (§6.8). Overshoot is wanted, and capped at 1.26. ──────────── */
+  --snapIn: cubic-bezier(0.34, 1.26, 0.42, 1);
+  --glide: cubic-bezier(0.22, 1, 0.36, 1);
+  --quick: cubic-bezier(0.4, 0, 0.2, 1);
+  --t-quick: 160ms;
+  --t-control: 200ms;
+  --t-panel: 360ms;
+  --t-step: 420ms;
+
+  /* ── Grid (§5.2). 1200 = 12 × 78 + 11 × 24, so columns land on whole px. ── */
+  --container: 1200px;
+  --narrow: 880px;
+  --pad: 80px;
+  --gutter: 24px;
+
+  position: relative;
+  z-index: 0;
+  isolation: isolate;
+  color-scheme: light;
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--snap-sans), "Figtree", system-ui, sans-serif;
+  font-size: 17px;
+  line-height: 28px;
+  font-variant-numeric: tabular-nums lining-nums;
+  -webkit-font-smoothing: antialiased;
+}
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: var(--canvas);
+}
+
+.page ::selection {
+  background: var(--src-lilac-tint);
+  color: var(--ink);
+}
+
+/* globals.css nudges every :active button down half a pixel product-wide.
+   §7.2 asks for a full 1px with the shadow dropping, so the shared rule is
+   undone here and restated where the spec puts it. Scoped to `.page`. */
+.page button:active {
+  transform: none;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   The ambient bloom (§6.6)
+
+   Three radial ellipses, blurred past the point where any edge is
+   perceptible, plus grain. NOT a linear top-to-bottom gradient — that reads
+   as a template header and is named in §3 as a thing that must not happen.
+   Full strength in the hero only; masked to 22% from S02 down so the content
+   stays legible. Static: no animation, no parallax.
+   ────────────────────────────────────────────────────────────────────────── */
+
+.bloom {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(44vw 44vw at 18% 12%, rgba(255, 227, 208, 0.9), transparent 70%),
+    radial-gradient(50vw 50vw at 82% 28%, rgba(230, 224, 255, 0.85), transparent 70%),
+    radial-gradient(40vw 40vw at 50% 68%, rgba(213, 245, 233, 0.6), transparent 70%);
+  filter: blur(60px);
+  /* A static promoted layer that never repaints — a 60px blur recomputed on
+     scroll is the single most expensive thing this page could do. */
+  will-change: transform;
+  transform: translateZ(0);
+}
+
+/* Grain: feTurbulence rendered once into a tiled data URI. Never a large PNG,
+   and never above 3% — it exists to take the plastic off large soft
+   gradients, not to be seen. */
+.grain {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.025;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='128' height='128'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='128' height='128' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* From S02 down the bloom is masked to 22%, so `main` carries a canvas wash
+   that everything below the hero sits on. */
+.belowFold {
+  position: relative;
+  z-index: 1;
+  background: linear-gradient(to bottom, rgba(251, 250, 252, 0.78), rgba(251, 250, 252, 0.78));
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Containers
+   ────────────────────────────────────────────────────────────────────────── */
+
+.container {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: calc(var(--container) + var(--pad) * 2);
+  margin-inline: auto;
+  padding-inline: var(--pad);
+}
+
+.narrowBlock {
+  max-width: var(--narrow);
+  margin-inline: auto;
+}
+
+.clip {
+  overflow-x: clip;
+}
+
+/* Section padding is per-section (§4) rather than a global constant. That
+   variation IS the rhythm — uniform padding is a large part of what makes a
+   page feel mechanical. */
+.s01 { padding-block: 168px 120px; }
+.s03 { padding-block: 144px; }
+.s04 { padding-block: 144px 120px; }
+.s05 { padding-block: 144px; }
+.s06 { padding-block: 144px; }
+.s07 { padding-block: 160px; }
+.s08 { padding-block: 120px; }
+.s09 { padding-block: 96px; }
+.s10 { padding-block: 120px 144px; }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Type (§6.2). One family. No monospace anywhere — a wide mono on figures is
+   what made the first build read as a form.
+   ────────────────────────────────────────────────────────────────────────── */
+
+.d0 { font-size: 104px; line-height: 98px; letter-spacing: -0.042em; font-weight: 800; }
+.d1 { font-size: 72px; line-height: 74px; letter-spacing: -0.035em; font-weight: 800; }
+.d2 { font-size: 52px; line-height: 56px; letter-spacing: -0.03em; font-weight: 800; }
+.d3 { font-size: 32px; line-height: 38px; letter-spacing: -0.022em; font-weight: 700; }
+.h4 { font-size: 20px; line-height: 26px; letter-spacing: -0.012em; font-weight: 700; }
+.bodyL { font-size: 20px; line-height: 32px; letter-spacing: -0.005em; font-weight: 400; }
+.bodyM { font-size: 17px; line-height: 28px; font-weight: 400; }
+.bodyS { font-size: 15px; line-height: 24px; font-weight: 400; }
+.caption { font-size: 13px; line-height: 18px; letter-spacing: 0.002em; font-weight: 500; }
+
+.f1 { font-size: 128px; line-height: 116px; font-weight: 800; letter-spacing: -0.04em; }
+.f2 { font-size: 76px; line-height: 76px; font-weight: 800; letter-spacing: -0.035em; }
+.f3 { font-size: 40px; line-height: 44px; font-weight: 800; letter-spacing: -0.025em; }
+.f4 { font-size: 20px; line-height: 26px; font-weight: 700; }
+
+.dim { color: var(--ink-60); }
+.faint { color: var(--ink-35); }
+.centre { text-align: center; }
+
+/* §6.2: no paragraph exceeds 64 characters, and the cap goes on the paragraph
+   rather than on its container. Measured with a Range walk: 17px Figtree sets
+   7.4px per character, so 64 characters is 474px. */
+.measure { max-width: 474px; }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Buttons (§7.2). `ink` is the only button fill on light; white is the only
+   fill on dark. A source colour never fills a button.
+   ────────────────────────────────────────────────────────────────────────── */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 56px;
+  padding-inline: 32px;
+  border: none;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--lift);
+  box-shadow: var(--sh-md);
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--t-quick) var(--quick),
+    box-shadow var(--t-quick) var(--quick),
+    transform var(--t-quick) var(--quick);
+}
+
+.btn:hover {
+  background: var(--ink-hover);
+  box-shadow: var(--sh-lg);
+  transform: translateY(-2px);
+}
+
+.btn:active {
+  transform: translateY(1px);
+  box-shadow: var(--sh-sm);
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+}
+
+.btnNav { height: 44px; padding-inline: 22px; }
+
+.btnOnDark {
+  background: var(--lift);
+  color: var(--ink);
+  box-shadow: var(--sh-lg);
+}
+
+.btnOnDark:hover { background: #f2f1f7; box-shadow: var(--sh-xl); }
+.btnOnDark:focus-visible { outline-color: var(--lift); }
+
+/* A text button whose hover affordance is a pill scaling in behind it — no
+   underline anywhere on this page. */
+.textBtn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  padding-inline: 20px;
+  border: none;
+  background: none;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.textBtn::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: #f2f1f7;
+  opacity: 0;
+  transform: scale(0.9);
+  transition: opacity var(--t-quick) var(--quick), transform var(--t-quick) var(--quick);
+}
+
+.textBtn:hover::before { opacity: 1; transform: scale(1); }
+.textBtn:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; border-radius: 999px; }
+.textBtn > span { position: relative; }
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding-inline: 14px;
+  border: none;
+  border-radius: 999px;
+  background: #f4f4f7;
+  color: var(--ink-60);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.badgeDot { width: 8px; height: 8px; border-radius: 50%; }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Marks (§6.7)
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* A rounded square in the source's colour. Used where a brand wordmark is
+   unavailable — which, for redistribution reasons, is most of them. */
+.squircle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  border-radius: 14px;
+  color: var(--lift);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+/* Lemon and mint are light enough that white on them fails; §6.1 assigns ink
+   to exactly those two. */
+.onLight { color: var(--ink); }
+
+.tick { flex: none; color: var(--good); }
+.tickOnDark { color: #5ee9a0; }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Card (§7.3)
+   ────────────────────────────────────────────────────────────────────────── */
+
+.card {
+  background: var(--lift);
+  border: 1px solid var(--edge);
+  border-radius: 24px;
+  box-shadow: var(--sh-md);
+  padding: 28px;
+}
+
+.cardHover {
+  transition: transform var(--t-quick) var(--quick), box-shadow var(--t-quick) var(--quick);
+}
+
+.cardHover:hover { transform: translateY(-3px); box-shadow: var(--sh-lg); }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   S00 — Nav, a floating pill (§7.1). Never a full-width bar.
+   ────────────────────────────────────────────────────────────────────────── */
+
+.nav {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  height: 60px;
+  min-width: 720px;
+  max-width: calc(100vw - 48px);
+  padding: 0 8px 0 28px;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(24px) saturate(140%);
+  box-shadow: var(--sh-md);
+  color-scheme: light;
+  color: var(--ink);
+  font-family: var(--snap-sans), "Figtree", system-ui, sans-serif;
+  transition: height var(--t-control) var(--quick), background-color var(--t-control) var(--quick);
+}
+
+.navScrolled { height: 54px; background: rgba(255, 255, 255, 0.84); }
+
+.navMark {
+  position: relative;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
+  background: var(--ink);
+}
+
+/* Two dots that merge into one on hover: two become one, which is the whole
+   product stated in a logo. The only piece of wit on the page. */
+.navDot {
+  position: absolute;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin-top: -3px;
+  border-radius: 50%;
+  background: var(--lift);
+  transition: all 260ms var(--snapIn);
+}
+
+.navDotA { left: 7px; }
+.navDotB { left: 13px; }
+
+.nav:hover .navDotA { left: 9.5px; width: 9px; height: 9px; margin-top: -4.5px; }
+.nav:hover .navDotB { left: 9.5px; width: 9px; height: 9px; margin-top: -4.5px; opacity: 0; }
+
+.wordmark {
+  margin-left: 10px;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.navLinks {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin-left: 26px;
+}
+
+.navLink {
+  position: relative;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--ink-60);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: color var(--t-quick) var(--quick);
+}
+
+.navLink::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: #f2f1f7;
+  opacity: 0;
+  transform: scale(0.9);
+  transition: opacity var(--t-quick) var(--quick), transform var(--t-quick) var(--quick);
+}
+
+.navLink:hover { color: var(--ink); }
+.navLink:hover::before { opacity: 1; transform: scale(1); }
+.navLink > span { position: relative; }
+
+.navLinkActive { color: var(--ink); }
+.navLinkActive::before { opacity: 1; transform: scale(1); background: #efeef5; }
+
+.navSpacer { flex: 1; }
+
+.navLogin {
+  height: 40px;
+  padding-inline: 16px;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--ink-60);
+}
+
+.menuBtn { display: none; }
+
+.menuOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  padding: 24px;
+  background: var(--canvas);
+  color-scheme: light;
+}
+
+.menuTop { display: flex; align-items: center; justify-content: space-between; }
+
+.menuLinks {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  margin-top: 64px;
+}
+
+.menuLink {
+  font-size: 32px;
+  line-height: 38px;
+  letter-spacing: -0.022em;
+  font-weight: 700;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.menuCta { margin-top: auto; margin-bottom: 32px; width: 100%; }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   S01 — Hero. Centred, floating, full bloom.
+   ────────────────────────────────────────────────────────────────────────── */
+
+.heroLine { display: block; overflow: hidden; }
+
+.heroLine > span {
+  display: block;
+  clip-path: inset(100% 0 0 0);
+  transform: translateY(14px);
+  animation: lineIn 460ms var(--snapIn) forwards;
+}
+
+.heroLine:nth-of-type(1) > span { animation-delay: 120ms; }
+.heroLine:nth-of-type(2) > span { animation-delay: 210ms; }
+.heroLine:nth-of-type(3) > span { animation-delay: 300ms; }
+
+@keyframes lineIn {
+  to { clip-path: inset(0 0 0 0); transform: translateY(0); }
+}
+
+.heroSub {
+  max-width: 620px;
+  margin: 28px auto 0;
+  color: var(--ink-60);
+  opacity: 0;
+  transform: translateY(10px);
+  animation: riseIn 320ms var(--glide) 540ms forwards;
+}
+
+/* The only inline emphasis on the page: these three names are the reader's
+   recognition trigger. */
+.heroSub strong { font-weight: 600; color: var(--ink); }
+
+.heroActions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 40px;
+  opacity: 0;
+  transform: scale(0.96);
+  animation: popIn 300ms var(--snapIn) 700ms forwards;
+}
+
+.heroReassurance {
+  margin-top: 18px;
+  color: var(--ink-35);
+  opacity: 0;
+  animation: fadeIn 240ms var(--glide) 840ms forwards;
+}
+
+@keyframes riseIn { to { opacity: 1; transform: translateY(0); } }
+@keyframes popIn { to { opacity: 1; transform: scale(1); } }
+@keyframes fadeIn { to { opacity: 1; } }
+
+/* The snap stage: chips float directly on the bloom, with no background and
+   no card behind them. A card here would make them a diagram; without one
+   they are objects on a surface. */
+.stage {
+  position: relative;
+  width: 1200px;
+  height: 460px;
+  max-width: 100%;
+  margin: 80px auto 0;
+}
+
+.chip {
+  --rot: var(--rot-base);
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 268px;
+  height: 92px;
+  padding: 16px;
+  border: 1px solid var(--edge);
+  border-radius: 20px;
+  background: var(--lift);
+  z-index: 2;
+  opacity: 0;
+  animation: chipIn 440ms var(--snapIn) forwards;
+}
+
+@keyframes chipIn {
+  from { opacity: 0; transform: translateY(30px) scale(0.9) rotate(0deg); }
+  to { opacity: 1; transform: translateY(0) scale(1) rotate(var(--rot)); }
+}
+
+/* After the sequence the chips recede to 62% and begin a slow idle drift —
+   they are the unresolved half of the argument and should not compete with
+   the card that resolves them. */
+.chipRest {
+  animation:
+    chipIn 440ms var(--snapIn) forwards,
+    chipSettle 400ms var(--glide) 3000ms forwards,
+    drift 6s ease-in-out 3400ms infinite;
+}
+
+@keyframes chipSettle { to { opacity: 0.62; } }
+
+@keyframes drift {
+  0%, 100% { transform: translateY(0) rotate(var(--rot)); }
+  50% { transform: translateY(-4px) rotate(calc(var(--rot) + 0.6deg)); }
+}
+
+/* Hovering a chip straightens it — which hints at the entire mechanic. */
+.chip:hover {
+  animation-play-state: paused;
+  opacity: 1;
+  transform: translateY(-4px) rotate(0deg);
+  transition: transform var(--t-control) var(--snapIn), opacity var(--t-control) var(--snapIn);
+  z-index: 3;
+}
+
+.chipBody { min-width: 0; flex: 1; }
+.chipName { display: block; }
+
+/* Two of the five descriptions wrap — "payments matched to a meeting" is the
+   longest — and at Caption's 18px line-height that put 62px of content into a
+   60px box, so the block sat off-centre and the chip bulged. 16px holds two
+   lines inside the chip the spec fixes at 92px. */
+.chipDesc { display: block; line-height: 16px; color: var(--ink-35); }
+
+/* The figure belongs on the source NAME's line, not centred against a block
+   whose height depends on whether its description happened to wrap. */
+.chipHead { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+
+.connectors {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.connector {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  opacity: 0.12;
+  stroke-dasharray: 600;
+  stroke-dashoffset: 600;
+  animation: drawIn 540ms var(--glide) 1840ms forwards;
+}
+
+@keyframes drawIn { to { stroke-dashoffset: 0; } }
+
+/* The one still, certain object in a field of moving ones. It never rotates
+   and never drifts, and that is what makes it read as the answer. */
+.resolved {
+  position: absolute;
+  left: 380px;
+  top: 132px;
+  width: 440px;
+  height: 168px;
+  padding: 24px 28px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 28px;
+  background: var(--ink);
+  box-shadow: var(--sh-xl);
+  color: var(--lift);
+  z-index: 3;
+  opacity: 0;
+  transform: scale(0.88);
+  animation: resolveIn 460ms var(--snapIn) 2240ms forwards;
+}
+
+@keyframes resolveIn { to { opacity: 1; transform: scale(1); } }
+
+.resolvedTop { display: flex; align-items: center; gap: 10px; }
+.resolvedMark { width: 26px; height: 26px; border-radius: 9px; background: rgba(255, 255, 255, 0.16); }
+.resolvedName { font-size: 16px; font-weight: 700; }
+.resolvedTick { margin-left: auto; }
+.resolvedFigure { display: flex; align-items: baseline; gap: 10px; margin-top: 8px; }
+.resolvedUnit { color: rgba(255, 255, 255, 0.55); }
+.resolvedSub { margin-top: 8px; color: rgba(255, 255, 255, 0.45); }
+
+/* One ring pulse out of the card's centre, once. */
+.pulse {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 440px;
+  height: 168px;
+  margin: -84px 0 0 -220px;
+  border: 2px solid var(--ink);
+  border-radius: 28px;
+  opacity: 0;
+  animation: pulse 720ms var(--glide) 2760ms forwards;
+  pointer-events: none;
+}
+
+@keyframes pulse {
+  0% { opacity: 0.18; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.7); }
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   S02 — Source rail. Full-bleed thin band, flush against its neighbours.
+   ────────────────────────────────────────────────────────────────────────── */
+
+.rail {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  height: 96px;
+  border-block: 1px solid var(--edge);
+  overflow: hidden;
+}
+
+.railLead {
+  flex: none;
+  padding-left: var(--pad);
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.railDivider { flex: none; width: 1px; height: 40px; margin-inline: 32px; background: var(--edge); }
+
+.railViewport {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  mask-image: linear-gradient(to right, #000 calc(100% - 140px), transparent 100%);
+}
+
+.railTrack { display: flex; gap: 16px; width: max-content; animation: marquee 44s linear infinite; }
+.rail:hover .railTrack { animation-play-state: paused; }
+
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+.railPill {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 44px;
+  padding: 8px 18px 8px 8px;
+  border: 1px solid var(--edge);
+  border-radius: 999px;
+  background: var(--lift);
+  box-shadow: var(--sh-sm);
+  font-size: 15px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: transform var(--t-quick) var(--quick), box-shadow var(--t-quick) var(--quick);
+}
+
+.railPill:hover { transform: translateY(-2px); box-shadow: var(--sh-md); }
+
+.railStatic { display: none; }
+.railLeadMobile { display: none; }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   S03 — The disagreement. Sticky left column, one tall stack. The densest
+   section on the page, directly after the airiest.
+   ────────────────────────────────────────────────────────────────────────── */
+
+.splitGrid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: var(--gutter);
+  align-items: start;
+}
+
+/* The page's only sticky element. It holds while the stack scrolls past and
+   releases when the section's bottom edge reaches it. */
+.stickyCol {
+  grid-column: 1 / span 4;
+  position: sticky;
+  top: 120px;
+  z-index: 3;
+}
+
+.stickyLead { max-width: 300px; margin-top: 24px; color: var(--ink-60); }
+
+.stack {
+  grid-column: 6 / -1;
+  border: 1px solid var(--edge);
+  border-radius: 32px;
+  background: var(--lift);
+  box-shadow: var(--sh-lg);
+  overflow: hidden;
+}
+
+.srcRow {
+  display: grid;
+  grid-template-columns: 44px 1fr 140px;
+  gap: 14px;
+  align-items: start;
+  height: 116px;
+  padding: 20px 28px;
+  border-bottom: 1px solid var(--edge);
+  transition: background-color var(--t-quick) var(--quick);
+}
+
+.srcRow:last-child { border-bottom: none; }
+.srcRow:hover { background: #fafafc; }
+.srcRow:hover .squircle { transform: rotate(-6deg); }
+.srcRow .squircle { transition: transform var(--t-control) var(--snapIn); }
+
+.srcName { display: block; }
+.srcLabel { display: block; line-height: 20px; color: var(--ink-35); }
+.srcFigure { text-align: right; }
+
+/* The clause is a neutral line with a small dot, NOT a red strike. These
+   tools are not wrong, they are partial — a strike reads as an error and
+   contradicts the heading directly above it. The dot marks absence without
+   accusing anyone. */
+.srcClause {
+  grid-column: 2 / span 2;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+  color: var(--ink-60);
+}
+
+.flagDot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--flag); }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   S04 — How it works. A horizontal track with three nodes on it.
+   ────────────────────────────────────────────────────────────────────────── */
+
+.track {
+  position: relative;
+  margin-top: 80px;
+}
+
+/* The line fades out at both ends, so it reads as a continuing process rather
+   than a bounded progress bar. */
+.trackLine {
+  position: absolute;
+  top: 28px;
+  left: -40px;
+  right: -40px;
+  height: 2px;
+  background: linear-gradient(to right, transparent, var(--edge) 40px, var(--edge) calc(100% - 40px), transparent);
+}
+
+.nodes { position: relative; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--gutter); }
+
+.node {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--ink);
+  box-shadow: var(--sh-md);
+  color: var(--lift);
+  font-size: 20px;
+  font-weight: 800;
+  transition: background-color var(--t-quick) var(--quick), transform var(--t-quick) var(--quick);
+}
+
+.step:hover .node { background: var(--ink-hover); transform: scale(1.06); }
+
+.stepTitle { margin-top: 32px; }
+.stepBody { max-width: 300px; margin-top: 12px; color: var(--ink-60); }
+
+.shot {
+  margin-top: 96px;
+  border: 1px solid var(--edge);
+  border-radius: 20px;
+  box-shadow: var(--sh-xl);
+  overflow: hidden;
+  background: var(--lift);
+}
+
+.shotNote { margin-top: 20px; color: var(--ink-35); }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   S05 — The receipt. Off-centre pair, tabbed, receipt always visible.
+   ────────────────────────────────────────────────────────────────────────── */
+
+.receiptPair {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: var(--gutter);
+  margin-top: 64px;
+  align-items: start;
+}
+
+.figureCard {
+  grid-column: 1 / span 5;
+  display: flex;
+  flex-direction: column;
+  height: 320px;
+  padding: 32px;
+  border: 1px solid var(--edge);
+  border-radius: 24px;
+  background: var(--lift);
+  box-shadow: var(--sh-lg);
+}
+
+.figureLabel { color: var(--ink-35); }
+.figureValue { margin-top: 20px; }
+.tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; }
+
+.tab {
+  cursor: pointer;
+  transition: background-color var(--t-quick) var(--quick), color var(--t-quick) var(--quick);
+}
+
+.tabActive { background: var(--ink); color: var(--lift); }
+.tab:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+
+/* The same connector device as the hero, at section scale. */
+.pairConnector {
+  position: absolute;
+  top: 160px;
+  left: calc(5 / 12 * 100%);
+  width: calc(1 / 12 * 100%);
+  height: 1.5px;
+  background: var(--edge);
+}
+
+.receiptCell { grid-column: 7 / -1; }
+
+.receipt {
+  padding: 24px;
+  border: 1px solid var(--edge);
+  border-radius: 24px;
+  background: var(--lift);
+  box-shadow: var(--sh-lg);
+  transition: height var(--t-panel) var(--glide);
+}
+
+.receiptSwap { animation: swapIn 240ms var(--glide); }
+
+@keyframes swapIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.receiptHead { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
+.receiptDivider { height: 1px; margin-block: 16px; background: var(--edge); }
+.receiptLines { display: flex; flex-direction: column; gap: 12px; margin: 0; }
+.receiptLine { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
+.receiptLine dt { color: var(--ink-35); }
+.receiptLine dd { margin: 0; font-weight: 600; text-align: right; }
+.receiptNote { color: var(--ink-60); }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   S06 / S10 — The two dark panels, and the only two.
+   ────────────────────────────────────────────────────────────────────────── */
+
+.darkPanel {
+  position: relative;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 32px;
+  background: var(--ink);
+  box-shadow: var(--sh-xl);
+  overflow: hidden;
+  /* §6.1's inversion table, declared once and inherited by both panels. */
+  --d-fg: #ffffff;
+  --d-60: #a3a3b4;
+  --d-35: #7d7d91;
+  --d-edge: rgba(255, 255, 255, 0.12);
+  --d-good: #5ee9a0;
+  --d-flag: #ff7a63;
+  color: var(--d-fg);
+}
+
+/* An internal bloom, because a large flat black panel reads as a hole. */
+.panelBloom {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  filter: blur(80px);
+}
+
+.panelBloomLilac { background: radial-gradient(40% 40% at 78% 15%, rgba(230, 224, 255, 0.1), transparent 70%); }
+.panelBloomPeach { background: radial-gradient(50% 50% at 20% 80%, rgba(255, 227, 208, 0.08), transparent 70%); }
+
+.s06Panel { padding: 96px 80px; }
+
+.s06Grid {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: var(--gutter);
+  align-items: center;
+}
+
+.s06Copy { grid-column: 1 / span 6; }
+
+/* The size jump inside one sentence is the whole device: it makes the line
+   read the way a person says it out loud. */
+.statement { margin-top: 32px; color: var(--d-60); }
+.statement .f1 { color: var(--d-fg); }
+
+.s06Body { max-width: 460px; margin-top: 40px; color: var(--d-60); }
+
+.field { position: relative; grid-column: 8 / -1; }
+
+.fieldGrid {
+  position: relative;
+  display: grid;
+  --dot: 22px;
+  --dot-gap: 6px;
+  grid-template-columns: repeat(15, var(--dot));
+  gap: var(--dot-gap);
+}
+
+.dot {
+  width: var(--dot);
+  height: var(--dot);
+  border-radius: 50%;
+  border: 1.5px solid var(--d-edge);
+}
+
+.dotRead {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-color: var(--d-good);
+  background: var(--d-good);
+  color: var(--ink);
+}
+
+/* Between dot 12 and dot 13, derived from the grid rather than typed: twelve
+   dots, eleven gaps, then half of the twelfth gap. Re-sizing the dot moves
+   the boundary with it. */
+.fieldBoundary {
+  position: absolute;
+  top: -14px;
+  left: calc(12 * var(--dot) + 11 * var(--dot-gap) + var(--dot-gap) / 2);
+  width: 1.5px;
+  height: calc(var(--dot) + 28px);
+  background: var(--d-flag);
+}
+
+.fieldLabel { margin-top: 20px; color: var(--d-35); }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   S07 — Ask your AI. The page's exhale: maximum air, one object.
+   ────────────────────────────────────────────────────────────────────────── */
+
+.aiNote { margin-top: 16px; color: var(--ink-35); }
+
+.aiPanel {
+  width: 760px;
+  max-width: 100%;
+  margin: 64px auto 0;
+  padding: 32px;
+  border: 1px solid var(--edge);
+  border-radius: 32px;
+  background: var(--lift);
+  box-shadow: var(--sh-xl);
+  text-align: left;
+}
+
+.bubble {
+  max-width: 70%;
+  margin-left: auto;
+  padding: 14px 20px;
+  border-radius: 24px 24px 8px 24px;
+  background: var(--ink);
+  color: var(--lift);
+}
+
+.aiReading { display: flex; align-items: center; gap: 8px; margin-top: 24px; color: var(--ink-35); }
+.goodDot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); }
+
+.aiMetrics { margin-top: 16px; }
+
+.aiMetric {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  height: 44px;
+  border-bottom: 1px solid var(--edge);
+  transition: background-color var(--t-quick) var(--quick);
+}
+
+.aiMetric:last-child { border-bottom: none; }
+.aiMetric:hover { background: #fafafc; }
+.aiMetricName { flex: 1; }
+.aiMetricWas { color: var(--ink-35); }
+.aiAnswer { max-width: 620px; margin-top: 20px; }
+.aiFoot { margin-top: 20px; }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   S08 — The 33 sources. Full-bleed plate, index layout, no cards.
+   ────────────────────────────────────────────────────────────────────────── */
+
+.plate {
+  position: relative;
+  z-index: 1;
+  background: var(--plate);
+  border-block: 1px solid var(--edge);
+}
+
+.indexHead { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: var(--gutter); align-items: center; }
+.indexHeading { grid-column: 1 / span 6; }
+
+.search {
+  grid-column: 9 / -1;
+  height: 56px;
+  padding-inline: 24px;
+  border: 1px solid var(--edge);
+  border-radius: 999px;
+  background: var(--lift);
+  box-shadow: var(--sh-sm);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 17px;
+  transition: border-color var(--t-quick) var(--quick), box-shadow var(--t-quick) var(--quick);
+}
+
+.search::placeholder { color: var(--ink-35); }
+.search:focus { border-color: var(--ink); box-shadow: var(--sh-md); }
+.search:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+
+.indexLead { max-width: 474px; margin-top: 20px; color: var(--ink-60); }
+
+.index {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0 var(--gutter);
+  margin-top: 56px;
+  padding: 0;
+  list-style: none;
+}
+
+/* No card, no fill, no shadow. Four sections have already used elevated
+   surfaces; a flat index is the contrast, and it is also what this content
+   actually is. */
+.indexCell {
+  min-height: 96px;
+  padding: 20px 0;
+  border-bottom: 1px solid var(--edge);
+  transition: opacity 240ms var(--glide), transform 240ms var(--glide), background-color var(--t-control) var(--glide);
+}
+
+.indexTop { display: flex; align-items: center; gap: 12px; }
+.indexName { min-width: 0; }
+
+.indexDesc {
+  margin-top: 8px;
+  color: var(--ink-60);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* On the plate, white reads as a lift without needing a shadow. */
+.indexCell:hover { background: var(--lift); }
+.indexCell:hover .indexDesc { white-space: normal; overflow: visible; }
+
+/* Non-matches are NOT hidden. The grid keeps its shape, so the effect is the
+   list visibly narrowing around the answer rather than jumping. */
+.indexDim { opacity: 0.22; transform: scale(0.97); }
+.indexHit .squircle { animation: pop 300ms var(--snapIn); }
+
+@keyframes pop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+
+.empty { margin-top: 48px; text-align: center; }
+.emptyBtn { margin-top: 24px; }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   S09 — What it asks of you. One inline row, dividers, no cards, no heading.
+   ────────────────────────────────────────────────────────────────────────── */
+
+.asksRule { height: 1px; background: var(--edge); }
+
+.asks {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--gutter);
+  margin-top: 32px;
+}
+
+.ask { position: relative; padding-left: 0; }
+
+.ask + .ask { padding-left: calc(var(--gutter) / 2); }
+
+.ask + .ask::before {
+  content: "";
+  position: absolute;
+  left: calc(var(--gutter) / -2);
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--edge);
+}
+
+.askTop { display: flex; align-items: center; gap: 10px; }
+.askBody { max-width: 220px; margin-top: 10px; color: var(--ink-60); }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   S10 — Final CTA. The page closes on the image it opened with.
+   ────────────────────────────────────────────────────────────────────────── */
+
+.s10Panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 420px;
+  padding: 0 40px;
+  text-align: center;
+}
+
+/* Five source-coloured dots: the hero's chips reduced to their essence. The
+   only decoration approved anywhere on this page. */
+.ctaDot {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  opacity: 0.22;
+  animation: driftDot 6s ease-in-out infinite;
+}
+
+@keyframes driftDot {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+.s10Heading { max-width: 620px; }
+.s10Sub { margin-top: 20px; color: var(--d-60); }
+.s10Actions { margin-top: 40px; }
+.s10Foot { margin-top: 20px; color: var(--d-35); }
+.btnLarge { height: 60px; padding-inline: 36px; }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   S11 — Footer (§7.6)
+   ────────────────────────────────────────────────────────────────────────── */
+
+.footer {
+  position: relative;
+  z-index: 1;
+  border-top: 1px solid var(--edge);
+  padding-block: 80px 48px;
+}
+
+.footerTop { display: flex; justify-content: space-between; gap: 56px; }
+.footerBrand { display: flex; align-items: center; }
+.footerGroups { display: flex; gap: 56px; }
+.footerTitle { margin-bottom: 14px; color: var(--ink-35); }
+.footerList { display: flex; flex-direction: column; gap: 12px; margin: 0; padding: 0; list-style: none; }
+
+.footerLink {
+  font-size: 15px;
+  color: var(--ink-60);
+  text-decoration: none;
+  transition: color var(--t-quick) var(--quick);
+}
+
+.footerLink:hover { color: var(--ink); }
+
+.footerBottom {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  margin-top: 48px;
+  padding-top: 24px;
+  border-top: 1px solid var(--edge);
+  color: var(--ink-35);
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Breakpoints (§5.1, §9)
+
+   §5.3 scales section padding by 0.82 at LG, 0.66 at MD and 0.5 at SM/XS,
+   rounded to the nearest value on the spacing scale — so the density rhythm
+   survives the collapse instead of flattening into one uniform gap.
+
+   The rhythm rules survive too: even when every section is a single column,
+   only S01 and S07 centre their headings, only S06 and S10 are dark, and only
+   S02 and S08 break to full bleed.
+   ────────────────────────────────────────────────────────────────────────── */
+
+@media (max-width: 1279px) {
+  .page { --pad: 64px; --gutter: 20px; }
+
+  .d0 { font-size: 84px; line-height: 80px; }
+  .s01 { padding-block: 144px 96px; }
+  .s03, .s05, .s06 { padding-block: 120px; }
+  .s04 { padding-block: 120px 96px; }
+  .s07 { padding-block: 120px; }
+  .s08 { padding-block: 96px; }
+  .s09 { padding-block: 80px; }
+  .s10 { padding-block: 96px 120px; }
+
+  .stage { width: 1000px; height: 420px; }
+  .chip { width: 240px; height: 84px; }
+  .resolved { width: 400px; height: 152px; left: 300px; top: 128px; }
+  .pulse { width: 400px; height: 152px; margin: -76px 0 0 -200px; }
+  .index { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 1023px) {
+  .page { --pad: 48px; }
+
+  .d0 { font-size: 64px; line-height: 62px; }
+  .d1 { font-size: 52px; line-height: 56px; }
+  .d2 { font-size: 38px; line-height: 42px; }
+  .f1 { font-size: 76px; line-height: 72px; }
+  .f2 { font-size: 52px; line-height: 52px; }
+  .f3 { font-size: 32px; line-height: 36px; }
+
+  .s01 { padding-block: 120px 80px; }
+  .s03, .s05, .s06 { padding-block: 96px; }
+  .s04 { padding-block: 96px 80px; }
+  .s07 { padding-block: 96px; }
+  .s08 { padding-block: 80px; }
+  .s09 { padding-block: 64px; }
+  .s10 { padding-block: 80px 96px; }
+
+  /* Nav: the pill spans the container and the links collapse to a word. */
+  .nav { left: 24px; right: 24px; transform: none; min-width: 0; max-width: none; width: auto; padding-left: 20px; }
+  .navLinks, .navLogin { display: none; }
+  .menuBtn { display: inline-flex; }
+
+  /* All rotations halve at MD — a tilted object in a narrowing column starts
+     reading as a broken layout rather than as play. */
+  .chip { --rot-scale: 0.5; }
+
+  .rail { height: 80px; }
+
+  /* S03's left column stops being sticky and sits above the stack. */
+  .splitGrid, .receiptPair, .s06Grid, .indexHead { display: block; }
+  .stickyCol { position: static; }
+  .stack { margin-top: 48px; }
+  .srcRow { height: 104px; }
+  .stickyLead { max-width: none; }
+
+  /* S04's track rotates to vertical: nodes down the left, content beside. */
+  .trackLine { top: 0; bottom: 0; left: 27px; right: auto; width: 2px; height: auto;
+    background: linear-gradient(to bottom, transparent, var(--edge) 40px, var(--edge) calc(100% - 40px), transparent); }
+  .nodes { grid-template-columns: 1fr; gap: 48px; }
+  .step { display: grid; grid-template-columns: 56px 1fr; gap: 24px; align-items: start; }
+  .stepTitle, .stepBody { grid-column: 2; margin-top: 0; }
+  .stepBody { margin-top: 12px; max-width: none; }
+  .shot { margin-top: 64px; }
+
+  .figureCard, .receiptCell { width: 100%; }
+  .receiptCell { margin-top: 24px; }
+  .pairConnector { display: none; }
+
+  .s06Panel { padding: 64px; }
+  .field { margin-top: 64px; }
+  /* 10 × 9: dot 13 is the third of the second row. */
+  .fieldGrid { grid-template-columns: repeat(10, var(--dot)); --dot: 24px; --dot-gap: 8px; }
+  .fieldBoundary {
+    left: calc(2 * var(--dot) + 2 * var(--dot-gap) - var(--dot-gap) / 2);
+    top: calc(var(--dot) + var(--dot-gap) - 14px);
+    height: calc(var(--dot) + 28px);
+  }
+
+  .aiPanel { width: 100%; }
+
+  /* §9: at MD the stage is 660 wide with the chips in two columns and one
+     below, and every rotation halves. Absolute positions measured for a
+     1200px stage cannot survive that, so the layout becomes a grid and the
+     chips give up their coordinates. */
+  .stage { width: 100%; max-width: 660px; height: auto; display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 64px; }
+  .chip { position: static; width: 100%; height: 92px; --rot: calc(var(--rot-base) * 0.5); }
+  .resolved { position: static; grid-column: 1 / -1; justify-self: center;
+    width: 100%; max-width: 380px; height: 152px; margin-top: 8px; }
+  .connectors, .pulse { display: none; }
+
+  /* The confirmation line is a badge, and §7.2 makes badges single-line —
+     right for a tab, wrong for a sentence, which overflowed the panel by
+     44px at 375. */
+  .aiFoot { height: auto; padding-block: 8px; white-space: normal; align-items: flex-start; }
+
+  .search { width: 100%; margin-top: 24px; }
+  .index { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+  /* S09 becomes 2 × 2: the vertical divider stays between the columns and a
+     horizontal one appears between the rows. */
+  .asks { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 40px var(--gutter); }
+  .ask:nth-child(odd) { padding-left: 0; }
+  .ask:nth-child(odd)::before { display: none; }
+  .ask:nth-child(n + 3) { padding-top: 40px; border-top: 1px solid var(--edge); }
+
+  .s10Panel { height: auto; padding: 80px 40px; }
+  .footerTop { flex-direction: column; }
+}
+
+@media (max-width: 767px) {
+  .page { --pad: 24px; --gutter: 16px; }
+
+  .d0 { font-size: min(44px, 10.9vw); line-height: min(44px, 10.9vw); letter-spacing: -0.03em; }
+  .d1 { font-size: 36px; line-height: 38px; }
+  .d2 { font-size: 32px; line-height: 34px; }
+  .d3 { font-size: 24px; line-height: 30px; }
+  .bodyL { font-size: 17px; line-height: 28px; }
+  .bodyM { font-size: 16px; line-height: 26px; }
+  .f1 { font-size: 56px; line-height: 54px; }
+  .f2 { font-size: 40px; line-height: 40px; }
+  .f3 { font-size: 28px; line-height: 32px; }
+
+  .s01 { padding-block: 80px 64px; }
+  .s03, .s05, .s06, .s07 { padding-block: 64px; }
+  .s04 { padding-block: 64px; }
+  .s08 { padding-block: 64px; }
+  .s09 { padding-block: 48px; }
+  .s10 { padding-block: 64px; }
+
+  .nav { left: 16px; right: 16px; top: 12px; height: 56px; padding-left: 16px; gap: 4px; }
+  .navScrolled { height: 52px; }
+  .btnNav { height: 40px; padding-inline: 12px; font-size: 14px; }
+  .menuBtn { padding-inline: 8px; font-size: 14px; }
+
+  /* Measured at 375: mark + wordmark + Menu + "Connect your first tool" is
+     390px of content in a 341px pill. The CTA label is final copy and the
+     menu is the only way to the rest of the page, so the wordmark's TEXT
+     gives — the mark still carries the brand and still links home. */
+  .nav .wordmark { display: none; }
+
+  /* The mark alone is 28px, and a 28px link is not a tap target. */
+  .nav .footerBrand { min-width: 44px; min-height: 44px; justify-content: center; }
+  .tab { height: 44px; padding-inline: 18px; }
+
+  /* Shadows lighten one step: a heavy shadow at small sizes reads as blur. */
+  .card, .railPill { box-shadow: var(--sh-sm); }
+  .stack, .figureCard, .receipt { box-shadow: var(--sh-md); }
+  .darkPanel, .aiPanel, .shot { box-shadow: var(--sh-lg); }
+
+  .btn { height: 52px; width: 100%; }
+  .heroActions { flex-direction: column; align-items: stretch; gap: 8px; }
+  .heroActions .textBtn { width: 100%; }
+
+  /* The stage becomes a vertical stack of THREE chips, not five: five in a
+     column is a list, and three plus an answer is a story. Every rotation
+     goes to 0° — a tilted card in a phone-width column reads as a bug. */
+  .stage { width: 100%; height: auto; margin-top: 48px; display: flex; flex-direction: column; gap: 12px; }
+  .chip { position: static; width: 100%; height: auto; --rot: 0deg; }
+  .chipDrop { display: none; }
+  .resolved { position: static; width: 100%; height: auto; margin-top: 8px; }
+  .connectors, .pulse { display: none; }
+
+  .rail { height: 72px; }
+  .railLead, .railDivider { display: none; }
+  .railLeadMobile { display: block; padding: 16px var(--pad) 0; color: var(--ink-35); }
+  .railPill { height: 38px; }
+
+  /* S03 rows become three lines. */
+  .srcRow { grid-template-columns: 36px 1fr auto; height: auto; padding: 20px 20px; }
+  .srcFigure { text-align: right; }
+  .srcClause { grid-column: 1 / -1; margin-top: 10px; }
+  .srcLabel { margin-top: 2px; }
+
+  .step { grid-template-columns: 44px 1fr; gap: 16px; }
+  .node { width: 44px; height: 44px; font-size: 17px; }
+  .trackLine { left: 21px; }
+  .stepTitle, .stepBody { grid-column: 1 / -1; padding-left: 28px; }
+
+  .shot { overflow-x: auto; }
+  .figureCard { height: auto; gap: 24px; padding: 24px; }
+  .s06Panel { padding: 40px 24px; border-radius: 24px; }
+  .darkPanel { border-radius: 24px; }
+  /* 6 × 15: dot 13 starts the third row, so the boundary sits at the left
+     edge of that row rather than inside it. */
+  .fieldGrid { grid-template-columns: repeat(6, var(--dot)); --dot: 20px; --dot-gap: 7px; }
+  .fieldBoundary {
+    left: calc(var(--dot-gap) / -2);
+    top: calc(2 * var(--dot) + 2 * var(--dot-gap) - 14px);
+    height: calc(var(--dot) + 28px);
+  }
+
+  .aiPanel { padding: 20px; border-radius: 24px; }
+  .aiMetric { height: auto; flex-wrap: wrap; padding-block: 12px; }
+  .aiMetricName { flex-basis: 100%; }
+
+  .index { grid-template-columns: minmax(0, 1fr); }
+  .indexDesc { white-space: normal; overflow: visible; }
+
+  .asks { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+  .ask, .ask + .ask { padding-left: 0; padding-top: 24px; border-top: 1px solid var(--edge); }
+  .ask + .ask::before { display: none; }
+  .ask:first-child { padding-top: 0; border-top: none; }
+  .askBody { max-width: none; }
+
+  .s10Panel { padding: 72px 24px; }
+  .btnLarge { height: 52px; width: 100%; }
+  .footerGroups { flex-wrap: wrap; gap: 32px; }
+  .footerList { gap: 0; }
+  .footerLink { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; }
+  .footerBottom { flex-direction: column; gap: 12px; }
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Reduced motion (§6.8)
+
+   The hero renders its final state at 0ms. The idle drift loop STOPS — a
+   continuous ambient loop is a real accessibility problem, not a style
+   preference, and it is the one thing on this page that would otherwise never
+   stop moving.
+   ────────────────────────────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .page *,
+  .page *::before,
+  .page *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 120ms !important;
+  }
+
+  .chipRest, .ctaDot { animation: none; opacity: 0.62; transform: rotate(var(--rot, 0deg)); }
+  .ctaDot { opacity: 0.22; transform: none; }
+  .heroLine > span { clip-path: inset(0 0 0 0); transform: none; }
+  .connector { stroke-dashoffset: 0; }
+  .pulse { display: none; }
+  .railTrack { animation: none; transform: none; }
+  .railStatic { display: flex; }
+  .railScrolling { display: none; }
+
+  /* Hover lift becomes a border colour change. */
+  .cardHover:hover, .railPill:hover, .btn:hover, .chip:hover { transform: none; }
+  .cardHover:hover { border-color: var(--ink-35); }
+}
+
+/* The drawn canvas: its fills live here so the component carries no hex and
+   `check-ui`'s colour rules stay armed over every .tsx in the repo. */
+.shotCanvas { display: block; width: 100%; aspect-ratio: 16 / 9; font-family: var(--snap-sans), "Figtree", system-ui, sans-serif; }
+.shotWire { fill: none; stroke: var(--ink); stroke-width: 2; opacity: 0.16; }
+.shotNode { fill: var(--lift); stroke: var(--edge); filter: drop-shadow(0 4px 10px rgba(20, 20, 28, 0.06)); }
+.shotGround { fill: var(--lift); }
+.shotChipNeutral { fill: #f4f4f7; }
+.shotLabel { fill: var(--ink-35); }
+.shotValue { fill: var(--ink); }
