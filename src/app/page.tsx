@@ -6,6 +6,10 @@ import { SnapNav } from "@/components/marketing/snap/nav";
 import { SourceRail } from "@/components/marketing/snap/rail";
 import { ReceiptTabs, type Metric } from "@/components/marketing/snap/receipt-tabs";
 import { SourceIndex } from "@/components/marketing/snap/source-index";
+import { StatusPill } from "@/components/marketing/snap/status-pill";
+import { AmbientChips } from "@/components/marketing/snap/ambient-chips";
+import { AiPanel } from "@/components/marketing/snap/ai-panel";
+import { INDEX_SOURCES } from "@/components/marketing/snap/source-taxonomy";
 import { CountUp } from "@/components/marketing/snap/count-up";
 import { CanvasShot } from "@/components/marketing/snap/canvas-shot";
 import { DashboardShot } from "@/components/marketing/snap/dashboard-shot";
@@ -30,13 +34,17 @@ import { Mark, brandColour, Tick, LogoMark } from "@/components/marketing/snap/m
  * centred heading over a grid of cards, it reads as generated no matter how
  * good the palette is. So density, alignment and weight change as you scroll:
  *
- *   big · thin · dense · wide · medium · heavy · quiet · wide · thin · heavy
+ *   big · thin · dense · wide · medium · heavy · wide · thin · heavy
+ *
+ * S06 was cut; the numbering keeps its gap on purpose, as a marker that a
+ * section was deliberately removed rather than lost. Its claim survives inside
+ * S05's receipt, attached to a real number, which is where it was strongest.
  *
  * No two neighbours match, and three rules enforce it:
  *
- *   1. ONLY S01 and S07 centre their heading. Everything else is left-aligned
- *      at the container's left edge.
- *   2. ONLY S06 and S10 are dark, and three light sections separate them.
+ *   1. ONLY S01 centres its heading. S07's moved left when it became the dark
+ *      section, which makes the fold the single centred moment on the page.
+ *   2. ONLY S07 and S10 are dark, separated by two light sections.
  *   3. ONLY S02 and S08 break the container to full bleed, and they sit at
  *      opposite ends of the page.
  *
@@ -134,12 +142,18 @@ const METRICS: Metric[] = [
     figure: "41",
     value: 41,
     kind: "count",
+    sources: [
+      { source: "calendly", name: "Calendly" },
+      { source: "close", name: "Close CRM" },
+      { source: "gsheets", name: "Google Sheets" },
+    ],
+    records: "123 records",
     lines: [
       { key: "Sources read", value: "Calendly, Close CRM, Google Sheets" },
       { key: "Last computed", value: "2 minutes ago" },
       { key: "Records in", value: "123" },
       { key: "Matched as the same person", value: "82" },
-      { key: "Excluded", value: "0" },
+      { key: "Excluded", value: "0", excluded: true },
     ],
     note: "Three sources disagreed on the count. 82 records described the same 41 meetings, so each was counted once, on the earliest timestamp any source recorded for it.",
   },
@@ -148,12 +162,18 @@ const METRICS: Metric[] = [
     figure: "$86.40",
     value: 86.4,
     kind: "currency",
+    sources: [
+      { source: "stripe", name: "Stripe" },
+      { source: "instantly", name: "Instantly" },
+      { source: "calendly", name: "Calendly" },
+    ],
+    records: "418 records",
     lines: [
       { key: "Sources read", value: "Stripe, Instantly, Calendly" },
       { key: "Last computed", value: "2 minutes ago" },
       { key: "Records in", value: "418" },
       { key: "Matched as the same person", value: "129" },
-      { key: "Excluded", value: "6" },
+      { key: "Excluded", value: "6", excluded: true },
     ],
     note: "Spend divided by the meetings two sources agree actually happened. Six charges were left out — four refunds and two test payments — because counting them would have made the number look better than it is.",
   },
@@ -162,21 +182,20 @@ const METRICS: Metric[] = [
     figure: "8m 39s",
     value: 519,
     kind: "duration",
+    sources: [
+      { source: "instantly", name: "Instantly" },
+      { source: "close", name: "Close CRM" },
+    ],
+    records: "312 records",
     lines: [
       { key: "Sources read", value: "Instantly, Close CRM" },
       { key: "Last computed", value: "9 minutes ago" },
       { key: "Records in", value: "312" },
       { key: "Matched as the same person", value: "0" },
-      { key: "Excluded", value: "14" },
+      { key: "Excluded", value: "14", excluded: true },
     ],
     note: "Nothing needed matching here — both sources key on the same lead. 14 replies are excluded because nobody has answered them yet, and counting an unanswered reply as instant would flatter the figure.",
   },
-];
-
-const AI_METRICS = [
-  { name: "Close rate", was: "was 27.4%", now: "20.0%" },
-  { name: "Show-up rate", was: "unchanged", now: "69%" },
-  { name: "Speed to lead", was: "was 8m 39s", now: "31m 12s" },
 ];
 
 /**
@@ -279,39 +298,50 @@ export default async function Home() {
             of dead canvas in an earlier build: the section is as tall as the
             headline, the stage and the air between them, and no taller. */}
         <section className={`${styles.container} ${styles.s01}`}>
+          <AmbientChips />
+          <StatusPill count={CONNECTOR_CATALOG.length} />
+
           <div className={`${styles.narrowBlock} ${styles.centre}`}>
-            {/* Three fixed lines. Letting this reflow puts a single word on
-                its own line at some widths, which reads as a typesetting
-                accident rather than as a sentence. */}
+            {/* TWO fixed lines at 88px, down from three at 104. The object
+                below has to reach the fold: three lines of 104 pushed the
+                stage 700px down the page, so on a 900px viewport the first
+                screen was entirely text. */}
             <h1 className={styles.d0}>
               <span className={styles.heroLine}>
                 <span>Your best metrics</span>
               </span>
               <span className={styles.heroLine}>
-                <span>live between</span>
-              </span>
-              <span className={styles.heroLine}>
-                <span>your tools.</span>
+                <span>live between your tools.</span>
               </span>
             </h1>
 
+            {/* ONE sentence, and no word inside it is weighted differently.
+                The bold on the three tool names existed to trigger
+                recognition; the chips below now do that with actual logos and
+                colour, so removing it also removes the page's last
+                inline-emphasis exception. */}
             <p className={`${styles.bodyL} ${styles.heroSub}`}>
-              <strong>Calendly</strong> holds part of the answer. <strong>Close</strong> holds another part.{" "}
-              <strong>Stripe</strong> holds the rest. Namzilabs reads all of them, matches the records that are the same person, and builds the number none of them can.
+              Namzilabs reads all {CONNECTOR_CATALOG.length}, matches the records that are the same person, and builds
+              the number none of them can.
             </p>
 
             <div className={styles.heroActions}>
-              <Link className={styles.btn} href={cta}>
-                {ctaLabel}
+              {/* A TWO-PART PILL, and hero-only. It reads as a product control
+                  rather than a template button, and it carries a second piece
+                  of information without a second line of text. Repeating the
+                  construction in the nav and in S10 would turn a signature
+                  into a pattern, so those keep the plain 56px button. */}
+              <Link className={`${styles.btn} ${styles.btnHero}`} href={cta}>
+                <span className={styles.btnHeroLabel}>{ctaLabel}</span>
+                <span className={styles.btnHeroDivider} aria-hidden />
+                <span className={styles.btnHeroNote}>No card required</span>
               </Link>
-              <Link className={styles.textBtn} href="#receipts">
-                <span>See a live metric</span>
+              <Link className={styles.ghostPill} href="#receipts">
+                See a live metric
               </Link>
             </div>
 
-            <p className={`${styles.caption} ${styles.heroReassurance}`}>
-              Read-only. Disconnect any tool and keep what it sent.
-            </p>
+            <p className={`${styles.caption} ${styles.heroReassurance}`}>Read-only. Disconnect anytime.</p>
           </div>
 
           <div className={styles.stage}>
@@ -356,7 +386,7 @@ export default async function Home() {
                 never mid-way through becoming something. */}
             <DashboardShot
               fallback={
-            <div className={`sky-panel ${styles.resolved}`}>
+            <div className={styles.resolved}>
               <div className={styles.resolvedTop}>
                 <span className={styles.resolvedMark} aria-hidden />
                 <span className={styles.resolvedName}>Namzilabs</span>
@@ -454,103 +484,65 @@ export default async function Home() {
             <ReceiptTabs metrics={METRICS} />
           </section>
 
-          {/* ══ S06 · Honest incompleteness — dark panel, split ════════════
-              The first of exactly two dark sections, and completely still.
-              The loudest claim on the page makes no noise, and the contrast
-              against the animated hero is the point. */}
-          <section className={`${styles.container} ${styles.s06}`}>
-            <div className={`sky-panel ${styles.darkPanel} ${styles.s06Panel}`}>
-              <div className={styles.s06Grid}>
-                <div className={styles.s06Copy}>
-                  <h2 className={styles.d2}>It tells you when it can&rsquo;t see everything.</h2>
-                  <p className={`${styles.d2} ${styles.statement}`}>
-                    Covering <span className={styles.f1}>12</span> of <span className={styles.f1}>90</span> days.
-                  </p>
-                  <p className={`${styles.bodyM} ${styles.s06Body}`}>
-                    Most tools fill a gap with a guess and let the chart look finished. When Namzilabs hasn&rsquo;t read
-                    far enough back yet, or a source has gone quiet, the metric says so on its face. A number you can
-                    trust is one that admits what it doesn&rsquo;t know.
-                  </p>
-                </div>
+          {/* ══ S07 · Give your AI the numbers — THE dark section ═════════
+              It inherits S06's slot in the rhythm. Deleting the incompleteness
+              panel would otherwise have left S10 as the only dark moment and
+              the middle of the page flat — and this section was the one that
+              most needed the weight, because an AI integration rendered as
+              another white card on a white background undersells itself.
 
-                <div className={styles.field}>
-                  {/* One element with one description: ninety individually
-                      announced dots is noise, and the sentence carries the
-                      same information the grid does. */}
-                  <div
-                    className={styles.fieldGrid}
-                    role="img"
-                    aria-label="12 of 90 days read, 78 days not yet read"
-                  >
-                    {Array.from({ length: 90 }, (_, i) =>
-                      i < 12 ? (
-                        <span className={`${styles.dot} ${styles.dotRead}`} key={i}>
-                          <Tick size={12} />
-                        </span>
-                      ) : (
-                        <span className={styles.dot} key={i} />
-                      ),
-                    )}
-                    <span className={styles.fieldBoundary} aria-hidden />
-                  </div>
-                  <p className={`${styles.caption} ${styles.fieldLabel}`}>78 days not yet read.</p>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* ══ S07 · Ask your AI — quiet centre, maximum air ══════════════
-              The page's exhale after the dark panel, and the only section
-              besides the hero with a centred heading. */}
+              The angle changed with it. The old headline sold a fact-check —
+              a clever line about an AI being wrong. What a buyer is short of is
+              a DIAGNOSIS, and the specificity is the sell: anyone can say "AI
+              insights", almost nobody can say the join across every tool
+              already exists, because they built it. */}
           <section className={`${styles.container} ${styles.s07}`} id="ask-your-ai">
-            <div className={`${styles.narrowBlock} ${styles.centre}`}>
-              <h2 className={styles.d2}>Opinions are cheap. Give it the numbers.</h2>
-              <p className={`${styles.bodyM} ${styles.dim}`} style={{ maxWidth: 640, margin: "20px auto 0" }}>
-                Connect Claude or ChatGPT to your workspace and it reads your published metrics directly. The same
-                figures you see on the board, not a screenshot you pasted and not a guess.
-              </p>
-              <p className={`${styles.bodyS} ${styles.aiNote}`}>
-                Read-only, scoped to one workspace, switched on per person.
-              </p>
-            </div>
-
-            {/* A still image of a conversation. A typewriter effect would
-                undercut the one claim this section makes — that these are
-                real published figures rather than a performance. */}
-            <div className={styles.aiPanel}>
-              <p className={`${styles.bodyS} ${styles.bubble}`}>Why did our close rate drop last week?</p>
-
-              <p className={`${styles.caption} ${styles.aiReading}`}>
-                <span className={styles.goodDot} aria-hidden />
-                Reading 3 metrics from Namzilabs
-              </p>
-
-              <div className={styles.aiMetrics}>
-                {AI_METRICS.map((metric) => (
-                  <div className={styles.aiMetric} key={metric.name}>
-                    <span className={`${styles.bodyS} ${styles.aiMetricName}`}>{metric.name}</span>
-                    <span className={`${styles.bodyS} ${styles.aiMetricWas}`}>{metric.was}</span>
-                    <span className={styles.f4}>{metric.now}</span>
-                  </div>
-                ))}
+            <div className={`${styles.darkPanel} ${styles.s07Panel}`}>
+              <div className={styles.panelBlooms} aria-hidden>
+                <div className={`${styles.panelBloom} ${styles.panelBloomLilac}`} />
+                <div className={`${styles.panelBloom} ${styles.panelBloomMint}`} />
               </div>
 
-              <p className={`${styles.bodyS} ${styles.aiAnswer}`}>
-                Show-up rate held, so it isn&rsquo;t the calls. Speed to lead went from 8m 39s to 31m 12s on Tuesday,
-                the same day two reps were out. Close rate tracks that, not lead quality.
-              </p>
+              <div className={styles.s07Grid}>
+                <div className={styles.s07Copy}>
+                  <h2 className={styles.d2}>Your AI can only see what you paste. Give it the whole business.</h2>
+                  <p className={`${styles.bodyM} ${styles.s07Lead}`}>
+                    Connect Claude or ChatGPT to your workspace and it reads every metric you have published, live. Not
+                    a screenshot, not a CSV, not last month. Ask where the month went and it works across all your
+                    sources at once — the one place that can, because it is the only place they have ever been joined —
+                    and it comes back with the step that actually broke and the arithmetic behind it.
+                  </p>
+                  <p className={`${styles.bodyS} ${styles.s07Note}`}>
+                    Read-only, scoped to one workspace, switched on per person.
+                  </p>
 
-              <span className={`${styles.badge} ${styles.aiFoot}`}>
-                <Tick size={14} />
-                Read-only, and every figure is a metric you published.
-              </span>
+                  {/* Not buttons: there is nothing to click here, and a hover
+                      lift on a label is how somebody finds that out the hard
+                      way. */}
+                  <div className={styles.connChips}>
+                    {["Claude", "ChatGPT", "Any MCP client"].map((label) => (
+                      <span className={styles.connChip} key={label}>
+                        {label}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                {/* The card bleeds past the panel's right edge — the thing the
+                    AI is reading sticks out of the box. It is the section's one
+                    structural idea and the reason the panel has no right
+                    padding. */}
+                <div className={styles.aiCardCell}>
+                  <AiPanel />
+                </div>
+              </div>
             </div>
           </section>
 
           {/* ══ S08 · The 33 sources — full-bleed plate, flat index ════════ */}
           <section className={styles.plate} id="sources">
             <div className={`${styles.container} ${styles.s08}`}>
-              <SourceIndex sources={sources} cta={cta} ctaLabel={ctaLabel} />
+              <SourceIndex sources={INDEX_SOURCES} cta={cta} />
             </div>
           </section>
 
@@ -575,7 +567,7 @@ export default async function Home() {
               dots, drifting on the same loop as the hero chips, reduced to
               their essence. This is the only decoration approved anywhere. */}
           <section className={`${styles.container} ${styles.s10}`}>
-            <div className={`sky-panel ${styles.darkPanel} ${styles.s10Panel}`}>
+            <div className={`${styles.darkPanel} ${styles.s10Panel}`}>
               {CTA_DOTS.map((dot) => (
                 <span
                   key={dot.id}

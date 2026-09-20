@@ -1,51 +1,51 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo, useState } from "react";
 import styles from "@/app/snap.module.css";
 import { Mark } from "./marks";
-
-type Source = { source: string; name: string; blurb: string };
+import { CATEGORY_COUNTS, type IndexSource } from "./source-taxonomy";
 
 /**
- * S08 — an index, not a card grid.
+ * S08 — an index that answers the question the visitor actually has.
  *
- * Four sections above this one have already used elevated white surfaces. A
- * flat reference table on a half-step-darker plate is the contrast, and it is
- * also what this content actually IS: a list you scan for your own tool, not
- * 33 things each deserving its own card. The previous build spent two and a
- * half screens on this and lost people in it.
+ * "Is my tool listed?" is the question this section used to answer. The real
+ * one is "will it give me the thing I need?", and the field tags are what
+ * answer it without anybody having to open anything: a buyer scans for
+ * `No-show` or `Refunds`, not for a logo they already knew was coming.
  *
- * ═══ NON-MATCHES FADE, THEY DO NOT DISAPPEAR ═══
+ * ═══ NOTHING IS EVER HIDDEN ═══
  *
- * Filtering by removal answers "is my tool here?" with a list that has
- * silently changed shape, and the reader cannot tell a short list of matches
- * from a short list of everything. Dimming in place keeps the grid's shape,
- * so the effect is the page visibly narrowing around the answer rather than
- * jumping — and matches pop their squircle, which is the small satisfying
- * confirmation that the thing you typed was found.
+ * Filtering by removal answers with a list that has silently changed shape,
+ * and the reader cannot tell a short list of matches from a short list of
+ * everything. Non-matches fade in place, so the grid keeps its shape and
+ * visibly narrows around the answer. Category and search COMPOSE — picking
+ * Scheduling and typing "cal" narrows to the intersection.
  *
- * It is the same argument the product makes about records it excludes from a
- * metric: what did not count is still shown, with the count beside it.
+ * ═══ THE REQUEST CELL IS THE EMPTY STATE ═══
+ *
+ * It is always last and always at full opacity, so a search that matches
+ * nothing leaves exactly one cell lit — the one that answers the question —
+ * with the other 33 faded behind it. That is a better empty state than a
+ * message, and it needs no second component.
  */
-export function SourceIndex({
-  sources,
-  cta,
-  ctaLabel,
-}: {
-  sources: Source[];
-  cta: string;
-  ctaLabel: string;
-}) {
+export function SourceIndex({ sources, cta }: { sources: IndexSource[]; cta: string }) {
   const [query, setQuery] = useState("");
+  const [category, setCategory] = useState<string | null>(null);
+
   const needle = query.trim().toLowerCase();
 
   const matches = useMemo(
-    () => sources.filter((source) => source.name.toLowerCase().includes(needle)),
-    [sources, needle],
+    () =>
+      sources.filter(
+        (s) =>
+          (category === null || s.category === category) &&
+          (needle === "" || s.name.toLowerCase().includes(needle) || s.tags.some((t) => t.toLowerCase().includes(needle))),
+      ),
+    [sources, needle, category],
   );
 
-  const empty = needle !== "" && matches.length === 0;
+  const hit = (s: IndexSource) => matches.includes(s);
+  const filtering = needle !== "" || category !== null;
 
   return (
     <>
@@ -62,50 +62,73 @@ export function SourceIndex({
       </div>
 
       <p className={`${styles.bodyM} ${styles.indexLead}`}>
-        Every one below is a source this product reads today, in production, with its own connector. Not a logo on a
+        Every one below is live in production with its own connector, reading that tool&rsquo;s own API. Not a logo on a
         roadmap.
       </p>
 
-      {/* The count is announced, because the dimming that carries the answer
-          visually is invisible to a screen reader. */}
-      <p className={`${styles.caption} ${styles.faint}`} role="status" style={{ marginTop: 16 }}>
-        {needle === ""
-          ? `${sources.length} sources.`
-          : `${matches.length} of ${sources.length} sources match “${query.trim()}”.`}
+      <div className={styles.filters} role="group" aria-label="Filter sources by category">
+        {CATEGORY_COUNTS.map((c, i) => {
+          const value = i === 0 ? null : c.label;
+          const on = category === value;
+          return (
+            <button
+              key={c.label}
+              type="button"
+              className={`${styles.filter} ${on ? styles.filterOn : ""}`}
+              aria-pressed={on}
+              onClick={() => setCategory(value)}
+            >
+              {i === 0 ? c.label : c.label}
+              {i === 0 ? null : <span className={styles.filterCount}>{c.count}</span>}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* The count is announced, because the fade that carries the answer
+          visually says nothing to a screen reader. */}
+      <p className={`${styles.caption} ${styles.faint} ${styles.filterStatus}`} role="status">
+        {filtering ? `${matches.length} of ${sources.length} sources match.` : ` `}
       </p>
 
       <ul className={styles.index}>
         {sources.map((source, i) => {
-          const hit = needle !== "" && source.name.toLowerCase().includes(needle);
-          const dim = needle !== "" && !hit;
+          const dim = filtering && !hit(source);
           return (
             <li
-              key={source.name}
-              className={`${styles.indexCell} ${dim ? styles.indexDim : ""} ${hit ? styles.indexHit : ""}`}
-              /* Staggered in grid order, so the list narrows as a wave rather
-                 than snapping all at once. */
-              style={{ transitionDelay: `${Math.min(i, 32) * 10}ms` }}
+              key={source.source}
+              className={`${styles.indexCell} ${dim ? styles.indexDim : ""}`}
+              style={{ transitionDelay: `${Math.min(i, 33) * 10}ms` }}
               aria-hidden={dim || undefined}
             >
               <div className={styles.indexTop}>
-                <Mark source={source.source} size={32} className={styles.mark} />
+                <Mark source={source.source} size={28} className={styles.mark} />
                 <span className={`${styles.h4} ${styles.indexName}`}>{source.name}</span>
               </div>
               <p className={`${styles.bodyS} ${styles.indexDesc}`}>{source.blurb}</p>
+              <div className={styles.tags}>
+                {source.tags.map((tag) => (
+                  <span className={styles.tag} key={tag}>
+                    {tag}
+                  </span>
+                ))}
+              </div>
             </li>
           );
         })}
-      </ul>
 
-      {/* An empty screen is an invitation, not an apology. */}
-      {empty ? (
-        <div className={styles.empty}>
-          <p className={styles.bodyM}>Not here yet. Any tool that can POST a webhook already works.</p>
-          <Link className={`${styles.btn} ${styles.emptyBtn}`} href={cta}>
-            {ctaLabel}
-          </Link>
-        </div>
-      ) : null}
+        {/* Always last, always lit — so a search that matches nothing still
+            leaves the one cell that answers the question. */}
+        <li className={`${styles.indexCell} ${styles.requestCell}`}>
+          <p className={styles.h4}>Don&rsquo;t see yours?</p>
+          <p className={`${styles.bodyS} ${styles.indexDesc} ${styles.requestBlurb}`}>
+            Any tool that can POST a webhook already works today.
+          </p>
+          <a className={`${styles.ghostPill} ${styles.requestPill}`} href={cta}>
+            Request a source
+          </a>
+        </li>
+      </ul>
     </>
   );
 }

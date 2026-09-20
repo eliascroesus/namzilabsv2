@@ -1,23 +1,21 @@
 "use client";
 
-import { useId, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import styles from "@/app/snap.module.css";
 import { CountUp } from "./count-up";
+import { Mark } from "./marks";
 
 export type Metric = {
   tab: string;
   figure: string;
-  /** The numeric part, so the figure can count from one tab's value to the
-      next, plus how to render it back. */
   value: number;
-  /**
-   * A NAME rather than a function, and that is a boundary constraint, not a
-   * style choice: this data is built in a server component and a function
-   * cannot cross the server/client boundary — React refuses to serialise it.
-   * The formatter itself lives on this side and is chosen by the name.
-   */
   kind: "count" | "currency" | "duration";
-  lines: Array<{ key: string; value: string }>;
+  /** The connectors that fed this figure, in the order the receipt lists them. */
+  sources: Array<{ source: string; name: string }>;
+  records: string;
+  /** Only where a real prior value exists. Never "unchanged". */
+  change?: string;
+  lines: Array<{ key: string; value: string; excluded?: boolean }>;
   note: string;
 };
 
@@ -28,26 +26,35 @@ const FORMATTERS: Record<Metric["kind"], (value: number) => string> = {
 };
 
 /**
- * S05 — and the one change from the previous version that matters most.
+ * S05 — the section that has to DEMONSTRATE the moat rather than describe it.
  *
- * The receipt used to be hidden behind a hover on a figure. That put the
- * product's only real moat behind an interaction most visitors never perform:
- * the section CLAIMED every number shows its working, and then declined to
- * show any working unless you happened to mouse over the right element. The
- * receipt is now rendered by default, and the interactivity moved to tabs —
- * three real metrics you can switch between — so the section is still alive
- * without hiding its own point.
+ * ═══ THE FIGURE CARD IS INK ═══
  *
- * ═══ A REAL TABLIST, NOT DIVS WITH HANDLERS ═══
+ * Two white boxes side by side is what this was, and the left one had a large
+ * dead region between the figure and the tabs. Making the answer black fixes
+ * both: it states the page's central idea a second time without repeating a
+ * layout (the hero's resolved object is the same colour for the same reason),
+ * and it gives the empty region something to be — the sources that fed the
+ * number, which is the one piece of information that makes a figure mean
+ * anything.
  *
- * Arrow keys move between tabs, Home and End jump to the ends, `aria-selected`
- * reports the state, and focus follows selection. §10 asks for the pattern by
- * name; it is also the difference between a control a keyboard user can
- * operate and a decoration they cannot see.
+ * ═══ CROSS-HIGHLIGHTING IS THE ARGUMENT, PERFORMED ═══
+ *
+ * Hovering `Sources read` in the receipt raises the very squircles on the ink
+ * card that produced the figure, and hovering a squircle tints the row back.
+ * It costs almost nothing and it shows what a sentence can only assert: that
+ * this number knows where it came from.
+ *
+ * ═══ A REAL TABLIST ═══
+ *
+ * Arrow keys move, Home/End jump, `aria-selected` reports. The pattern is the
+ * difference between a control a keyboard user can operate and a decoration
+ * they cannot see.
  */
 export function ReceiptTabs({ metrics }: { metrics: Metric[] }) {
   const [index, setIndex] = useState(0);
-  const baseId = useId();
+  const [lit, setLit] = useState(false);
+  const [hoveredSource, setHoveredSource] = useState<string | null>(null);
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const active = metrics[index];
 
@@ -69,43 +76,58 @@ export function ReceiptTabs({ metrics }: { metrics: Metric[] }) {
       <div className={styles.pairConnector} aria-hidden />
 
       <div className={styles.figureCard}>
-        <span className={`${styles.bodyS} ${styles.figureLabel}`}>{active.tab}</span>
-        <span className={`${styles.f2} ${styles.figureValue}`} key={active.tab}>
-          <CountUp to={active.value} format={FORMATTERS[active.kind]} duration={420} />
-        </span>
+        <div className={styles.panelBlooms} aria-hidden>
+          <div className={`${styles.panelBloom} ${styles.panelBloomLilac}`} />
+        </div>
+        <div className={styles.figureCardBody}>
+          <span className={`${styles.bodyS} ${styles.figureLabel}`}>{active.tab}</span>
+          <span className={`${styles.f2} ${styles.figureValue}`} key={active.tab}>
+            <CountUp to={active.value} format={FORMATTERS[active.kind]} duration={420} />
+          </span>
 
-        <div className={styles.tabs} role="tablist" aria-label="Metrics" onKeyDown={onKeyDown}>
-          {metrics.map((metric, i) => (
-            <button
-              key={metric.tab}
-              type="button"
-              role="tab"
-              id={`${baseId}-tab-${i}`}
-              aria-selected={i === index}
-              aria-controls={`${baseId}-panel`}
-              tabIndex={i === index ? 0 : -1}
-              ref={(node) => {
-                tabRefs.current[i] = node;
-              }}
-              className={`${styles.badge} ${styles.tab} ${i === index ? styles.tabActive : ""}`}
-              onClick={() => setIndex(i)}
-            >
-              {metric.tab}
-            </button>
-          ))}
+          <p className={`${styles.caption} ${styles.readFrom}`}>Read from</p>
+          <div className={styles.readMarks}>
+            {active.sources.map((s, i) => (
+              <span
+                key={s.source}
+                className={`${styles.readMark} ${lit ? styles.readMarkLit : ""}`}
+                style={{ transitionDelay: `${i * 60}ms` }}
+                onMouseEnter={() => setHoveredSource(s.source)}
+                onMouseLeave={() => setHoveredSource(null)}
+                title={s.name}
+              >
+                <Mark source={s.source} size={32} />
+              </span>
+            ))}
+            <span className={`${styles.caption} ${styles.readCount}`}>{active.records}</span>
+          </div>
+
+          {active.change ? <span className={`${styles.caption} ${styles.changeBadge}`}>{active.change}</span> : null}
+
+          <div className={styles.tabs} role="tablist" aria-label="Metrics" onKeyDown={onKeyDown}>
+            {metrics.map((metric, i) => (
+              <button
+                key={metric.tab}
+                type="button"
+                role="tab"
+                aria-selected={i === index}
+                tabIndex={i === index ? 0 : -1}
+                ref={(node) => {
+                  tabRefs.current[i] = node;
+                }}
+                className={`${styles.tabDark} ${i === index ? styles.tabDarkActive : ""}`}
+                onClick={() => setIndex(i)}
+              >
+                {metric.tab}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
       <div className={styles.receiptCell}>
-        <div
-          className={styles.receipt}
-          role="tabpanel"
-          id={`${baseId}-panel`}
-          aria-labelledby={`${baseId}-tab-${index}`}
-        >
-          {/* Keyed on the tab so React remounts the contents and the swap
-              animation replays — without the key the panel would cross-fade
-              nothing, because the DOM nodes never change identity. */}
+        <div className={styles.receipt} role="tabpanel" aria-label={active.tab}>
+          <span className={styles.receiptNub} aria-hidden />
           <div className={styles.receiptSwap} key={active.tab}>
             <div className={styles.receiptHead}>
               <span className={styles.h4}>{active.tab}</span>
@@ -113,12 +135,40 @@ export function ReceiptTabs({ metrics }: { metrics: Metric[] }) {
             </div>
             <div className={styles.receiptDivider} />
             <dl className={styles.receiptLines}>
-              {active.lines.map((line) => (
-                <div className={styles.receiptLine} key={line.key}>
-                  <dt className={styles.caption}>{line.key}</dt>
-                  <dd className={styles.bodyS}>{line.value}</dd>
-                </div>
-              ))}
+              {active.lines.map((line) => {
+                const isSources = line.key === "Sources read";
+                return (
+                  <div
+                    className={`${styles.receiptLine} ${isSources ? styles.receiptSourcesLine : ""} ${
+                      isSources && hoveredSource ? styles.receiptLineLit : ""
+                    }`}
+                    key={line.key}
+                    onMouseEnter={isSources ? () => setLit(true) : undefined}
+                    onMouseLeave={isSources ? () => setLit(false) : undefined}
+                  >
+                    <dt className={styles.caption}>
+                      {/* The deleted incompleteness section's claim, attached to
+                          a real number instead of announced as a principle. It
+                          dims rather than disappearing at zero so the row keeps
+                          its shape across tabs. */}
+                      {line.excluded ? (
+                        <span className={`${styles.flagDot} ${line.value === "0" ? styles.flagDotZero : ""}`} aria-hidden />
+                      ) : null}
+                      {line.key}
+                    </dt>
+                    <dd className={styles.bodyS}>
+                      {isSources
+                        ? active.sources.map((s, i) => (
+                            <span key={s.source} className={hoveredSource === s.source ? styles.sourceNameLit : styles.sourceNames}>
+                              {s.name}
+                              {i < active.sources.length - 1 ? ", " : ""}
+                            </span>
+                          ))
+                        : line.value}
+                    </dd>
+                  </div>
+                );
+              })}
             </dl>
             <div className={styles.receiptDivider} />
             <p className={`${styles.bodyS} ${styles.receiptNote}`}>{active.note}</p>

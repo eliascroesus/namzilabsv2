@@ -92,9 +92,11 @@ for (const vp of [
     return {
       scrollWidth: document.documentElement.scrollWidth,
       inner: window.innerWidth,
-      // The track line deliberately runs 40px past the container at both ends
-      // so the process reads as continuing; it is the one allowed overhang.
-      blown: blown.filter((b) => !b.startsWith("track ")),
+      // Two overhangs are the design: S04's track line runs 40px past the
+      // container at both ends so the process reads as continuing, and S07's
+      // preview card hangs 56px past its panel — that overhang is the
+      // section's whole structural idea. Everything else is a blow-out.
+      blown: blown.filter((b) => !/^(track|s07Panel|s07Grid|darkPanel s07Panel|aiCardCell) /.test(b)),
       h1Lines: document.querySelectorAll("h1 > span").length,
     };
   });
@@ -111,7 +113,8 @@ for (const vp of [
   if (missingAssets.length > unexpected.length) {
     console.log("        (public/dashboard.png is absent — the hero is showing its drawn fallback, by design)");
   }
-  if (vp.width === 1440) check(m.h1Lines === 3, "the headline breaks on three fixed lines", `${m.h1Lines}`);
+  // v3.1: two lines at 88px, so the hero object reaches the fold.
+  if (vp.width === 1440) check(m.h1Lines === 2, "the headline breaks on two fixed lines", `${m.h1Lines}`);
 
   if (vp.width === 375) {
     const small = await page.evaluate(() =>
@@ -175,7 +178,9 @@ const rhythm = await page.evaluate(() => {
 
 check(rhythm.dark === 2, "exactly two dark sections", `${rhythm.dark}`);
 check(rhythm.fullBleed === 2, "exactly two full-bleed sections", `${rhythm.fullBleed}`);
-check(rhythm.centred === 2, "exactly two centred headings among the light sections", `${rhythm.centred}`);
+// v3.1: S07 went dark and its heading went left, so the fold is the single
+// centred moment on the page.
+check(rhythm.centred === 1, "exactly one centred heading among the light sections", `${rhythm.centred}`);
 // Uniform padding is most of what makes a page feel mechanical; the spec
 // varies it per section on purpose.
 check(rhythm.distinctPaddings >= 4, "section padding varies rather than repeating", `${rhythm.distinctPaddings} distinct values`);
@@ -201,7 +206,7 @@ const type = await page.evaluate(() => {
 });
 
 check(type.figtree, "Figtree loaded", type.family);
-check(type.size === "104px" && type.weight === "800", "the hero headline is D0", `${type.size}/${type.weight}`);
+check(type.size === "88px" && type.weight === "800", "the hero headline is D0", `${type.size}/${type.weight}`);
 check(type.tabular.includes("tabular-nums"), "figures are tabular", type.tabular);
 // §6.2: one family, and no monospace anywhere. A wide mono on a figure is
 // what made an earlier build read as a form rather than as a product.
@@ -232,27 +237,57 @@ const runs = await page.evaluate(() => {
    */
   const SKY_CARD = [63, 115, 230];
   const SKY_PANEL = [43, 83, 174];
+
+  /**
+   * ONE PARSER, BECAUSE THE UNITS ARE NOT ALL THE SAME.
+   *
+   * `color-mix()` computes to `color(srgb 0.99 0.96 0.95)` — channels in 0..1,
+   * not 0..255 — and reading those as bytes turns a near-white tint into near
+   * black. That is how three perfectly legible rows in S07's card were
+   * reported at 1.14:1. `rgb()` and `rgba()` stay in bytes; the alpha is the
+   * last value either way.
+   */
+  const parse = (value) => {
+    const n = (value.match(/[\d.]+/g) ?? []).map(Number);
+    const scale = /^color\(\s*srgb/.test(value) ? 255 : 1;
+    const rgb = n.slice(0, 3).map((c) => c * scale);
+    const a = /^(rgba|color)/.test(value) && n.length >= 4 ? n[3] : 1;
+    return { rgb, a };
+  };
   const painted = (node) => {
     // Walk OUTWARDS and stop at the first thing that actually paints — which
     // may be a white button sitting on top of a sky panel. Testing for the
     // panel first reported the panel's blue under the button's own fill and
     // failed a control that is perfectly legible.
+    /**
+     * Layers are composited DOWN, not believed at face value. A tab on the ink
+     * card fills `rgba(255,255,255,0.1)`; reading its first three numbers calls
+     * that ground pure white and then scores white-on-white at 1:1 — a failure
+     * that does not exist. Every translucent layer is stacked until an opaque
+     * one is reached.
+     */
+    const stack = [];
+    let ground = [255, 255, 255];
     for (let n = node; n; n = n.parentElement) {
-      if (n.classList?.contains("sky-panel")) return SKY_PANEL;
-      if (n.classList?.contains("sky-card")) return SKY_CARD;
+      if (n.classList?.contains("sky-panel")) { ground = SKY_PANEL; break; }
+      if (n.classList?.contains("sky-card")) { ground = SKY_CARD; break; }
       const bg = getComputedStyle(n).backgroundColor;
       if (!bg || bg === "rgba(0, 0, 0, 0)" || bg === "transparent") continue;
-      const p = (bg.match(/[\d.]+/g) ?? []).map(Number);
-      if (p.length >= 4 && p[3] === 0) continue;
-      return p.slice(0, 3);
+      const { rgb, a } = parse(bg);
+      if (a === 0) continue;
+      if (a >= 1) { ground = rgb; break; }
+      stack.push({ rgb, a });
     }
-    return [255, 255, 255];
+    // Innermost last, so compositing runs outermost-first onto the ground.
+    for (const layer of stack.reverse()) {
+      ground = [0, 1, 2].map((i) => layer.rgb[i] * layer.a + ground[i] * (1 - layer.a));
+    }
+    return ground;
   };
   /** Composite a possibly-translucent ink over the ground behind it. */
   const over = (colour, ground) => {
-    const p = (colour.match(/[\d.]+/g) ?? []).map(Number);
-    const a = p.length >= 4 ? p[3] : 1;
-    return [0, 1, 2].map((i) => p[i] * a + ground[i] * (1 - a));
+    const { rgb, a } = parse(colour);
+    return [0, 1, 2].map((i) => rgb[i] * a + ground[i] * (1 - a));
   };
   const out = [];
   for (const node of document.querySelectorAll("p, h1, h2, h3, span, a, li, dt, dd, button, input")) {
@@ -394,12 +429,16 @@ const dimmed = await page.locator('li[class*="indexDim"]').count();
 check(after === total, "searching dims sources rather than removing them", `${total} → ${after}`);
 check(dimmed > 0 && dimmed < total, "and some, not all, are dimmed", `${dimmed} of ${total}`);
 
+// v3.1: the empty state is the request cell, which is always present and
+// always at full opacity — so a search that matches nothing leaves exactly one
+// cell lit rather than printing a message.
 await page.locator('input[type="search"]').fill("zzzz");
-await page.waitForTimeout(500);
-check(
-  await page.getByText("Not here yet.").isVisible(),
-  "an empty result is an invitation, not an apology",
+await page.waitForTimeout(600);
+const lit = await page.evaluate(
+  () => [...document.querySelectorAll('ul[class*="index"] > li')].filter((n) => Number(getComputedStyle(n).opacity) > 0.9).length,
 );
+check(lit === 1, "a search matching nothing leaves exactly the request cell lit", `${lit} cells lit`);
+check(await page.getByText(/Don.t see yours\?/).isVisible(), "and that cell is the invitation");
 await page.close();
 
 /* ── 7. Reduced motion gets the conclusion, not a faster performance ─────── */
