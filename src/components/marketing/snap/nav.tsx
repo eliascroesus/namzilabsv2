@@ -59,25 +59,59 @@ export function SnapNav({
    */
   useEffect(() => {
     if (!revealAfter) return;
-    const anchor = document.querySelector(revealAfter);
-    if (!anchor) {
-      setRevealed(true);
-      return;
-    }
+
+    /**
+     * THE ANCHOR IS RE-QUERIED EVERY TIME, AND THAT IS A PRODUCTION BUG FIX.
+     *
+     * Looking it up once on mount worked on localhost and failed on the real
+     * site: the nav sits above `main` in the tree, Next streams the RSC
+     * payload, and on a connection with any latency this effect runs before
+     * the source rail's markup has arrived. `querySelector` returned null, the
+     * old code read that as "no anchor, so just show the nav", and the header
+     * was visible over the hero on every cold load in production while every
+     * local check passed.
+     *
+     * Missing now means "not yet" — the pill stays out of the way — with a
+     * grace period so that an anchor which genuinely never arrives (a future
+     * edit removing the rail) ends with a visible nav rather than a page with
+     * no navigation at all.
+     */
+    let settled = false;
     let queued = false;
+    let retry = 0;
+
     const measure = () => {
       queued = false;
+      const anchor = document.querySelector(revealAfter);
+      if (!anchor) {
+        setRevealed(false);
+        return;
+      }
+      if (!settled) {
+        settled = true;
+        window.clearInterval(retry);
+      }
       setRevealed(anchor.getBoundingClientRect().bottom <= 0);
     };
+
     const onScroll = () => {
       if (queued) return;
       queued = true;
       requestAnimationFrame(measure);
     };
+
     measure();
+    retry = window.setInterval(measure, 120);
+    const giveUp = window.setTimeout(() => {
+      window.clearInterval(retry);
+      if (!settled) setRevealed(true);
+    }, 3000);
+
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", onScroll);
     return () => {
+      window.clearInterval(retry);
+      window.clearTimeout(giveUp);
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", onScroll);
     };
