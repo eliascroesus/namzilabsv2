@@ -31,6 +31,19 @@
  */
 import { chromium } from "playwright";
 
+/**
+ * `networkidle` never settles against a real deployment — analytics and the
+ * Vercel toolbar keep a socket warm — so this check could only ever run
+ * against localhost, which is exactly the environment whose result matters
+ * least. Waiting for the document plus the two webfonts is both faster and
+ * the thing actually being asserted: the page cannot be measured until the
+ * faces it is designed in have arrived.
+ */
+const settle = async (page, url) => {
+  await page.goto(url, { waitUntil: "load", timeout: 60_000 });
+  await page.evaluate(() => document.fonts.ready);
+};
+
 const BASE = process.env.SHOT_BASE ?? "http://localhost:3000";
 
 const fails = [];
@@ -67,7 +80,7 @@ for (const vp of VIEWPORTS) {
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e)));
   page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
-  await page.goto(BASE, { waitUntil: "networkidle" });
+  await settle(page, BASE);
   await page.waitForTimeout(3600); // the hero sequence ends at 3,340ms
 
   const m = await page.evaluate(() => {
@@ -113,7 +126,7 @@ for (const vp of VIEWPORTS) {
 console.log("\nTypography");
 
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
-await page.goto(BASE, { waitUntil: "networkidle" });
+await settle(page, BASE);
 await page.waitForTimeout(3600);
 
 const type = await page.evaluate(() => {
@@ -202,7 +215,7 @@ console.log("\nTheme isolation");
 // not write localStorage is just re-testing light. That mistake shipped once.
 const dark = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
 await dark.addInitScript(() => window.localStorage.setItem("theme", "dark"));
-await dark.goto(BASE, { waitUntil: "networkidle" });
+await settle(dark, BASE);
 await dark.waitForTimeout(1200);
 
 const themed = await dark.evaluate(() => ({
@@ -251,7 +264,7 @@ await page.close();
 console.log("\nReduced motion");
 
 const still = await browser.newPage({ viewport: { width: 1440, height: 1000 }, reducedMotion: "reduce" });
-await still.goto(BASE, { waitUntil: "networkidle" });
+await settle(still, BASE);
 await still.waitForTimeout(400); // deliberately BEFORE the sequence would end
 
 const final = await still.evaluate(() => {
