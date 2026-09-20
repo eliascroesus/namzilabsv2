@@ -1566,7 +1566,9 @@
 
 /* The drawn canvas: its fills live here so the component carries no hex and
    `check-ui`'s colour rules stay armed over every .tsx in the repo. */
-.shotCanvas { display: block; width: 100%; aspect-ratio: 16 / 9; }
+/* 1200 × 500, not 16:9 — the flow is a wide, shallow thing and a taller
+   frame only added empty canvas above and below it. */
+.shotCanvas { display: block; width: 100%; aspect-ratio: 1200 / 500; }
 .shotWire { fill: none; stroke: var(--ink); stroke-width: 2; opacity: 0.16; }
 .shotNode { fill: var(--lift); stroke: var(--edge); filter: drop-shadow(0 4px 10px rgba(20, 20, 28, 0.06)); }
 .shotGround { fill: var(--lift); }
@@ -1662,3 +1664,8 @@
      it, under the three chips it belongs with. */
   .dashboardShot { order: 1; margin-top: 8px; }
 }
+
+/* The metric's answer, in the product's own brand blue — the one place the
+   drawing raises its voice, because it is the number the two apps could not
+   produce on their own. */
+.shotResult { fill: var(--color-brand-500); }
