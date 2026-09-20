@@ -98,9 +98,17 @@ export function DashboardShot({ fallback }: { fallback: React.ReactNode }) {
    * optimizer serves WebP at the width actually needed — roughly a fifth of
    * the bytes, on the element that IS this page's Largest Contentful Paint.
    *
-   * `priority` preloads it for the same reason. `quality` is lifted above the
-   * default because this is a screenshot full of small text, which is exactly
-   * what aggressive compression smears.
+   * `priority` preloads it for the same reason: this is the LCP element, so
+   * nothing should be discovered later than it is.
+   *
+   * THERE IS NO `quality` PROP, and its absence is deliberate. A screenshot
+   * full of small text is what aggressive compression smears, so 90 was the
+   * obvious ask — but Next 16 only honours qualities declared in
+   * `images.qualities`, and next.config declares no `images` block at all, so
+   * the prop was silently falling back to the default 75. Rather than leave a
+   * value that reads as set and does nothing, it is gone. Verified on the
+   * deployment at 2× — 34KB of WebP, and the axis labels and "Booking rate
+   * 50.8%" are crisp — so the default is genuinely good enough here.
    */
   return (
     /* The crop lives on a wrapper rather than on the image: `clip-path` would
@@ -125,7 +133,6 @@ export function DashboardShot({ fallback }: { fallback: React.ReactNode }) {
         width={NATURAL.width}
         height={NATURAL.height}
         sizes="(max-width: 1023px) 92vw, 760px"
-        quality={90}
         priority
       />
     </span>
