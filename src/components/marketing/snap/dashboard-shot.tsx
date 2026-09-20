@@ -1,10 +1,38 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import styles from "@/app/snap.module.css";
 
 /** The one path the hero looks for. Documented in `public/README.md`. */
 const DASHBOARD_SHOT = "/dashboard.png";
+
+/**
+ * The source file's own pixels. Required by `next/image` and worth stating
+ * rather than guessing: they fix the aspect ratio, so the hero reserves the
+ * right box before the image arrives and nothing shifts underneath it.
+ */
+const NATURAL = { width: 3456, height: 1922 };
+
+/**
+ * THE SCREENSHOT ARRIVES INSIDE ITS OWN WINDOW FRAME, and it is cropped off.
+ *
+ * Measured off the file rather than eyeballed — sampling the edges finds a
+ * #121212 border 12px along the top and 14px along the right and bottom, which
+ * is the captured window's chrome. Left is not cropped by the same amount
+ * because the app's OWN navigation rail is that colour, so there is nothing to
+ * find there; it takes the same trim as the right for symmetry.
+ *
+ * Left in place it reads as a black mat down two sides of the picture. Cropped,
+ * the board runs to the corner radius like a screenshot should. The values are
+ * percentages, so an image swapped in later without a frame loses less than
+ * half a percent — invisible — rather than breaking.
+ */
+const FRAME = { top: 12, right: 14, bottom: 14, left: 14 };
+const CROPPED = {
+  width: NATURAL.width - FRAME.left - FRAME.right,
+  height: NATURAL.height - FRAME.top - FRAME.bottom,
+};
 
 /**
  * THE HERO'S CENTREPIECE — a real screenshot of the product when one exists,
@@ -58,19 +86,48 @@ export function DashboardShot({ fallback }: { fallback: React.ReactNode }) {
 
   if (missing) return <>{fallback}</>;
 
+  /**
+   * `next/image` RATHER THAN A BARE `<img>`, and the reasoning is the opposite
+   * of the profile page's.
+   *
+   * That avatar is a user-supplied URL on a blob host, so optimising it would
+   * mean allow-listing a hostname in next.config — configuration that fails
+   * closed at runtime, on a 96px image where the optimizer saves nothing. This
+   * is a local file in `public/`: no allow-list, and the saving is the whole
+   * point. The source is a 281KB PNG at 3456px wide displayed at 720, so the
+   * optimizer serves WebP at the width actually needed — roughly a fifth of
+   * the bytes, on the element that IS this page's Largest Contentful Paint.
+   *
+   * `priority` preloads it for the same reason. `quality` is lifted above the
+   * default because this is a screenshot full of small text, which is exactly
+   * what aggressive compression smears.
+   */
   return (
-    <img
-      ref={ref}
+    /* The crop lives on a wrapper rather than on the image: `clip-path` would
+       have taken the drop shadow with it, and the shadow is what lifts the
+       board off the bloom. */
+    <span
       className={styles.dashboardShot}
-      src={DASHBOARD_SHOT}
-      alt="The Namzilabs board: one reconciled figure per metric, each with the sources it was built from."
-      onError={() => setMissing(true)}
-      /* Hints only — the real dimensions come from the file. They stop the
-         layout jumping while it loads. */
-      width={1600}
-      height={1000}
-      decoding="async"
-      fetchPriority="high"
-    />
+      style={{ aspectRatio: `${CROPPED.width} / ${CROPPED.height}` }}
+    >
+      <Image
+        ref={ref}
+        className={styles.dashboardShotImg}
+        style={{
+          left: `${(-FRAME.left / CROPPED.width) * 100}%`,
+          top: `${(-FRAME.top / CROPPED.height) * 100}%`,
+          width: `${(NATURAL.width / CROPPED.width) * 100}%`,
+          height: `${(NATURAL.height / CROPPED.height) * 100}%`,
+        }}
+        src={DASHBOARD_SHOT}
+        alt="The Namzilabs board: leads, booked leads, calls showed, customers, revenue and AOV, each reconciled from several tools."
+        onError={() => setMissing(true)}
+        width={NATURAL.width}
+        height={NATURAL.height}
+        sizes="(max-width: 1023px) 92vw, 760px"
+        quality={90}
+        priority
+      />
+    </span>
   );
 }

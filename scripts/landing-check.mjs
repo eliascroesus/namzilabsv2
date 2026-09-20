@@ -66,7 +66,7 @@ for (const vp of [
    * a genuinely broken asset cannot hide behind this.
    */
   const missingAssets = [];
-  page.on("response", (r) => r.status() >= 400 && missingAssets.push(`${r.status()} ${new URL(r.url()).pathname}`));
+  page.on("response", (r) => r.status() >= 400 && missingAssets.push(`${r.status()} ${decodeURIComponent(r.url())}`));
   page.on("pageerror", (e) => errors.push(String(e)));
   page.on("console", (m) => {
     if (m.type() !== "error") return;
@@ -103,7 +103,10 @@ for (const vp of [
   check(m.blown.length === 0, `${vp.name}: no grid or row blows past its container`, m.blown.slice(0, 3).join(" · "));
   check(errors.length === 0, `${vp.name}: no console errors`, errors.slice(0, 2).join(" | "));
 
-  const unexpected = missingAssets.filter((a) => !a.endsWith("/dashboard.png"));
+  // The shot is served through `next/image`, so its URL is the optimizer's
+  // with the real path as a query param — matched on the decoded URL so both
+  // spellings are covered.
+  const unexpected = missingAssets.filter((a) => !a.includes("/dashboard.png"));
   check(unexpected.length === 0, `${vp.name}: no unexpected missing assets`, unexpected.slice(0, 3).join(", "));
   if (missingAssets.length > unexpected.length) {
     console.log("        (public/dashboard.png is absent — the hero is showing its drawn fallback, by design)");
@@ -408,11 +411,19 @@ await settle(still, BASE);
 await still.waitForTimeout(400); // deliberately BEFORE the sequence would end
 
 const final = await still.evaluate(() => {
+  // The hero's centrepiece is the board SCREENSHOT when `public/dashboard.png`
+  // exists and the drawn summary card when it does not, so the assertion has
+  // to follow whichever composition is live rather than one of them.
+  const shot = document.querySelector('[class*="dashboardShotImg"]');
   const resolved = document.querySelector('[class*="resolved"]');
+  const centre = shot ?? resolved;
   const chip = document.querySelector('[class*="chipRest"]');
   return {
-    figure: (resolved?.textContent ?? "").includes("41"),
-    resolvedOpacity: resolved ? getComputedStyle(resolved).opacity : "0",
+    kind: shot ? "screenshot" : "drawn card",
+    // The drawn card counts to 41; the screenshot simply has to be decoded and
+    // on screen, with no animation still holding it back.
+    figure: shot ? shot.complete && shot.naturalWidth > 0 : (resolved?.textContent ?? "").includes("41"),
+    resolvedOpacity: centre ? getComputedStyle(centre).opacity : "0",
     // The idle drift is the one thing on this page that would otherwise never
     // stop moving, which §10 names as a real accessibility problem.
     chipAnimation: chip ? getComputedStyle(chip).animationName : "none",
@@ -420,8 +431,8 @@ const final = await still.evaluate(() => {
   };
 });
 
-check(final.figure, "the hero figure reads its final value at once");
-check(Number(final.resolvedOpacity) === 1, "the resolved card is already in place", final.resolvedOpacity);
+check(final.figure, `the hero centrepiece (${final.kind}) is fully there at once`);
+check(Number(final.resolvedOpacity) === 1, "and is already in place, not animating in", final.resolvedOpacity);
 check(final.chipAnimation === "none", "the idle drift loop is stopped", final.chipAnimation);
 check(final.railAnimation === "none", "the source rail does not scroll", final.railAnimation);
 

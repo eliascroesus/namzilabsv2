@@ -616,7 +616,11 @@
     drift 6s ease-in-out 3400ms infinite;
 }
 
-@keyframes chipSettle { to { opacity: 0.62; } }
+/* The resting opacity is a variable so the composition can change it. Over the
+   bloom, 62% makes the unresolved sources recede behind the answer; over a
+   screenshot it makes the board show THROUGH them, which reads as a rendering
+   fault rather than as depth. */
+@keyframes chipSettle { to { opacity: var(--chip-rest, 0.62); } }
 
 @keyframes drift {
   0%, 100% { transform: translateY(0) rotate(var(--rot)); }
@@ -1579,12 +1583,17 @@
    composition it was. One source of truth, no flag to keep in sync.
    ────────────────────────────────────────────────────────────────────────── */
 
+.dashboardShotImg {
+  position: absolute;
+  max-width: none;
+}
+
 .dashboardShot {
   position: absolute;
   left: 50%;
   top: 24px;
   z-index: 3;
-  width: 620px;
+  width: 720px;
   max-width: 100%;
   height: auto;
   /* Capped so the stage does not have to grow for it, and `contain` so an
@@ -1592,7 +1601,10 @@
      measured at 620 × 412, which is what the existing 460px stage holds with
      the chips still clear of it. */
   max-height: 412px;
-  object-fit: contain;
+  /* The wrapper crops the screenshot's own window chrome (see dashboard-shot.tsx)
+     and carries the radius and the shadow; the image inside is oversized and
+     offset by exactly the frame's thickness. */
+  overflow: hidden;
   transform: translateX(-50%);
   border: 1px solid var(--edge);
   border-radius: 20px;
@@ -1606,16 +1618,47 @@
    only added 148px of dead canvas under the composition. */
 .stage:has(.dashboardShot) .chipCentre { display: none; }
 
+/* THE CHIPS COME TO THE FRONT, and this is the fix for a real regression.
+   The shot is large enough to reach under all four of them, and at the card's
+   z-index it painted over their right-hand edges — taking the figures (41, 44)
+   with it. Those numbers ARE the hero's argument: four sources that disagree,
+   in front of the board that settles them. So the product sits behind and the
+   sources float over it, which is also the right reading of the concept. */
+.stage:has(.dashboardShot) .chip { z-index: 4; }
+.stage:has(.dashboardShot) { --chip-rest: 1; }
+
 /* The connectors were drawn for the card's footprint and would visibly miss a
    picture of a different size. They come back once the real image's
    proportions are known. */
 .stage:has(.dashboardShot) .connectors { display: none; }
 
 @media (max-width: 1279px) {
-  .dashboardShot { width: 540px; max-height: 372px; }
+  .dashboardShot { width: 620px; max-height: 372px; }
 }
 
 @media (max-width: 1023px) {
-  /* The stage is a grid below LG, so the shot stops being positioned. */
-  .dashboardShot { position: static; width: 100%; max-height: none; transform: none; grid-column: 1 / -1; }
+  /* The stage becomes a grid below LG, so the shot stops being placed by
+     coordinates — but it stays POSITIONED, because the image inside it is
+     absolute and the wrapper is its containing block. `static` here let the
+     image escape to the stage and land on top of the chips, which is exactly
+     what it looked like: three cards stacked over a screenshot. */
+  .dashboardShot {
+    position: relative;
+    /* `left`/`top` MUST be reset with the position mode. They are 50%/24px on
+       the desktop rule, and a relative box still honours them — which shifted
+       the shot exactly half the stage to the right, one whole grid column,
+       while its `grid-column: 1 / -1` span reported as correct. */
+    left: auto;
+    top: auto;
+    width: 100%;
+    max-height: none;
+    transform: none;
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 767px) {
+  /* The stage is a flex column at phone width; the shot is the last item in
+     it, under the three chips it belongs with. */
+  .dashboardShot { order: 1; margin-top: 8px; }
 }
