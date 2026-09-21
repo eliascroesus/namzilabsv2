@@ -6,7 +6,6 @@ import { SnapNav } from "@/components/marketing/snap/nav";
 import { SourceRail } from "@/components/marketing/snap/rail";
 import { ReceiptTabs, type Metric } from "@/components/marketing/snap/receipt-tabs";
 import { SourceIndex } from "@/components/marketing/snap/source-index";
-import { StatusPill } from "@/components/marketing/snap/status-pill";
 import { AiPanel } from "@/components/marketing/snap/ai-panel";
 import { INDEX_SOURCES } from "@/components/marketing/snap/source-taxonomy";
 import { JoinCard } from "@/components/marketing/snap/join-card";
@@ -265,8 +264,6 @@ export default async function Home() {
             of dead canvas in an earlier build: the section is as tall as the
             headline, the stage and the air between them, and no taller. */}
         <section className={`${styles.container} ${styles.s01}`}>
-          <StatusPill count={CONNECTOR_CATALOG.length} />
-
           <div className={`${styles.narrowBlock} ${styles.centre}`}>
             {/* TWO fixed lines at 88px, down from three at 104. The object
                 below has to reach the fold: three lines of 104 pushed the

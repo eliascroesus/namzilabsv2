@@ -98,7 +98,9 @@ export function SourceIndex({ sources, cta }: { sources: IndexSource[]; cta: str
             <li
               key={source.source}
               className={`${styles.indexCell} ${dim ? styles.indexDim : ""}`}
-              style={{ transitionDelay: `${Math.min(i, 33) * 10}ms` }}
+              /* A custom property, not `transition-delay`: the stagger must reach
+                 the filter's opacity and scale WITHOUT delaying the hover lift. */
+              style={{ "--stagger": `${Math.min(i, 33) * 10}ms` } as React.CSSProperties}
               aria-hidden={dim || undefined}
             >
               <div className={styles.indexTop}>

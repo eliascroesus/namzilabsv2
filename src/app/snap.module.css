@@ -1047,15 +1047,15 @@
 }
 
 .figureCardBody { position: relative; z-index: 1; display: flex; flex-direction: column; height: 100%; }
-.figureLabel { color: #a3a3b4; }
+.figureLabel { color: var(--ink-35); }
 .figureValue { margin-top: 12px; }
-.readFrom { margin-top: auto; padding-top: 24px; color: #7d7d91; }
+.readFrom { margin-top: auto; padding-top: 24px; color: var(--ink-35); }
 .readMarks { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
 
 .readMark {
   display: inline-flex;
   padding: 2px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid var(--edge);
   border-radius: 10px;
   transition: transform var(--t-control) var(--snapIn), border-color var(--t-control) var(--snapIn);
 }
@@ -1063,16 +1063,17 @@
 /* Hovering the receipt's `Sources read` row raises the very marks that fed the
    figure. It costs nothing and it shows what a sentence can only assert: that
    this number knows where it came from. */
-.readMarkLit { border-color: #ffffff; border-width: 2px; transform: scale(1.08); }
-.readCount { margin-left: 4px; color: #a3a3b4; }
+.readMarkLit { border-color: var(--ink); border-width: 2px; transform: scale(1.08); }
+.readCount { margin-left: 4px; color: var(--ink-35); }
 
 .changeBadge {
   align-self: flex-start;
   margin-top: 20px;
   padding: 5px 12px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.1);
-  color: #ffffff;
+  background: var(--lift);
+  border: 1px solid var(--edge);
+  color: var(--ink-60);
 }
 
 .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 24px; }
@@ -1384,10 +1385,21 @@
   /* A guard, not a fix: the tags are sized to fit one row, and if a future one
      does not, it is clipped rather than laid over the description. */
   overflow: hidden;
-  transition: opacity 240ms var(--glide), transform 240ms var(--glide), box-shadow var(--t-quick) var(--quick);
+  /* The stagger delays only the FILTER. It used to be an inline
+     `transition-delay`, which applies to every property — so the hover lift
+     sat waiting up to 330ms before it moved, which is the whole reason the
+     grid felt blocky. `scale` and `translate` are separate properties, so the
+     two states no longer share a timeline. */
+  transition:
+    opacity 240ms var(--glide) var(--stagger, 0ms),
+    scale 240ms var(--glide) var(--stagger, 0ms),
+    translate 140ms var(--quick),
+    box-shadow 140ms var(--quick),
+    background-color 140ms var(--quick),
+    border-color 140ms var(--quick);
 }
 
-.indexCell:hover { transform: translateY(-3px); box-shadow: var(--sh-md); }
+.indexCell:hover { translate: 0 -3px; box-shadow: var(--sh-md); }
 
 .indexTop { display: flex; align-items: center; gap: 12px; }
 .indexName { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1423,8 +1435,8 @@
 /* Never hidden: the grid keeps its shape and visibly narrows around the
    answer, so a short list of matches cannot be mistaken for a short list of
    everything. */
-.indexDim { opacity: 0.22; transform: scale(0.97); }
-.indexDim:hover { transform: scale(0.97); box-shadow: none; }
+.indexDim { opacity: 0.22; scale: 0.97; }
+.indexDim:hover { translate: none; box-shadow: none; }
 
 /* The 34th cell — always last, always lit. A search that matches nothing
    therefore leaves exactly one cell at full opacity: the one that answers the
@@ -1435,7 +1447,7 @@
   transition: border-color var(--t-quick) var(--quick), background-color var(--t-quick) var(--quick);
 }
 
-.requestCell:hover { border-color: var(--ink-35); background: color-mix(in srgb, #ffffff 50%, transparent); transform: none; box-shadow: none; }
+.requestCell:hover { border-color: var(--ink-35); background: color-mix(in srgb, #ffffff 50%, transparent); translate: none; box-shadow: none; }
 .requestBlurb { margin-top: 8px; }
 .requestPill { height: 36px; margin-top: auto; align-self: flex-start; font-size: 15px; }
 
@@ -1513,118 +1525,96 @@
 }
 
 /* ──────────────────────────────────────────────────────────────────────────
-   S01 — the join. One object, read left to right.
+   S01 — the stage: the real board, wired to the tools that feed it.
 
-   It replaces five floating chips, a separate resolved card, four ambient
-   chips and a screenshot. Nothing here rotates, nothing fades below full
-   opacity, and nothing is clipped by the viewport — the previous composition
-   broke all three and the faint pieces read as UI that had failed to load.
+   The nodes are the SAME pills the source rail uses, deliberately: a reader
+   meets the pill here and meets it again a scroll later, so the rail reads as
+   more of the same thing rather than as a different component.
    ────────────────────────────────────────────────────────────────────────── */
 
-.join {
+.stage {
   position: relative;
   display: flex;
-  width: 1120px;
-  max-width: 100%;
-  height: 320px;
-  margin: 64px auto 0;
-  border: 1px solid var(--edge);
-  border-radius: 28px;
-  background: var(--lift);
-  box-shadow: var(--sh-xl);
-  overflow: hidden;
-  opacity: 0;
-  transform: translateY(20px) scale(0.98);
-  animation: joinIn 460ms var(--snapIn) 1000ms forwards;
-}
-
-/* The card arrives EMPTY and fills row by row: the object exists, then the
-   evidence lands in it, then it resolves. A card that arrives complete is a
-   picture; one that fills is an argument. */
-@keyframes joinIn {
-  to { opacity: 1; transform: translateY(0) scale(1); }
-}
-
-.joinRows {
-  flex: none;
-  width: 600px;
-  padding: 24px 28px;
-}
-
-.joinRow {
-  display: flex;
   align-items: center;
-  gap: 12px;
-  height: 68px;
-  border-bottom: 1px solid var(--edge);
+  justify-content: space-between;
+  width: 100%;
+  max-width: 1200px;
+  aspect-ratio: 1200 / 420;
+  margin: 64px auto 0;
+}
+
+.nodeCol {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: flex-start;
+  width: 15.83%;
+  height: 71.4%;
+  z-index: 2;
+}
+
+.nodeColRight { align-items: flex-end; }
+
+/* The rail's pill, exactly. */
+.nodePill {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 44px;
+  padding: 8px 18px 8px 8px;
+  border: 1px solid var(--edge);
+  border-radius: 999px;
+  background: var(--lift);
+  box-shadow: var(--sh-sm);
+  font-size: 15px;
+  font-weight: 500;
+  white-space: nowrap;
   opacity: 0;
-  transform: translateX(-12px);
-  animation: rowIn 300ms var(--snapIn) forwards;
+  transform: translateY(8px);
+  animation: nodeIn 320ms var(--snapIn) forwards;
 }
 
-.joinRow:last-child { border-bottom: none; }
+@keyframes nodeIn { to { opacity: 1; transform: translateY(0); } }
 
-@keyframes rowIn {
-  to { opacity: 1; transform: translateX(0); }
-}
+.wires { position: absolute; inset: 0; z-index: 0; }
 
-.joinName { font-size: 17px; font-weight: 600; white-space: nowrap; }
-.joinLabel { flex: 1; min-width: 0; font-size: 15px; color: var(--ink-35); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.joinFigure { flex: none; width: 72px; text-align: right; font-size: 20px; font-weight: 700; }
-
-/* They converge INSIDE the ink card, so the meeting point is absorbed by it
-   rather than four lines ending in open space. */
-.joinWires {
-  position: absolute;
-  left: 600px;
-  top: 0;
-  width: 130px;
-  height: 320px;
-  z-index: 0;
-}
-
-.joinWire {
+/* ORTHOGONAL, NOT CURVES. Four soft converging arcs read as decoration; a bus
+   — each node straight to a trunk, the trunk straight into the board — reads
+   as wiring, which is what it is. 22% rather than 16%: a line too faint to
+   follow is the same failure as decoration too faint to read. */
+.wire {
   fill: none;
   stroke: var(--ink);
   stroke-width: 1.5;
-  stroke-linecap: round;
-  opacity: 0.16;
-  stroke-dasharray: 260;
-  stroke-dashoffset: 260;
-  animation: wireDraw 520ms var(--glide) 1980ms forwards;
+  stroke-linejoin: round;
+  opacity: 0.22;
+  stroke-dasharray: 420;
+  stroke-dashoffset: 420;
+  animation: wireDraw 520ms var(--glide) 1600ms forwards;
 }
 
 @keyframes wireDraw { to { stroke-dashoffset: 0; } }
 
-.joinInk {
+.board {
+  display: block;
   position: absolute;
-  left: 716px;
-  top: 24px;
+  left: 23.333%;
+  top: 7.6%;
   z-index: 1;
-  width: 380px;
-  height: 272px;
-  padding: 24px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  width: 53.333%;
+  border: 1px solid var(--edge);
   border-radius: 20px;
-  background: var(--ink);
-  box-shadow: var(--sh-lg);
+  background: var(--lift);
+  box-shadow: var(--sh-xl);
   overflow: hidden;
-  color: #ffffff;
   opacity: 0;
-  transform: scale(0.9);
-  animation: inkIn 440ms var(--snapIn) 2380ms forwards;
+  transform: scale(0.98);
+  animation: boardIn 460ms var(--snapIn) 1000ms forwards;
 }
 
-@keyframes inkIn { to { opacity: 1; transform: scale(1); } }
+@keyframes boardIn { to { opacity: 1; transform: scale(1); } }
 
-.joinInkBody { position: relative; z-index: 1; display: flex; flex-direction: column; height: 100%; }
-.joinInkTop { display: flex; align-items: center; gap: 10px; }
-.joinInkMark { width: 22px; height: 22px; border-radius: 7px; background: rgba(255, 255, 255, 0.18); }
-.joinInkName { font-size: 15px; font-weight: 600; }
-.joinInkTick { margin-left: auto; display: inline-flex; }
-.joinInkFigure { display: flex; align-items: baseline; gap: 12px; margin-top: auto; }
-.joinInkUnit { color: rgba(255, 255, 255, 0.55); }
-.joinInkSub { margin-top: auto; color: rgba(255, 255, 255, 0.45); }
+.boardImg { position: absolute; max-width: none; }
 
 /* ──────────────────────────────────────────────────────────────────────────
    S05 — ONE card, split internally.
@@ -1693,8 +1683,13 @@
   flex: none;
   width: 44%;
   padding: 32px;
-  background: var(--ink);
-  color: #ffffff;
+  /* PLATE, NOT INK. v3.1 made this panel black on the argument that answers
+     are black — but the page's own rhythm rule says only S07 and S10 are
+     dark, and a 527x374 black slab in the middle of a light section is
+     exactly the inconsistency that reads as a bug rather than as emphasis.
+     `plate` is the kit's half-step-darker surface (S08 stands on it), so the
+     two halves still separate without one of them being a different world. */
+  background: var(--plate);
   overflow: hidden;
 }
 
@@ -1824,31 +1819,12 @@
 .moreMD, .moreSM { display: none; }
 
 @media (max-width: 1279px) {
-  .join { width: 960px; height: 300px; }
-  .joinRows { width: 520px; }
-  .joinRow { height: 63px; }
-  .joinWires { left: 520px; width: 92px; }
-  .joinInk { left: 612px; top: 24px; width: 340px; height: 252px; }
 }
 
 @media (max-width: 1023px) {
   /* The card goes vertical: rows above, a full-width rule, the answer inset
      beneath. The converging fan becomes one line, because four curves into a
      card that is now BELOW them would cross the rows they came from. */
-  .join { flex-direction: column; width: 100%; height: auto; }
-  .joinRows { width: 100%; padding-bottom: 0; }
-  .joinRow { height: 64px; }
-  .joinWires { display: none; }
-  .joinInk {
-    position: relative;
-    left: auto;
-    top: auto;
-    width: auto;
-    height: 180px;
-    margin: 20px;
-    border-top: 1px solid var(--edge);
-  }
-  .joinVertRule { display: block; }
 
   .receiptHeadRow, .splitGrid, .steps, .shotRow, .aiGrid, .stats, .indexHead { display: block; }
   .stickyCol { position: static; }
@@ -1876,11 +1852,6 @@
   /* The label line goes: at this width a source name and its figure are the
      whole point, and the description wraps into a second line that makes each
      row look like a paragraph. */
-  .joinLabel { display: none; }
-  .joinRow { height: 56px; }
-  .joinRows { padding: 16px; }
-  .joinFigure { width: 52px; }
-  .joinName { font-size: 16px; }
 
   /* The hero pair stacks and both fill the width; the two-part pill centres
      its group rather than pushing the note off the right edge. */
@@ -1890,9 +1861,6 @@
   .btnHeroLabel { font-size: 16px; }
   .btnHeroDivider { margin-inline: 12px; }
   .btnHeroNote { font-size: 12px; }
-  .joinInk { height: 156px; margin: 16px; }
-  .join { border-radius: 20px; }
-  .joinInk .f2 { font-size: 40px; line-height: 40px; }
 
   .receiptCard { border-radius: 20px; }
   .receiptInk, .receiptWhite { padding: 20px; }
@@ -1936,9 +1904,8 @@
   /* Every loop and every entrance lands on its final state immediately. The
      hero is an argument; somebody who asked for less motion should get its
      conclusion, not a shorter performance. */
-  .statusPill, .join, .joinRow, .joinInk { opacity: 1 !important; transform: none !important; animation: none !important; }
+  .nodePill, .board { opacity: 1 !important; transform: none !important; animation: none !important; }
   .statusDot, .footerDot, .aiReadingMark { animation: none !important; }
-  .joinWire { stroke-dashoffset: 0 !important; animation: none !important; }
   .railTrack { animation: none !important; transform: none !important; }
   .railStatic { display: flex; }
   .railScrolling { display: none; }
@@ -1962,6 +1929,24 @@
   .d2 { font-size: 38px; line-height: 42px; }
   .f2 { font-size: 52px; line-height: 52px; }
   .f3 { font-size: 32px; line-height: 36px; }
+
+  /* Below LG the wiring stops: the pills would be 117px wide, which is
+     narrower than "Google Sheets". The board takes the full width and the
+     sources sit beneath it as a row — the same pills, no longer a diagram. */
+  .stage { aspect-ratio: auto; display: block; margin-top: 48px; }
+  .board { position: relative; left: auto; top: auto; width: 100%; }
+  .wires { display: none; }
+  .nodeCol {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    height: auto;
+    margin-top: 20px;
+  }
+  .nodeColRight { margin-top: 10px; }
 
   .nav { left: 24px; right: 24px; transform: none; min-width: 0; max-width: none; width: auto; padding-left: 20px; }
   .navHidden { transform: translateY(-24px); }
@@ -2056,5 +2041,5 @@
 
   /* Shadows lighten one step: a heavy shadow at small sizes reads as blur. */
   .railPill { box-shadow: var(--sh-sm); }
-  .join, .receiptCard, .aiCard, .darkPanel { box-shadow: var(--sh-lg); }
+  .stage .board, .receiptCard, .aiCard, .darkPanel { box-shadow: var(--sh-lg); }
 }
