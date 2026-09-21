@@ -123,20 +123,51 @@ export type ConnectorDocs = { url: string; readOn: string; webhooks?: string };
  * was indistinguishable from a fresh one. A guide with no date is a guide nobody
  * can audit; the page prints it.
  */
+/**
+ * One titled run of instructions — the unit every section of a guide page is
+ * built from, whether it names a credential box or a consent screen.
+ */
+export type GuideBlock = {
+  /** What the reader is going to end up holding, or doing. */
+  title: string;
+  /** One click, or one short instruction, per line. */
+  steps: string[];
+  /** Anything true and awkward — a plan gate, a value the provider hides. */
+  note?: string;
+};
+
 export type ConnectorGuide = {
   /** The date every step below was checked against the provider's own docs or app. */
   readOn: string;
   /** One block per credential the form asks for, in the order the form asks. */
-  fields: Array<{
+  fields: Array<GuideBlock & {
     /** Must match a `credentialFields[].key` on the same entry. */
     key: string;
-    /** What the reader is going to end up holding. */
-    title: string;
-    /** One click, or one short instruction, per line. */
-    steps: string[];
-    /** Anything true and awkward — a plan gate, a value the provider hides. */
-    note?: string;
   }>;
+  /**
+   * THE OAUTH HALF, AND WITHOUT IT AN OAUTH SOURCE HAS NO GUIDE AT ALL.
+   *
+   * `fields` is keyed to `credentialFields`, which is the right anchor for a
+   * source you paste a key into and an empty set for every source you connect
+   * by leaving the app. So a Google, Meta or TikTok entry could carry a `guide`,
+   * satisfy every assertion in tests/connector-guides.test.ts, and render a
+   * title and a footer with nothing in between — the vacuous pass, in the one
+   * place where the page IS the product.
+   *
+   * What an OAuth source needs said is also a different KIND of thing. There is
+   * no value to go and find; there is a state the account has to already be in
+   * before the button can work (the ad account has to sit in a business
+   * portfolio, the signed-in user has to hold a role on it), a screen that asks
+   * questions only the customer can answer, and a choice to make back here
+   * afterwards. None of that is a credential, and all of it is why a connect
+   * fails.
+   *
+   * ORDERED SECTIONS rather than named slots, because the count genuinely
+   * differs per provider: Google Ads needs its account-id step, Meta needs its
+   * portfolio step, TikTok needs neither. A test asserts a non-apiKey guide has
+   * at least one.
+   */
+  oauth?: { sections: GuideBlock[] };
   /** The webhook half, when the source has one worth turning on. */
   webhook?: { steps: string[]; note?: string };
 };
@@ -295,6 +326,23 @@ export type ConnectorCatalogEntry = {
     prefixes?: readonly string[];
     suffixes?: readonly string[];
   };
+  /**
+   * Environment this source cannot work without, beyond its OAuth provider's
+   * own client id and secret.
+   *
+   * WHY A CARD HAS TO KNOW THIS. An OAuth connector whose credentials are not
+   * configured does not degrade — it throws: `buildAuthUrl` calls `reqEnv` and
+   * the start route 500s. So without this, shipping a connector before its app
+   * registration lands puts a Connect button in the catalogue that answers a
+   * customer's click with an error page, which is strictly worse than the
+   * connector not being there at all.
+   *
+   * Google Ads is the case that needs it beyond the provider check: it rides
+   * the existing `GOOGLE_CLIENT_ID`, so its provider looks configured, while
+   * every request it makes is refused without a developer token that takes
+   * weeks of approvals to obtain.
+   */
+  requiresEnv?: readonly string[];
   /** Manual webhook setup note shown on the connection page when not auto. */
   webhookSetup?: string;
 };
@@ -2336,6 +2384,355 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
       "“new-meeting-content-ready” event, then copy the signing secret it shows you into the Webhook signing secret " +
       "field here. Fathom mints that secret itself, so if you leave the field blank its deliveries cannot be " +
       "verified and are refused — reconnect with the secret to switch them on.",
+  },
+  {
+    source: "meta-ads",
+    name: "Meta Ads",
+    brand: { color: "#0064E0", short: "Me" },
+    description: "Spend, impressions, clicks and conversions from Facebook and Instagram ads.",
+    connect: "oauth",
+    oauthProvider: "meta",
+    /**
+     * NO WEBHOOK CARRIES REPORT DATA. Meta has webhooks, and none of them fire
+     * when yesterday's spend is restated — which is the only change this
+     * connector cares about. Poll-only by the provider's design, not by omission.
+     */
+    instant: false,
+    poll: true,
+    sync: "derived-mirror",
+    docs: {
+      url: "https://developers.facebook.com/docs/marketing-api/reference/ad-account/insights/",
+      readOn: "2026-09-21",
+    },
+    verified: { live: null },
+    historyNote: "Meta returns at most 37 months of insights, so the first import reaches back no further.",
+    /**
+     * OUR APP ID, SO THE WHOLE FLEET SHARES ONE BUCKET — which is what
+     * `fleetLimits` exists for. Meta scores requests rather than counting them:
+     * a read costs 1 point, a write 3, and the ceiling depends on the app's
+     * Marketing API access tier.
+     *
+     * "Your maximum score is 60 … the decay rate is 300 seconds" on the LIMITED
+     * tier, and 9000 on FULL — developers.facebook.com/docs/marketing-api/overview/rate-limiting,
+     * read 21 Sep 2026. 60 points per 300s is 12 reads a minute across every
+     * customer, which is the number declared here because it is the one a new
+     * app actually has.
+     *
+     * RAISE THIS TO 1800 THE DAY FULL ACCESS LANDS. Leaving it at 12 after the
+     * upgrade throttles the fleet at a fifteenth of its real budget, and nothing
+     * will report that as a fault — sweeps will simply be slow.
+     */
+    fleetLimits: { "insights.read": { requestsPerMinute: 12 }, "adaccounts.list": { requestsPerMinute: 12 } },
+    /**
+     * The per-AD-ACCOUNT half, which Meta enforces separately and does not
+     * publish as a rate: it is load-based, and the only true measurement is the
+     * `X-FB-Ads-Insights-Throttle` header's `acc_id_util_pct`, which the
+     * connector's responses carry. A conservative floor that keeps the scheduler
+     * honest until the prober has watched a real account.
+     */
+    rateLimits: { "insights.read": { requestsPerMinute: 60 }, "adaccounts.list": { requestsPerMinute: 60 } },
+    autoWebhook: false,
+    credentialFields: [],
+    flowFields: [
+      {
+        key: "adAccountId",
+        label: "Ad account",
+        required: true,
+        dynamic: true,
+        placeholder: "Choose an ad account…",
+        hint: "Only the accounts you ticked when you connected appear here.",
+      },
+      {
+        key: "level",
+        label: "Group by",
+        options: [
+          { value: "campaign", label: "Campaign" },
+          { value: "adset", label: "Ad set" },
+          { value: "ad", label: "Ad" },
+          { value: "account", label: "Whole account" },
+        ],
+        hint: "One row per day at this level. Ad gives the finest detail and by far the most rows; Whole account gives one row a day.",
+      },
+    ],
+    hiddenFields: [
+      "source", //               always "meta-ads"
+      "properties.timeZone", //  the account's zone — carried so a row can be re-dated, not read
+      "properties.level", //     restates the step's own Group by
+      "properties.adAccountId", // restates the step's own Ad account
+    ],
+    commonFields: ["value", "properties.impressions", "properties.clicks", "properties.reach", "properties.campaign_name"],
+    guide: {
+      readOn: "2026-09-21",
+      fields: [],
+      oauth: {
+        sections: [
+          {
+            title: "Before you connect",
+            steps: [
+              "Open [Meta Business settings](https://business.facebook.com/settings) and look under Accounts → Ad accounts for the account you want to track.",
+              "If it is not listed, it is a personal ad account. Move it into a business portfolio first — that is how Meta expects outside tools to reach an ad account, and it is also how you keep access when someone leaves.",
+              "Under Users → People, find yourself and check you have access to that ad account. Having a role on the Page is not the same thing.",
+              "Namzilabs asks for one permission, ads_read. It can read performance figures and nothing else: it cannot create, edit, pause, or spend.",
+            ],
+            note:
+              "Meta renamed Business Manager to business portfolio in 2024. Parts of Business settings still say Business Manager — they are the same place.",
+          },
+          {
+            title: "What Meta will ask you",
+            steps: [
+              "Choose Connect with Meta. Meta takes over from here.",
+              "Sign in as the person who has access to the ad account.",
+              "Pick the business portfolio that owns the ad account.",
+              "Tick every ad account you want Namzilabs to read. One you leave unticked will not appear in the next step.",
+              "Leave the permissions Meta lists switched on, then finish. Meta returns you here and the new connection appears under Manage.",
+            ],
+            note:
+              "If Meta says you do not have permission to grant this, you are signed in as someone with a role on the Page but not on the ad account. Somebody who appears against that ad account in Business settings has to do this step. Adding another ad account later means running this again — an authorisation covers the accounts you ticked and no others.",
+          },
+          {
+            title: "Choosing what to track",
+            steps: [
+              "Open a flow, add a Get data step and choose this connection.",
+              "Pick the ad account. The list shows what the authorisation covered, with each account's currency.",
+              "Group by is Campaign unless you change it — one row per campaign per day.",
+              "Spend lands on each record's value, so a Sum of it is your spend. Impressions, clicks, reach, frequency, CPC, CPM, CTR, conversions and ROAS all ride along on the record.",
+            ],
+            note:
+              "Figures follow your ad account's own attribution setting, so they reconcile with what you see in Ads Manager rather than with a default of ours. Meta keeps revising the last 28 days and Namzilabs re-reads that whole window on every sweep — a number that moves inside 28 days is Meta restating it, not a sync fault.",
+          },
+        ],
+      },
+    },
+  },
+  {
+    source: "tiktok-ads",
+    name: "TikTok Ads",
+    brand: { color: "#FE2C55", short: "Tt" },
+    description: "Spend, impressions, clicks, conversions and video views from TikTok ads.",
+    connect: "oauth",
+    oauthProvider: "tiktok",
+    instant: false,
+    poll: true,
+    sync: "derived-mirror",
+    /**
+     * THE WEAKEST PROVENANCE IN THIS CATALOG, AND IT IS SAID OUT LOUD.
+     *
+     * TikTok's documentation portal renders client-side, so none of it can be
+     * read by a fetcher or cited the way every other entry here cites a page.
+     * These figures come from TikTok's own SDK reference on GitHub, which is
+     * published by TikTok and versioned, but is a description of a client
+     * library rather than of the API. The prober is what turns this entry from
+     * plausible into checked.
+     */
+    docs: {
+      url: "https://github.com/tiktok/tiktok-business-api-sdk/blob/main/js_sdk/docs/ReportingApi.md",
+      readOn: "2026-09-21",
+    },
+    verified: { live: null },
+    historyNote:
+      "TikTok reporting runs about eleven hours behind, so today is always partial and yesterday can still move.",
+    /**
+     * TikTok limits per app AND per advertiser, in three dimensions at once —
+     * QPS, QPM and QPD — and publishes none of the numbers anywhere a fetcher
+     * can read. Error 40100 is the only signal, and it arrives inside an HTTP
+     * 200. Both figures below are deliberate under-estimates: under-requesting
+     * costs latency, and over-requesting costs a throttle that looks exactly
+     * like an advertiser who spent nothing.
+     */
+    fleetLimits: { "report.integrated": { requestsPerMinute: 60 }, "advertiser.info": { requestsPerMinute: 60 } },
+    rateLimits: { "report.integrated": { requestsPerMinute: 60 }, "advertiser.info": { requestsPerMinute: 60 } },
+    autoWebhook: false,
+    // TikTok's advertiser picker needs the app id and secret at RUNTIME, not
+    // only at connect time — unlike every other picker here.
+    requiresEnv: ["TIKTOK_APP_ID", "TIKTOK_APP_SECRET"],
+    credentialFields: [],
+    flowFields: [
+      {
+        key: "advertiserId",
+        label: "Advertiser account",
+        required: true,
+        dynamic: true,
+        placeholder: "Choose an advertiser account…",
+        hint: "Only the accounts you ticked when you connected appear here.",
+      },
+      {
+        key: "level",
+        label: "Group by",
+        options: [
+          { value: "campaign", label: "Campaign" },
+          { value: "adgroup", label: "Ad group" },
+          { value: "ad", label: "Ad" },
+          { value: "advertiser", label: "Whole account" },
+        ],
+        hint: "One row per day at this level. Ad gives the finest detail and by far the most rows.",
+      },
+    ],
+    hiddenFields: [
+      "source", //                  always "tiktok-ads"
+      "properties.timeZone", //     the advertiser's zone — carried so a row can be re-dated
+      "properties.level", //        restates the step's own Group by
+      "properties.advertiserId", // restates the step's own Advertiser account
+    ],
+    commonFields: ["value", "properties.impressions", "properties.clicks", "properties.conversion", "properties.campaign_name"],
+    guide: {
+      readOn: "2026-09-21",
+      fields: [],
+      oauth: {
+        sections: [
+          {
+            title: "Before you connect",
+            steps: [
+              "Open [TikTok Business Center](https://business.tiktok.com/) and find the advertiser account you want to track.",
+              "Check your own role: you need Admin on the Business Center, or Admin or Operator on that advertiser account.",
+              "If you run ads from a TikTok Ads Manager login with no Business Center at all, that works too — you will authorise the advertiser account directly.",
+            ],
+            note:
+              "Analyst access can read reports inside TikTok's own interface but is not enough to authorise an outside tool. If an account you expect is missing from the list TikTok shows you, that is the usual reason.",
+          },
+          {
+            title: "What TikTok will ask you",
+            steps: [
+              "Choose Connect with TikTok. TikTok takes over from here.",
+              "Sign in with the account that manages the ads — not the creator account that posts the videos.",
+              "TikTok lists your advertiser accounts. Tick the ones Namzilabs should read.",
+              "Confirm. TikTok returns you here and the new connection appears under Manage.",
+            ],
+            note:
+              "TikTok scopes the authorisation to exactly the accounts you tick, and there is no way to widen one afterwards — adding an account later means running this again.",
+          },
+          {
+            title: "Choosing what to track",
+            steps: [
+              "Open a flow, add a Get data step and choose this connection.",
+              "Pick the advertiser account, then leave Group by on Campaign or change it.",
+              "Spend lands on each record's value, so a Sum of it is your spend. Impressions, clicks, CTR, CPC, CPM, reach, conversions, cost per conversion and the video metrics all ride along on the record.",
+            ],
+            note:
+              "TikTok's figures lag about eleven hours, so today is always incomplete. Namzilabs re-reads the last three days on every sweep, which is what lets a late conversion land on the day it belongs to.",
+          },
+        ],
+      },
+    },
+  },
+  {
+    source: "gads",
+    name: "Google Ads",
+    brand: { color: "#3C8BD9", short: "Ad" },
+    description: "Spend, clicks, conversions and YouTube video views from Google Ads campaigns.",
+    connect: "google",
+    instant: false,
+    poll: true,
+    sync: "derived-mirror",
+    docs: {
+      url: "https://developers.google.com/google-ads/api/docs/reporting/overview",
+      readOn: "2026-09-21",
+    },
+    verified: { live: null },
+    historyNote:
+      "Google restates conversions for days or weeks after the click, so a recent day's figures keep moving after it ends.",
+    /**
+     * THE DEVELOPER TOKEN IS OURS, AND ITS DAILY CEILING IS THE WHOLE FLEET'S.
+     *
+     * Every customer's requests count against one token, which makes this a
+     * fleet limit and not a per-connection one. Explorer allows "2,880 API
+     * operations per day against production accounts", Basic 15,000, Standard
+     * unlimited — developers.google.com/google-ads/api/docs/api-policy/access-levels,
+     * read 21 Sep 2026.
+     *
+     * 2,880/day is 2 a minute, which is what is declared, because Explorer is
+     * where a new project starts. RAISE TO 10 ON BASIC. A paginated continuation
+     * carrying a valid page token is free, which is why this connector uses
+     * `search` rather than `searchStream` — at two operations a minute the
+     * difference between one operation per report and one per page is the
+     * difference between working and not.
+     */
+    fleetLimits: { "googleAds.search": { requestsPerMinute: 2 }, "customers.list": { requestsPerMinute: 2 } },
+    /** Per customer account; Google publishes no separate per-account rate for search. */
+    rateLimits: { "googleAds.search": { requestsPerMinute: 60 }, "customers.list": { requestsPerMinute: 60 } },
+    autoWebhook: false,
+    requiresEnv: ["GOOGLE_ADS_DEVELOPER_TOKEN"],
+    credentialFields: [],
+    flowFields: [
+      {
+        key: "customerId",
+        label: "Google Ads account",
+        required: true,
+        dynamic: true,
+        placeholder: "Choose an account…",
+        hint: "Manager accounts are not listed — they hold no campaigns, so a report on one returns nothing.",
+      },
+      {
+        key: "level",
+        label: "Group by",
+        options: [
+          { value: "campaign", label: "Campaign" },
+          { value: "adgroup", label: "Ad group" },
+          { value: "account", label: "Whole account" },
+        ],
+        hint: "One row per day at this level.",
+      },
+      {
+        key: "channelType",
+        label: "Campaign type",
+        options: [
+          { value: "", label: "All campaign types" },
+          { value: "VIDEO", label: "Video (YouTube)" },
+          { value: "DEMAND_GEN", label: "Demand Gen" },
+          { value: "SEARCH", label: "Search" },
+          { value: "PERFORMANCE_MAX", label: "Performance Max" },
+          { value: "DISPLAY", label: "Display" },
+          { value: "SHOPPING", label: "Shopping" },
+        ],
+        hint: "Narrows what Google is asked for, so it costs less quota as well as showing less. YouTube ads are Video campaigns.",
+      },
+    ],
+    hiddenFields: [
+      "source", //                always "gads"
+      "properties.timeZone", //   the account's zone — carried so a row can be re-dated
+      "properties.level", //      restates the step's own Group by
+      "properties.customerId", // restates the step's own account
+    ],
+    commonFields: ["value", "properties.impressions", "properties.clicks", "properties.conversions", "properties.campaign_name"],
+    guide: {
+      readOn: "2026-09-21",
+      fields: [],
+      oauth: {
+        sections: [
+          {
+            title: "Before you connect",
+            steps: [
+              "Open [Google Ads](https://ads.google.com/) and note which Google account you are signed in with. That is the one to use here.",
+              "Under Admin → Access and security, check your access level on the account you want to track. Standard or Admin can run reports.",
+              "If what you have is a manager account, pick out the advertising account underneath it that actually runs the campaigns.",
+            ],
+            note:
+              "Read only access can sign in and look at campaigns but Google does not list running reports among the things it can do, so it may not be enough. If the connection reports nothing and you are on Read only, that is the first thing to change.",
+          },
+          {
+            title: "What Google will ask you",
+            steps: [
+              "Choose Connect with Google.",
+              "Sign in with the Google account that has access to the Google Ads account — not a personal address that merely receives the invoices.",
+              "Google asks to “manage your AdWords campaigns”. That is the only permission Google Ads publishes; there is no read-only version of it.",
+              "Allow. Google returns you here and the new connection appears under Manage.",
+            ],
+            note:
+              "That wording is Google's, and it overstates what happens next: Namzilabs runs reports and has no code that changes anything in your account. If you would rather not take our word for it, connect with a Google account that only has Read only access and watch what appears.",
+          },
+          {
+            title: "Choosing what to track",
+            steps: [
+              "Open a flow, add a Get data step and choose this connection.",
+              "Pick the account. The list covers every account your Google login reaches, including ones under a manager, with each account's currency.",
+              "To track YouTube only, set Campaign type to Video. YouTube ads are Video campaigns inside Google Ads — there is no separate YouTube advertising account to connect.",
+              "Cost lands on each record's value, so a Sum of it is your spend. Impressions, clicks, CTR, average CPC, conversions, conversion value and the video-view metrics ride along on the record.",
+            ],
+            note:
+              "Costs arrive from Google in millionths of your currency and are converted here, so the number you see is the number in Ads. Google keeps restating conversions for days after a click; Namzilabs re-reads the last 14 days on every sweep, so a recent day's figures can still rise.",
+          },
+        ],
+      },
+    },
   },
 ];
 

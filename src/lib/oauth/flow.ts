@@ -18,6 +18,12 @@ export function redirectUriFor(p: OAuthProvider): string {
 
 export function buildAuthUrl(p: OAuthProvider, opts: { source: string; state: string }): string {
   const clientId = reqEnv(p.clientIdEnv);
+  // A provider whose consent screen is not spelled the OAuth 2.0 way builds its
+  // own URL; see `authorizeUrlFor`. Everything shared — the state, the cookie,
+  // the redirect registration — is identical either way.
+  if (p.authorizeUrlFor) {
+    return p.authorizeUrlFor(p, { ...opts, clientId, redirectUri: redirectUriFor(p) });
+  }
   const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: redirectUriFor(p),
@@ -40,6 +46,16 @@ async function tokenRequest(p: OAuthProvider, body: URLSearchParams): Promise<To
 }
 
 export async function exchangeCode(p: OAuthProvider, code: string): Promise<OAuthTokens> {
+  // Same escape hatch on the other half of the flow: Meta documents a GET with
+  // query parameters, TikTok a JSON POST that reports failure in a 200 body.
+  if (p.exchangeCodeWith) {
+    return p.exchangeCodeWith(p, {
+      code,
+      redirectUri: redirectUriFor(p),
+      clientId: reqEnv(p.clientIdEnv),
+      clientSecret: reqEnv(p.clientSecretEnv),
+    });
+  }
   const res = await tokenRequest(
     p,
     new URLSearchParams({

@@ -36,6 +36,9 @@ import { shopifyConnector } from "./shopify";
 
 import { klaviyoConnector } from "./klaviyo";
 import { fathomConnector } from "./fathom";
+import { metaAdsConnector } from "./meta-ads";
+import { tiktokAdsConnector } from "./tiktok-ads";
+import { googleAdsConnector } from "./google-ads";
 
 const registry = new Map<string, Connector>();
 
@@ -82,6 +85,9 @@ for (const connector of [
   shopifyConnector,
   klaviyoConnector,
   fathomConnector,
+  metaAdsConnector,
+  tiktokAdsConnector,
+  googleAdsConnector,
 ]) {
   registerConnector(connector);
 }

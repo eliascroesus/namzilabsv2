@@ -530,6 +530,31 @@ export type DirectoryApp = {
   /** OAuth sources leave the app to connect, so they have no dialog and no form. */
   oauthHref?: string;
   /**
+   * What the OAuth button says. Passed in rather than written here, because
+   * this file hard-coded "Connect with Google" while `oauthHref` already
+   * covered any provider — so the first non-Google OAuth source would have
+   * shipped a Meta card offering to connect with Google.
+   */
+  oauthLabel?: string;
+  /**
+   * The setup page for this source, when it has one.
+   *
+   * A credential source reaches its guide from inside the connect dialog. An
+   * OAuth source HAS no dialog — the card links straight out to the consent
+   * screen — so until this existed the guide for exactly the connectors that
+   * need one most (an ad account has to be in the right portfolio, under the
+   * right role, before the button can work) was reachable only by typing the
+   * URL.
+   */
+  guideHref?: string;
+  /**
+   * Why this source cannot be connected on this deployment yet, or absent when
+   * it can. See `sourceConnectable`: a connector exists in the catalogue as
+   * soon as its code does, and the provider app registration behind it can be
+   * weeks away.
+   */
+  unavailable?: string;
+  /**
    * The credential form, rendered on the server and shown inside the dialog.
    *
    * A node rather than a field description, because the fields are the one part
@@ -873,14 +898,30 @@ function AppCard({ app, onConnect }: { app: DirectoryApp; onConnect: () => void 
           these are on screen at once, and the yellow fill means "the one act
           here" — seven of them is a catalogue with no act in it at all. */}
       <div className="mt-auto pt-4">
-        {app.oauthHref ? (
+        {app.unavailable ? (
+          /* Not a disabled button: a greyed control invites clicking and says
+             nothing. The sentence is the whole point. */
+          <p className="text-xs text-muted-foreground">{app.unavailable}</p>
+        ) : app.oauthHref ? (
           <a href={app.oauthHref} className={cn(buttonVariants({ variant: "accent" }), "w-full")}>
-            Connect with Google
+            {app.oauthLabel ?? `Connect ${app.name}`}
           </a>
         ) : (
           <Button type="button" className="w-full" onClick={onConnect}>
             {connected ? "Connect another" : "Connect"}
           </Button>
+        )}
+        {/* THE ONE PLACE AN OAUTH SOURCE CAN REACH ITS OWN GUIDE. The credential
+            sources get this link inside their dialog; these have no dialog, and
+            "what has to be true before this button works" is the question that
+            makes an ads connection fail. Under the button, not above it: the act
+            still leads. */}
+        {app.oauthHref && app.guideHref && (
+          <p className="mt-2 text-center text-xs text-muted-foreground">
+            <a href={app.guideHref} target="_blank" rel="noreferrer noopener" className="underline">
+              Before you connect
+            </a>
+          </p>
         )}
       </div>
     </Card>

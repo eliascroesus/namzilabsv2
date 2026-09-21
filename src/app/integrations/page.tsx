@@ -6,6 +6,7 @@ import { connectionImportStatuses, type ImportStatus } from "@/lib/sync/import-s
 import { AppShell } from "@/components/app-shell";
 import { integrationsErrorMessage } from "./error-messages";
 import { connectionRecordCounts, listConnections, webhookUrlFor } from "@/lib/connections";
+import { oauthProviderFor, sourceConnectable } from "@/lib/oauth/providers";
 import { CONNECTOR_CATALOG, catalogEntry, type ConnectorCatalogEntry } from "@/connectors/catalog";
 import { AppDirectory, ConnectionRow, type DirectoryApp } from "./ConnectionRow";
 import { connectApiKeyAction } from "./actions";
@@ -115,7 +116,12 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
    * decides WHEN the dialog holding a form is on screen; it never has to know
    * what is inside one.
    */
-  const apps: DirectoryApp[] = CONNECTOR_CATALOG.map((entry) => ({
+  const apps: DirectoryApp[] = CONNECTOR_CATALOG.map((entry) => {
+    // Read once per entry: `sourceConnectable` reads process.env, which only
+    // the server can do, and the answer decides whether this card gets an
+    // action at all.
+    const connectable = sourceConnectable(entry.source);
+    return {
     source: entry.source,
     name: entry.name,
     description: entry.description,
@@ -125,14 +131,33 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
     connectedCount: countBySource[entry.source] ?? 0,
     // Google's connectors leave the app to connect, so there is nothing to type
     // and no dialog to open: the card links straight out to the consent screen.
+    unavailable: connectable
+      ? undefined
+      : `Not available yet — ${entry.name} needs its API access approved before anyone can connect it.`,
     oauthHref:
+      !connectable
+        ? undefined
+        : entry.connect === "google"
+          ? `/api/oauth/google/start?source=${entry.source}`
+          : entry.connect === "oauth" && entry.oauthProvider
+            ? `/api/oauth/${entry.oauthProvider}/start?source=${entry.source}`
+            : undefined,
+    // THE PROVIDER NAMES THE BUTTON, and it is resolved here because this is
+    // the server half that can read OAUTH_PROVIDERS. The card used to say
+    // "Connect with Google" for every OAuth source, which was true of all three
+    // of them and would have been a lie on the first one that was not.
+    oauthLabel:
       entry.connect === "google"
-        ? `/api/oauth/google/start?source=${entry.source}`
-        : entry.connect === "oauth" && entry.oauthProvider
-          ? `/api/oauth/${entry.oauthProvider}/start?source=${entry.source}`
+        ? "Connect with Google"
+        : entry.connect === "oauth"
+          ? `Connect with ${oauthProviderFor(entry.source)?.name ?? entry.name}`
           : undefined,
-    form: entry.connect === "apiKey" ? <ConnectForm entry={entry} /> : undefined,
-  }));
+    // Only where a page actually exists; the card link is otherwise absent
+    // rather than pointing at a 404 (`dynamicParams = false` on /docs/[source]).
+    guideHref: entry.guide ? `/docs/${entry.source}` : undefined,
+    form: entry.connect === "apiKey" && connectable ? <ConnectForm entry={entry} /> : undefined,
+    };
+  });
 
   return (
     <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email}>

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { GuideText } from "@/components/guide-text";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { CONNECTOR_CATALOG, catalogEntry } from "@/connectors/catalog";
+import { CONNECTOR_CATALOG, catalogEntry, type GuideBlock } from "@/connectors/catalog";
 import { SourceMark } from "@/components/source-mark";
 
 /**
@@ -80,23 +80,13 @@ export default async function ConnectorDocsPage({ params }: { params: Promise<{ 
         </div>
       </header>
 
-      {guide.fields.map((field) => (
-        <section key={field.key} className="mt-8">
-          <h2 className="text-sm font-semibold text-heading">{field.title}</h2>
-          {/* NUMBERED, because these are steps in an order rather than a set of
-              facts — and the numbers are the list's own, so a step inserted in
-              the middle renumbers the rest instead of being missed. */}
-          <ol className="mt-3 space-y-2">
-            {field.steps.map((step, i) => (
-              <li key={i} className="flex gap-3 text-sm text-foreground">
-                <span className="stat-numeral shrink-0 text-xs text-muted-foreground">{i + 1}</span>
-                <span><GuideText>{step}</GuideText></span>
-              </li>
-            ))}
-          </ol>
-          {field.note && <p className="mt-3 text-xs text-muted-foreground"><GuideText>{field.note}</GuideText></p>}
-        </section>
-      ))}
+      {/* THE OAUTH SECTIONS COME FIRST, because they are what has to be true
+          BEFORE the button does anything — the portfolio the ad account sits in,
+          the role the signed-in person holds. A reader who meets the credential
+          blocks first for a source that has none meets nothing at all. */}
+      {guide.oauth?.sections.map((block, i) => <GuideSection key={`oauth-${i}`} block={block} />)}
+
+      {guide.fields.map((field) => <GuideSection key={field.key} block={field} />)}
 
       {guide.webhook && (
         <section className="mt-8 border-t border-border pt-8">
@@ -135,5 +125,31 @@ export default async function ConnectorDocsPage({ params }: { params: Promise<{ 
         </p>
       </footer>
     </main>
+  );
+}
+
+/**
+ * ONE TITLED RUN OF STEPS. Shared by the OAuth sections and the credential
+ * blocks so the two cannot drift into looking like different kinds of page —
+ * they are the same instruction in two situations, and a reader moving between
+ * a Stripe page and a Meta one should not have to re-learn the layout.
+ */
+function GuideSection({ block }: { block: GuideBlock }) {
+  return (
+    <section className="mt-8">
+      <h2 className="text-sm font-semibold text-heading">{block.title}</h2>
+      {/* NUMBERED, because these are steps in an order rather than a set of
+          facts — and the numbers are the list's own, so a step inserted in
+          the middle renumbers the rest instead of being missed. */}
+      <ol className="mt-3 space-y-2">
+        {block.steps.map((step, i) => (
+          <li key={i} className="flex gap-3 text-sm text-foreground">
+            <span className="stat-numeral shrink-0 text-xs text-muted-foreground">{i + 1}</span>
+            <span><GuideText>{step}</GuideText></span>
+          </li>
+        ))}
+      </ol>
+      {block.note && <p className="mt-3 text-xs text-muted-foreground"><GuideText>{block.note}</GuideText></p>}
+    </section>
   );
 }

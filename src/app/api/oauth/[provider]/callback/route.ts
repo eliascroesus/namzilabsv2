@@ -26,7 +26,15 @@ export async function GET(req: Request, ctx: { params: Promise<{ provider: strin
   if (!provider) return NextResponse.redirect(new URL("/integrations?error=oauth_unknown", req.url));
 
   const url = new URL(req.url);
-  const code = url.searchParams.get("code");
+  /**
+   * `auth_code` IS TIKTOK'S SPELLING OF `code`.
+   *
+   * Every other provider returns the grant as `code`; TikTok's advertiser
+   * authorisation returns `auth_code` and nothing else. Read only `code` and a
+   * successful TikTok authorisation lands here, finds nothing, and redirects the
+   * customer to "you denied access" — after they granted it.
+   */
+  const code = url.searchParams.get("code") ?? url.searchParams.get("auth_code");
   const stateParam = url.searchParams.get("state");
   const jar = await cookies();
   const cookieNonce = jar.get(OAUTH_STATE_COOKIE)?.value;

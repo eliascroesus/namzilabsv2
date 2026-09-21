@@ -22,7 +22,9 @@ describe("connector setup guides", () => {
   it("documents at least the apps the owner actually connects", () => {
     // Sabotage: delete a guide and this names which one went missing, rather
     // than the suite passing on an empty set.
-    expect(guided.map((e) => e.source).sort()).toEqual(expect.arrayContaining(["calendly", "fathom", "stripe", "whop"]));
+    expect(guided.map((e) => e.source).sort()).toEqual(
+      expect.arrayContaining(["calendly", "fathom", "gads", "meta-ads", "stripe", "tiktok-ads", "whop"]),
+    );
   });
 
   for (const entry of guided) {
@@ -101,8 +103,12 @@ describe("guide links", () => {
   const allText = CONNECTOR_CATALOG.filter((e) => e.guide).flatMap((e) => {
     const g = e.guide!;
     const blocks = g.fields.flatMap((f) => [...f.steps, ...(f.note ? [f.note] : [])]);
+    // The OAuth sections carry the links that matter most — a route into the
+    // provider's own settings — and were invisible to every assertion below
+    // until they were walked here.
+    const oauth = (g.oauth?.sections ?? []).flatMap((b) => [...b.steps, ...(b.note ? [b.note] : [])]);
     const hook = g.webhook ? [...g.webhook.steps, ...(g.webhook.note ? [g.webhook.note] : [])] : [];
-    return [...blocks, ...hook].map((text) => ({ source: e.source, text }));
+    return [...blocks, ...oauth, ...hook].map((text) => ({ source: e.source, text }));
   });
 
   it("leaves no half-written link rendering as literal brackets", () => {
@@ -127,6 +133,56 @@ describe("guide links", () => {
     const steps = CONNECTOR_CATALOG.find((e) => e.source === "notion")!.guide!.fields[0].steps;
     const links = steps.flatMap((s) => [...s.matchAll(/\[[^\]]+\]\((https:\/\/[^\s)]+)\)/g)].map((m) => m[1]));
     expect(links.some((h) => h.includes("notion.so/developers/tokens"))).toBe(true);
+  });
+});
+
+/**
+ * THE VACUOUS PASS, CLOSED.
+ *
+ * Every assertion in the block above iterates `guide.fields`, and an OAuth
+ * source has no credential fields at all — so all three ads connectors could
+ * ship a `guide: { readOn, fields: [] }`, satisfy the entire suite, and render a
+ * page with a heading, a footer and nothing in between. The suite would have
+ * reported 3,952 passing tests over a broken feature, which is the exact shape
+ * of failure `docs/` pages exist to prevent in the first place.
+ *
+ * Sabotage check for anyone maintaining this: empty `oauth.sections` on any of
+ * the three, or drop the `oauth` key entirely, and both tests below name the
+ * source that went missing.
+ */
+describe("a guide says something", () => {
+  for (const entry of CONNECTOR_CATALOG.filter((e) => e.guide)) {
+    it(`${entry.source}: renders at least one section`, () => {
+      const g = entry.guide!;
+      const sections = g.fields.length + (g.oauth?.sections.length ?? 0);
+      expect(sections, `${entry.source}: a guide with no sections is a blank page`).toBeGreaterThan(0);
+    });
+  }
+
+  for (const entry of CONNECTOR_CATALOG.filter((e) => e.guide && e.connect !== "apiKey")) {
+    it(`${entry.source}: connects by OAuth, so it needs oauth sections`, () => {
+      /**
+       * A CREDENTIAL BLOCK CANNOT DESCRIBE THIS SOURCE. There is no box to
+       * paste into — what a reader needs is which account to sign in as, what
+       * the consent screen will ask, and what has to already be true for the
+       * button to work at all.
+       */
+      const sections = entry.guide!.oauth?.sections ?? [];
+      expect(sections.length, `${entry.source}: an OAuth source with no oauth sections has no guide`).toBeGreaterThan(0);
+      for (const block of sections) {
+        expect(block.title.trim().length, `${entry.source}: a section with no title`).toBeGreaterThan(0);
+        expect(block.steps.length, `${entry.source}/${block.title}: no steps`).toBeGreaterThan(0);
+        for (const step of block.steps) expect(step.trim().length).toBeGreaterThan(0);
+      }
+    });
+  }
+
+  it("does not put oauth sections on a source you paste a key into", () => {
+    // Not pedantry: those sources DO have a form, and a section describing a
+    // consent screen they never see is instructions for somebody else's flow.
+    for (const entry of CONNECTOR_CATALOG.filter((e) => e.connect === "apiKey" && e.guide)) {
+      expect(entry.guide!.oauth, `${entry.source}: pastes a key but carries oauth sections`).toBeUndefined();
+    }
   });
 });
 
