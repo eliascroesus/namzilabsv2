@@ -1,148 +1,210 @@
-import { BarChart3, Blend, Divide, Filter } from "lucide-react";
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { Blend, Divide, Filter } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
 import { glyphInk, nodeAccent } from "@/components/flow/node-accent";
+import { CountUp } from "@/components/marketing/snap/count-up";
 import styles from "@/app/snap.module.css";
 
 /**
- * A METRIC ON THE CANVAS — and the metric is the whole point of the section.
+ * A METRIC BEING BUILT — light, labelled, and on a grid.
  *
- * ═══ IT BUILDS A SHOW-UP RATE FROM TWO APPS, WHICH NO ONE APP CAN ═══
+ * ═══ WHY THIS IS NOT THE DARK BOX IT REPLACES ═══
  *
- * It used to draw a single Calendly source counted into a number, which is a
- * thing Calendly already does for you — so the picture quietly argued that the
- * product is a slower way to get a figure you have. This one takes a calendar
- * and a spreadsheet, matches the same person across them, splits into the
- * meetings that were attended and every meeting booked, and divides. That is a
- * figure neither app holds, built from two that each hold half, which is the
- * claim the whole page rests on.
+ * The previous drawing was one SVG on a near-black ground with unlabelled
+ * tiles floating in it. Two things were wrong with that and only one was
+ * cosmetic. The cosmetic one: this page's own rule is that S07 and S10 are the
+ * only dark sections, and a third dark panel in the middle flattened the
+ * rhythm the section padding is tuned to produce. The load-bearing one: a
+ * reader could not tell what any tile DID. The picture is an argument — two
+ * apps that each hold half an answer, joined into one figure — and an argument
+ * made in unlabelled icons is not made at all.
  *
- * The arithmetic ties back on purpose: 66.8% is the show-up rate on the board
- * in the hero. The two pictures describe one workspace.
+ * So every node now carries its own name and its own object: not `Match` but
+ * `Match / same person`, not `Divide` but `Divide / by booked`. Five nodes and
+ * one answer, left to right, no branching. The earlier version forked into
+ * held and booked and rejoined, which is more faithful to the builder and much
+ * harder to read at a glance; a landing page owes the reader the shape of the
+ * idea, not the shape of the implementation.
  *
- * ═══ THE STEPS ARE THE PRODUCT'S, NOT INVENTED FOR THE DRAWING ═══
+ * ═══ THE OUTPUT IS INK BECAUSE IT IS AN ANSWER ═══
  *
- * Get data, Match, Filter, Summarize and Calculate are entries in the real
- * `NODE_LIBRARY`; the glyphs are the same lucide icons the canvas draws; and
- * the tile colours come from `nodeAccent`, so a step that is indigo here is
- * indigo in the builder. A connected Get-data step wears its app's real logo
- * bare, exactly as `NodeIcon` does — which also fixes the grey squares this
- * drawing used to show, one of which had been rendering BLACK since the
- * invented `--src-*` palette was deleted out from under it.
+ * Same rule as the hero deck, restated at 164px: the sources are paper, the
+ * reconciled figure is ink. That is the only dark thing in the section and it
+ * is the thing the section is about.
  *
- * ═══ ONE SVG, ONE COORDINATE SYSTEM ═══
+ * ═══ HTML NODES, SVG EDGES, ONE PIXEL GRID ═══
  *
- * Cards and wires share a viewBox so they cannot drift. An earlier version
- * placed cards with CSS percentages and drew wires in SVG units: they agreed
- * at exactly one width, and everywhere else the wires left from empty space.
+ * The old drawing put cards and wires in one SVG so they could not drift.
+ * That worked, and cost real text: SVG `<text>` gets no font features, no
+ * wrapping, no tabular figures, and a count-up inside it cannot reuse
+ * `CountUp`. Here the nodes are HTML positioned in px and the edges are one
+ * SVG layer at the SAME px size with no scaling — `width: 1200; height: 460`
+ * and a matching viewBox — so the two coordinate systems are literally the
+ * same one. Nothing scales, so nothing can drift.
  */
-const W = 210;
-const H = 84;
 
-/** Centre of a node's left and right edge, for wiring. */
-const midY = (y: number, h = H) => y + h / 2;
+const NODE_W = 200;
+const NODE_H = 64;
+const OUT_H = 108;
 
-const NODES = [
-  { id: "cal", x: 30, y: 88, label: "Get data", value: "Google Calendar", source: "gcal" },
-  { id: "sheet", x: 30, y: 328, label: "Get data", value: "Google Sheets", source: "gsheets" },
-  { id: "match", x: 270, y: 208, label: "Match", value: "email, then name", type: "unite", variant: "unite_match" },
-  { id: "filter", x: 510, y: 88, label: "Filter", value: "attended is yes", type: "filter" },
-  { id: "booked", x: 510, y: 328, label: "Summarize", value: "meetings booked", type: "formula" },
-  { id: "held", x: 750, y: 88, label: "Summarize", value: "meetings held", type: "formula" },
-  { id: "rate", x: 985, y: 195, label: "Calculate", value: "held ÷ booked", type: "formula", variant: "formula_compare", h: 110, result: "66.8%" },
+type Src = { kind: "source"; id: string; x: number; y: number; source: string; name: string; sub: string };
+type Step = { kind: "step"; id: string; x: number; y: number; type: string; variant?: string; name: string; sub: string };
+
+const SOURCES: Src[] = [
+  { kind: "source", id: "gcal", x: 40, y: 120, source: "gcal", name: "Google Calendar", sub: "Meetings" },
+  { kind: "source", id: "gsheets", x: 40, y: 276, source: "gsheets", name: "Google Sheets", sub: "Show-ups" },
 ];
 
-const GLYPH = { unite_match: Blend, filter: Filter, formula: BarChart3, formula_compare: Divide };
+const STEPS: Step[] = [
+  { kind: "step", id: "match", x: 300, y: 198, type: "unite", variant: "unite_match", name: "Match", sub: "same person" },
+  { kind: "step", id: "filter", x: 540, y: 198, type: "filter", name: "Filter", sub: "held only" },
+  { kind: "step", id: "divide", x: 780, y: 198, type: "formula", variant: "formula_compare", name: "Divide", sub: "by booked" },
+];
+
+const OUT = { x: 1000, y: 176 };
+
+const GLYPH: Record<string, typeof Blend> = { match: Blend, filter: Filter, divide: Divide };
 
 /** Right edge of A to left edge of B, bowing through the gap between them. */
-const wire = (a: (typeof NODES)[number], b: (typeof NODES)[number]) => {
-  const x1 = a.x + W;
-  const y1 = midY(a.y, a.h);
-  const x2 = b.x;
-  const y2 = midY(b.y, b.h);
+function edge(x1: number, y1: number, x2: number, y2: number) {
   const bend = (x2 - x1) / 2;
   return `M${x1} ${y1} C ${x1 + bend} ${y1}, ${x2 - bend} ${y2}, ${x2} ${y2}`;
-};
+}
 
-const N = Object.fromEntries(NODES.map((n) => [n.id, n])) as Record<string, (typeof NODES)[number]>;
+const R = (x: number, y: number, w = NODE_W, h = NODE_H) => [x + w, y + h / 2] as const;
+const L = (x: number, y: number, h = NODE_H) => [x, y + h / 2] as const;
 
-const WIRES = [
-  wire(N.cal, N.match),
-  wire(N.sheet, N.match),
-  wire(N.match, N.filter),
-  wire(N.match, N.booked),
-  wire(N.filter, N.held),
-  wire(N.held, N.rate),
-  wire(N.booked, N.rate),
+const EDGES = [
+  { d: edge(...R(40, 120), ...L(300, 198)), delay: 200 },
+  { d: edge(...R(40, 276), ...L(300, 198)), delay: 240 },
+  { d: edge(...R(300, 198), ...L(540, 198)), delay: 500 },
+  { d: edge(...R(540, 198), ...L(780, 198)), delay: 740 },
+  { d: edge(...R(780, 198), ...L(OUT.x, OUT.y, OUT_H)), delay: 980 },
 ];
 
+/** Where an edge starts and ends, for the endpoint dots. */
+const DOTS = [
+  R(40, 120),
+  R(40, 276),
+  L(300, 198),
+  R(300, 198),
+  L(540, 198),
+  R(540, 198),
+  L(780, 198),
+  R(780, 198),
+  L(OUT.x, OUT.y, OUT_H),
+];
+
+const NODE_DELAY: Record<string, number> = { gcal: 0, gsheets: 100, match: 400, filter: 640, divide: 880, out: 1120 };
+
 export function CanvasShot() {
+  const stage = useRef<HTMLDivElement | null>(null);
+  const [live, setLive] = useState(false);
+
+  /**
+   * ONCE, ON FIRST ENTRY — and it disconnects itself, so scrolling back does
+   * not replay it. A drawing that re-animates every time it passes the fold
+   * reads as a loading state rather than as a thing that finished.
+   */
+  useEffect(() => {
+    const el = stage.current;
+    if (!el) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setLive(true);
+      return;
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setLive(true);
+          io.disconnect();
+        }
+      },
+      { threshold: 0.2 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
   return (
-    <svg
-      className={styles.shotCanvas}
-      viewBox="0 0 1200 500"
-      role="img"
-      aria-label="A metric on the canvas: Google Calendar and Google Sheets are matched on email then name, split into the meetings that were attended and every meeting booked, and divided into a show-up rate of 66.8 per cent."
-    >
-      <defs>
-        <pattern id="snap-canvas-grid" width="40" height="40" patternUnits="userSpaceOnUse">
-          <path d="M40 0 L0 0 0 40" fill="none" stroke="rgba(20,20,28,0.05)" strokeWidth="1" />
-        </pattern>
-      </defs>
-      <rect width="1200" height="500" className={styles.shotGround} />
-      <rect width="1200" height="500" fill="url(#snap-canvas-grid)" />
+    <div className={styles.cvScroll}>
+      <div
+        ref={stage}
+        className={styles.cvStage}
+        data-live={live ? "true" : undefined}
+        role="img"
+        aria-label="A metric being built: Google Calendar's meetings and Google Sheets' show-ups are matched to the same person, filtered to held only, and divided by booked, giving a show-up rate of 66.8 per cent."
+      >
+        <svg className={styles.cvEdges} width="1200" height="460" viewBox="0 0 1200 460" aria-hidden focusable="false">
+          {EDGES.map((e) => (
+            <path key={e.d} className={styles.cvEdge} d={e.d} style={{ "--d": `${e.delay}ms` } as React.CSSProperties} />
+          ))}
+        </svg>
 
-      <g className={styles.shotWire}>
-        {WIRES.map((d) => (
-          <path key={d} d={d} />
+        {SOURCES.map((n) => (
+          <div
+            key={n.id}
+            className={`${styles.cvNode} ${styles.cvNodeStd}`}
+            style={{ left: n.x, top: n.y, "--d": `${NODE_DELAY[n.id]}ms` } as React.CSSProperties}
+          >
+            <span className={styles.cvLogo} aria-hidden>
+              <BrandLogo source={n.source} size={28} />
+            </span>
+            <span className={styles.cvNodeText}>
+              <span className={`${styles.bodyS} ${styles.cvNodeName}`}>{n.name}</span>
+              <span className={`${styles.caption} ${styles.cvNodeSub}`}>{n.sub}</span>
+            </span>
+          </div>
         ))}
-      </g>
 
-      {NODES.map((node) => {
-        const h = node.h ?? H;
-        const accent = node.type ? nodeAccent(node.type, node.variant) : null;
-        const Glyph = node.variant
-          ? GLYPH[node.variant as keyof typeof GLYPH]
-          : node.type
-            ? GLYPH[node.type as keyof typeof GLYPH]
-            : null;
-        const iconY = node.y + (h - 34) / 2;
+        {STEPS.map((n) => {
+          const accent = nodeAccent(n.type, n.variant);
+          const Glyph = GLYPH[n.id];
+          return (
+            <div
+              key={n.id}
+              className={`${styles.cvNode} ${styles.cvNodeStd}`}
+              style={{ left: n.x, top: n.y, "--d": `${NODE_DELAY[n.id]}ms` } as React.CSSProperties}
+            >
+              <span className={styles.cvTile} style={{ background: accent }} aria-hidden>
+                {/* No `strokeWidth`: globals.css declares the kit's 2.25 once, on
+                    `svg.lucide`, and a zero-specificity rule still beats lucide's
+                    own presentation attribute. Re-spelling it here is a build
+                    failure waiting for the next kit change. */}
+                <Glyph width={16} height={16} color={glyphInk(accent)} />
+              </span>
+              <span className={styles.cvNodeText}>
+                <span className={`${styles.bodyS} ${styles.cvNodeName}`}>{n.name}</span>
+                <span className={`${styles.caption} ${styles.cvNodeSub}`}>{n.sub}</span>
+              </span>
+            </div>
+          );
+        })}
 
-        return (
-          <g key={node.id}>
-            <rect x={node.x} y={node.y} width={W} height={h} rx={16} className={styles.shotNode} vectorEffect="non-scaling-stroke" />
+        {/* THE HANDLES ARE A SECOND LAYER, ABOVE THE NODES, and that is the
+            whole reason they are not in the SVG above. A handle sits ON a
+            node's border by definition; drawn underneath, every one of the
+            nine was exactly half-hidden by the card it belonged to, which at
+            6px means invisible. The edges still have to pass BEHIND the
+            cards, so one layer cannot do both jobs. */}
+        <svg className={styles.cvHandles} width="1200" height="460" viewBox="0 0 1200 460" aria-hidden focusable="false">
+          {DOTS.map(([x, y]) => (
+            <circle key={`${x}-${y}`} className={styles.cvDot} cx={x} cy={y} r={3} />
+          ))}
+        </svg>
 
-            {/* A connected Get-data step wears its app's mark bare; every other
-                step wears its accent tile with the builder's own glyph. */}
-            {node.source ? (
-              <g transform={`translate(${node.x + 16} ${iconY})`}>
-                <BrandLogo source={node.source} size={34} />
-              </g>
-            ) : accent && Glyph ? (
-              <g transform={`translate(${node.x + 16} ${iconY})`}>
-                <rect width={34} height={34} rx={10} fill={accent} />
-                <g transform="translate(7 7)">
-                  {/* No `strokeWidth`: globals.css declares the kit's 2.25 once, on
-                      `svg.lucide`, and a zero-specificity rule still beats lucide's own
-                      presentation attribute. Re-spelling it here is a build failure. */}
-                  <Glyph width={20} height={20} color={glyphInk(accent)} />
-                </g>
-              </g>
-            ) : null}
-
-            <text x={node.x + 62} y={node.y + (node.result ? 38 : 38)} fontSize="12" fontWeight="500" className={styles.shotLabel}>
-              {node.label}
-            </text>
-            <text x={node.x + 62} y={node.y + (node.result ? 58 : 60)} fontSize="14" fontWeight="600" className={styles.shotValue}>
-              {node.value}
-            </text>
-            {node.result ? (
-              <text x={node.x + 62} y={node.y + 88} fontSize="22" fontWeight="700" className={styles.shotResult}>
-                {node.result}
-              </text>
-            ) : null}
-          </g>
-        );
-      })}
-    </svg>
+        <div
+          className={`${styles.cvNode} ${styles.cvOut}`}
+          style={{ left: OUT.x, top: OUT.y, "--d": `${NODE_DELAY.out}ms` } as React.CSSProperties}
+        >
+          <span className={`${styles.caption} ${styles.cvOutLabel}`}>Show-up rate</span>
+          <span className={styles.cvOutFigure}>
+            {live ? <CountUp to={66.8} from={0} delay={60} duration={620} format={(v) => `${v.toFixed(1)}%`} /> : "66.8%"}
+          </span>
+        </div>
+      </div>
+    </div>
   );
 }

@@ -1,4 +1,6 @@
 import Link from "next/link";
+import localFont from "next/font/local";
+import { Instrument_Serif } from "next/font/google";
 import { withAuth } from "@workos-inc/authkit-nextjs";
 import { CONNECTOR_CATALOG } from "@/connectors/catalog";
 import styles from "./snap.module.css";
@@ -8,7 +10,8 @@ import { ReceiptTabs, type Metric } from "@/components/marketing/snap/receipt-ta
 import { SourceIndex } from "@/components/marketing/snap/source-index";
 import { AiPanel } from "@/components/marketing/snap/ai-panel";
 import { INDEX_SOURCES } from "@/components/marketing/snap/source-taxonomy";
-import { JoinCard } from "@/components/marketing/snap/join-card";
+import { Deck } from "@/components/marketing/snap/deck";
+import { StatusPill } from "@/components/marketing/snap/status-pill";
 import { CanvasShot } from "@/components/marketing/snap/canvas-shot";
 import { Mark, Tick, LogoMark } from "@/components/marketing/snap/marks";
 
@@ -62,7 +65,48 @@ import { Mark, Tick, LogoMark } from "@/components/marketing/snap/marks";
  */
 
 /**
- * THE APP'S OWN FACE, INHERITED RATHER THAN LOADED.
+ * TWO FACES, AND THE SECOND ONE IS THE WHOLE IDENTITY.
+ *
+ * A heavy tightly-tracked grotesk carries the line and exactly one word breaks
+ * into a high-contrast italic serif. That contrast is what makes a composition
+ * read as designed rather than generated, and it costs one font file.
+ *
+ * ═══ SWITZER IS SELF-HOSTED, NOT FETCHED ═══
+ *
+ * It is a Fontshare face, so `next/font/google` cannot reach it. The variable
+ * roman is committed at `src/app/fonts/` — 43KB — and `next/font/local` fingers
+ * it into the build, so there is no runtime request to a third party and no
+ * chance of the headline rendering in a fallback because a CDN was slow.
+ *
+ * ═══ BOTH ARE METRIC-MATCHED, WHICH IS NOT OPTIONAL HERE ═══
+ *
+ * The hero headline CONTAINS the serif word. If either face arrives late and
+ * the fallback has different metrics, the headline reflows in front of the
+ * visitor — the most noticeable load defect this page could have. Arial backs
+ * the grotesk and Times backs the serif, both with the overrides `next/font`
+ * generates, so the swap is a change of shape rather than of layout.
+ */
+const switzer = localFont({
+  src: "./fonts/switzer-variable.woff2",
+  weight: "400 800",
+  style: "normal",
+  display: "swap",
+  variable: "--v4-sans",
+  adjustFontFallback: "Arial",
+  preload: true,
+});
+
+const instrumentSerif = Instrument_Serif({
+  subsets: ["latin"],
+  weight: "400",
+  style: "italic",
+  display: "swap",
+  variable: "--v4-serif",
+  preload: true,
+});
+
+/**
+ * THE APP'S OWN FACE — no longer used by this page, kept for reference.
  *
  * This page shipped with Figtree of its own, on the argument that a marketing
  * page should not wear the product's chrome. The owner's call went the other
@@ -127,6 +171,11 @@ const METRICS: Metric[] = [
       { source: "gsheets", name: "Google Sheets" },
     ],
     records: "123 records",
+    said: [
+      { source: "calendly", name: "Calendly", value: "41" },
+      { source: "close", name: "Close CRM", value: "38" },
+      { source: "gsheets", name: "Google Sheets", value: "44" },
+    ],
     lines: [
       { key: "Sources read", value: "Calendly, Close CRM, Google Sheets" },
       { key: "Last computed", value: "2 minutes ago" },
@@ -147,6 +196,11 @@ const METRICS: Metric[] = [
       { source: "calendly", name: "Calendly" },
     ],
     records: "418 records",
+    said: [
+      { source: "instantly", name: "Instantly · spend", value: "$3,542" },
+      { source: "calendly", name: "Calendly · held", value: "41" },
+      { name: "Excluded, no spend", value: "6" },
+    ],
     lines: [
       { key: "Sources read", value: "Stripe, Instantly, Calendly" },
       { key: "Last computed", value: "2 minutes ago" },
@@ -166,6 +220,11 @@ const METRICS: Metric[] = [
       { source: "close", name: "Close CRM" },
     ],
     records: "312 records",
+    said: [
+      { source: "instantly", name: "Instantly · replies", value: "312" },
+      { source: "close", name: "Close CRM · first calls", value: "298" },
+      { name: "Never called", value: "14" },
+    ],
     lines: [
       { key: "Sources read", value: "Instantly, Close CRM" },
       { key: "Last computed", value: "9 minutes ago" },
@@ -244,14 +303,8 @@ export default async function Home() {
   const cta = user ? "/dashboard" : "/sign-up";
   const ctaLabel = "Connect your first tool";
 
-  const sources = CONNECTOR_CATALOG.map((entry) => ({
-    source: entry.source,
-    name: entry.name,
-    blurb: entry.description,
-  }));
-
   return (
-    <div className={styles.page}>
+    <div className={`${styles.page} ${switzer.variable} ${instrumentSerif.variable}`}>
       <div className={styles.backdrop} aria-hidden />
       <div className={styles.bloom} aria-hidden />
       <div className={styles.grain} aria-hidden />
@@ -259,68 +312,94 @@ export default async function Home() {
       <SnapNav cta={cta} ctaLabel={ctaLabel} revealAfter="#rail" />
 
       <main id="main" className={styles.clip}>
-        {/* ══ S01 · Hero — centred, floating, full bloom ═══════════════════
-            Height is AUTO. A viewport-fraction height is what produced 700px
-            of dead canvas in an earlier build: the section is as tall as the
-            headline, the stage and the air between them, and no taller. */}
+        {/* ══ THE FOLD ═══════════════════════════════════════════════════
+            The hero, the deck and the source rail are wrapped together
+            because on a narrow screen they have to REORDER: §5.7 puts the
+            rail directly under the reassurance line and the deck below the
+            rail, so that the rail — the proof that 33 tools are being read —
+            is still in the first screen at 375 × 812.
+
+            That is only expressible if the deck and the rail are siblings, so
+            the deck sits OUTSIDE the hero section and is positioned back over
+            it at XL. It stays second in the document, between the copy it
+            belongs beside and the rail it precedes, so the reading order is
+            right at every width and no element is rendered twice. */}
+        <div className={styles.fold}>
+        {/* ══ S01 · Hero — the editorial stagger ═══════════════════════════
+            Height is the viewport minus the rail, so the two together are
+            exactly one screen. See §5.1 for why the ban on viewport heights
+            does not apply: the frame is sized to its content plus the rail. */}
         <section className={`${styles.container} ${styles.s01}`}>
-          <div className={`${styles.narrowBlock} ${styles.centre}`}>
-            {/* TWO fixed lines at 88px, down from three at 104. The object
-                below has to reach the fold: three lines of 104 pushed the
-                stage 700px down the page, so on a 900px viewport the first
-                screen was entirely text. */}
-            <h1 className={styles.d0}>
-              <span className={styles.heroLine}>
-                <span>Your best metrics</span>
-              </span>
-              <span className={styles.heroLine}>
-                <span>live between your tools.</span>
-              </span>
-            </h1>
+          {/* EDITORIAL STAGGER, NOT A CENTRED STACK. A centred headline uses
+              the full width for text, so the visual has to go underneath it
+              and there is no vertical room left for the rail. Off-centre, the
+              headline's short second and third lines open a pocket on the
+              right and the deck rises into it — which is what lets the
+              headline, the call to action and the source rail share one
+              screen. */}
+          <div className={styles.foldGrid}>
+            <div className={styles.foldCopy}>
+              <StatusPill count={CONNECTOR_CATALOG.length} />
 
-            {/* ONE sentence, and no word inside it is weighted differently.
-                The bold on the three tool names existed to trigger
-                recognition; the chips below now do that with actual logos and
-                colour, so removing it also removes the page's last
-                inline-emphasis exception. */}
-            <p className={`${styles.bodyL} ${styles.heroSub}`}>
-              Namzilabs reads all {CONNECTOR_CATALOG.length}, matches the records that are the same person, and builds
-              the number none of them can.
-            </p>
+              <h1 className={styles.d0}>
+                <span className={styles.heroLine}>
+                  <span>Your best metrics</span>
+                </span>
+                <span className={styles.heroLine}>
+                  <span>
+                    live <span className={`${styles.accent} ${styles.accentHero}`}>between</span>
+                  </span>
+                </span>
+                <span className={styles.heroLine}>
+                  <span>your tools.</span>
+                </span>
+              </h1>
 
-            <div className={styles.heroActions}>
-              {/* A TWO-PART PILL, and hero-only. It reads as a product control
-                  rather than a template button, and it carries a second piece
-                  of information without a second line of text. Repeating the
-                  construction in the nav and in S10 would turn a signature
-                  into a pattern, so those keep the plain 56px button. */}
-              <Link className={`${styles.btn} ${styles.btnHero}`} href={cta}>
-                <span className={styles.btnHeroLabel}>{ctaLabel}</span>
-                <span className={styles.btnHeroDivider} aria-hidden />
-                <span className={styles.btnHeroNote}>No card required</span>
-              </Link>
-              <Link className={styles.ghostPill} href="#receipts">
-                See a live metric
-              </Link>
+              {/* "reads all 33" assumed a first-time visitor knows what the 33
+                  are. Naming the categories tells them in one breath. */}
+              <p className={`${styles.bodyL} ${styles.heroSub}`}>
+                Namzilabs reads your calendar, CRM, outreach and payments together, matches the records that are the
+                same person, and builds the number none of them can.
+              </p>
+
+              <div className={styles.heroActions}>
+                <Link className={`${styles.btn} ${styles.btnHero}`} href={cta}>
+                  <span className={styles.btnHeroLabel}>{ctaLabel}</span>
+                  <span className={styles.btnHeroDivider} aria-hidden />
+                  <span className={styles.btnHeroNote}>No card required</span>
+                </Link>
+                <Link className={styles.ghostPill} href="#receipts">
+                  See a live metric
+                </Link>
+              </div>
+
+              <p className={`${styles.caption} ${styles.heroReassurance}`}>Read-only. Disconnect anytime.</p>
             </div>
 
-            <p className={`${styles.caption} ${styles.heroReassurance}`}>Read-only. Disconnect anytime.</p>
           </div>
-
-          <JoinCard />
         </section>
+
+        {/* Absolutely positioned over the hero at XL — see `.foldDeck`. */}
+        <div className={styles.foldDeck}>
+          <div className={styles.foldDeckInner}>
+            <Deck />
+          </div>
+        </div>
+
+        {/* The rail is the bottom edge of the first screen — it is flush
+            against the hero and starts scrolling at t=0, before anything else
+            on the page animates. */}
+        <SourceRail sources={INDEX_SOURCES} count={CONNECTOR_CATALOG.length} id="rail" />
+        </div>
 
         {/* Everything from the rail down sits on the masked bloom. */}
         <div className={styles.belowFold}>
-          {/* ══ S02 · Source rail — full bleed, thin, flush ════════════════ */}
-          <SourceRail sources={sources} count={CONNECTOR_CATALOG.length} id="rail" />
-
           {/* ══ S03 · The disagreement — sticky column, one tall stack ═════
               The densest section on the page, directly after the airiest. */}
           <section className={`${styles.container} ${styles.s03}`}>
             <div className={styles.splitGrid}>
               <div className={styles.stickyCol}>
-                <h2 className={styles.d2}>Ten tools. Ten dashboards. One number, built from all of them.</h2>
+                <h2 className={styles.d2}>Ten tools. Ten dashboards. One number, built from <span className={styles.accent}>all</span> of them.</h2>
                 <p className={`${styles.bodyM} ${styles.stickyLead}`}>
                   Each one tells the truth about its own slice and cannot see the other nine. Namzilabs reads them
                   together.
@@ -348,7 +427,7 @@ export default async function Home() {
 
           {/* ══ S04 · How it works — one horizontal track ══════════════════ */}
           <section className={`${styles.container} ${styles.s04}`} id="how-it-works">
-            <h2 className={styles.d2}>Connected on Monday. Defensible by Friday.</h2>
+            <h2 className={styles.d2}>Connected on Monday. Defensible by <span className={styles.accent}>Friday</span>.</h2>
 
             <div className={styles.track}>
               {/* The line fades at both ends, so it reads as a continuing
@@ -382,7 +461,7 @@ export default async function Home() {
                 section a shape of its own and fills the top-right, which used
                 to be empty in a section about density. */}
             <div className={styles.receiptHeadRow}>
-              <h2 className={`${styles.d2} ${styles.receiptHeading}`}>Every number shows its working.</h2>
+              <h2 className={`${styles.d2} ${styles.receiptHeading}`}>Every number shows its <span className={styles.accent}>working</span>.</h2>
               <p className={`${styles.bodyM} ${styles.receiptLeadCell} ${styles.dim}`}>
                 The arithmetic sits beside the number, always: which sources it read, when it read them, what it
                 matched, and what it deliberately left out.
@@ -413,7 +492,7 @@ export default async function Home() {
 
               <div className={styles.s07Grid}>
                 <div className={styles.s07Copy}>
-                  <h2 className={styles.d2}>Your AI can only see what you paste. Give it the whole business.</h2>
+                  <h2 className={styles.d2}>Your AI can only see what you paste. Give it the <span className={styles.accent}>whole</span> business.</h2>
                   <p className={`${styles.bodyM} ${styles.s07Lead}`}>
                     Connect Claude or ChatGPT to your workspace and it reads every metric you have published, live. Not
                     a screenshot, not a CSV, not last month. Ask where the month went and it works across all your
@@ -505,7 +584,7 @@ export default async function Home() {
                 </span>
               </div>
 
-              <h2 className={`${styles.d1} ${styles.s10Heading}`}>Stop reconciling by hand.</h2>
+              <h2 className={`${styles.d1} ${styles.s10Heading}`}>Stop reconciling by <span className={styles.accent}>hand</span>.</h2>
               <p className={`${styles.bodyL} ${styles.s10Sub}`}>
                 Connect one tool and build your first metric this afternoon.
               </p>

@@ -113,8 +113,10 @@ for (const vp of [
   if (missingAssets.length > unexpected.length) {
     console.log("        (public/dashboard.png is absent — the hero is showing its drawn fallback, by design)");
   }
-  // v3.1: two lines at 88px, so the hero object reaches the fold.
-  if (vp.width === 1440) check(m.h1Lines === 2, "the headline breaks on two fixed lines", `${m.h1Lines}`);
+  // v4 §5.2: THREE fixed lines — `Your best metrics / live between / your
+  // tools.` — in a left column beside the deck, rather than v3's two centred
+  // ones above a full-width object.
+  if (vp.width === 1440) check(m.h1Lines === 3, "the headline breaks on three fixed lines", `${m.h1Lines}`);
 
   if (vp.width === 375) {
     const small = await page.evaluate(() =>
@@ -178,12 +180,102 @@ const rhythm = await page.evaluate(() => {
 
 check(rhythm.dark === 2, "exactly two dark sections", `${rhythm.dark}`);
 check(rhythm.fullBleed === 2, "exactly two full-bleed sections", `${rhythm.fullBleed}`);
-// v3.1: S07 went dark and its heading went left, so the fold is the single
-// centred moment on the page.
-check(rhythm.centred === 1, "exactly one centred heading among the light sections", `${rhythm.centred}`);
+// v4 §5: the fold is a two-column layout with the headline in the left one,
+// which spends the last centred heading on the page. Zero is therefore the
+// assertion — a heading that drifts back to centre is a regression, not a
+// tidy-up, because it would put the deck below the copy instead of beside it.
+check(rhythm.centred === 0, "no centred heading among the light sections", `${rhythm.centred}`);
 // Uniform padding is most of what makes a page feel mechanical; the spec
 // varies it per section on purpose.
 check(rhythm.distinctPaddings >= 4, "section padding varies rather than repeating", `${rhythm.distinctPaddings} distinct values`);
+
+const anchors = await page.evaluate(() => {
+  // EVERY ID THAT SOMETHING ACTUALLY LINKS TO, not every id on the page. The
+  // rail carries one so the nav can watch for it scrolling past; nothing
+  // navigates there, so it needs no margin and is not a finding.
+  const wanted = new Set(
+    [...document.querySelectorAll('a[href^="#"]')]
+      .map((a) => a.getAttribute("href")?.slice(1))
+      .filter((id) => id && id !== "main"),
+  );
+  const missing = [...wanted].filter((id) => !document.getElementById(id));
+  const targets = [...wanted].map((id) => document.getElementById(id)).filter(Boolean);
+  const short = targets.filter((n) => parseFloat(getComputedStyle(n).scrollMarginTop) < 100);
+  return {
+    total: targets.length,
+    missing,
+    short: short.map((n) => `${n.id} ${getComputedStyle(n).scrollMarginTop}`),
+  };
+});
+
+/**
+ * §0: A NAV LINK USED TO LAND ITS HEADING UNDER THE FLOATING PILL, and the
+ * fix for it shipped INSIDE a `prefers-reduced-motion` block — so it worked
+ * for readers who ask for less motion and for nobody else. Nothing could see
+ * that: the declaration is present in the file, the selector list is right,
+ * and the only tell is one level of indentation. Measured, it is obvious.
+ */
+// THE COUNT IS PART OF THE ASSERTION. "No section fell short" is also what a
+// page with no anchors at all reports, and this check reads the anchors off
+// the links rather than off a hard-coded list — so a nav that lost its hrefs
+// would otherwise make it pass by having nothing left to test. A link that
+// points at no element is a broken link, and belongs here too.
+check(
+  anchors.total >= 3 && anchors.missing.length === 0 && anchors.short.length === 0,
+  "every in-page link lands below the floating nav",
+  `${anchors.total} targets${anchors.missing.length ? ` · missing: ${anchors.missing.join(", ")}` : ""}${
+    anchors.short.length ? ` · short: ${anchors.short.join(" · ")}` : ""
+  }`,
+);
+
+/**
+ * INK MEANS "AN ANSWER" and the page makes that claim three times: the hero's
+ * front card, S04's output, S05's left panel. All three paint a GRADIENT, so
+ * nothing that reads `backgroundColor` can tell whether they are dark — which
+ * is exactly how S05's panel spent a build as light grey while the rule it
+ * was supposed to follow sat in the file above it.
+ */
+const ink = await page.evaluate(() => {
+  const lum = (el) => {
+    const img = getComputedStyle(el).backgroundImage;
+    const stop = (img.match(/rgba?\([^)]*\)/) ?? [])[0];
+    if (!stop) return null;
+    const [r, g, b] = stop.match(/[\d.]+/g).map(Number);
+    const f = (c) => { const v = c / 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+    return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+  };
+  const at = (sel) => { const el = document.querySelector(sel); return el ? lum(el) : null; };
+  return {
+    deck: at('[class*="deckFront"]'),
+    output: at('[class*="cvOut"]'),
+    panel: at('[class*="receiptInk"]'),
+  };
+});
+
+const isInk = (v) => typeof v === "number" && v < 0.03;
+check(
+  isInk(ink.deck) && isInk(ink.output) && isInk(ink.panel),
+  "all three ink surfaces are actually ink",
+  `deck ${ink.deck} · S04 output ${ink.output} · S05 panel ${ink.panel}`,
+);
+
+// §7.2: five labelled nodes and one output, reading left to right. A node
+// that loses its label is the failure this drawing was rebuilt to fix.
+const canvas = await page.evaluate(() => {
+  const nodes = [...document.querySelectorAll('[class*="cvNodeStd"]')];
+  return {
+    nodes: nodes.length,
+    labelled: nodes.every((n) => (n.textContent ?? "").trim().length > 0),
+    output: Boolean(document.querySelector('[class*="cvOut"]')),
+    // `path`, because `[class*="cvEdge"]` also matches the `cvEdges` layer
+    // they are drawn in and counts the container as a sixth edge.
+    edges: document.querySelectorAll('path[class*="cvEdge"]').length,
+  };
+});
+
+check(canvas.nodes === 5 && canvas.output, "S04 draws five nodes into one output", `${canvas.nodes} nodes`);
+check(canvas.labelled, "and every node says what it does");
+check(canvas.edges === 5, "and five edges join them", `${canvas.edges}`);
 
 /* ── 3. Type ─────────────────────────────────────────────────────────────── */
 
@@ -195,8 +287,25 @@ const type = await page.evaluate(() => {
   const monos = [...document.querySelectorAll("main *")].filter((n) =>
     /mono|courier/i.test(getComputedStyle(n).fontFamily),
   );
+  /**
+   * `document.fonts.check()` WAS A VACUOUS TEST AND PASSED FOR A WHOLE
+   * RELEASE. It answers "would using this font block on a pending download",
+   * so it returns TRUE for a family that is not in the document at all —
+   * which is why `check("800 104px Figtree")` still said yes long after
+   * Figtree was deleted from the page. What follows asks the two questions
+   * that can fail: is the face really in `document.fonts`, and is it the face
+   * the element actually computes to.
+   */
+  const loaded = [...document.fonts].filter((f) => f.status === "loaded").map((f) => f.family);
+  const accent = document.querySelector('h1 [class*="accent"]');
+  const accentStyle = accent ? getComputedStyle(accent) : null;
   return {
-    figtree: document.fonts.check("800 104px Figtree"),
+    loadedFaces: loaded,
+    sansLoaded: loaded.some((f) => /switzer/i.test(f)),
+    serifLoaded: loaded.some((f) => /instrument.?serif/i.test(f)),
+    h1IsSans: /switzer/i.test(h1.fontFamily),
+    accentIsSerif: Boolean(accentStyle && /instrument.?serif/i.test(accentStyle.fontFamily)),
+    accentIsItalic: accentStyle?.fontStyle === "italic",
     family: h1.fontFamily,
     size: h1.fontSize,
     weight: h1.fontWeight,
@@ -205,12 +314,40 @@ const type = await page.evaluate(() => {
   };
 });
 
-check(type.figtree, "Figtree loaded", type.family);
+check(type.sansLoaded && type.h1IsSans, "Switzer is loaded and is what the headline computes to", type.family);
+check(type.serifLoaded, "Instrument Serif is loaded", type.loadedFaces.join(", "));
+// §2.2: the accent word is the one italic on the page. Both halves matter —
+// the serif without the italic is a different typeface decision.
+check(type.accentIsSerif && type.accentIsItalic, "the hero's accent word is Instrument Serif Italic");
 check(type.size === "88px" && type.weight === "800", "the hero headline is D0", `${type.size}/${type.weight}`);
 check(type.tabular.includes("tabular-nums"), "figures are tabular", type.tabular);
 // §6.2: one family, and no monospace anywhere. A wide mono on a figure is
 // what made an earlier build read as a form rather than as a product.
 check(type.monoCount === 0, "no monospace anywhere on the page", `${type.monoCount} elements`);
+
+/**
+ * §9 NAMES SEVEN ACCENT WORDS AND FIXES THEM, so the count is an assertion
+ * rather than a sample. Seven headings carry exactly one italic word each;
+ * S09 has no heading, and nothing in the nav, the footer, the buttons or the
+ * cards gets one. An eighth is drift and a sixth is a heading that lost its
+ * accent in an edit — both are silent failures by eye.
+ */
+const accents = await page.evaluate(() => {
+  const all = [...document.querySelectorAll('h1 [class*="accent"], h2 [class*="accent"]')];
+  return {
+    count: all.length,
+    words: all.map((n) => n.textContent?.trim()),
+    allSerifItalic: all.every((n) => {
+      const cs = getComputedStyle(n);
+      return /instrument.?serif/i.test(cs.fontFamily) && cs.fontStyle === "italic";
+    }),
+    strays: [...document.querySelectorAll('[class*="accent"]')].filter((n) => !n.closest("h1, h2")).length,
+  };
+});
+
+check(accents.count === 7, "seven headings carry an accent word", `${accents.count}: ${accents.words.join(", ")}`);
+check(accents.allSerifItalic, "and every one of them is serif italic");
+check(accents.strays === 0, "and nothing outside a heading is accented", `${accents.strays} stray`);
 
 /* ── 4. Contrast ─────────────────────────────────────────────────────────── */
 
@@ -267,22 +404,49 @@ const runs = await page.evaluate(() => {
      * one is reached.
      */
     const stack = [];
-    let ground = [255, 255, 255];
+    let grounds = [[255, 255, 255]];
     for (let n = node; n; n = n.parentElement) {
-      if (n.classList?.contains("sky-panel")) { ground = SKY_PANEL; break; }
-      if (n.classList?.contains("sky-card")) { ground = SKY_CARD; break; }
-      const bg = getComputedStyle(n).backgroundColor;
+      if (n.classList?.contains("sky-panel")) { grounds = [SKY_PANEL]; break; }
+      if (n.classList?.contains("sky-card")) { grounds = [SKY_CARD]; break; }
+      const cs = getComputedStyle(n);
+      /**
+       * A GRADIENT IS AN OPAQUE BACKGROUND AND THIS WALKER COULD NOT SEE ONE.
+       *
+       * `background: linear-gradient(...)` leaves `backgroundColor`
+       * transparent, so every card painted with the v4 recipes — the hero's
+       * front card, S04's output, S05's left panel, all three of them ink —
+       * was skipped, and the walk carried on up to the page's near-white
+       * canvas. White text on ink was therefore scored as white on white and
+       * reported at 1.02:1. Four runs "failed" that are in fact 6–17:1, and
+       * the same blindness would have PASSED genuinely illegible ink on ink.
+       *
+       * Both classes of error come from guessing. So no stop is chosen: every
+       * colour stop becomes a candidate ground and the caller scores against
+       * all of them, keeping the worst. That is exact for a flat two-stop
+       * fill and conservative for anything else, which is the right direction
+       * for a contrast floor.
+       */
+      const stops = cs.backgroundImage && cs.backgroundImage !== "none"
+        ? cs.backgroundImage.match(/(?:rgba?|color)\([^)]*\)/g) ?? []
+        : [];
+      const opaqueStops = stops.map(parse).filter((c) => c.a >= 1);
+      if (opaqueStops.length > 0) { grounds = opaqueStops.map((c) => c.rgb); break; }
+      const bg = cs.backgroundColor;
       if (!bg || bg === "rgba(0, 0, 0, 0)" || bg === "transparent") continue;
       const { rgb, a } = parse(bg);
       if (a === 0) continue;
-      if (a >= 1) { ground = rgb; break; }
+      if (a >= 1) { grounds = [rgb]; break; }
       stack.push({ rgb, a });
     }
     // Innermost last, so compositing runs outermost-first onto the ground.
-    for (const layer of stack.reverse()) {
-      ground = [0, 1, 2].map((i) => layer.rgb[i] * layer.a + ground[i] * (1 - layer.a));
-    }
-    return ground;
+    const layers = stack.reverse();
+    return grounds.map((base) => {
+      let ground = base;
+      for (const layer of layers) {
+        ground = [0, 1, 2].map((i) => layer.rgb[i] * layer.a + ground[i] * (1 - layer.a));
+      }
+      return ground;
+    });
   };
   /** Composite a possibly-translucent ink over the ground behind it. */
   const over = (colour, ground) => {
@@ -307,15 +471,16 @@ const runs = await page.evaluate(() => {
     const box = node.getBoundingClientRect();
     if (size < 10 || box.width < 4 || box.height < 4) continue;
     if (node.tagName === "INPUT") continue;
-    const ground = painted(node);
-    out.push({
-      text: text.slice(0, 32),
-      colour: over(cs.color, ground),
-      raw: cs.color,
-      bg: ground,
-      size,
-      weight: Number(cs.fontWeight),
-    });
+    for (const ground of painted(node)) {
+      out.push({
+        text: text.slice(0, 32),
+        colour: over(cs.color, ground),
+        raw: cs.color,
+        bg: ground,
+        size,
+        weight: Number(cs.fontWeight),
+      });
+    }
   }
   return out;
 });
@@ -357,6 +522,47 @@ const unpaired = await page.evaluate(() => {
 check(unpaired.length === 0, "every source mark is paired with its name in text", unpaired.join(", "));
 
 /* ── 5. The page stays light when the app is dark ────────────────────────── */
+
+/* ── 4b. Fonts and stability (§11.9) ─────────────────────────────────────── */
+
+console.log("\nFonts and stability");
+
+/**
+ * NOT A SPEED TEST. This runs against whatever server it is pointed at, and in
+ * development that is an unoptimised build — an LCP threshold measured there
+ * would be noise with a number attached. What IS meaningful at any build is
+ * whether the page moves under the reader while it loads, and whether the two
+ * faces are fetched with the document rather than after it.
+ *
+ * Two faces means two chances to reflow the headline, and the headline is the
+ * largest element on the page: 88px Switzer with an italic serif word inside
+ * it. A late swap on either would shove three lines sideways.
+ */
+const stability = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+await stability.addInitScript(() => {
+  window.__cls = 0;
+  new PerformanceObserver((list) => {
+    for (const entry of list.getEntries()) if (!entry.hadRecentInput) window.__cls += entry.value;
+  }).observe({ type: "layout-shift", buffered: true });
+});
+await stability.goto(BASE, { waitUntil: "networkidle" });
+await stability.waitForTimeout(1200);
+
+const fonts = await stability.evaluate(() => ({
+  preloaded: [...document.querySelectorAll('link[rel="preload"][as="font"]')].length,
+  cls: Number(window.__cls ?? 0),
+  ready: document.fonts.status,
+}));
+
+// One per face. next/font only emits these for faces the ROUTE uses, so a
+// face that stopped being referenced silently loses its preload.
+check(fonts.preloaded >= 2, "both faces are preloaded with the document", `${fonts.preloaded} preloads`);
+check(fonts.ready === "loaded", "and the font set has settled", fonts.ready);
+// 0.1 is the "good" threshold; a headline reflow on this page scores far above
+// it, so anything passing here is not a font swap.
+check(fonts.cls < 0.1, "the page does not shift while it loads", `CLS ${fonts.cls.toFixed(4)}`);
+
+await stability.close();
 
 console.log("\nTheme isolation");
 
@@ -450,31 +656,42 @@ await settle(still, BASE);
 await still.waitForTimeout(400); // deliberately BEFORE the sequence would end
 
 const final = await still.evaluate(() => {
-  // The hero's centrepiece is the board SCREENSHOT when `public/dashboard.png`
-  // exists and the drawn summary card when it does not, so the assertion has
-  // to follow whichever composition is live rather than one of them.
-  // The hero's centrepiece is the board screenshot, wired to the source pills
-  // around it. Reduced motion must show it already in place, not arriving.
-  const shot = document.querySelector('[class*="boardImg"]');
-  const resolved = shot?.closest('[class*="board"]') ?? null;
-  const centre = resolved;
-  const chip = document.querySelector('[class*="chipRest"]');
+  /**
+   * THE CENTREPIECE IS THE DECK NOW, not the board screenshot v3 hung in the
+   * middle of the hero. The old assertion kept passing by accident once the
+   * screenshot was gone — `querySelector` returned null, `Boolean(null)` was
+   * false and the check failed loudly, which at least was honest; the drift
+   * check beside it was the quiet one, looking for a `chipRest` element that
+   * no longer exists and reporting "none" for it.
+   *
+   * Reduced motion has a specific meaning here and it is NOT "hold still". A
+   * deck whose four cards are all at transform: none is a stack of identical
+   * rectangles — a different picture, not the same picture unanimated. So the
+   * three tinted cards are asserted to hold the transform their entrance ENDS
+   * on, and the ink card in front to be fully opaque.
+   */
+  const front = document.querySelector('[class*="deckFront"]');
+  const fan = [...document.querySelectorAll('[class*="deckCard"]')];
+  const settled = (n) => {
+    const cs = getComputedStyle(n);
+    return Number(cs.opacity) === 1 && cs.animationName === "none";
+  };
   return {
-    kind: "board screenshot",
-    // The drawn card counts to 41; the screenshot simply has to be decoded and
-    // on screen, with no animation still holding it back.
-    figure: Boolean(shot) && shot.complete && shot.naturalWidth > 0,
-    resolvedOpacity: centre ? getComputedStyle(centre).opacity : "0",
-    // The idle drift is the one thing on this page that would otherwise never
-    // stop moving, which §10 names as a real accessibility problem.
-    chipAnimation: chip ? getComputedStyle(chip).animationName : "none",
+    // Three tinted source cards behind one ink answer — the whole argument of
+    // the fold, stated in objects.
+    dealt: fan.length === 3 && Boolean(front),
+    allSettled: Boolean(front) && settled(front) && fan.every(settled),
+    // …and fanned, not stacked. `none` for any of them means the reduced-motion
+    // block reset the transform instead of pinning it.
+    fanned: fan.every((n) => getComputedStyle(n).transform !== "none"),
+    frontOpacity: front ? getComputedStyle(front).opacity : "0",
     railAnimation: getComputedStyle(document.querySelector('[class*="railTrack"]')).animationName,
   };
 });
 
-check(final.figure, `the hero centrepiece (${final.kind}) is fully there at once`);
-check(Number(final.resolvedOpacity) === 1, "and is already in place, not animating in", final.resolvedOpacity);
-check(final.chipAnimation === "none", "the idle drift loop is stopped", final.chipAnimation);
+check(final.dealt, "the hero centrepiece is three source cards behind one answer");
+check(final.allSettled, "and is fully there at once, with nothing still animating", final.frontOpacity);
+check(final.fanned, "and still fanned rather than collapsed into a stack");
 check(final.railAnimation === "none", "the source rail does not scroll", final.railAnimation);
 
 await still.close();

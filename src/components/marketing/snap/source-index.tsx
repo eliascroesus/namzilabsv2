@@ -50,7 +50,9 @@ export function SourceIndex({ sources, cta }: { sources: IndexSource[]; cta: str
   return (
     <>
       <div className={styles.indexHead}>
-        <h2 className={`${styles.d2} ${styles.indexHeading}`}>{sources.length} sources, read directly.</h2>
+        <h2 className={`${styles.d2} ${styles.indexHeading}`}>
+          {sources.length} sources, read <span className={styles.accent}>directly</span>.
+        </h2>
         <input
           type="search"
           className={styles.search}

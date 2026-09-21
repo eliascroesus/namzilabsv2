@@ -17,8 +17,17 @@ vi.mock("next/link", () => ({
 // landing page's two faces are stubbed the same way next/link is above. The
 // page only ever reads `.variable` off them, which is the class name that
 // carries the CSS custom property.
+//
+// BOTH ENTRY POINTS, because the two faces no longer come from one: Switzer
+// is self-hosted through `next/font/local` (a DEFAULT export, so the stub has
+// to be one too) and Instrument Serif still comes from Google. Stubbing only
+// the Google one left `localFont` undefined and the failure read "default is
+// not a function" at the top of page.tsx — which says nothing about fonts.
 vi.mock("next/font/google", () => ({
-  Figtree: () => ({ variable: "snap-sans", className: "snap-sans" }),
+  Instrument_Serif: () => ({ variable: "snap-serif", className: "snap-serif" }),
+}));
+vi.mock("next/font/local", () => ({
+  default: () => ({ variable: "snap-sans", className: "snap-sans" }),
 }));
 
 import Home from "@/app/page";

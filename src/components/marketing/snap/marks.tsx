@@ -65,11 +65,33 @@ export function Tick({ size = 16, onDark = false }: { size?: number; onDark?: bo
  * The logo mark: two dots that merge into one when the nav is hovered. Two
  * become one — the product, stated in a logo.
  */
-export function LogoMark() {
+export function LogoMark({ size = 28, onDark = false }: { size?: number; onDark?: boolean }) {
+  /**
+   * AN INLINE SVG WITH EXPLICIT WIDTH AND HEIGHT, never a glyph and never a
+   * background image.
+   *
+   * It was three nested spans with absolutely-positioned dots, which depends
+   * on the outer span keeping its 28px box. In a flex row with a wordmark
+   * beside it that box could collapse, and what shipped was two stray dots
+   * sitting on top of the "N" — the wordmark read as "꞉lamzilabs". An SVG with
+   * real attributes cannot collapse, and `flex: none` says so twice.
+   *
+   * `onDark` is the deck's front card: the same mark, tile and dots inverted,
+   * rather than the blank grey square that stood in for it while the fold was
+   * being built. The hero's one piece of branding should be the brand.
+   */
   return (
-    <span aria-hidden className={styles.navMark}>
-      <span className={`${styles.navDot} ${styles.navDotA}`} />
-      <span className={`${styles.navDot} ${styles.navDotB}`} />
-    </span>
+    <svg
+      aria-hidden
+      className={`${styles.navMark} ${onDark ? styles.navMarkOnDark : ""}`}
+      width={size}
+      height={size}
+      viewBox="0 0 28 28"
+      fill="none"
+    >
+      <rect width="28" height="28" rx="10" fill="currentColor" />
+      <circle className={styles.navDotA} cx="10.5" cy="14" r="3" />
+      <circle className={styles.navDotB} cx="17.5" cy="14" r="3" />
+    </svg>
   );
 }

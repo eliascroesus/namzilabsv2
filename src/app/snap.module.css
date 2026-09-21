@@ -52,8 +52,36 @@
   /* ── Elevation (§6.4). Nothing on this page sits flat. ────────────────── */
   --sh-sm: 0 1px 2px rgba(20, 20, 28, 0.04), 0 4px 10px rgba(20, 20, 28, 0.05);
   --sh-md: 0 2px 4px rgba(20, 20, 28, 0.04), 0 10px 24px rgba(20, 20, 28, 0.07);
-  --sh-lg: 0 4px 8px rgba(20, 20, 28, 0.05), 0 20px 48px rgba(20, 20, 28, 0.1);
-  --sh-xl: 0 8px 16px rgba(20, 20, 28, 0.06), 0 32px 72px rgba(20, 20, 28, 0.12);
+
+  /* STACKED, WITH NEGATIVE SPREAD ON THE OUTER LAYERS. A single wide soft
+     shadow makes everything look like it is floating in fog; pulling the
+     outer layers in with a negative spread puts the shadow UNDER the card
+     instead of blooming around it, which is what reads as crisp. */
+  --sh-lg:
+    0 1px 1px rgba(20, 20, 28, 0.04),
+    0 2px 4px rgba(20, 20, 28, 0.04),
+    0 8px 16px -4px rgba(20, 20, 28, 0.06),
+    0 24px 40px -12px rgba(20, 20, 28, 0.08);
+  --sh-xl:
+    0 1px 1px rgba(20, 20, 28, 0.04),
+    0 4px 8px rgba(20, 20, 28, 0.05),
+    0 16px 28px -6px rgba(20, 20, 28, 0.09),
+    0 36px 56px -16px rgba(20, 20, 28, 0.12);
+  --sh-ink:
+    0 2px 2px rgba(20, 20, 28, 0.06),
+    0 6px 13px rgba(20, 20, 28, 0.08),
+    0 26px 45px -10px rgba(20, 20, 28, 0.14),
+    0 58px 90px -26px rgba(20, 20, 28, 0.19);
+
+  /* The card's own surface: a barely perceptible falloff so it reads as
+     material rather than as a flat white rectangle, plus a hairline of light
+     on the top edge. */
+  --card-fill: linear-gradient(180deg, #ffffff 0%, #fbfbfd 100%);
+  --card-edge: rgba(20, 20, 28, 0.07);
+  --card-top: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  --ink-fill: linear-gradient(180deg, #1c1c26 0%, #121218 100%);
+  --ink-edge: rgba(255, 255, 255, 0.08);
+  --ink-top: inset 0 1px 0 rgba(255, 255, 255, 0.1);
 
   /* ── Motion (§6.8). Overshoot is wanted, and capped at 1.26. ──────────── */
   --snapIn: cubic-bezier(0.34, 1.26, 0.42, 1);
@@ -76,13 +104,14 @@
   color-scheme: light;
   background: var(--canvas);
   color: var(--ink);
-  /* NO `font-family`. `body` sets `var(--font-sans)` — Inter, self-hosted by
-     next/font in the root layout — and the landing page now inherits it, so
-     the marketing page and the product read as one thing. This also removes a
-     second webfont from the critical path of the page whose headline IS the
-     LCP element. */
+  /* Switzer, self-hosted. The page no longer inherits the app's Inter: a
+     heavy tightly-tracked grotesk is half of the typographic device, and the
+     serif accent only reads as a contrast against straight-sided forms. */
+  font-family: var(--v4-sans), Arial, system-ui, sans-serif;
   font-size: 17px;
   line-height: 28px;
+  /* Every figure on this page sits in a column beside another figure, so
+     proportional digits would make the columns ragged. */
   font-variant-numeric: tabular-nums lining-nums;
   -webkit-font-smoothing: antialiased;
 }
@@ -194,20 +223,33 @@
    what made the first build read as a form.
    ────────────────────────────────────────────────────────────────────────── */
 
-.d0 { font-size: 88px; line-height: 86px; letter-spacing: -0.04em; font-weight: 800; }
-.d1 { font-size: 72px; line-height: 74px; letter-spacing: -0.035em; font-weight: 800; }
-.d2 { font-size: 52px; line-height: 56px; letter-spacing: -0.03em; font-weight: 800; }
-.d3 { font-size: 32px; line-height: 38px; letter-spacing: -0.022em; font-weight: 700; }
-.h4 { font-size: 20px; line-height: 26px; letter-spacing: -0.012em; font-weight: 700; }
-.bodyL { font-size: 20px; line-height: 32px; letter-spacing: -0.005em; font-weight: 400; }
-.bodyM { font-size: 17px; line-height: 28px; font-weight: 400; }
-.bodyS { font-size: 15px; line-height: 24px; font-weight: 400; }
-.caption { font-size: 13px; line-height: 18px; letter-spacing: 0.002em; font-weight: 500; }
+.d0 { font-size: 88px; line-height: 0.92; letter-spacing: -0.045em; font-weight: 800; }
+.d1 { font-size: 68px; line-height: 0.98; letter-spacing: -0.04em; font-weight: 800; }
+.d2 { font-size: 52px; line-height: 1; letter-spacing: -0.035em; font-weight: 700; }
+.d3 { font-size: 28px; line-height: 1.15; letter-spacing: -0.02em; font-weight: 650; }
+.h4 { font-size: 18px; line-height: 1.3; letter-spacing: -0.01em; font-weight: 600; }
+.bodyL { font-size: 19px; line-height: 1.6; letter-spacing: -0.005em; font-weight: 400; }
+.bodyM { font-size: 17px; line-height: 1.6; font-weight: 400; }
+.bodyS { font-size: 15px; line-height: 1.55; font-weight: 400; }
+.caption { font-size: 13px; line-height: 1.4; letter-spacing: 0.005em; font-weight: 500; }
 
-.f1 { font-size: 128px; line-height: 116px; font-weight: 800; letter-spacing: -0.04em; }
-.f2 { font-size: 76px; line-height: 76px; font-weight: 800; letter-spacing: -0.035em; }
-.f3 { font-size: 40px; line-height: 44px; font-weight: 800; letter-spacing: -0.025em; }
-.f4 { font-size: 20px; line-height: 26px; font-weight: 700; }
+.f1 { font-size: 84px; line-height: 1; letter-spacing: -0.04em; font-weight: 800; }
+.f2 { font-size: 72px; line-height: 1; letter-spacing: -0.04em; font-weight: 800; }
+.f3 { font-size: 40px; line-height: 1.1; letter-spacing: -0.03em; font-weight: 750; }
+.f4 { font-size: 20px; line-height: 1.3; letter-spacing: -0.01em; font-weight: 700; }
+
+/* ONE WORD PER HEADING, AND HEADINGS ONLY.
+   1.1x because the serif's x-height is smaller — at 1.0 it reads as a smaller
+   word rather than a different voice. The right margin is for the italic's
+   overhang, which otherwise crashes into whatever follows it. */
+.accent {
+  font-family: var(--v4-serif), "Times New Roman", serif;
+  font-style: italic;
+  font-weight: 400;
+  font-size: 1.1em;
+  letter-spacing: -0.015em;
+  margin-right: 0.06em;
+}
 
 .dim { color: var(--ink-60); }
 .faint { color: var(--ink-35); }
@@ -346,8 +388,8 @@
    ────────────────────────────────────────────────────────────────────────── */
 
 .card {
-  background: var(--lift);
-  border: 1px solid var(--edge);
+  background: var(--card-fill);
+  border: 1px solid var(--card-edge);
   border-radius: 24px;
   box-shadow: var(--sh-md);
   padding: 28px;
@@ -397,34 +439,18 @@
 
 .navScrolled { height: 54px; background: rgba(255, 255, 255, 0.84); }
 
-.navMark {
-  position: relative;
-  flex: none;
-  flex: none;
-  width: 28px;
-  height: 28px;
-  border-radius: 10px;
-  background: var(--ink);
-}
+/* The SVG draws its own tile from `currentColor`; the background here painted
+   a SECOND one behind it, and the pair only agreed because both resolved to
+   ink. `flex: none` was also declared twice. Colour is set once, on `color`. */
+.navMark { flex: none; color: var(--ink); }
+.navMarkOnDark { color: rgba(255, 255, 255, 0.16); }
+.navMarkOnDark .navDotA, .navMarkOnDark .navDotB { fill: #ffffff; }
 
 /* Two dots that merge into one on hover: two become one, which is the whole
    product stated in a logo. The only piece of wit on the page. */
-.navDot {
-  position: absolute;
-  top: 50%;
-  width: 6px;
-  height: 6px;
-  margin-top: -3px;
-  border-radius: 50%;
-  background: var(--lift);
-  transition: all 260ms var(--snapIn);
-}
-
-.navDotA { left: 7px; }
-.navDotB { left: 13px; }
-
-.nav:hover .navDotA { left: 9.5px; width: 9px; height: 9px; margin-top: -4.5px; }
-.nav:hover .navDotB { left: 9.5px; width: 9px; height: 9px; margin-top: -4.5px; opacity: 0; }
+.navDotA, .navDotB { fill: var(--lift); transition: cx 260ms var(--snapIn), r 260ms var(--snapIn), opacity 260ms var(--snapIn); }
+.nav:hover .navDotA { cx: 14; r: 4.5; }
+.nav:hover .navDotB { cx: 14; r: 4.5; opacity: 0; }
 
 .wordmark {
   margin-left: 10px;
@@ -601,7 +627,9 @@
   flex: 1;
   min-width: 0;
   overflow: hidden;
-  mask-image: linear-gradient(to right, #000 calc(100% - 140px), transparent 100%);
+  /* A 48px fade immediately right of the divider, so pills slide out from
+     behind it instead of being cut mid-logo. */
+  mask-image: linear-gradient(to right, transparent 0, #000 48px, #000 calc(100% - 140px), transparent 100%);
 }
 
 .railTrack { display: flex; gap: 16px; width: max-content; animation: marquee 44s linear infinite; }
@@ -658,10 +686,10 @@
 
 .stack {
   grid-column: 6 / -1;
-  border: 1px solid var(--edge);
-  border-radius: 32px;
-  background: var(--lift);
-  box-shadow: var(--sh-lg);
+  border: 1px solid var(--card-edge);
+  border-radius: 24px;
+  background: var(--card-fill);
+  box-shadow: var(--card-top), var(--sh-lg);
   overflow: hidden;
 }
 
@@ -741,14 +769,105 @@
 .stepTitle { margin-top: 32px; }
 .stepBody { max-width: 300px; margin-top: 12px; color: var(--ink-60); }
 
+/* ── S04 · The metric canvas (§7) ──────────────────────────────────────── */
+
+/* The frame is a card like every other card; what makes it read as an EDITOR
+   is the dot grid inside it, not a different border. */
 .shot {
+  position: relative;
   margin-top: 96px;
-  border: 1px solid var(--edge);
-  border-radius: 20px;
-  box-shadow: var(--sh-xl);
+  border: 1px solid var(--card-edge);
+  border-radius: 24px;
+  box-shadow: var(--card-top), var(--sh-xl);
   overflow: hidden;
-  background: var(--lift);
+  background: #fafafc;
 }
+
+/* The scroller is a separate element from the frame so the right-edge fade can
+   sit on the FRAME and stay put. A pseudo-element on the scroller itself
+   scrolls away with the content, which is the opposite of a scroll cue. */
+.cvScroll { overflow-x: auto; overflow-y: hidden; }
+
+/* THE GRID IS THE CANVAS. 1.5px dots at 20px centres — a `radial-gradient`
+   rather than an SVG pattern so it costs one paint and no DOM. */
+.cvStage {
+  position: relative;
+  width: 1200px;
+  height: 460px;
+  background-image: radial-gradient(circle at 1px 1px, #dedde7 0.75px, transparent 0.75px);
+  background-size: 20px 20px;
+  background-position: 9px 9px;
+}
+
+.cvEdges { position: absolute; z-index: 0; left: 0; top: 0; pointer-events: none; }
+.cvHandles { position: absolute; z-index: 2; left: 0; top: 0; pointer-events: none; }
+
+.cvEdge {
+  fill: none;
+  stroke: #c6c4d3;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  /* 640 comfortably exceeds the longest path here (the two source curves, at
+     ~270), so one dash length covers every edge and none of them can show a
+     seam. Measured with getTotalLength rather than guessed. */
+  stroke-dasharray: 640;
+  stroke-dashoffset: 640;
+}
+
+.cvDot { fill: #c6c4d3; stroke: #ffffff; stroke-width: 2; opacity: 0; }
+
+.cvNode {
+  position: absolute;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-inline: 14px;
+  border: 1px solid var(--card-edge);
+  border-radius: 14px;
+  background: var(--card-fill);
+  box-shadow: var(--card-top), var(--sh-lg);
+  opacity: 0;
+  transform: scale(0.94);
+}
+
+.cvNodeStd { width: 200px; height: 64px; }
+
+.cvLogo { display: inline-flex; flex: none; }
+.cvTile { display: inline-flex; flex: none; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 8px; }
+.cvNodeText { display: flex; min-width: 0; flex-direction: column; }
+.cvNodeName { font-weight: 600; white-space: nowrap; }
+.cvNodeSub { color: var(--ink-35); white-space: nowrap; }
+
+/* The one dark thing in the section, because it is the one answer. */
+.cvOut {
+  width: 164px;
+  height: 108px;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 4px;
+  border-color: var(--ink-edge);
+  background: var(--ink-fill);
+  box-shadow: var(--ink-top), var(--sh-ink);
+}
+
+.cvOutLabel { color: rgba(255, 255, 255, 0.55); }
+.cvOutFigure { font-size: 32px; font-weight: 800; letter-spacing: -0.03em; line-height: 1.1; color: #ffffff; font-variant-numeric: tabular-nums; }
+
+/* ── The build, once, on first entry (§7.3) ────────────────────────────── */
+
+.cvStage[data-live="true"] .cvNode { animation: cvNodeIn 320ms var(--snapIn) var(--d) forwards; }
+.cvStage[data-live="true"] .cvEdge { animation: cvDraw 260ms var(--glide) var(--d) forwards; }
+.cvStage[data-live="true"] .cvDot { animation: fadeIn 200ms var(--glide) var(--d) forwards; }
+
+@keyframes cvNodeIn { to { opacity: 1; transform: scale(1); } }
+@keyframes cvDraw { to { stroke-dashoffset: 0; } }
+
+/* ONE DELAY FOR ALL NINE DOTS, not one per edge. Pairing each dot to its
+   edge's delay is possible and looks worse: nine separate pops at 6px is
+   noise. They arrive together, just after the last edge has drawn. */
+.cvStage .cvDot { --d: 1180ms; }
 
 .shotNote { margin-top: 20px; color: var(--ink-35); }
 
@@ -767,10 +886,10 @@
  */
 .darkPanel {
   position: relative;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 32px;
-  background: var(--ink);
-  box-shadow: var(--sh-xl);
+  border: 1px solid var(--ink-edge);
+  border-radius: 24px;
+  background: var(--ink-fill);
+  box-shadow: var(--ink-top), var(--sh-ink);
   /* VISIBLE, because S07's preview card is supposed to hang past this edge —
      that overhang is the section's one structural idea and `hidden` ate it.
      The blooms get their own clipped layer below instead, since a blurred
@@ -778,9 +897,13 @@
   overflow: visible;
   --d-fg: #ffffff;
   --d-60: #a3a3b4;
-  /* Lifted to clear 4.5:1 on #14141C — #6E6E80 measures 3.67 and carries real
-     captions. */
-  --d-35: #7d7d91;
+  /* SOLVED AGAINST THE GROUND THAT IS ACTUALLY THERE, and that ground moved.
+     #7d7d91 cleared 4.5:1 on the old flat #14141C; §3's ink recipe made the
+     panel a gradient whose TOP stop is #1c1c26, and against that the same grey
+     is 4.19:1. The regression was invisible for a build because the contrast
+     walker could not read a gradient at all — see landing-check.mjs. Worst
+     stop, not the average: #87879A is 4.79:1 on #1c1c26 and better below it. */
+  --d-35: #87879a;
   --d-edge: rgba(255, 255, 255, 0.12);
   --d-good: #5ee9a0;
   --d-flag: #ff7a63;
@@ -898,13 +1021,6 @@
    `check-ui`'s colour rules stay armed over every .tsx in the repo. */
 /* 1200 × 500, not 16:9 — the flow is a wide, shallow thing and a taller
    frame only added empty canvas above and below it. */
-.shotCanvas { display: block; width: 100%; aspect-ratio: 1200 / 500; }
-.shotWire { fill: none; stroke: var(--ink); stroke-width: 2; opacity: 0.16; }
-.shotNode { fill: var(--lift); stroke: var(--edge); filter: drop-shadow(0 4px 10px rgba(20, 20, 28, 0.06)); }
-.shotGround { fill: var(--lift); }
-.shotChipNeutral { fill: #f4f4f7; }
-.shotLabel { fill: var(--ink-35); }
-.shotValue { fill: var(--ink); }
 
 
 
@@ -927,7 +1043,6 @@
 /* The metric's answer, in the product's own brand blue — the one place the
    drawing raises its voice, because it is the number the two apps could not
    produce on their own. */
-.shotResult { fill: var(--color-brand-500); }
 
 }
 
@@ -1047,34 +1162,69 @@
 }
 
 .figureCardBody { position: relative; z-index: 1; display: flex; flex-direction: column; height: 100%; }
-.figureLabel { color: var(--ink-35); }
-.figureValue { margin-top: 12px; }
-.readFrom { margin-top: auto; padding-top: 24px; color: var(--ink-35); }
-.readMarks { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
-
-.readMark {
-  display: inline-flex;
-  padding: 2px;
-  border: 1px solid var(--edge);
-  border-radius: 10px;
-  transition: transform var(--t-control) var(--snapIn), border-color var(--t-control) var(--snapIn);
-}
-
-/* Hovering the receipt's `Sources read` row raises the very marks that fed the
-   figure. It costs nothing and it shows what a sentence can only assert: that
-   this number knows where it came from. */
-.readMarkLit { border-color: var(--ink); border-width: 2px; transform: scale(1.08); }
-.readCount { margin-left: 4px; color: var(--ink-35); }
+/* 0.55 WHITE, NOT THE SPEC'S #6E6E80. That value is a light-mode muted grey;
+   measured against this panel's #1c1c26 it lands at 3.38:1, under the 4.5
+   floor for 13px text, and the browser gate fails it. 0.55 white composites to
+   5.95:1 and is the same label treatment the hero's front card uses, so the
+   two ink surfaces speak with one voice. */
+.figureLabel { color: rgba(255, 255, 255, 0.55); }
+.figureValue { margin-top: 12px; color: #ffffff; }
 
 .changeBadge {
   align-self: flex-start;
   margin-top: 20px;
   padding: 5px 12px;
   border-radius: 999px;
-  background: var(--lift);
-  border: 1px solid var(--edge);
-  color: var(--ink-60);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--ink-edge);
+  color: rgba(255, 255, 255, 0.75);
 }
+
+/* ── What each source said (§8.2) ──────────────────────────────────────── */
+
+/* 24 under the figure, 12 to the first row, and the slack falls at the BOTTOM
+   of the panel — the block is pinned to the figure it explains, not to the
+   panel's floor. The auto margin went on the label for one build and opened a
+   90px hole between the label and its own rows. */
+.saidLabel { margin: 24px 0 0; color: rgba(255, 255, 255, 0.55); }
+.saidRows { display: flex; flex-direction: column; margin: 12px 0 auto; }
+
+.saidRow {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 36px;
+}
+
+.saidRow + .saidRow { border-top: 1px solid rgba(255, 255, 255, 0.08); }
+
+/* THE WASH IS A PSEUDO-ELEMENT so the stagger has somewhere to live that the
+   row's own hover does not share. See the note in receipt-tabs.tsx. */
+.saidRow::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  /* FLUSH, NOT BLED. `inset: 1px -10px` looked better and pushed the row 10px
+     past `.receiptInkBody` at every width — real horizontal overflow that the
+     geometry gate counts, hidden from the eye only by the panel's
+     `overflow: hidden`. */
+  inset: 1px 0;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  opacity: 0;
+  transition: opacity 220ms var(--glide) var(--stagger, 0ms);
+}
+
+.saidRowLit::before { opacity: 1; }
+
+.saidMark { position: relative; z-index: 1; display: inline-flex; flex: none; }
+.saidNoMark { display: block; width: 20px; height: 20px; border-radius: 50%; background: rgba(255, 255, 255, 0.1); }
+.saidName { position: relative; z-index: 1; margin-right: auto; color: #a3a3b4; white-space: nowrap; transition: color var(--t-quick) var(--quick); }
+.saidValue { position: relative; z-index: 1; font-weight: 600; color: #ffffff; font-variant-numeric: tabular-nums; }
+
+/* The row's own hover, at zero delay whatever the stagger says. */
+.saidRowHot .saidName { color: #ffffff; }
 
 .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 24px; }
 
@@ -1214,10 +1364,10 @@
 .aiCardCell { grid-column: 7 / -1; justify-self: end; width: 560px; margin-right: -56px; }
 
 .aiCard {
-  border: 1px solid var(--edge);
+  border: 1px solid var(--card-edge);
   border-radius: 24px;
-  background: var(--lift);
-  box-shadow: var(--sh-xl);
+  background: var(--card-fill);
+  box-shadow: var(--card-top), var(--sh-xl);
   color: var(--ink);
   overflow: hidden;
 }
@@ -1379,9 +1529,9 @@
   flex-direction: column;
   height: 164px;
   padding: 20px;
-  border: 1px solid var(--edge);
-  border-radius: 16px;
-  background: var(--lift);
+  border: 1px solid var(--card-edge);
+  border-radius: 14px;
+  background: var(--card-fill);
   /* A guard, not a fix: the tags are sized to fit one row, and if a future one
      does not, it is clipped rather than laid over the description. */
   overflow: hidden;
@@ -1399,7 +1549,7 @@
     border-color 140ms var(--quick);
 }
 
-.indexCell:hover { translate: 0 -3px; box-shadow: var(--sh-md); }
+.indexCell:hover { translate: 0 -2px; box-shadow: var(--card-top), var(--sh-xl); }
 
 .indexTop { display: flex; align-items: center; gap: 12px; }
 .indexName { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1517,12 +1667,16 @@
 @media (prefers-reduced-motion: reduce) {
   .statusDot, .aiReadingMark { animation: none; }
   .statusPill { opacity: 1; transform: none; }
-
-/* Anchored sections clear the floating nav pill — 60px tall, 20px from the
-   top — so an in-page link does not land underneath it. */
-.s04, .s05, .s07, .plate { scroll-margin-top: 104px; }
-
 }
+
+/* §0: AN IN-PAGE LINK USED TO LAND ITS HEADING UNDER THE FLOATING NAV.
+   Anchored sections clear the pill — 60px tall, 20px from the top.
+
+   THIS WAS WRITTEN INSIDE THE `prefers-reduced-motion` BLOCK ABOVE, so the fix
+   shipped for readers who ask for less motion and for nobody else. It looked
+   right in the file and was right in the browser one time in fifty. Unindented
+   declarations inside a media query are the tell; there is no second one. */
+.s01, .s03, .s04, .s05, .s07, .s09, .s10, .plate { scroll-margin-top: 112px; }
 
 /* ──────────────────────────────────────────────────────────────────────────
    S01 — the stage: the real board, wired to the tools that feed it.
@@ -1602,10 +1756,10 @@
   top: 7.6%;
   z-index: 1;
   width: 53.333%;
-  border: 1px solid var(--edge);
+  border: 1px solid var(--card-edge);
   border-radius: 20px;
-  background: var(--lift);
-  box-shadow: var(--sh-xl);
+  background: var(--card-fill);
+  box-shadow: var(--card-top), var(--sh-xl);
   overflow: hidden;
   opacity: 0;
   transform: scale(0.98);
@@ -1614,7 +1768,6 @@
 
 @keyframes boardIn { to { opacity: 1; transform: scale(1); } }
 
-.boardImg { position: absolute; max-width: none; }
 
 /* ──────────────────────────────────────────────────────────────────────────
    S05 — ONE card, split internally.
@@ -1633,10 +1786,10 @@
   flex-direction: column;
   height: 440px;
   margin-top: 64px;
-  border: 1px solid var(--edge);
-  border-radius: 28px;
-  background: var(--lift);
-  box-shadow: var(--sh-xl);
+  border: 1px solid var(--card-edge);
+  border-radius: 24px;
+  background: var(--card-fill);
+  box-shadow: var(--card-top), var(--sh-xl);
   overflow: hidden;
 }
 
@@ -1678,18 +1831,18 @@
 
 .receiptSplit { display: flex; flex: 1; min-height: 0; }
 
+/* INK, using §3.2's recipe. The brief lightening to `plate` treated the
+   colour as the problem; the problem was that the panel was mostly empty.
+   Ink on this page means "an answer" — the hero's front card and the canvas
+   output are the other two — and this is the page's central answer. */
 .receiptInk {
   position: relative;
   flex: none;
   width: 44%;
   padding: 32px;
-  /* PLATE, NOT INK. v3.1 made this panel black on the argument that answers
-     are black — but the page's own rhythm rule says only S07 and S10 are
-     dark, and a 527x374 black slab in the middle of a light section is
-     exactly the inconsistency that reads as a bug rather than as emphasis.
-     `plate` is the kit's half-step-darker surface (S08 stands on it), so the
-     two halves still separate without one of them being a different world. */
-  background: var(--plate);
+  background: var(--ink-fill);
+  box-shadow: var(--ink-top);
+  color: #ffffff;
   overflow: hidden;
 }
 
@@ -1743,11 +1896,14 @@
   opacity: 0.34;
 }
 
-.proofMore { margin-left: 8px; color: rgba(255, 255, 255, 0.45); }
+/* 0.5, NOT 0.45, on every dark panel: composited over #1c1c26 the dimmer
+   value is 4.43:1 at 13px — just under AA, and only measurable once the gate
+   could see the gradient beneath it. */
+.proofMore { margin-left: 8px; color: rgba(255, 255, 255, 0.5); }
 .s10Heading { max-width: 620px; margin-top: 48px; }
 .s10Sub { margin-top: 20px; color: var(--d-60); }
 .s10Actions { margin-top: 40px; }
-.s10Foot { margin-top: 20px; color: rgba(255, 255, 255, 0.45); }
+.s10Foot { margin-top: 20px; color: rgba(255, 255, 255, 0.5); }
 .btnLarge { height: 64px; padding-inline: 40px; font-size: 17px; }
 
 /* ──────────────────────────────────────────────────────────────────────────
@@ -1911,6 +2067,15 @@
   .railScrolling { display: none; }
   .heroLine > span { clip-path: inset(0 0 0 0); transform: none; animation: none !important; }
   .heroSub, .heroActions, .heroReassurance { opacity: 1 !important; transform: none !important; animation: none !important; }
+  /* The deck lands dealt. Each tinted card keeps the transform its entrance
+     ENDS on — take those away and all four stack into one rectangle, which is
+     not the final state, it is a different picture. */
+  .deckCard, .deckFront { opacity: 1 !important; animation: none !important; transition: none !important; }
+  .deckCard1 { transform: translate(-102px, -156px) scale(0.88) rotate(-7.5deg); }
+  .deckCard2 { transform: translate(-68px, -104px) scale(0.92) rotate(-5deg); }
+  .deckCard3 { transform: translate(-34px, -52px) scale(0.96) rotate(-2.5deg); }
+  .deckFront { transform: none; }
+  .deckReconciled { opacity: 1 !important; animation: none !important; }
 }
 
 /* ──────────────────────────────────────────────────────────────────────────
@@ -1924,11 +2089,11 @@
 
 @media (max-width: 1023px) {
   .page { --pad: 48px; --gutter: 20px; }
-  .d0 { font-size: 64px; line-height: 62px; }
-  .d1 { font-size: 52px; line-height: 56px; }
-  .d2 { font-size: 38px; line-height: 42px; }
-  .f2 { font-size: 52px; line-height: 52px; }
-  .f3 { font-size: 32px; line-height: 36px; }
+  .d0 { font-size: 56px; line-height: 0.96; }
+  .d2 { font-size: 38px; line-height: 1.04; }
+  .f1 { font-size: 64px; }
+  .f2 { font-size: 56px; }
+
 
   /* Below LG the wiring stops: the pills would be 117px wide, which is
      narrower than "Google Sheets". The board takes the full width and the
@@ -1960,7 +2125,11 @@
   .trackLine { top: 0; bottom: 0; left: 27px; right: auto; width: 2px; height: auto;
     background: linear-gradient(to bottom, transparent, var(--edge) 40px, var(--edge) calc(100% - 40px), transparent); }
   .nodes { grid-template-columns: 1fr; gap: 48px; }
-  .step { display: grid; grid-template-columns: 56px 1fr; gap: 24px; align-items: start; }
+  /* `gap` here meant a 24px ROW gap as well as a column one, and the title and
+     the body are two rows of the same column — so every step opened a 60px
+     hole between its heading and its first line. The columns still need the
+     gap; the rows never did. */
+  .step { display: grid; grid-template-columns: 56px 1fr; column-gap: 24px; row-gap: 0; align-items: start; }
   .stepTitle, .stepBody { grid-column: 2; margin-top: 0; max-width: none; }
   .stepBody { margin-top: 12px; }
   .note { margin-bottom: 16px; }
@@ -1990,14 +2159,16 @@
 
 @media (max-width: 767px) {
   .page { --pad: 24px; --gutter: 16px; }
-  .d0 { font-size: min(44px, 10.1vw); line-height: min(44px, 10.1vw); }
-  .d1 { font-size: 36px; line-height: 38px; }
-  .d2 { font-size: 32px; line-height: 34px; }
-  .d3 { font-size: 24px; line-height: 30px; }
-  .bodyL { font-size: 17px; line-height: 28px; }
-  .bodyM { font-size: 16px; line-height: 26px; }
-  .f2 { font-size: 40px; line-height: 40px; }
-  .f3 { font-size: 28px; line-height: 32px; }
+
+  .d0 { font-size: min(44px, 10.4vw); line-height: 0.98; }
+  .d1 { font-size: 36px; line-height: 1.02; }
+  .d2 { font-size: 32px; line-height: 1.04; }
+  .d3 { font-size: 22px; line-height: 1.2; }
+  .bodyL { font-size: 17px; line-height: 1.6; }
+  .bodyM { font-size: 16px; line-height: 1.6; }
+  .f1 { font-size: 52px; }
+  .f2 { font-size: 44px; }
+  .f3 { font-size: 30px; }
 
   .nav { left: 16px; right: 16px; top: 12px; height: 56px; }
   .rail { height: 72px; }
@@ -2042,4 +2213,448 @@
   /* Shadows lighten one step: a heavy shadow at small sizes reads as blur. */
   .railPill { box-shadow: var(--sh-sm); }
   .stage .board, .receiptCard, .aiCard, .darkPanel { box-shadow: var(--sh-lg); }
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   S01 v4 — the fold as a designed frame.
+
+   The hero and the source rail together fill exactly one viewport, so a
+   visitor lands on all five things at once: what this is, what it does, what
+   to do, proof it reads real tools, and proof of the idea.
+
+   The viewport-height frame is deliberate. It was banned when the content did
+   not fill it; here the frame is sized to the content PLUS the rail, and the
+   content is centred inside it.
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* ONE DECLARATION OF THE FRAME HEIGHT, because two things depend on it being
+   the same number: the hero section itself and the absolutely-positioned deck
+   that has to overlay it exactly. Written twice, they drift the first time
+   someone retunes one of them. */
+.fold { position: relative; --fold-h: clamp(600px, calc(100svh - 96px), 920px); }
+
+.s01 {
+  display: flex;
+  align-items: center;
+  /* 96px is the rail. Hero + rail = one screen on anything from 696px to
+     1016px tall. */
+  height: var(--fold-h);
+  padding-block: 0;
+}
+
+.foldGrid {
+  position: relative;
+  width: 100%;
+  /* Encloses the deck, which hangs below the copy — otherwise the section
+     centres the copy alone and the deck falls out of the frame. */
+  min-height: 580px;
+}
+
+.foldCopy { max-width: 780px; }
+
+.statusPill {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: fit-content;
+  height: 34px;
+  margin: 0 0 28px;
+  padding: 6px 16px 6px 12px;
+  border: 1px solid var(--edge);
+  border-radius: 999px;
+  background: color-mix(in srgb, #ffffff 70%, transparent);
+  backdrop-filter: blur(16px);
+  box-shadow: var(--sh-sm);
+  opacity: 0;
+  transform: scale(0.9);
+  animation: popIn 280ms var(--snapIn) 60ms forwards;
+}
+
+.statusDot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--good);
+  animation: livePulse 2s ease-in-out infinite;
+}
+
+@keyframes livePulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(1.35); }
+}
+
+.statusDivider { width: 1px; height: 14px; background: var(--edge); }
+
+/* The italic leans in — a small settle that makes the accent read as a
+   deliberate voice rather than as a font that failed to match. */
+.accentHero {
+  display: inline-block;
+  transform: skewX(10deg) translateY(10px);
+  animation: leanIn 520ms var(--snapIn) 320ms forwards;
+}
+
+@keyframes leanIn { to { transform: skewX(0) translateY(0); } }
+
+.heroSub { max-width: 480px; margin: 28px 0 0; color: var(--ink-60); opacity: 0; transform: translateY(10px); animation: riseIn 320ms var(--glide) 600ms forwards; }
+.heroActions { display: flex; align-items: center; gap: 12px; margin-top: 32px; opacity: 0; transform: scale(0.96); animation: popIn 300ms var(--snapIn) 740ms forwards; }
+.heroReassurance { margin-top: 16px; color: var(--ink-35); opacity: 0; animation: fadeIn 240ms var(--glide) 860ms forwards; }
+
+/* ── The deck ─────────────────────────────────────────────────────────── */
+
+/* 159px = the status pill, its gap and headline line one — so the deck's top
+   edge sits 16px below the top of line two and rises alongside lines two and
+   three rather than below the whole headline. */
+/* THE DECK, PUT BACK WHERE IT LOOKS LIKE IT LIVES.
+   It is a sibling of the hero in the document (see page.tsx) and is laid back
+   over it here: same height as the frame, same container width and padding,
+   so `margin-left: auto` lands its right edge on the container's right edge
+   exactly as it did when it was a child. `pointer-events` is off on the
+   overlay and back on for the deck itself, so the invisible box does not
+   swallow clicks on the headline or the buttons beneath it. */
+.foldDeck {
+  position: absolute;
+  z-index: 2;
+  left: 50%;
+  top: 0;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  max-width: calc(var(--container) + var(--pad) * 2);
+  height: var(--fold-h);
+  padding-inline: var(--pad);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+/* 79px BELOW the frame's centre line, which is the same thing the old
+   `top: 159px` said relative to the 580px copy block — measured, not
+   re-derived. That drop is what makes the deck rise alongside headline lines
+   two and three instead of sitting level with the whole block. */
+/* ONE DIAL FOR THE WHOLE DECK. §5.6's height tiers and §5.7's width tiers
+   both shrink it, and they have to agree about the layout box as well as the
+   drawing — a bare `scale()` would leave a 560px hole in the flow and a bare
+   width change would crop it. `transform-origin: 0 0` keeps the two in step:
+   the wrapper IS the scaled box. */
+.foldDeckInner {
+  position: relative;
+  top: calc(79px * var(--deck-scale, 1));
+  width: calc(560px * var(--deck-scale, 1));
+  height: calc(420px * var(--deck-scale, 1));
+  margin-left: auto;
+  pointer-events: auto;
+}
+
+.foldDeckInner .deck { transform: scale(var(--deck-scale, 1)); transform-origin: 0 0; }
+
+.deck {
+  position: relative;
+  display: block;
+  width: 560px;
+  height: 420px;
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.deck:focus-visible { outline: 2px solid var(--ink); outline-offset: 6px; border-radius: 20px; }
+
+.deckCard,
+.deckFront {
+  position: absolute;
+  left: 140px;
+  top: 176px;
+  display: flex;
+  flex-direction: column;
+  width: 400px;
+  height: 232px;
+  border-radius: 20px;
+  overflow: hidden;
+}
+
+/* `transform-origin` at the bottom centre so the fan pivots like a held hand
+   rather than sliding. */
+.deckCard {
+  transform-origin: 50% 100%;
+  border: 1px solid var(--card-edge);
+  box-shadow: var(--card-top), var(--sh-lg);
+  opacity: 0;
+  transition: transform 420ms var(--snapIn);
+}
+
+.deckCard1 { z-index: 1; background: #eef3ff; animation: deckIn1 480ms var(--snapIn) 900ms forwards; }
+.deckCard2 { z-index: 2; background: #fff5e9; animation: deckIn2 480ms var(--snapIn) 1000ms forwards; }
+.deckCard3 { z-index: 3; background: #eaf6ee; animation: deckIn3 480ms var(--snapIn) 1100ms forwards; }
+
+@keyframes deckIn1 {
+  from { opacity: 0; transform: translate(-102px, -196px) scale(0.88) rotate(-14deg); }
+  to { opacity: 1; transform: translate(-102px, -156px) scale(0.88) rotate(-7.5deg); }
+}
+@keyframes deckIn2 {
+  from { opacity: 0; transform: translate(-68px, -144px) scale(0.92) rotate(-10deg); }
+  to { opacity: 1; transform: translate(-68px, -104px) scale(0.92) rotate(-5deg); }
+}
+@keyframes deckIn3 {
+  from { opacity: 0; transform: translate(-34px, -92px) scale(0.96) rotate(-6deg); }
+  to { opacity: 1; transform: translate(-34px, -52px) scale(0.96) rotate(-2.5deg); }
+}
+
+/* Only the top strip shows at rest, so it carries everything. */
+.deckHead { display: flex; align-items: center; gap: 10px; flex: none; height: 52px; padding-inline: 18px; }
+.deckName { font-size: 18px; font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; }
+/* NOT `--ink-35`. That grey is solved against the page's own near-white; on
+   the deck's tinted card fills (#eef3ff, #fff5e9, #eaf6ee) it lands at 4.49:1
+   and 4.50:1 — straddling AA. This one clears 5.8:1 on all three. */
+.deckLabel { font-size: 13px; font-weight: 500; color: #5c5c6e; white-space: nowrap; }
+.deckFigure { margin-left: auto; font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+.deckBlindRow { display: flex; align-items: center; gap: 10px; margin-top: 16px; padding-inline: 18px; border-top: 1px solid rgba(20, 20, 28, 0.07); padding-top: 16px; opacity: 0; transition: opacity 260ms var(--glide); }
+.deckBlind { font-size: 15px; color: var(--ink-60); }
+
+.deckFront {
+  z-index: 4;
+  padding: 24px;
+  border: 1px solid var(--ink-edge);
+  background: var(--ink-fill);
+  box-shadow: var(--ink-top), var(--sh-ink);
+  color: #ffffff;
+  opacity: 0;
+  transform: translateY(40px) scale(0.94);
+  animation: frontIn 520ms var(--snapIn) 1320ms forwards;
+  transition: transform 420ms var(--snapIn), box-shadow 420ms var(--snapIn);
+}
+
+@keyframes frontIn { to { opacity: 1; transform: translateY(0) scale(1); } }
+
+.deckFrontTop { display: flex; align-items: center; gap: 10px; }
+.deckFrontName { font-size: 15px; font-weight: 600; }
+.deckReconciled { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; font-size: 13px; font-weight: 500; color: #5ee9a0; opacity: 0; animation: fadeIn 260ms var(--glide) 1940ms forwards; }
+.deckFrontLabel { margin-top: 14px; font-size: 15px; color: rgba(255, 255, 255, 0.55); }
+/* NO MARGIN, AND THAT IS ARITHMETIC RATHER THAN TASTE: the card is 232 with
+   24px padding and a 1px border, so the content box is exactly 182. The rows
+   are 28 + 14 + 28 + 84 + 28 = 182. A 2px nudge here overflowed the card by
+   2px and clipped the foot, which `overflow: hidden` hid instead of showing. */
+.deckFrontFigure { margin-top: 0; }
+.deckFrontFoot { display: flex; align-items: center; gap: 12px; margin-top: auto; }
+/* 0.5, NOT 0.45. Composited over #1c1c26 the dimmer value scores 4.42:1 at
+   13px — under AA by a margin no one would notice by eye and the gate reads
+   exactly. 0.5 is 5.15:1 and still sits below the 0.55 label. */
+.deckFrontSub { font-size: 13px; color: rgba(255, 255, 255, 0.5); }
+.deckFrontMarks { display: flex; margin-left: auto; }
+/* The ring is what separates overlapping marks. */
+.deckFrontMarkRing { display: inline-flex; border-radius: 50%; box-shadow: 0 0 0 2px #16161e; }
+.deckFrontMarkRing + .deckFrontMarkRing { margin-left: -6px; }
+
+/* ── The fan-out, pointer devices only ────────────────────────────────── */
+
+@media (hover: hover) and (pointer: fine) {
+  .deck:hover .deckCard1 { transform: translate(-132px, -200px) scale(0.88) rotate(-11deg); transition-delay: 80ms; }
+  .deck:hover .deckCard2 { transform: translate(-92px, -138px) scale(0.92) rotate(-7deg); transition-delay: 40ms; }
+  .deck:hover .deckCard3 { transform: translate(-48px, -72px) scale(0.96) rotate(-3.5deg); }
+  .deck:hover .deckBlindRow { opacity: 1; transition-delay: 160ms; }
+  .deck:hover .deckFront { transform: translateY(-2px); box-shadow: var(--ink-top), var(--sh-ink); }
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   S04 canvas — responsive (§7.4)
+
+   Stated here rather than folded into the general breakpoint blocks above
+   because this one element does three DIFFERENT things across three widths,
+   and reading those three rules next to each other is the only way to keep
+   them consistent.
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* LG — the canvas is wider than the container, so it scrolls and says so. */
+@media (max-width: 1279px) {
+  .shot::after {
+    content: "";
+    position: absolute;
+    z-index: 2;
+    inset: 0 0 0 auto;
+    width: 56px;
+    pointer-events: none;
+    background: linear-gradient(90deg, rgba(250, 250, 252, 0) 0%, #fafafc 100%);
+  }
+}
+
+/* MD — it wraps instead. Two rows: the sources and Match, then Filter, Divide
+   and the answer. The edges cannot follow a wrapped layout, so they go; the
+   left-to-right reading order survives in the grid itself. */
+@media (max-width: 1023px) {
+  .shot::after { content: none; }
+  .cvScroll { overflow-x: visible; }
+  .cvStage {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 24px;
+    width: auto;
+    height: auto;
+    padding: 32px;
+    background-position: 0 0;
+  }
+  .cvEdges,
+  .cvHandles { display: none; }
+  .cvNode { position: static; width: auto; }
+  .cvNodeStd { height: 64px; }
+  .cvOut { height: 96px; }
+}
+
+/* SM / XS — back to the full drawing, scrolled. A three-column grid at 375px
+   is three 90px cards, which is narrower than the words inside them. */
+@media (max-width: 767px) {
+  .shot::after { content: ""; width: 48px; }
+  .cvScroll { overflow-x: auto; }
+  .cvStage {
+    display: block;
+    width: 1200px;
+    height: 460px;
+    padding: 0;
+    background-position: 9px 9px;
+  }
+  .cvEdges,
+  .cvHandles { display: block; }
+  .cvNode { position: absolute; }
+  .cvNodeStd { width: 200px; height: 64px; }
+  .cvOut { width: 164px; height: 108px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cvNode,
+  .cvStage[data-live="true"] .cvNode { opacity: 1; transform: none; animation: none; }
+  .cvEdge,
+  .cvStage[data-live="true"] .cvEdge { stroke-dashoffset: 0; animation: none; }
+  .cvDot,
+  .cvStage[data-live="true"] .cvDot { opacity: 1; animation: none; }
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   The fold — responsive (§5.7)
+
+   DECLARED HERE, AT THE END, BECAUSE POSITION IN THIS FILE IS LOAD-BEARING.
+   The block that calls itself "the narrow-viewport rules, restated in full"
+   sits ABOVE the fold's own rules, so the same declarations written there
+   lost to the base every time — no error, no warning, just a deck lying over
+   the headline at 834px. Anything overriding `.fold*` has to come after it.
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* MD — ONE COLUMN, AND THE RAIL COMES BEFORE THE DECK. The order is pill ·
+   headline · sub · buttons · reassurance · RAIL · deck, so the proof that 33
+   tools are being read is still inside the first screen on a tablet. The deck
+   is what moves below the fold, because it is the one element a reader can
+   infer from the copy. */
+@media (max-width: 1023px) {
+  .fold { display: flex; flex-direction: column; }
+  .s01 { display: block; height: auto; padding-block: 88px 0; order: 0; }
+  .foldGrid { min-height: 0; }
+  .foldCopy { max-width: none; }
+  .railLeadMobile { order: 1; }
+  .rail { order: 2; margin-top: 40px; }
+
+  .foldDeck {
+    order: 3;
+    position: static;
+    display: flex;
+    justify-content: center;
+    width: auto;
+    max-width: none;
+    height: auto;
+    margin-top: 56px;
+    padding-inline: var(--pad);
+    transform: none;
+  }
+
+  /* 480 x 360 is the whole deck at 0.857 — scaled rather than re-laid-out, so
+     the composition tuned at 560 survives intact. The wrapper carries the
+     scaled size as its LAYOUT box; a bare `scale()` leaves a 560px hole in
+     the flow. */
+  .fold { --deck-scale: 0.857; }
+  .foldDeckInner { position: static; top: auto; margin-left: 0; }
+
+  /* Static below LG: the fan-out is a pointer gesture, and a tablet with a
+     mouse attached still reads this as the bottom of the first screen rather
+     than as the object it is at XL. Specificity beats the `(hover: hover)`
+     block rather than relying on source order. */
+  .foldDeck .deck:hover .deckCard1 { transform: translate(-102px, -156px) scale(0.88) rotate(-7.5deg); }
+  .foldDeck .deck:hover .deckCard2 { transform: translate(-68px, -104px) scale(0.92) rotate(-5deg); }
+  .foldDeck .deck:hover .deckCard3 { transform: translate(-34px, -52px) scale(0.96) rotate(-2.5deg); }
+  .foldDeck .deck:hover .deckBlindRow { opacity: 0; }
+  .foldDeck .deck:hover .deckFront { transform: none; box-shadow: var(--ink-top), var(--sh-ink); }
+}
+
+/* SM / XS — the rail tightens to 32px under the reassurance so that at
+   375 x 812 it is still above the fold, and the deck RE-LAYS OUT rather than
+   scaling further: at 0.58 the front card's labels would be under 9px. */
+@media (max-width: 767px) {
+  .rail { margin-top: 32px; }
+  .foldDeck { margin-top: 40px; }
+  .fold { --deck-scale: 1; }
+  .foldDeckInner { width: 100%; height: 380px; }
+  .foldDeckInner .deck { width: 100%; height: 380px; transform: none; }
+
+  /* Bottom-anchored and full width. The HORIZONTAL offsets halve and the
+     rotations halve with them; the VERTICAL ones do not, and that is the
+     whole difference between a fan and a smudge. Each card is also scaled,
+     which pulls its top edge DOWN by (1 − scale) × 232 — so a y offset of 52
+     buys only ~43px of visible header, and halving it to 26 leaves 17px:
+     less than half of `.deckHead`, so every name and every figure was sliced
+     through the middle. Measured on screen, not reasoned about.
+
+     The entrance goes too: its keyframes end on the XL transforms, and a
+     performance that plays out below the rail on a phone is one nobody is
+     looking at. */
+  .deckCard, .deckFront { left: 0; top: auto; bottom: 0; width: 100%; height: 232px; }
+  .deckCard, .deckFront, .deckReconciled { opacity: 1; animation: none; }
+  .deckCard1 { transform: translate(-18px, -156px) scale(0.88) rotate(-3.75deg); }
+  .deckCard2 { transform: translate(-12px, -104px) scale(0.92) rotate(-2.5deg); }
+  .deckCard3 { transform: translate(-6px, -52px) scale(0.96) rotate(-1.25deg); }
+  .deckFront { transform: none; }
+
+  /* Two full-width controls, 12px apart. Side by side they are 170px each,
+     which cuts `Connect your first tool` in half. */
+  .heroActions { flex-direction: column; align-items: stretch; gap: 12px; }
+  .btnHero, .ghostPill { width: 100%; justify-content: center; }
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   The fold — width and height tiers (§5.6, §5.7)
+
+   The frame is a viewport height, so the fold has to answer to BOTH axes. The
+   width tiers decide how much room the deck may take beside the copy; the
+   height tiers decide whether the whole block still fits above the rail.
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* LG — the deck is capped at 46% of the container. At 1180 the full-size deck
+   reached x 595 and laid its farthest card straight over `See a live metric`,
+   which is a link nobody could read, let alone click. */
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .fold { --deck-scale: 0.8; }
+  .heroSub { max-width: 420px; }
+  .foldCopy { max-width: 620px; }
+}
+
+/* 756–875px tall — a 1366 x 768 laptop. Everything steps down by a fifth so
+   the rail stays inside the first screen without the clamp having to fight
+   the content. */
+@media (min-width: 1024px) and (max-height: 875px) {
+  .d0 { font-size: 74px; }
+  .heroSub { font-size: 17px; }
+  .fold { --deck-scale: 0.86; }
+  .foldGrid { min-height: 500px; }
+  .statusPill { height: 30px; margin-bottom: 22px; }
+  .heroSub { margin-top: 22px; }
+  .heroActions { margin-top: 26px; }
+  .heroReassurance { margin-top: 13px; }
+}
+
+/* Under 756px tall — a 1280 x 720 screen, or a laptop with a browser bar and
+   a dock. The status pill goes: it is the one element on the fold that
+   repeats what the rail below it already shows. */
+@media (min-width: 1024px) and (max-height: 755px) {
+  .d0 { font-size: 64px; line-height: 0.94; }
+  .heroSub { font-size: 16px; }
+  .fold { --deck-scale: 0.75; }
+  .foldGrid { min-height: 440px; }
+  .statusPill { display: none; }
+  .heroSub { margin-top: 20px; }
+  .heroActions { margin-top: 24px; }
+  .heroReassurance { margin-top: 12px; }
 }

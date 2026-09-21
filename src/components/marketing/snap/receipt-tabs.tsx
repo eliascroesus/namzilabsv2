@@ -12,6 +12,11 @@ export type Metric = {
   kind: "count" | "currency" | "duration";
   sources: Array<{ source: string; name: string }>;
   records: string;
+  /** What each source claimed, before reconciliation. The rows the figure
+      overrules — which is the only reason the figure is interesting. A row
+      with no `source` is an exclusion rather than a reading, so it has no
+      logo. */
+  said: Array<{ source?: string; name: string; value: string }>;
   /** Only where a real prior value exists. Never "unchanged". */
   change?: string;
   lines: Array<{ key: string; value: string; excluded?: boolean }>;
@@ -44,10 +49,20 @@ const FORMATTERS: Record<Metric["kind"], (value: number) => string> = {
  *
  * ═══ CROSS-HIGHLIGHTING IS THE ARGUMENT, PERFORMED ═══
  *
- * Hovering `Sources read` rings the logos that produced the figure; hovering a
- * logo tints the row and steps that name up a weight. The names rest at 500 so
- * the step to 600 is visible at all — when they sat at the row's own 600 the
- * highlight declared nothing and nothing moved.
+ * Hovering `Sources read` washes the three rows that produced the figure;
+ * hovering one of those rows tints it and steps that source's name up a weight
+ * on the right. The names rest at 500 so the step to 600 is visible at all —
+ * when they sat at the row's own 600 the highlight declared nothing and
+ * nothing moved.
+ *
+ * ═══ THE LEFT PANEL IS INK AGAIN, AND THAT IS NOT A REVERSAL ═══
+ *
+ * It was lightened to `plate` on the argument that only S07 and S10 are dark.
+ * What made the black slab read as a bug then was not its colour but its
+ * CONTENT: a 527x374 panel holding one number and three logos, most of it
+ * empty. The rule the page actually keeps is that ink means "an answer" — the
+ * hero's front card, the canvas output — and this is the page's central
+ * answer. Filled with the disagreement it resolves, it earns the weight.
  */
 export function ReceiptTabs({ metrics }: { metrics: Metric[] }) {
   const [index, setIndex] = useState(0);
@@ -106,21 +121,38 @@ export function ReceiptTabs({ metrics }: { metrics: Metric[] }) {
 
             {active.change ? <span className={`${styles.caption} ${styles.changeBadge}`}>{active.change}</span> : null}
 
-            <p className={`${styles.caption} ${styles.readFrom}`}>Read from</p>
-            <div className={styles.readMarks}>
-              {active.sources.map((s, i) => (
-                <span
-                  key={s.source}
-                  className={`${styles.readMark} ${lit ? styles.readMarkLit : ""}`}
-                  style={{ transitionDelay: `${i * 60}ms` }}
-                  onMouseEnter={() => setHoveredSource(s.source)}
-                  onMouseLeave={() => setHoveredSource(null)}
-                  title={s.name}
+            {/* THE DISAGREEMENT, NOT A LOGO ROW.
+                This band used to read `Read from` over three marks, which
+                says only that the sources exist — something the right-hand
+                column already states in words. Three numbers that do not
+                match do the work instead: 41, 38 and 44 are what the apps
+                each believe, and the figure above is the one that survives
+                reconciliation. It is the same claim the hero deck makes,
+                restated with the arithmetic visible. */}
+            <p className={`${styles.caption} ${styles.saidLabel}`}>What each source said</p>
+            <div className={styles.saidRows}>
+              {active.said.map((row, i) => (
+                <div
+                  key={row.name}
+                  className={`${styles.saidRow} ${lit ? styles.saidRowLit : ""} ${
+                    row.source && hoveredSource === row.source ? styles.saidRowHot : ""
+                  }`}
+                  /* A CUSTOM PROPERTY, NOT `transitionDelay`. An inline
+                     delay applies to EVERY transitioned property, so the
+                     row's own hover would wait out the stagger too — the
+                     exact lag that made the source filters feel "blocky".
+                     `--stagger` is read only by the lit wash. */
+                  style={{ "--stagger": `${i * 60}ms` } as React.CSSProperties}
+                  onMouseEnter={row.source ? () => setHoveredSource(row.source ?? null) : undefined}
+                  onMouseLeave={row.source ? () => setHoveredSource(null) : undefined}
                 >
-                  <Mark source={s.source} size={32} />
-                </span>
+                  <span className={styles.saidMark} aria-hidden>
+                    {row.source ? <Mark source={row.source} size={20} /> : <span className={styles.saidNoMark} />}
+                  </span>
+                  <span className={`${styles.bodyS} ${styles.saidName}`}>{row.name}</span>
+                  <span className={`${styles.bodyS} ${styles.saidValue}`}>{row.value}</span>
+                </div>
               ))}
-              <span className={`${styles.caption} ${styles.readCount}`}>{active.records}</span>
             </div>
           </div>
         </div>
