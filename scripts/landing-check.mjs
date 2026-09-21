@@ -545,7 +545,7 @@ await stability.addInitScript(() => {
     for (const entry of list.getEntries()) if (!entry.hadRecentInput) window.__cls += entry.value;
   }).observe({ type: "layout-shift", buffered: true });
 });
-await stability.goto(BASE, { waitUntil: "networkidle" });
+await settle(stability, BASE);
 await stability.waitForTimeout(1200);
 
 const fonts = await stability.evaluate(() => ({
