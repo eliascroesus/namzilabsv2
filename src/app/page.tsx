@@ -7,13 +7,11 @@ import { SourceRail } from "@/components/marketing/snap/rail";
 import { ReceiptTabs, type Metric } from "@/components/marketing/snap/receipt-tabs";
 import { SourceIndex } from "@/components/marketing/snap/source-index";
 import { StatusPill } from "@/components/marketing/snap/status-pill";
-import { AmbientChips } from "@/components/marketing/snap/ambient-chips";
 import { AiPanel } from "@/components/marketing/snap/ai-panel";
 import { INDEX_SOURCES } from "@/components/marketing/snap/source-taxonomy";
-import { CountUp } from "@/components/marketing/snap/count-up";
+import { JoinCard } from "@/components/marketing/snap/join-card";
 import { CanvasShot } from "@/components/marketing/snap/canvas-shot";
-import { DashboardShot } from "@/components/marketing/snap/dashboard-shot";
-import { Mark, brandColour, Tick, LogoMark } from "@/components/marketing/snap/marks";
+import { Mark, Tick, LogoMark } from "@/components/marketing/snap/marks";
 
 /**
  * THE FRONT DOOR — "Snap".
@@ -84,24 +82,6 @@ export const metadata = {
     "Namzilabs reads Calendly, Close, Stripe, Instantly, Google Sheets and 28 more, matches the records that are the same person, and builds the number none of them can — with the receipt for how it got there.",
 };
 
-/**
- * The hero's five chips. Positions, rotations and figures are all specified
- * rather than chosen: the tilts are small (2–4°) because anything larger
- * reads as decoration instead of as objects that have not been squared up
- * yet, and the arithmetic reconciles on purpose — 123 records in, 82 of them
- * the same people seen twice, 41 left. A demo whose numbers do not add up is
- * a demo of exactly the problem this product claims to fix.
- *
- * `drop` marks the two that leave at phone width: five chips in a single
- * column is a list, and three plus an answer is a story.
- */
-const CHIPS = [
-  { source: "calendly", name: "Calendly", desc: "invitee-created events", figure: "41", x: 24, y: 40, rot: -4, drop: false },
-  { source: "stripe", name: "Stripe", desc: "payments matched to a meeting", figure: "29", x: 908, y: 16, rot: 3, drop: true },
-  { source: "gsheets", name: "Google Sheets", desc: "the sheet kept by hand", figure: "44", x: 8, y: 300, rot: 3.5, drop: false },
-  { source: "close", name: "Close CRM", desc: "meetings logged to a lead", figure: "38", x: 898, y: 272, rot: -3, drop: false },
-  { source: "instantly", name: "Instantly", desc: "replies that booked something", figure: "12", x: 466, y: 352, rot: -2, drop: true, centre: true },
-];
 
 /**
  * S03. Six tools, six partial truths.
@@ -210,6 +190,15 @@ const ASKS = [
   { title: "Leave anytime", body: "Disconnect a tool and keep every figure it already produced. Nothing you built is held hostage." },
 ];
 
+/**
+ * The eight most recognisable marks, all of which ship a real logo. Instantly
+ * is named in the spec but has no redistributable mark, and its lettered tile
+ * forced white would be a blank square in a row of logos — so Mailchimp takes
+ * the slot. The trailing count is derived, so it cannot fall behind the
+ * catalogue.
+ */
+const PROOF_LOGOS = ["stripe", "calendly", "close", "gsheets", "notion", "shopify", "mailchimp", "airtable"];
+
 const FOOTER_GROUPS = [
   {
     title: "Product",
@@ -230,7 +219,8 @@ const FOOTER_GROUPS = [
     title: "Company",
     links: [
       { label: "Docs", href: "/docs" },
-      { label: "Log in", href: "/login" },
+      { label: "Integrations", href: "/integrations" },
+      { label: "Log in", href: "/sign-in" },
     ],
   },
   {
@@ -242,30 +232,7 @@ const FOOTER_GROUPS = [
   },
 ];
 
-/** The five connectors, chip edge to the card's nearest edge. */
-const CONNECTORS = [
-  "M292 86 C 340 86, 340 160, 380 160",
-  "M908 62 C 860 62, 860 160, 820 160",
-  "M276 346 C 330 346, 330 272, 380 272",
-  "M898 318 C 860 318, 860 272, 820 272",
-  "M600 352 L600 300",
-];
 
-/**
- * The closing panel's five drifting dots — the hero's chips reduced to their
- * essence, so the page closes on the image it opened with.
- *
- * They are white rather than source-coloured now that the panel is the
- * product's blue: a brand colour at a third of an opacity over #2B53AE is mud,
- * and five muddy dots read as compression artefacts rather than as objects.
- */
-const CTA_DOTS = [
-  { id: "a", left: "16%", top: "20%", delay: "0ms" },
-  { id: "b", left: "31%", top: "13%", delay: "800ms" },
-  { id: "c", left: "62%", top: "16%", delay: "1600ms" },
-  { id: "d", left: "78%", top: "25%", delay: "2400ms" },
-  { id: "e", left: "47%", top: "10%", delay: "3200ms" },
-];
 
 export default async function Home() {
   const { user } = await withAuth();
@@ -298,7 +265,6 @@ export default async function Home() {
             of dead canvas in an earlier build: the section is as tall as the
             headline, the stage and the air between them, and no taller. */}
         <section className={`${styles.container} ${styles.s01}`}>
-          <AmbientChips />
           <StatusPill count={CONNECTOR_CATALOG.length} />
 
           <div className={`${styles.narrowBlock} ${styles.centre}`}>
@@ -344,71 +310,10 @@ export default async function Home() {
             <p className={`${styles.caption} ${styles.heroReassurance}`}>Read-only. Disconnect anytime.</p>
           </div>
 
-          <div className={styles.stage}>
-            <svg className={styles.connectors} viewBox="0 0 1200 460" fill="none" aria-hidden>
-              {CONNECTORS.map((d) => (
-                <path key={d} className={styles.connector} d={d} />
-              ))}
-            </svg>
-
-            {CHIPS.map((chip) => (
-              <div
-                key={chip.name}
-                className={`${styles.chip} ${styles.chipRest} ${chip.drop ? styles.chipDrop : ""} ${"centre" in chip && chip.centre ? styles.chipCentre : ""}`}
-                style={
-                  {
-                    left: chip.x,
-                    top: chip.y,
-                    "--rot-base": `${chip.rot}deg`,
-                    animationDelay: `${980 + CHIPS.indexOf(chip) * 100}ms, 3000ms, ${3400 + CHIPS.indexOf(chip) * 800}ms`,
-                    boxShadow: `var(--sh-md), 0 8px 24px color-mix(in srgb, ${brandColour(chip.source)} 26%, transparent)`,
-                  } as React.CSSProperties
-                }
-              >
-                <Mark source={chip.source} size={40} className={styles.mark} />
-                {/* Name and figure share a row so the figure sits on the
-                    source's own baseline; the description wraps beneath both
-                    rather than shoving the figure off-centre when it runs to
-                    two lines. */}
-                <span className={styles.chipBody}>
-                  <span className={styles.chipHead}>
-                    <span className={styles.h4}>{chip.name}</span>
-                    <span className={styles.f4}>{chip.figure}</span>
-                  </span>
-                  <span className={`${styles.caption} ${styles.chipDesc}`}>{chip.desc}</span>
-                </span>
-              </div>
-            ))}
-
-            {/* THE CENTREPIECE: a real screenshot of the board when
-                `public/dashboard.png` exists, and this drawn card when it does
-                not. Both states are a finished composition, so the page is
-                never mid-way through becoming something. */}
-            <DashboardShot
-              fallback={
-            <div className={styles.resolved}>
-              <div className={styles.resolvedTop}>
-                <span className={styles.resolvedMark} aria-hidden />
-                <span className={styles.resolvedName}>Namzilabs</span>
-                <span className={styles.resolvedTick}>
-                  <Tick size={20} onDark />
-                </span>
-              </div>
-              <div className={styles.resolvedFigure}>
-                <span className={styles.f2}>
-                  <CountUp to={41} from={0} delay={2480} />
-                </span>
-                <span className={`${styles.bodyS} ${styles.resolvedUnit}`}>meetings held</span>
-              </div>
-              <p className={`${styles.caption} ${styles.resolvedSub}`}>123 in · 82 matched · 41 unique</p>
-            </div>
-              }
-            />
-
-            <span className={styles.pulse} aria-hidden />
-          </div>
+          <JoinCard />
         </section>
 
+        {/* Everything from the rail down sits on the masked bloom. */}
         <div className={styles.belowFold}>
           {/* ══ S02 · Source rail — full bleed, thin, flush ════════════════ */}
           <SourceRail sources={sources} count={CONNECTOR_CATALOG.length} id="rail" />
@@ -475,11 +380,17 @@ export default async function Home() {
 
           {/* ══ S05 · The receipt — off-centre pair, tabbed ════════════════ */}
           <section className={`${styles.container} ${styles.s05}`} id="receipts">
-            <h2 className={styles.d2}>Every number shows its working.</h2>
-            <p className={`${styles.bodyM} ${styles.measure}`} style={{ marginTop: 20, color: "var(--ink-60)" }}>
-              The arithmetic sits beside the number, always: which sources it read, when it read them, what it matched,
-              and what it deliberately left out.
-            </p>
+            {/* Heading left, body right on a shared top edge — an editorial
+                device that appears nowhere else on this page, so it earns the
+                section a shape of its own and fills the top-right, which used
+                to be empty in a section about density. */}
+            <div className={styles.receiptHeadRow}>
+              <h2 className={`${styles.d2} ${styles.receiptHeading}`}>Every number shows its working.</h2>
+              <p className={`${styles.bodyM} ${styles.receiptLeadCell} ${styles.dim}`}>
+                The arithmetic sits beside the number, always: which sources it read, when it read them, what it
+                matched, and what it deliberately left out.
+              </p>
+            </div>
 
             <ReceiptTabs metrics={METRICS} />
           </section>
@@ -563,19 +474,39 @@ export default async function Home() {
           </section>
 
           {/* ══ S10 · Final CTA — dark panel, centred ══════════════════════
-              The page closes on the image it opened with: five source-coloured
-              dots, drifting on the same loop as the hero chips, reduced to
-              their essence. This is the only decoration approved anywhere. */}
+              The five drifting dots are GONE. Ten pixels at 22% on a large
+              black panel read as dust on the screen, which is the same failure
+              as the hero's ambient chips: decoration too faint to be
+              understood is indistinguishable from a defect. What replaces them
+              carries real information — the marks of eight sources the product
+              actually reads, legible at 34%. */}
           <section className={`${styles.container} ${styles.s10}`}>
             <div className={`${styles.darkPanel} ${styles.s10Panel}`}>
-              {CTA_DOTS.map((dot) => (
-                <span
-                  key={dot.id}
-                  className={styles.ctaDot}
-                  aria-hidden
-                  style={{ left: dot.left, top: dot.top, animationDelay: dot.delay }}
-                />
-              ))}
+              <div className={styles.panelBlooms} aria-hidden>
+                <div className={`${styles.panelBloom} ${styles.panelBloomLilac}`} />
+                <div className={`${styles.panelBloom} ${styles.panelBloomPeach}`} />
+              </div>
+
+              {/* Eight real marks at 34% — legible as marks, unlike the dots
+                  they replace, and they restate the page's promise one last
+                  time before the ask. Mailchimp stands in for Instantly, which
+                  ships no redistributable logo; a lettered tile forced white
+                  would have been a blank square in a row of marks. */}
+              <div className={styles.proofRow}>
+                {PROOF_LOGOS.map((source) => (
+                  <span className={styles.proofLogo} key={source}>
+                    <Mark source={source} size={26} />
+                  </span>
+                ))}
+                {/* Three labels, one shown per breakpoint, because the row
+                    drops logos as it narrows and a count that did not follow
+                    would be a number the page could be caught on. */}
+                <span className={`${styles.caption} ${styles.proofMore}`}>
+                  <span className={styles.moreXL}>+{CONNECTOR_CATALOG.length - 8} more</span>
+                  <span className={styles.moreMD}>+{CONNECTOR_CATALOG.length - 6} more</span>
+                  <span className={styles.moreSM}>+{CONNECTOR_CATALOG.length - 4} more</span>
+                </span>
+              </div>
 
               <h2 className={`${styles.d1} ${styles.s10Heading}`}>Stop reconciling by hand.</h2>
               <p className={`${styles.bodyL} ${styles.s10Sub}`}>
@@ -586,9 +517,7 @@ export default async function Home() {
                   {ctaLabel}
                 </Link>
               </div>
-              <p className={`${styles.caption} ${styles.s10Foot}`}>
-                Read-only access. Disconnect any tool and keep what it sent.
-              </p>
+              <p className={`${styles.caption} ${styles.s10Foot}`}>Read-only. No card required.</p>
             </div>
           </section>
         </div>
@@ -597,27 +526,38 @@ export default async function Home() {
       {/* ══ S11 · Footer ════════════════════════════════════════════════ */}
       <footer className={`${styles.belowFold} ${styles.footer}`}>
         <div className={styles.container}>
-          <div className={styles.footerTop}>
-            <span className={styles.footerBrand}>
-              <LogoMark />
-              <span className={styles.wordmark}>Namzilabs</span>
-            </span>
-            <div className={styles.footerGroups}>
-              {FOOTER_GROUPS.map((group) => (
-                <div key={group.title}>
-                  <p className={`${styles.caption} ${styles.footerTitle}`}>{group.title}</p>
-                  <ul className={styles.footerList}>
-                    {group.links.map((link) => (
-                      <li key={link.label}>
-                        <Link className={styles.footerLink} href={link.href}>
-                          {link.label}
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
+          <div className={styles.footerGrid}>
+            {/* The descriptor and the static pill are what fill this column.
+                Without them the brand column is one word and the whole layout
+                tips right again, which is the thing being fixed. */}
+            <div className={styles.footerBrandCol}>
+              <span className={styles.footerBrand}>
+                <LogoMark />
+                <span className={styles.wordmark}>Namzilabs</span>
+              </span>
+              <p className={`${styles.bodyS} ${styles.footerDescriptor}`}>
+                The number none of your tools can build alone.
+              </p>
+              <span className={`${styles.caption} ${styles.footerPill}`}>
+                <span className={styles.footerDot} aria-hidden />
+                Reading {CONNECTOR_CATALOG.length} sources
+              </span>
             </div>
+
+            {FOOTER_GROUPS.map((group) => (
+              <div className={styles.footerGroup} key={group.title}>
+                <p className={`${styles.caption} ${styles.footerTitle}`}>{group.title}</p>
+                <ul className={styles.footerList}>
+                  {group.links.map((link) => (
+                    <li key={link.label}>
+                      <Link className={styles.footerLink} href={link.href}>
+                        {link.label}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
           </div>
 
           <div className={`${styles.caption} ${styles.footerBottom}`}>

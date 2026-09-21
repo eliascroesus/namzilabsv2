@@ -180,7 +180,7 @@
 /* 128 / 112, retuned so the hero's OBJECT reaches the fold. Three lines of
    104px headline plus four sentences of body pushed the stage ~700px down the
    page: on a 900px viewport the entire first screen was text. */
-.s01 { padding-block: 128px 112px; }
+.s01 { padding-block: 120px 104px; }
 .s03 { padding-block: 144px; }
 .s04 { padding-block: 144px 120px; }
 .s05 { padding-block: 144px; }
@@ -400,6 +400,7 @@
 .navMark {
   position: relative;
   flex: none;
+  flex: none;
   width: 28px;
   height: 28px;
   border-radius: 10px;
@@ -570,153 +571,6 @@
 @keyframes riseIn { to { opacity: 1; transform: translateY(0); } }
 @keyframes popIn { to { opacity: 1; transform: scale(1); } }
 @keyframes fadeIn { to { opacity: 1; } }
-
-/* The snap stage: chips float directly on the bloom, with no background and
-   no card behind them. A card here would make them a diagram; without one
-   they are objects on a surface. */
-.stage {
-  position: relative;
-  width: 1200px;
-  height: 460px;
-  max-width: 100%;
-  margin: 56px auto 0;
-}
-
-.chip {
-  --rot: var(--rot-base);
-  position: absolute;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 268px;
-  height: 92px;
-  padding: 16px;
-  border: 1px solid var(--edge);
-  border-radius: 20px;
-  background: var(--lift);
-  z-index: 2;
-  opacity: 0;
-  animation: chipIn 440ms var(--snapIn) forwards;
-}
-
-@keyframes chipIn {
-  from { opacity: 0; transform: translateY(30px) scale(0.9) rotate(0deg); }
-  to { opacity: 1; transform: translateY(0) scale(1) rotate(var(--rot)); }
-}
-
-/* After the sequence the chips recede to 62% and begin a slow idle drift —
-   they are the unresolved half of the argument and should not compete with
-   the card that resolves them. */
-.chipRest {
-  animation:
-    chipIn 440ms var(--snapIn) forwards,
-    chipSettle 400ms var(--glide) 3000ms forwards,
-    drift 6s ease-in-out 3400ms infinite;
-}
-
-/* The resting opacity is a variable so the composition can change it. Over the
-   bloom, 62% makes the unresolved sources recede behind the answer; over a
-   screenshot it makes the board show THROUGH them, which reads as a rendering
-   fault rather than as depth. */
-@keyframes chipSettle { to { opacity: var(--chip-rest, 0.62); } }
-
-@keyframes drift {
-  0%, 100% { transform: translateY(0) rotate(var(--rot)); }
-  50% { transform: translateY(-4px) rotate(calc(var(--rot) + 0.6deg)); }
-}
-
-/* Hovering a chip straightens it — which hints at the entire mechanic. */
-.chip:hover {
-  animation-play-state: paused;
-  opacity: 1;
-  transform: translateY(-4px) rotate(0deg);
-  transition: transform var(--t-control) var(--snapIn), opacity var(--t-control) var(--snapIn);
-  z-index: 3;
-}
-
-.chipBody { min-width: 0; flex: 1; }
-.chipName { display: block; }
-
-/* Two of the five descriptions wrap — "payments matched to a meeting" is the
-   longest — and at Caption's 18px line-height that put 62px of content into a
-   60px box, so the block sat off-centre and the chip bulged. 16px holds two
-   lines inside the chip the spec fixes at 92px. */
-.chipDesc { display: block; line-height: 16px; color: var(--ink-35); }
-
-/* The figure belongs on the source NAME's line, not centred against a block
-   whose height depends on whether its description happened to wrap. */
-.chipHead { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-
-.connectors {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  pointer-events: none;
-}
-
-.connector {
-  fill: none;
-  stroke: var(--ink);
-  stroke-width: 1.5;
-  stroke-linecap: round;
-  opacity: 0.12;
-  stroke-dasharray: 600;
-  stroke-dashoffset: 600;
-  animation: drawIn 540ms var(--glide) 1840ms forwards;
-}
-
-@keyframes drawIn { to { stroke-dashoffset: 0; } }
-
-/* The one still, certain object in a field of moving ones. It never rotates
-   and never drifts, and that is what makes it read as the answer. */
-.resolved {
-  position: absolute;
-  left: 380px;
-  top: 132px;
-  width: 440px;
-  height: 168px;
-  padding: 24px 28px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 28px;
-  background: var(--ink);
-  box-shadow: var(--sh-xl);
-  color: var(--lift);
-  overflow: hidden;
-  z-index: 3;
-  opacity: 0;
-  transform: scale(0.88);
-  animation: resolveIn 460ms var(--snapIn) 2240ms forwards;
-}
-
-@keyframes resolveIn { to { opacity: 1; transform: scale(1); } }
-
-.resolvedTop { display: flex; align-items: center; gap: 10px; }
-.resolvedMark { width: 26px; height: 26px; border-radius: 9px; background: rgba(255, 255, 255, 0.22); }
-.resolvedName { font-size: 16px; font-weight: 700; }
-.resolvedTick { margin-left: auto; }
-.resolvedFigure { display: flex; align-items: baseline; gap: 10px; margin-top: 8px; }
-.resolvedUnit { color: rgba(255, 255, 255, 0.62); }
-.resolvedSub { margin-top: 8px; color: rgba(255, 255, 255, 0.55); }
-
-/* One ring pulse out of the card's centre, once. */
-.pulse {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 440px;
-  height: 168px;
-  margin: -84px 0 0 -220px;
-  border: 2px solid var(--ink);
-  border-radius: 28px;
-  opacity: 0;
-  animation: pulse 720ms var(--glide) 2760ms forwards;
-  pointer-events: none;
-}
-
-@keyframes pulse {
-  0% { opacity: 0.18; transform: scale(1); }
-  100% { opacity: 0; transform: scale(1.7); }
-}
 
 /* ──────────────────────────────────────────────────────────────────────────
    S02 — Source rail. Full-bleed thin band, flush against its neighbours.
@@ -989,79 +843,6 @@
 .askBody { max-width: 220px; margin-top: 10px; color: var(--ink-60); }
 
 /* ──────────────────────────────────────────────────────────────────────────
-   S10 — Final CTA. The page closes on the image it opened with.
-   ────────────────────────────────────────────────────────────────────────── */
-
-.s10Panel {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 420px;
-  padding: 0 40px;
-  text-align: center;
-}
-
-/* Five source-coloured dots: the hero's chips reduced to their essence. The
-   only decoration approved anywhere on this page. */
-.ctaDot {
-  position: absolute;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: #ffffff;
-  opacity: 0.32;
-  animation: driftDot 6s ease-in-out infinite;
-}
-
-@keyframes driftDot {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-4px); }
-}
-
-.s10Heading { max-width: 620px; }
-.s10Sub { margin-top: 20px; color: var(--d-60); }
-.s10Actions { margin-top: 40px; }
-.s10Foot { margin-top: 20px; color: var(--d-35); }
-.btnLarge { height: 60px; padding-inline: 36px; }
-
-/* ──────────────────────────────────────────────────────────────────────────
-   S11 — Footer (§7.6)
-   ────────────────────────────────────────────────────────────────────────── */
-
-.footer {
-  position: relative;
-  z-index: 1;
-  border-top: 1px solid var(--edge);
-  padding-block: 80px 48px;
-}
-
-.footerTop { display: flex; justify-content: space-between; gap: 56px; }
-.footerBrand { display: flex; align-items: center; }
-.footerGroups { display: flex; gap: 56px; }
-.footerTitle { margin-bottom: 14px; color: var(--ink-35); }
-.footerList { display: flex; flex-direction: column; gap: 12px; margin: 0; padding: 0; list-style: none; }
-
-.footerLink {
-  font-size: 15px;
-  color: var(--ink-60);
-  text-decoration: none;
-  transition: color var(--t-quick) var(--quick);
-}
-
-.footerLink:hover { color: var(--ink); }
-
-.footerBottom {
-  display: flex;
-  justify-content: space-between;
-  gap: 24px;
-  margin-top: 48px;
-  padding-top: 24px;
-  border-top: 1px solid var(--edge);
-  color: var(--ink-35);
-}
-
-/* ──────────────────────────────────────────────────────────────────────────
    Breakpoints (§5.1, §9)
 
    §5.3 scales section padding by 0.82 at LG, 0.66 at MD and 0.5 at SM/XS,
@@ -1084,11 +865,7 @@
   .s09 { padding-block: 80px; }
   .s10 { padding-block: 96px 120px; }
 
-  .stage { width: 1000px; height: 420px; }
-  .chip { width: 240px; height: 84px; }
-  .resolved { width: 400px; height: 152px; left: 300px; top: 128px; }
-  .pulse { width: 400px; height: 152px; margin: -76px 0 0 -200px; }
-  .index { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
 }
 
 @media (max-width: 1023px) {
@@ -1115,193 +892,7 @@
 
   /* All rotations halve at MD — a tilted object in a narrowing column starts
      reading as a broken layout rather than as play. */
-  .chip { --rot-scale: 0.5; }
 
-  .rail { height: 80px; }
-
-  /* S03's left column stops being sticky and sits above the stack. */
-  .splitGrid, .receiptPair, .s07Grid, .indexHead { display: block; }
-  .stickyCol { position: static; }
-  .stack { margin-top: 48px; }
-  .srcRow { height: 104px; }
-  .stickyLead { max-width: none; }
-
-  /* S04's track rotates to vertical: nodes down the left, content beside. */
-  .trackLine { top: 0; bottom: 0; left: 27px; right: auto; width: 2px; height: auto;
-    background: linear-gradient(to bottom, transparent, var(--edge) 40px, var(--edge) calc(100% - 40px), transparent); }
-  .nodes { grid-template-columns: 1fr; gap: 48px; }
-  .step { display: grid; grid-template-columns: 56px 1fr; gap: 24px; align-items: start; }
-  .stepTitle, .stepBody { grid-column: 2; margin-top: 0; }
-  .stepBody { margin-top: 12px; max-width: none; }
-  .shot { margin-top: 64px; }
-
-  .figureCard, .receiptCell { width: 100%; }
-  .receiptCell { margin-top: 24px; }
-  .pairConnector { display: none; }
-
-
-  .aiPanel { width: 100%; }
-
-  /* §9: at MD the stage is 660 wide with the chips in two columns and one
-     below, and every rotation halves. Absolute positions measured for a
-     1200px stage cannot survive that, so the layout becomes a grid and the
-     chips give up their coordinates. */
-  .stage { width: 100%; max-width: 660px; height: auto; display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 64px; }
-  .chip { position: static; width: 100%; height: 92px; --rot: calc(var(--rot-base) * 0.5); }
-  .resolved { position: static; grid-column: 1 / -1; justify-self: center;
-    width: 100%; max-width: 380px; height: 152px; margin-top: 8px; }
-  .connectors, .pulse { display: none; }
-
-  /* The confirmation line is a badge, and §7.2 makes badges single-line —
-     right for a tab, wrong for a sentence, which overflowed the panel by
-     44px at 375. */
-  .aiFoot { height: auto; padding-block: 8px; white-space: normal; align-items: flex-start; }
-
-  .search { width: 100%; margin-top: 24px; }
-  .index { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-
-  /* S09 becomes 2 × 2: the vertical divider stays between the columns and a
-     horizontal one appears between the rows. */
-  .asks { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 40px var(--gutter); }
-  .ask:nth-child(odd) { padding-left: 0; }
-  .ask:nth-child(odd)::before { display: none; }
-  .ask:nth-child(n + 3) { padding-top: 40px; border-top: 1px solid var(--edge); }
-
-  .s10Panel { height: auto; padding: 80px 40px; }
-  .navHidden { transform: translateY(-24px); }
-  .footerTop { flex-direction: column; }
-}
-
-@media (max-width: 767px) {
-  .page { --pad: 24px; --gutter: 16px; }
-
-  .d0 { font-size: min(44px, 10.1vw); line-height: min(44px, 10.1vw); letter-spacing: -0.03em; }
-  .d1 { font-size: 36px; line-height: 38px; }
-  .d2 { font-size: 32px; line-height: 34px; }
-  .d3 { font-size: 24px; line-height: 30px; }
-  .bodyL { font-size: 17px; line-height: 28px; }
-  .bodyM { font-size: 16px; line-height: 26px; }
-  .f1 { font-size: 56px; line-height: 54px; }
-  .f2 { font-size: 40px; line-height: 40px; }
-  .f3 { font-size: 28px; line-height: 32px; }
-
-  .s01 { padding-block: 64px 64px; }
-  .s03, .s05, .s07 { padding-block: 64px; }
-  .s04 { padding-block: 64px; }
-  .s08 { padding-block: 64px; }
-  .s09 { padding-block: 48px; }
-  .s10 { padding-block: 64px; }
-
-  .nav { left: 16px; right: 16px; top: 12px; height: 56px; padding-left: 16px; gap: 4px; }
-  .navScrolled { height: 52px; }
-  .btnNav { height: 40px; padding-inline: 12px; font-size: 14px; }
-  .menuBtn { padding-inline: 8px; font-size: 14px; }
-
-  /* Measured at 375: mark + wordmark + Menu + "Connect your first tool" is
-     390px of content in a 341px pill. The CTA label is final copy and the
-     menu is the only way to the rest of the page, so the wordmark's TEXT
-     gives — the mark still carries the brand and still links home. */
-  .nav .wordmark { display: none; }
-
-  /* The mark alone is 28px, and a 28px link is not a tap target. */
-  .nav .footerBrand { min-width: 44px; min-height: 44px; justify-content: center; }
-  .tab { height: 44px; padding-inline: 18px; }
-
-  /* Shadows lighten one step: a heavy shadow at small sizes reads as blur. */
-  .card, .railPill { box-shadow: var(--sh-sm); }
-  .stack, .figureCard, .receipt { box-shadow: var(--sh-md); }
-  .darkPanel, .aiPanel, .shot { box-shadow: var(--sh-lg); }
-
-  .btn { height: 52px; width: 100%; }
-  .heroActions { flex-direction: column; align-items: stretch; gap: 8px; }
-  .heroActions .textBtn { width: 100%; }
-
-  /* The stage becomes a vertical stack of THREE chips, not five: five in a
-     column is a list, and three plus an answer is a story. Every rotation
-     goes to 0° — a tilted card in a phone-width column reads as a bug. */
-  .stage { width: 100%; height: auto; margin-top: 48px; display: flex; flex-direction: column; gap: 12px; }
-  .chip { position: static; width: 100%; height: auto; --rot: 0deg; }
-  .chipDrop { display: none; }
-  .resolved { position: static; width: 100%; height: auto; margin-top: 8px; }
-  .connectors, .pulse { display: none; }
-
-  .rail { height: 72px; }
-  .railLead, .railDivider { display: none; }
-  .railLeadMobile { display: block; padding: 16px var(--pad) 0; color: var(--ink-35); }
-  .railPill { height: 38px; }
-
-  /* S03 rows become three lines. */
-  .srcRow { grid-template-columns: 36px 1fr auto; height: auto; padding: 20px 20px; }
-  .srcFigure { text-align: right; }
-  .srcClause { grid-column: 1 / -1; margin-top: 10px; }
-  .srcLabel { margin-top: 2px; }
-
-  .step { grid-template-columns: 44px 1fr; gap: 16px; }
-  .node { width: 44px; height: 44px; font-size: 17px; }
-  .trackLine { left: 21px; }
-  .stepTitle, .stepBody { grid-column: 1 / -1; padding-left: 28px; }
-
-  .shot { overflow-x: auto; }
-  .figureCard { height: auto; gap: 24px; padding: 24px; }
-  .darkPanel { border-radius: 24px; }
-
-  .aiPanel { padding: 20px; border-radius: 24px; }
-  .aiMetric { height: auto; flex-wrap: wrap; padding-block: 12px; }
-  .aiMetricName { flex-basis: 100%; }
-
-  .index { grid-template-columns: minmax(0, 1fr); }
-  .tabDark { height: 44px; padding-inline: 18px; }
-  .filter { height: 44px; }
-  .requestPill { height: 44px; }
-  .indexDesc { white-space: normal; overflow: visible; }
-
-  .asks { grid-template-columns: minmax(0, 1fr); gap: 24px; }
-  .ask, .ask + .ask { padding-left: 0; padding-top: 24px; border-top: 1px solid var(--edge); }
-  .ask + .ask::before { display: none; }
-  .ask:first-child { padding-top: 0; border-top: none; }
-  .askBody { max-width: none; }
-
-  .s10Panel { padding: 72px 24px; }
-  .btnLarge { height: 52px; width: 100%; }
-  .footerGroups { flex-wrap: wrap; gap: 32px; }
-  .footerList { gap: 0; }
-  .footerLink { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; }
-  .footerBottom { flex-direction: column; gap: 12px; }
-}
-
-/* ──────────────────────────────────────────────────────────────────────────
-   Reduced motion (§6.8)
-
-   The hero renders its final state at 0ms. The idle drift loop STOPS — a
-   continuous ambient loop is a real accessibility problem, not a style
-   preference, and it is the one thing on this page that would otherwise never
-   stop moving.
-   ────────────────────────────────────────────────────────────────────────── */
-
-@media (prefers-reduced-motion: reduce) {
-  .page *,
-  .page *::before,
-  .page *::after {
-    animation-duration: 0.01ms !important;
-    animation-delay: 0ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 120ms !important;
-  }
-
-  .chipRest, .ctaDot { animation: none; opacity: 0.62; transform: rotate(var(--rot, 0deg)); }
-  .ctaDot { opacity: 0.22; transform: none; }
-  .heroLine > span { clip-path: inset(0 0 0 0); transform: none; }
-  .connector { stroke-dashoffset: 0; }
-  .pulse { display: none; }
-  .railTrack { animation: none; transform: none; }
-  .railStatic { display: flex; }
-  .railScrolling { display: none; }
-
-  /* Hover lift becomes a border colour change. */
-  .cardHover:hover, .railPill:hover, .btn:hover, .chip:hover { transform: none; }
-  .cardHover:hover { border-color: var(--ink-35); }
-}
 
 /* The drawn canvas: its fills live here so the component carries no hex and
    `check-ui`'s colour rules stay armed over every .tsx in the repo. */
@@ -1315,66 +906,10 @@
 .shotLabel { fill: var(--ink-35); }
 .shotValue { fill: var(--ink); }
 
-/* ──────────────────────────────────────────────────────────────────────────
-   The hero's dashboard shot, when `public/dashboard.png` exists.
 
-   The stage reacts with `:has()` rather than with lifted state: if the file is
-   missing the component renders the drawn card instead, `.dashboardShot` is
-   not in the tree, none of these rules match, and the hero is exactly the
-   composition it was. One source of truth, no flag to keep in sync.
-   ────────────────────────────────────────────────────────────────────────── */
 
-.dashboardShotImg {
-  position: absolute;
-  max-width: none;
-}
 
-.dashboardShot {
-  position: absolute;
-  left: 50%;
-  top: 24px;
-  z-index: 3;
-  width: 720px;
-  max-width: 100%;
-  height: auto;
-  /* Capped so the stage does not have to grow for it, and `contain` so an
-     image of any proportion is fitted rather than cropped or stretched —
-     measured at 620 × 412, which is what the existing 460px stage holds with
-     the chips still clear of it. */
-  max-height: 412px;
-  /* The wrapper crops the screenshot's own window chrome (see dashboard-shot.tsx)
-     and carries the radius and the shadow; the image inside is oversized and
-     offset by exactly the frame's thickness. */
-  overflow: hidden;
-  transform: translateX(-50%);
-  border: 1px solid var(--edge);
-  border-radius: 20px;
-  box-shadow: var(--sh-xl);
-  background: var(--lift);
-}
 
-/* The centre chip steps out of the way: four chips framing a shot is a
-   composition; five, with one underneath it, is a collision. The stage does
-   NOT grow — the image is capped to the height it already has, so growing it
-   only added 148px of dead canvas under the composition. */
-.stage:has(.dashboardShot) .chipCentre { display: none; }
-
-/* THE CHIPS COME TO THE FRONT, and this is the fix for a real regression.
-   The shot is large enough to reach under all four of them, and at the card's
-   z-index it painted over their right-hand edges — taking the figures (41, 44)
-   with it. Those numbers ARE the hero's argument: four sources that disagree,
-   in front of the board that settles them. So the product sits behind and the
-   sources float over it, which is also the right reading of the concept. */
-.stage:has(.dashboardShot) .chip { z-index: 4; }
-.stage:has(.dashboardShot) { --chip-rest: 1; }
-
-/* The connectors were drawn for the card's footprint and would visibly miss a
-   picture of a different size. They come back once the real image's
-   proportions are known. */
-.stage:has(.dashboardShot) .connectors { display: none; }
-
-@media (max-width: 1279px) {
-  .dashboardShot { width: 620px; max-height: 372px; }
 }
 
 @media (max-width: 1023px) {
@@ -1383,42 +918,30 @@
      absolute and the wrapper is its containing block. `static` here let the
      image escape to the stage and land on top of the chips, which is exactly
      what it looked like: three cards stacked over a screenshot. */
-  .dashboardShot {
-    position: relative;
-    /* `left`/`top` MUST be reset with the position mode. They are 50%/24px on
-       the desktop rule, and a relative box still honours them — which shifted
-       the shot exactly half the stage to the right, one whole grid column,
-       while its `grid-column: 1 / -1` span reported as correct. */
-    left: auto;
-    top: auto;
-    width: 100%;
-    max-height: none;
-    transform: none;
-    grid-column: 1 / -1;
-  }
 }
 
 @media (max-width: 767px) {
   /* The stage is a flex column at phone width; the shot is the last item in
      it, under the three chips it belongs with. */
-  .dashboardShot { order: 1; margin-top: 8px; }
-}
 
 /* The metric's answer, in the product's own brand blue — the one place the
    drawing raises its voice, because it is the number the two apps could not
    produce on their own. */
 .shotResult { fill: var(--color-brand-500); }
 
+}
+
 /* ──────────────────────────────────────────────────────────────────────────
    S01 additions — the status pill, the ambient chips, the two-part CTA
    ────────────────────────────────────────────────────────────────────────── */
 
 .statusPill {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 10px;
+  width: fit-content;
   height: 34px;
-  margin-bottom: 36px;
+  margin: 0 auto 36px;
   padding: 6px 16px 6px 12px;
   border: 1px solid var(--edge);
   border-radius: 999px;
@@ -1446,59 +969,9 @@
 
 .statusDivider { width: 1px; height: 14px; background: var(--edge); }
 
-/* Atmosphere, not content: half opacity and a 2px blur so they read as depth
-   behind the headline rather than as a second thing to look at. */
-.ambient {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  overflow: hidden;
-}
 
-.ambientChip {
-  --rot: var(--rot-base);
-  position: absolute;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 188px;
-  height: 62px;
-  padding: 0 14px;
-  border: 1px solid var(--edge);
-  border-radius: 16px;
-  background: color-mix(in srgb, #ffffff 82%, transparent);
-  box-shadow: var(--sh-sm);
-  opacity: 0.5;
-  filter: blur(2px);
-  transform: rotate(var(--rot));
-  animation: drift 7s ease-in-out infinite;
-}
 
-.ambientName {
-  flex: 1;
-  min-width: 0;
-  font-size: 15px;
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 
-.ambientFigure { font-size: 13px; font-weight: 700; }
-
-/* THE HERO'S CTA IS A TWO-PART PILL, and it is the only one on the page.
-   It reads as a product control rather than a template button, and it fits a
-   second piece of information in without a second line of text. Repeating the
-   construction in the nav and in S10 would turn a signature into a pattern. */
-.btnHero {
-  height: 60px;
-  padding: 0 24px 0 32px;
-  box-shadow: var(--sh-lg);
-  /* A 1px inset highlight along the top edge gives the pill roundness in
-     light without resorting to a gradient. */
-  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.14), var(--sh-lg);
-}
 
 .btnHero:hover { box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.14), var(--sh-xl); }
 .btnHero:active { box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.14), var(--sh-md); }
@@ -1686,7 +1159,7 @@
 .receiptLineLit { background: #fafafc; }
 .sourceNames { font-weight: 500; color: var(--ink-60); }
 .sourceNameLit { font-weight: 600; color: var(--ink); }
-.receiptNote { color: var(--ink-60); }
+.receiptNote { max-width: 460px; margin-top: 20px; color: var(--ink-60); }
 
 /* The deleted incompleteness section's claim, attached to a real number. It
    dims rather than disappearing at zero, so the row keeps its shape. */
@@ -1970,15 +1443,16 @@
    Responsive for the v3.1 sections
    ────────────────────────────────────────────────────────────────────────── */
 
+
 @media (max-width: 1279px) {
   .d0 { font-size: 74px; line-height: 74px; }
-  .s01 { padding-block: 104px 96px; }
+  .s01 { padding-block: 96px 88px; }
   .s07 { padding-block: 120px; }
   .aiCardCell { width: 500px; margin-right: -32px; }
   .index { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   /* Two ambient chips, not four: the margins are narrower and four starts to
      read as a border of content rather than as atmosphere. */
-  .ambientChip:nth-child(2), .ambientChip:nth-child(4) { display: none; }
+
 }
 
 @media (max-width: 1023px) {
@@ -1987,30 +1461,6 @@
   .s07 { padding-block: 96px; }
 
   /* A 188px chip in a 700px viewport is content, not atmosphere. */
-  .ambient { display: none; }
-
-  .figureCard, .receiptCell { grid-column: 1 / -1; height: auto; }
-  .figureCard { min-height: 320px; }
-  .receiptCell { margin-top: 24px; }
-  .pairConnector, .receiptNub { display: none; }
-
-  .s07Panel { padding: 64px; }
-  .s07Copy, .aiCardCell { grid-column: 1 / -1; }
-  .s07Copy h2, .s07Lead { max-width: none; }
-  .aiCardCell { width: auto; justify-self: stretch; margin-right: 0; margin-top: 40px; }
-
-  .indexHeading, .search { grid-column: 1 / -1; }
-  .search { margin-top: 24px; }
-  .index { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-
-  /* One scrolling row with a fade at the right edge, rather than three rows of
-     pills eating the section's opening. */
-  .filters {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    scrollbar-width: none;
-    mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent 100%);
-  }
   .filters::-webkit-scrollbar { display: none; }
   .filter { flex: none; }
 }
@@ -2031,7 +1481,12 @@
   .bubble { max-width: 86%; }
   .aiMetric { flex-wrap: wrap; }
   .aiMetricName { flex-basis: 100%; }
+  .aiAnswer, .aiQuestion { max-width: none; }
+  /* A badge is single-line by design, which is right for a tab and wrong for
+     a sentence: this one is 349px of nowrap inside a 275px card. */
+  .aiFoot { height: auto; padding-block: 8px; white-space: normal; align-items: flex-start; }
   .followUps { flex-direction: column; align-items: flex-start; }
+  .followUp { max-width: 100%; }
 
   .index { grid-template-columns: minmax(0, 1fr); }
   .tabDark { height: 44px; padding-inline: 18px; }
@@ -2048,12 +1503,558 @@
    header's dot — all stop. Continuous ambient motion is an accessibility
    problem, not a style preference. */
 @media (prefers-reduced-motion: reduce) {
-  .statusDot, .ambientChip, .aiReadingMark { animation: none; }
+  .statusDot, .aiReadingMark { animation: none; }
   .statusPill { opacity: 1; transform: none; }
-  .ambientChip { opacity: 0.5; transform: rotate(var(--rot-base)); }
-  .aiReadingMark { opacity: 1; transform: none; }
-}
 
 /* Anchored sections clear the floating nav pill — 60px tall, 20px from the
    top — so an in-page link does not land underneath it. */
 .s04, .s05, .s07, .plate { scroll-margin-top: 104px; }
+
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   S01 — the join. One object, read left to right.
+
+   It replaces five floating chips, a separate resolved card, four ambient
+   chips and a screenshot. Nothing here rotates, nothing fades below full
+   opacity, and nothing is clipped by the viewport — the previous composition
+   broke all three and the faint pieces read as UI that had failed to load.
+   ────────────────────────────────────────────────────────────────────────── */
+
+.join {
+  position: relative;
+  display: flex;
+  width: 1120px;
+  max-width: 100%;
+  height: 320px;
+  margin: 64px auto 0;
+  border: 1px solid var(--edge);
+  border-radius: 28px;
+  background: var(--lift);
+  box-shadow: var(--sh-xl);
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(20px) scale(0.98);
+  animation: joinIn 460ms var(--snapIn) 1000ms forwards;
+}
+
+/* The card arrives EMPTY and fills row by row: the object exists, then the
+   evidence lands in it, then it resolves. A card that arrives complete is a
+   picture; one that fills is an argument. */
+@keyframes joinIn {
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.joinRows {
+  flex: none;
+  width: 600px;
+  padding: 24px 28px;
+}
+
+.joinRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 68px;
+  border-bottom: 1px solid var(--edge);
+  opacity: 0;
+  transform: translateX(-12px);
+  animation: rowIn 300ms var(--snapIn) forwards;
+}
+
+.joinRow:last-child { border-bottom: none; }
+
+@keyframes rowIn {
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.joinName { font-size: 17px; font-weight: 600; white-space: nowrap; }
+.joinLabel { flex: 1; min-width: 0; font-size: 15px; color: var(--ink-35); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.joinFigure { flex: none; width: 72px; text-align: right; font-size: 20px; font-weight: 700; }
+
+/* They converge INSIDE the ink card, so the meeting point is absorbed by it
+   rather than four lines ending in open space. */
+.joinWires {
+  position: absolute;
+  left: 600px;
+  top: 0;
+  width: 130px;
+  height: 320px;
+  z-index: 0;
+}
+
+.joinWire {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  opacity: 0.16;
+  stroke-dasharray: 260;
+  stroke-dashoffset: 260;
+  animation: wireDraw 520ms var(--glide) 1980ms forwards;
+}
+
+@keyframes wireDraw { to { stroke-dashoffset: 0; } }
+
+.joinInk {
+  position: absolute;
+  left: 716px;
+  top: 24px;
+  z-index: 1;
+  width: 380px;
+  height: 272px;
+  padding: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  background: var(--ink);
+  box-shadow: var(--sh-lg);
+  overflow: hidden;
+  color: #ffffff;
+  opacity: 0;
+  transform: scale(0.9);
+  animation: inkIn 440ms var(--snapIn) 2380ms forwards;
+}
+
+@keyframes inkIn { to { opacity: 1; transform: scale(1); } }
+
+.joinInkBody { position: relative; z-index: 1; display: flex; flex-direction: column; height: 100%; }
+.joinInkTop { display: flex; align-items: center; gap: 10px; }
+.joinInkMark { width: 22px; height: 22px; border-radius: 7px; background: rgba(255, 255, 255, 0.18); }
+.joinInkName { font-size: 15px; font-weight: 600; }
+.joinInkTick { margin-left: auto; display: inline-flex; }
+.joinInkFigure { display: flex; align-items: baseline; gap: 12px; margin-top: auto; }
+.joinInkUnit { color: rgba(255, 255, 255, 0.55); }
+.joinInkSub { margin-top: auto; color: rgba(255, 255, 255, 0.45); }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   S05 — ONE card, split internally.
+
+   Two cards meant two heights, a ragged pair of bottoms, and a thin connector
+   ending in a nub that read as a glitch rather than a join. There is nothing
+   left to connect once it is one surface.
+   ────────────────────────────────────────────────────────────────────────── */
+
+.receiptHeadRow { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: var(--gutter); align-items: start; }
+.receiptHeading { grid-column: 1 / span 6; }
+.receiptLeadCell { grid-column: 8 / -1; max-width: 420px; }
+
+.receiptCard {
+  display: flex;
+  flex-direction: column;
+  height: 440px;
+  margin-top: 64px;
+  border: 1px solid var(--edge);
+  border-radius: 28px;
+  background: var(--lift);
+  box-shadow: var(--sh-xl);
+  overflow: hidden;
+}
+
+/* The tabs move to the top, which clears the ink panel's dead band AND makes
+   the control the first thing read rather than the last. */
+.receiptBar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: none;
+  height: 64px;
+  padding-inline: 24px;
+  border-bottom: 1px solid var(--edge);
+}
+
+.segTabs { display: flex; gap: 6px; }
+
+.segTab {
+  height: 36px;
+  padding-inline: 18px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-60);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color var(--t-quick) var(--quick), color var(--t-quick) var(--quick);
+}
+
+.segTab:hover { background: #f4f4f7; }
+.segTabOn { background: var(--ink); color: #ffffff; }
+.segTabOn:hover { background: var(--ink); }
+.segTab:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+
+.receiptStamp { display: flex; align-items: center; gap: 8px; margin-left: auto; color: var(--ink-35); }
+
+.receiptSplit { display: flex; flex: 1; min-height: 0; }
+
+.receiptInk {
+  position: relative;
+  flex: none;
+  width: 44%;
+  padding: 32px;
+  background: var(--ink);
+  color: #ffffff;
+  overflow: hidden;
+}
+
+.receiptInkBody { position: relative; z-index: 1; display: flex; flex-direction: column; height: 100%; }
+.receiptWhite { flex: 1; min-width: 0; padding: 32px; border-left: 1px solid var(--edge); }
+
+.receiptRows { display: flex; flex-direction: column; margin: 0; }
+
+.receiptRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  height: 48px;
+  border-bottom: 1px solid var(--edge);
+  border-radius: 8px;
+  transition: background-color var(--t-quick) var(--quick);
+}
+
+.receiptRow:last-of-type { border-bottom: none; }
+.receiptRow dt { display: flex; align-items: center; gap: 10px; margin: 0; color: var(--ink-60); font-size: 15px; }
+.receiptRow dd { margin: 0; font-size: 15px; font-weight: 600; text-align: right; }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   S10 — a panel with something to hold.
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* §3.3: everything centred, horizontally and vertically. The old block
+   carried this and the rewrite dropped it, which left the whole composition
+   hanging off the left edge of 1200px of black. */
+.s10Panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 520px;
+  padding: 56px 40px;
+  text-align: center;
+}
+
+/* What replaces the dots. Real marks, real information, and legible — 34% on
+   ink reads as a row of logos rather than as dust on the screen. */
+.proofRow { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 28px; }
+
+.proofLogo {
+  display: inline-flex;
+  /* Forced to white regardless of whether a mark is a paintable silhouette or
+     an official multi-colour file — `logoColor` cannot reach the baked fills
+     in the second kind. */
+  filter: brightness(0) invert(1);
+  opacity: 0.34;
+}
+
+.proofMore { margin-left: 8px; color: rgba(255, 255, 255, 0.45); }
+.s10Heading { max-width: 620px; margin-top: 48px; }
+.s10Sub { margin-top: 20px; color: var(--d-60); }
+.s10Actions { margin-top: 40px; }
+.s10Foot { margin-top: 20px; color: rgba(255, 255, 255, 0.45); }
+.btnLarge { height: 64px; padding-inline: 40px; font-size: 17px; }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   S11 — five columns, not "brand left, links right".
+   ────────────────────────────────────────────────────────────────────────── */
+
+.footer { padding-block: 72px 40px; }
+
+.footerGrid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: var(--gutter); }
+.footerBrandCol { grid-column: 1 / span 3; }
+
+/* Without these two the brand column is one word and the layout tips right
+   again, which is the thing being fixed. */
+.footerDescriptor { max-width: 240px; margin-top: 16px; color: var(--ink-60); }
+
+.footerPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  margin-top: 24px;
+  padding-inline: 12px;
+  border: 1px solid var(--edge);
+  border-radius: 999px;
+  background: var(--lift);
+  color: var(--ink-60);
+}
+
+/* Static: a second pulsing dot in the footer is noise, not life. */
+.footerDot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); }
+
+.footerGroup:nth-child(2) { grid-column: 5 / span 2; }
+.footerGroup:nth-child(3) { grid-column: 7 / span 2; }
+.footerGroup:nth-child(4) { grid-column: 9 / span 2; }
+.footerGroup:nth-child(5) { grid-column: 11 / span 2; }
+
+.footerTitle { margin-bottom: 14px; color: var(--ink-35); }
+.footerList { display: flex; flex-direction: column; gap: 12px; margin: 0; padding: 0; list-style: none; }
+
+.footerLink {
+  font-size: 15px;
+  color: var(--ink-60);
+  text-decoration: none;
+  transition: color var(--t-quick) var(--quick);
+}
+
+.footerLink:hover { color: var(--ink); }
+
+.footerBottom {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  margin-top: 56px;
+  padding-top: 24px;
+  border-top: 1px solid var(--edge);
+  color: var(--ink-35);
+}
+
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Responsive and reduced motion for v3.2
+
+   Appended last on purpose: the section blocks above were rebuilt in place and
+   these override whatever survived, so there is exactly one place to read what
+   a narrow viewport actually does.
+   ────────────────────────────────────────────────────────────────────────── */
+
+.moreXL { display: inline; }
+.moreMD, .moreSM { display: none; }
+
+@media (max-width: 1279px) {
+  .join { width: 960px; height: 300px; }
+  .joinRows { width: 520px; }
+  .joinRow { height: 63px; }
+  .joinWires { left: 520px; width: 92px; }
+  .joinInk { left: 612px; top: 24px; width: 340px; height: 252px; }
+}
+
+@media (max-width: 1023px) {
+  /* The card goes vertical: rows above, a full-width rule, the answer inset
+     beneath. The converging fan becomes one line, because four curves into a
+     card that is now BELOW them would cross the rows they came from. */
+  .join { flex-direction: column; width: 100%; height: auto; }
+  .joinRows { width: 100%; padding-bottom: 0; }
+  .joinRow { height: 64px; }
+  .joinWires { display: none; }
+  .joinInk {
+    position: relative;
+    left: auto;
+    top: auto;
+    width: auto;
+    height: 180px;
+    margin: 20px;
+    border-top: 1px solid var(--edge);
+  }
+  .joinVertRule { display: block; }
+
+  .receiptHeadRow, .splitGrid, .steps, .shotRow, .aiGrid, .stats, .indexHead { display: block; }
+  .stickyCol { position: static; }
+  .stack { margin-top: 48px; }
+  .footerGrid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 40px var(--gutter); }
+  .footerBrandCol { grid-column: 1 / -1; }
+  .footerGroup:nth-child(2) { grid-column: 1; }
+  .footerGroup:nth-child(3) { grid-column: 2; }
+  .footerGroup:nth-child(4) { grid-column: 3; }
+  .footerGroup:nth-child(5) { grid-column: 4; }
+  .receiptSplit { flex-direction: column; }
+  .receiptInk { width: auto; height: 260px; }
+  .receiptWhite { border-left: none; border-top: 1px solid var(--edge); }
+  .receiptCard { height: auto; }
+
+  .s10Panel { height: auto; padding: 80px 40px; }
+  .proofLogo:nth-of-type(n + 7) { display: none; }
+  .moreXL { display: none; }
+  .moreMD { display: inline; }
+
+
+}
+
+@media (max-width: 767px) {
+  /* The label line goes: at this width a source name and its figure are the
+     whole point, and the description wraps into a second line that makes each
+     row look like a paragraph. */
+  .joinLabel { display: none; }
+  .joinRow { height: 56px; }
+  .joinRows { padding: 16px; }
+  .joinFigure { width: 52px; }
+  .joinName { font-size: 16px; }
+
+  /* The hero pair stacks and both fill the width; the two-part pill centres
+     its group rather than pushing the note off the right edge. */
+  .heroActions { flex-direction: column; align-items: stretch; gap: 10px; }
+  .btnHero, .ghostPill { width: 100%; }
+  .btnHero { height: 56px; justify-content: center; padding-inline: 14px; }
+  .btnHeroLabel { font-size: 16px; }
+  .btnHeroDivider { margin-inline: 12px; }
+  .btnHeroNote { font-size: 12px; }
+  .joinInk { height: 156px; margin: 16px; }
+  .join { border-radius: 20px; }
+  .joinInk .f2 { font-size: 40px; line-height: 40px; }
+
+  .receiptCard { border-radius: 20px; }
+  .receiptInk, .receiptWhite { padding: 20px; }
+  .receiptInk { height: auto; padding-bottom: 24px; }
+  .receiptInk .f2 { font-size: 40px; line-height: 40px; }
+  .receiptBar { padding-inline: 16px; overflow-x: auto; scrollbar-width: none; }
+  .receiptBar::-webkit-scrollbar { display: none; }
+  .segTabs { flex: none; }
+  .segTab { height: 44px; }
+  .receiptStamp { display: none; }
+
+  .s10Panel { padding: 64px 24px; border-radius: 24px; }
+  .proofRow { gap: 20px; }
+  .proofLogo:nth-of-type(n + 5) { display: none; }
+  .moreMD { display: none; }
+  .moreSM { display: inline; }
+  .btnLarge { width: 100%; height: 56px; }
+
+  .footerGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px var(--gutter); }
+  .footerGroup:nth-child(2), .footerGroup:nth-child(4) { grid-column: 1; }
+  .footerGroup:nth-child(3), .footerGroup:nth-child(5) { grid-column: 2; }
+  .footerBottom { flex-direction: column; gap: 12px; }
+  /* Measured at 375: mark + wordmark + Menu + the CTA label is 390px of
+     content in a 341px pill. The CTA label is final copy and the menu is the
+     only route to the rest of the page, so the wordmark's TEXT gives — the
+     mark still carries the brand and still links home, at a 44px target. */
+  .nav .wordmark { display: none; }
+  .nav .footerBrand { min-width: 44px; min-height: 44px; justify-content: center; }
+  .nav { gap: 4px; padding-left: 16px; }
+  /* §9's 44x44 reaches the nav's own button too. */
+  .btnNav { height: 44px; padding-inline: 12px; font-size: 14px; }
+  .menuBtn { padding-inline: 8px; font-size: 14px; }
+
+  /* §9's 44x44 applies to the footer's links too: 15px text on a 12px rhythm
+     is right for a mouse and about 24px tall for a thumb. */
+  .footerLink { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; }
+  .footerList { gap: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Every loop and every entrance lands on its final state immediately. The
+     hero is an argument; somebody who asked for less motion should get its
+     conclusion, not a shorter performance. */
+  .statusPill, .join, .joinRow, .joinInk { opacity: 1 !important; transform: none !important; animation: none !important; }
+  .statusDot, .footerDot, .aiReadingMark { animation: none !important; }
+  .joinWire { stroke-dashoffset: 0 !important; animation: none !important; }
+  .railTrack { animation: none !important; transform: none !important; }
+  .railStatic { display: flex; }
+  .railScrolling { display: none; }
+  .heroLine > span { clip-path: inset(0 0 0 0); transform: none; animation: none !important; }
+  .heroSub, .heroActions, .heroReassurance { opacity: 1 !important; transform: none !important; animation: none !important; }
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   The narrow-viewport rules, restated in full.
+
+   The v3.0 and v3.1 breakpoint blocks were gutted when the scattered hero's
+   rules were removed from inside them, so rather than leave a half-set that
+   is impossible to read, everything a narrow viewport needs is declared here,
+   last, in one place.
+   ────────────────────────────────────────────────────────────────────────── */
+
+@media (max-width: 1023px) {
+  .page { --pad: 48px; --gutter: 20px; }
+  .d0 { font-size: 64px; line-height: 62px; }
+  .d1 { font-size: 52px; line-height: 56px; }
+  .d2 { font-size: 38px; line-height: 42px; }
+  .f2 { font-size: 52px; line-height: 52px; }
+  .f3 { font-size: 32px; line-height: 36px; }
+
+  .nav { left: 24px; right: 24px; transform: none; min-width: 0; max-width: none; width: auto; padding-left: 20px; }
+  .navHidden { transform: translateY(-24px); }
+  .navLinks, .navLogin { display: none; }
+  .menuBtn { display: inline-flex; }
+
+  .rail { height: 80px; }
+  .srcRow { height: 104px; }
+
+  /* S04's track rotates to vertical: nodes down the left, content beside. */
+  .trackLine { top: 0; bottom: 0; left: 27px; right: auto; width: 2px; height: auto;
+    background: linear-gradient(to bottom, transparent, var(--edge) 40px, var(--edge) calc(100% - 40px), transparent); }
+  .nodes { grid-template-columns: 1fr; gap: 48px; }
+  .step { display: grid; grid-template-columns: 56px 1fr; gap: 24px; align-items: start; }
+  .stepTitle, .stepBody { grid-column: 2; margin-top: 0; max-width: none; }
+  .stepBody { margin-top: 12px; }
+  .note { margin-bottom: 16px; }
+  .noteRule { display: none; }
+
+  /* The card's bleed is an XL device; below LG the panel has normal padding
+     and nothing hangs off it. */
+  .s07Grid { display: block; }
+  .s07Copy, .aiCardCell { grid-column: 1 / -1; }
+  .s07Copy h2, .s07Lead { max-width: none; }
+  .s07Panel { padding: 64px; }
+  .aiCardCell { width: auto; justify-self: stretch; margin-right: 0; margin-top: 40px; }
+  .aiCard { width: auto; }
+  .index { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .indexHeading, .search { grid-column: 1 / -1; }
+  .search { width: 100%; margin-top: 24px; }
+  .filters { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none;
+    mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent 100%); }
+  .filters::-webkit-scrollbar { display: none; }
+  .filter { flex: none; }
+
+  .asks { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 40px var(--gutter); }
+  .ask:nth-child(odd) { padding-left: 0; }
+  .ask:nth-child(odd)::before { display: none; }
+  .ask:nth-child(n + 3) { padding-top: 40px; border-top: 1px solid var(--edge); }
+}
+
+@media (max-width: 767px) {
+  .page { --pad: 24px; --gutter: 16px; }
+  .d0 { font-size: min(44px, 10.1vw); line-height: min(44px, 10.1vw); }
+  .d1 { font-size: 36px; line-height: 38px; }
+  .d2 { font-size: 32px; line-height: 34px; }
+  .d3 { font-size: 24px; line-height: 30px; }
+  .bodyL { font-size: 17px; line-height: 28px; }
+  .bodyM { font-size: 16px; line-height: 26px; }
+  .f2 { font-size: 40px; line-height: 40px; }
+  .f3 { font-size: 28px; line-height: 32px; }
+
+  .nav { left: 16px; right: 16px; top: 12px; height: 56px; }
+  .rail { height: 72px; }
+  .railLead, .railDivider { display: none; }
+  .railLeadMobile { display: block; padding: 16px var(--pad) 0; color: var(--ink-35); }
+  .railPill { height: 38px; }
+
+  /* S03's rows go to three lines: mark, name and figure, then the label, then
+     the clause. */
+  .srcRow { grid-template-columns: 36px 1fr auto; height: auto; padding: 20px; }
+  .srcClause { grid-column: 1 / -1; margin-top: 10px; }
+
+  .step { grid-template-columns: 44px 1fr; gap: 16px; }
+  .node { width: 44px; height: 44px; font-size: 17px; }
+  .trackLine { left: 21px; }
+  .stepTitle, .stepBody { grid-column: 1 / -1; padding-left: 28px; }
+  .shot { overflow-x: auto; }
+
+  .index { grid-template-columns: minmax(0, 1fr); }
+  .indexCell { height: auto; }
+  .indexDesc { -webkit-line-clamp: unset; line-clamp: unset; display: block; height: auto; }
+  .filter, .requestPill { height: 44px; }
+
+  .asks { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+  .ask, .ask + .ask { padding-left: 0; padding-top: 24px; border-top: 1px solid var(--edge); }
+  .ask + .ask::before { display: none; }
+  .ask:first-child { padding-top: 0; border-top: none; }
+  .askBody { max-width: none; }
+
+  .s07Panel { padding: 40px 24px; }
+  .aiCardBody { padding: 18px; }
+  .bubble { max-width: 86%; }
+  .aiMetric { flex-wrap: wrap; }
+  .aiMetricName { flex-basis: 100%; }
+  .aiAnswer, .aiQuestion { max-width: none; }
+  /* A badge is single-line by design, which is right for a tab and wrong for
+     a sentence: this one is 349px of nowrap inside a 275px card. */
+  .aiFoot { height: auto; padding-block: 8px; white-space: normal; align-items: flex-start; }
+  .followUps { flex-direction: column; align-items: flex-start; }
+  .followUp { max-width: 100%; }
+
+  /* Shadows lighten one step: a heavy shadow at small sizes reads as blur. */
+  .railPill { box-shadow: var(--sh-sm); }
+  .join, .receiptCard, .aiCard, .darkPanel { box-shadow: var(--sh-lg); }
+}

@@ -1,5 +1,4 @@
 import { SourceMark } from "@/components/source-mark";
-import { sourceStyle } from "@/components/flow/controls/source-style";
 import styles from "@/app/snap.module.css";
 
 /**
@@ -39,16 +38,6 @@ export function Mark({
   return <SourceMark source={source} size={size} radius={radius} className={className} />;
 }
 
-/**
- * A connector's own brand colour, from the catalogue.
- *
- * The hero chips carry a coloured shadow, and it has to be the colour of the
- * logo sitting on the card — an invented palette under a real mark reads as
- * two different brands on one object.
- */
-export function brandColour(source: string): string {
-  return sourceStyle(source).color;
-}
 
 /**
  * The tick. Drawn rather than imported, at 2.5px with round caps.

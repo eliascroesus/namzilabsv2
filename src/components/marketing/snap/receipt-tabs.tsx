@@ -10,7 +10,6 @@ export type Metric = {
   figure: string;
   value: number;
   kind: "count" | "currency" | "duration";
-  /** The connectors that fed this figure, in the order the receipt lists them. */
   sources: Array<{ source: string; name: string }>;
   records: string;
   /** Only where a real prior value exists. Never "unchanged". */
@@ -26,30 +25,29 @@ const FORMATTERS: Record<Metric["kind"], (value: number) => string> = {
 };
 
 /**
- * S05 — the section that has to DEMONSTRATE the moat rather than describe it.
+ * S05 — ONE card, split down the middle.
  *
- * ═══ THE FIGURE CARD IS INK ═══
+ * ═══ WHY IT STOPPED BEING TWO ═══
  *
- * Two white boxes side by side is what this was, and the left one had a large
- * dead region between the figure and the tabs. Making the answer black fixes
- * both: it states the page's central idea a second time without repeating a
- * layout (the hero's resolved object is the same colour for the same reason),
- * and it gives the empty region something to be — the sources that fed the
- * number, which is the one piece of information that makes a figure mean
- * anything.
+ * Two cards meant two heights, so their bottoms never lined up; a hairline
+ * connector between them ended in a rotated nub that read as a glitch rather
+ * than a join; and the ink card carried a dead band between the figure and its
+ * provenance. One surface deletes all three problems at once — there is
+ * nothing left to connect, and both halves end on the same edge because they
+ * are the same card.
+ *
+ * ═══ THE TABS MOVED TO THE TOP ═══
+ *
+ * That is what clears the ink panel's empty band, and it makes the control the
+ * first thing read rather than the last — which is the right order for
+ * something whose whole job is "pick a metric, then read its working".
  *
  * ═══ CROSS-HIGHLIGHTING IS THE ARGUMENT, PERFORMED ═══
  *
- * Hovering `Sources read` in the receipt raises the very squircles on the ink
- * card that produced the figure, and hovering a squircle tints the row back.
- * It costs almost nothing and it shows what a sentence can only assert: that
- * this number knows where it came from.
- *
- * ═══ A REAL TABLIST ═══
- *
- * Arrow keys move, Home/End jump, `aria-selected` reports. The pattern is the
- * difference between a control a keyboard user can operate and a decoration
- * they cannot see.
+ * Hovering `Sources read` rings the logos that produced the figure; hovering a
+ * logo tints the row and steps that name up a weight. The names rest at 500 so
+ * the step to 600 is visible at all — when they sat at the row's own 600 the
+ * highlight declared nothing and nothing moved.
  */
 export function ReceiptTabs({ metrics }: { metrics: Metric[] }) {
   const [index, setIndex] = useState(0);
@@ -72,91 +70,86 @@ export function ReceiptTabs({ metrics }: { metrics: Metric[] }) {
   };
 
   return (
-    <div className={styles.receiptPair}>
-      <div className={styles.pairConnector} aria-hidden />
-
-      <div className={styles.figureCard}>
-        <div className={styles.panelBlooms} aria-hidden>
-          <div className={`${styles.panelBloom} ${styles.panelBloomLilac}`} />
+    <div className={styles.receiptCard}>
+      <div className={styles.receiptBar}>
+        <div className={styles.segTabs} role="tablist" aria-label="Metrics" onKeyDown={onKeyDown}>
+          {metrics.map((metric, i) => (
+            <button
+              key={metric.tab}
+              type="button"
+              role="tab"
+              aria-selected={i === index}
+              tabIndex={i === index ? 0 : -1}
+              ref={(node) => {
+                tabRefs.current[i] = node;
+              }}
+              className={`${styles.segTab} ${i === index ? styles.segTabOn : ""}`}
+              onClick={() => setIndex(i)}
+            >
+              {metric.tab}
+            </button>
+          ))}
         </div>
-        <div className={styles.figureCardBody}>
-          <span className={`${styles.bodyS} ${styles.figureLabel}`}>{active.tab}</span>
-          <span className={`${styles.f2} ${styles.figureValue}`} key={active.tab}>
-            <CountUp to={active.value} format={FORMATTERS[active.kind]} duration={420} />
-          </span>
-
-          <p className={`${styles.caption} ${styles.readFrom}`}>Read from</p>
-          <div className={styles.readMarks}>
-            {active.sources.map((s, i) => (
-              <span
-                key={s.source}
-                className={`${styles.readMark} ${lit ? styles.readMarkLit : ""}`}
-                style={{ transitionDelay: `${i * 60}ms` }}
-                onMouseEnter={() => setHoveredSource(s.source)}
-                onMouseLeave={() => setHoveredSource(null)}
-                title={s.name}
-              >
-                <Mark source={s.source} size={32} />
-              </span>
-            ))}
-            <span className={`${styles.caption} ${styles.readCount}`}>{active.records}</span>
-          </div>
-
-          {active.change ? <span className={`${styles.caption} ${styles.changeBadge}`}>{active.change}</span> : null}
-
-          <div className={styles.tabs} role="tablist" aria-label="Metrics" onKeyDown={onKeyDown}>
-            {metrics.map((metric, i) => (
-              <button
-                key={metric.tab}
-                type="button"
-                role="tab"
-                aria-selected={i === index}
-                tabIndex={i === index ? 0 : -1}
-                ref={(node) => {
-                  tabRefs.current[i] = node;
-                }}
-                className={`${styles.tabDark} ${i === index ? styles.tabDarkActive : ""}`}
-                onClick={() => setIndex(i)}
-              >
-                {metric.tab}
-              </button>
-            ))}
-          </div>
-        </div>
+        <span className={`${styles.caption} ${styles.receiptStamp}`}>
+          <span className={styles.statusDot} aria-hidden />
+          Recomputed 2 minutes ago
+        </span>
       </div>
 
-      <div className={styles.receiptCell}>
-        <div className={styles.receipt} role="tabpanel" aria-label={active.tab}>
-          <span className={styles.receiptNub} aria-hidden />
-          <div className={styles.receiptSwap} key={active.tab}>
-            <div className={styles.receiptHead}>
-              <span className={styles.h4}>{active.tab}</span>
-              <span className={styles.f4}>{active.figure}</span>
+      <div className={styles.receiptSplit}>
+        <div className={styles.receiptInk}>
+          <div className={`${styles.panelBloom} ${styles.panelBloomLilac}`} aria-hidden />
+          <div className={styles.receiptInkBody}>
+            <span className={`${styles.bodyS} ${styles.figureLabel}`}>{active.tab}</span>
+            <span className={`${styles.f2} ${styles.figureValue}`} key={active.tab}>
+              <CountUp to={active.value} format={FORMATTERS[active.kind]} duration={420} />
+            </span>
+
+            {active.change ? <span className={`${styles.caption} ${styles.changeBadge}`}>{active.change}</span> : null}
+
+            <p className={`${styles.caption} ${styles.readFrom}`}>Read from</p>
+            <div className={styles.readMarks}>
+              {active.sources.map((s, i) => (
+                <span
+                  key={s.source}
+                  className={`${styles.readMark} ${lit ? styles.readMarkLit : ""}`}
+                  style={{ transitionDelay: `${i * 60}ms` }}
+                  onMouseEnter={() => setHoveredSource(s.source)}
+                  onMouseLeave={() => setHoveredSource(null)}
+                  title={s.name}
+                >
+                  <Mark source={s.source} size={32} />
+                </span>
+              ))}
+              <span className={`${styles.caption} ${styles.readCount}`}>{active.records}</span>
             </div>
-            <div className={styles.receiptDivider} />
-            <dl className={styles.receiptLines}>
+          </div>
+        </div>
+
+        <div className={styles.receiptWhite} role="tabpanel" aria-label={active.tab}>
+          <div className={styles.receiptSwap} key={active.tab}>
+            <dl className={styles.receiptRows}>
               {active.lines.map((line) => {
                 const isSources = line.key === "Sources read";
                 return (
                   <div
-                    className={`${styles.receiptLine} ${isSources ? styles.receiptSourcesLine : ""} ${
+                    className={`${styles.receiptRow} ${isSources ? styles.receiptSourcesLine : ""} ${
                       isSources && hoveredSource ? styles.receiptLineLit : ""
                     }`}
                     key={line.key}
                     onMouseEnter={isSources ? () => setLit(true) : undefined}
                     onMouseLeave={isSources ? () => setLit(false) : undefined}
                   >
-                    <dt className={styles.caption}>
+                    <dt>
                       {/* The deleted incompleteness section's claim, attached to
-                          a real number instead of announced as a principle. It
-                          dims rather than disappearing at zero so the row keeps
-                          its shape across tabs. */}
+                          a real number. It dims rather than disappearing at
+                          zero so the row keeps its shape across tabs. */}
                       {line.excluded ? (
                         <span className={`${styles.flagDot} ${line.value === "0" ? styles.flagDotZero : ""}`} aria-hidden />
                       ) : null}
                       {line.key}
                     </dt>
-                    <dd className={styles.bodyS}>
+                    <dd>
                       {isSources
                         ? active.sources.map((s, i) => (
                             <span key={s.source} className={hoveredSource === s.source ? styles.sourceNameLit : styles.sourceNames}>
@@ -170,7 +163,6 @@ export function ReceiptTabs({ metrics }: { metrics: Metric[] }) {
                 );
               })}
             </dl>
-            <div className={styles.receiptDivider} />
             <p className={`${styles.bodyS} ${styles.receiptNote}`}>{active.note}</p>
           </div>
         </div>

@@ -453,15 +453,17 @@ const final = await still.evaluate(() => {
   // The hero's centrepiece is the board SCREENSHOT when `public/dashboard.png`
   // exists and the drawn summary card when it does not, so the assertion has
   // to follow whichever composition is live rather than one of them.
-  const shot = document.querySelector('[class*="dashboardShotImg"]');
-  const resolved = document.querySelector('[class*="resolved"]');
-  const centre = shot ?? resolved;
+  // v3.2: the hero's centrepiece is the join card's ink panel. The screenshot
+  // and the free-floating resolved card are both gone.
+  const shot = null;
+  const resolved = document.querySelector('[class*="joinInkBody"]')?.parentElement ?? null;
+  const centre = resolved;
   const chip = document.querySelector('[class*="chipRest"]');
   return {
-    kind: shot ? "screenshot" : "drawn card",
+    kind: "join card",
     // The drawn card counts to 41; the screenshot simply has to be decoded and
     // on screen, with no animation still holding it back.
-    figure: shot ? shot.complete && shot.naturalWidth > 0 : (resolved?.textContent ?? "").includes("41"),
+    figure: (resolved?.textContent ?? "").includes("41"),
     resolvedOpacity: centre ? getComputedStyle(centre).opacity : "0",
     // The idle drift is the one thing on this page that would otherwise never
     // stop moving, which §10 names as a real accessibility problem.
