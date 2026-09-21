@@ -86,8 +86,8 @@ const GOOGLE_SCOPES: Record<string, string[]> = {
    * will see "manage your AdWords campaigns". Worth knowing before support asks.
    *
    * SENSITIVE since 1 Oct 2020, so the app needs Google's OAuth verification
-   * (3-5 business days, free) on top of the developer-token approval, which is
-   * an entirely separate queue at a different company address. Both must land
+   * (3-5 business days, free) on top of the Cloud project's Google Ads API
+   * access level, which is a separate queue with its own form. Both must land
    * before one customer can connect.
    */
   gads: ["https://www.googleapis.com/auth/adwords"],

@@ -2,7 +2,9 @@ import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { googleAdsConnector } from "@/connectors/google-ads";
 import { catalogEntry } from "@/connectors/catalog";
 
-beforeEach(() => vi.stubEnv("GOOGLE_ADS_DEVELOPER_TOKEN", "dev-token"));
+// No developer token by default: Google sunset them on 9 Sep 2026 and a
+// deployment that has never had one is now the ordinary case.
+beforeEach(() => vi.stubEnv("GOOGLE_ADS_DEVELOPER_TOKEN", ""));
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
@@ -95,21 +97,31 @@ describe("Google Ads: the REST response is camelCase", () => {
 });
 
 describe("Google Ads: the headers Google refuses requests without", () => {
-  it("sends the developer token on every call", async () => {
+  it("works with NO developer token, because Google sunset them", async () => {
+    /**
+     * THE CORRECTION THIS TEST PINS. Google sunset developer tokens on
+     * 9 Sep 2026 — access now attaches to the Cloud project behind the OAuth
+     * credentials, and a token sent in the header is "optional and ignored by
+     * the API servers", with rejection promised in a future major version.
+     *
+     * This connector originally THREW without one. After the sunset that made a
+     * working API permanently unreachable over a credential Google had stopped
+     * issuing — a self-inflicted outage with a confident error message on it.
+     */
     const calls = serve([{ results: [result()] }]);
-    await googleAdsConnector.poll!({ connectionId: CONN, cursor: null, credentials: CREDS, config: { customerId: "123" } });
-    expect(calls[0].headers["developer-token"]).toBe("dev-token");
+    const res = await googleAdsConnector.poll!({ connectionId: CONN, cursor: null, credentials: CREDS, config: { customerId: "123" } });
+    expect(res.records).toHaveLength(1);
+    expect(calls[0].headers["developer-token"], "a header Google now ignores must not be sent").toBeUndefined();
     expect(calls[0].headers["authorization"]).toBe("Bearer tok");
   });
 
-  it("says what to do when the developer token is not configured", async () => {
-    // The single likeliest reason this connector does nothing on a fresh deploy,
-    // and Google's own error for it is opaque.
-    vi.stubEnv("GOOGLE_ADS_DEVELOPER_TOKEN", "");
-    serve([{ results: [] }]);
-    await expect(
-      googleAdsConnector.poll!({ connectionId: CONN, cursor: null, credentials: CREDS, config: { customerId: "123" } }),
-    ).rejects.toThrow(/GOOGLE_ADS_DEVELOPER_TOKEN.*apicenter/s);
+  it("still sends one when someone has deliberately set it", async () => {
+    // Harmless today and needed by nobody, but a deployment that kept its old
+    // token should not silently stop sending it mid-migration.
+    vi.stubEnv("GOOGLE_ADS_DEVELOPER_TOKEN", "legacy-token");
+    const calls = serve([{ results: [result()] }]);
+    await googleAdsConnector.poll!({ connectionId: CONN, cursor: null, credentials: CREDS, config: { customerId: "123" } });
+    expect(calls[0].headers["developer-token"]).toBe("legacy-token");
   });
 
   it("sends login-customer-id only for an account reached through a manager", async () => {

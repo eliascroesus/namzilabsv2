@@ -21,21 +21,27 @@ import { dailyReportWalk, dateInZone, fromMicros, metricNumber, reportRowId, rep
  * column, and `channelType` below turns it into a WHERE clause so a flow can
  * ask for YouTube alone without a second sync.
  *
- * ═══ TWO APPROVALS, AT TWO DIFFERENT COMPANIES' PACE ═══
+ * ═══ TWO APPROVALS, AT TWO DIFFERENT QUEUES ═══
  *
- * Nothing here works until both land, and they are independent queues:
+ * Nothing here works until both land, and they are independent:
  *
- *   1. A DEVELOPER TOKEN, from a Google Ads manager account's API Center. It
- *      is OURS, not the customer's, and every customer's requests are counted
+ *   1. AN ACCESS LEVEL ON OUR GOOGLE CLOUD PROJECT. Until 9 Sep 2026 this was
+ *      a developer token obtained from a Google Ads manager account's API
+ *      Center; Google sunset that and access now attaches to the Cloud project
+ *      whose OAuth credentials made the call. Enabling the API grants Test
+ *      access (test accounts only); Explorer allows 2,880 operations/day
+ *      against production accounts, Basic 15,000 after brand verification, and
+ *      Standard unlimited after a manual audit.
+ *
+ *      IT IS OURS, NOT THE CUSTOMER'S, and every customer's requests count
  *      against it — which is what makes it a `fleetLimits` entry rather than a
- *      `rateLimits` one. Explorer allows 2,880 operations/day against
- *      production accounts, Basic 15,000, Standard unlimited after a manual
- *      audit of about ten business days.
+ *      `rateLimits` one.
  *   2. GOOGLE'S OAUTH VERIFICATION, because `auth/adwords` has been a SENSITIVE
  *      scope since 1 Oct 2020. Free, 3-5 business days, and entirely separate
- *      from the token above.
+ *      from the access level above.
  *
  * Read 21 Sep 2026:
+ *   developers.google.com/google-ads/api/docs/api-policy/developer-token
  *   developers.google.com/google-ads/api/docs/api-policy/access-levels
  *   developers.google.com/google-ads/api/docs/best-practices/quotas
  *
@@ -153,16 +159,27 @@ function parseCustomer(value: string): { customerId: string; loginCustomerId: st
 }
 
 function headers(token: string, loginCustomerId: string | null): Record<string, string> {
+  /**
+   * THE DEVELOPER TOKEN IS GONE, AND SENDING ONE IS NOW A LIABILITY.
+   *
+   * Google SUNSET developer tokens on 9 September 2026: "API access levels are
+   * now determined by the Google Cloud project you used to generate your OAuth
+   * credentials", and "You can continue sending developer tokens in your API
+   * call headers, but this is optional and ignored by the API servers" — with
+   * the warning that "We will start rejecting developer tokens in API calls in
+   * a future major version."
+   * developers.google.com/google-ads/api/docs/api-policy/developer-token,
+   * read 21 Sep 2026.
+   *
+   * So the header is sent ONLY when someone has deliberately set the variable,
+   * and its absence is the normal, correct state. This function used to THROW
+   * without one, which after the sunset would have made a working API
+   * permanently unreachable over a credential Google no longer issues.
+   */
   const devToken = process.env.GOOGLE_ADS_DEVELOPER_TOKEN;
-  if (!devToken) {
-    throw new Error(
-      "google-ads: GOOGLE_ADS_DEVELOPER_TOKEN is not set. Google Ads refuses every request without it — " +
-        "apply from a Google Ads manager account at ads.google.com/aw/apicenter.",
-    );
-  }
   return {
     authorization: `Bearer ${token}`,
-    "developer-token": devToken,
+    ...(devToken ? { "developer-token": devToken } : {}),
     "content-type": "application/json",
     /**
      * REQUIRED WHENEVER THE ACCOUNT IS REACHED THROUGH A MANAGER, and harmful

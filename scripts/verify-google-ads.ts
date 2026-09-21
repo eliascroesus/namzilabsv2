@@ -37,7 +37,7 @@ function record(ok: boolean, label: string, note: string) {
 function headers(token: string, dev: string, login?: string): Record<string, string> {
   return {
     authorization: `Bearer ${token}`,
-    "developer-token": dev,
+    ...(dev ? { "developer-token": dev } : {}),
     "content-type": "application/json",
     ...(login ? { "login-customer-id": login } : {}),
   };
@@ -61,10 +61,12 @@ async function search(token: string, dev: string, customerId: string, query: str
 
 async function main() {
   const token = process.env.GOOGLE_ADS_ACCESS_TOKEN ?? process.env.GADS_API_KEY;
-  const dev = process.env.GOOGLE_ADS_DEVELOPER_TOKEN;
-  if (!token || !dev) {
-    console.error("Set GOOGLE_ADS_ACCESS_TOKEN and GOOGLE_ADS_DEVELOPER_TOKEN.");
-    console.error("The developer token comes from a Google Ads manager account: ads.google.com/aw/apicenter");
+  // OPTIONAL SINCE 9 SEP 2026, when Google sunset developer tokens and moved
+  // access onto the Cloud project. Empty is the normal, correct state.
+  const dev = process.env.GOOGLE_ADS_DEVELOPER_TOKEN ?? "";
+  if (!token) {
+    console.error("Set GOOGLE_ADS_ACCESS_TOKEN to an OAuth token carrying the adwords scope.");
+    console.error("Access level lives on the Cloud project behind that token — check its Google Ads API Overview page.");
     process.exit(2);
   }
   console.log(`connector pins: ${GOOGLE_ADS_API_VERSION}\n`);
@@ -79,7 +81,7 @@ async function main() {
       return [];
     }
   })();
-  record(listRes.ok, "the developer token and access token are both accepted", listRes.ok ? `${roots.length} accessible customer(s)` : `${listRes.status} ${listText.slice(0, 300)}`);
+  record(listRes.ok, "the access token is accepted and the project has API access", listRes.ok ? `${roots.length} accessible customer(s)` : `${listRes.status} ${listText.slice(0, 300)}`);
   if (!listRes.ok) {
     /**
      * The two failures worth naming, because Google's message for each is

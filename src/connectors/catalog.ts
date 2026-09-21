@@ -2631,12 +2631,15 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
     historyNote:
       "Google restates conversions for days or weeks after the click, so a recent day's figures keep moving after it ends.",
     /**
-     * THE DEVELOPER TOKEN IS OURS, AND ITS DAILY CEILING IS THE WHOLE FLEET'S.
+     * OUR CLOUD PROJECT'S DAILY CEILING IS THE WHOLE FLEET'S.
      *
-     * Every customer's requests count against one token, which makes this a
-     * fleet limit and not a per-connection one. Explorer allows "2,880 API
-     * operations per day against production accounts", Basic 15,000, Standard
-     * unlimited — developers.google.com/google-ads/api/docs/api-policy/access-levels,
+     * Every customer's requests count against one Google Cloud project — the
+     * one behind GOOGLE_CLIENT_ID — which makes this a fleet limit and not a
+     * per-connection one. (Until 9 Sep 2026 the same ceiling hung off a
+     * developer token; Google sunset those and moved the level onto the
+     * project.) Explorer allows "2,880 API operations per day against
+     * production accounts", Basic 15,000, Standard unlimited —
+     * developers.google.com/google-ads/api/docs/api-policy/access-levels,
      * read 21 Sep 2026.
      *
      * 2,880/day is 2 a minute, which is what is declared, because Explorer is
@@ -2650,7 +2653,21 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
     /** Per customer account; Google publishes no separate per-account rate for search. */
     rateLimits: { "googleAds.search": { requestsPerMinute: 60 }, "customers.list": { requestsPerMinute: 60 } },
     autoWebhook: false,
-    requiresEnv: ["GOOGLE_ADS_DEVELOPER_TOKEN"],
+    /**
+     * A DELIBERATE HUMAN SWITCH, because nothing in the environment can prove
+     * the thing that actually gates this.
+     *
+     * Google sunset developer tokens on 9 Sep 2026; access now attaches to the
+     * Google Cloud project behind `GOOGLE_CLIENT_ID`, and enabling the API
+     * grants TEST access — which reaches test accounts only and refuses every
+     * real advertiser. There is no variable, header or endpoint that reports
+     * the project's level cheaply, so a customer on a Test-access project would
+     * connect happily and then see every sweep fail.
+     *
+     * Set GOOGLE_ADS_ENABLED=1 once the Cloud project shows Explorer access or
+     * better on its Google Ads API Overview page.
+     */
+    requiresEnv: ["GOOGLE_ADS_ENABLED"],
     credentialFields: [],
     flowFields: [
       {

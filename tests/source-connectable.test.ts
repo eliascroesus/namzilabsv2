@@ -37,19 +37,24 @@ describe("a source is only offered when it can actually be connected", () => {
     expect(sourceConnectable("meta-ads")).toBe(false);
   });
 
-  it("refuses Google Ads without its developer token, even though Google OAuth is configured", () => {
+  it("refuses Google Ads until someone confirms the Cloud project has real access", () => {
     /**
      * THE CASE THE PROVIDER CHECK ALONE CANNOT SEE. Google Ads rides the
      * existing GOOGLE_CLIENT_ID that Sheets and Calendar already use, so its
-     * provider looks perfectly configured — while every request it makes is
-     * refused by Google without a developer token.
+     * provider looks perfectly configured.
+     *
+     * What actually gates it is the Google Cloud project's Google Ads API
+     * access level — TEST access reaches test accounts only and refuses every
+     * real advertiser — and since Google sunset developer tokens on
+     * 9 Sep 2026 there is no credential whose presence proves that level.
+     * Hence a deliberate switch rather than an inferred one.
      */
     vi.stubEnv("GOOGLE_CLIENT_ID", "id");
     vi.stubEnv("GOOGLE_CLIENT_SECRET", "secret");
-    vi.stubEnv("GOOGLE_ADS_DEVELOPER_TOKEN", "");
+    vi.stubEnv("GOOGLE_ADS_ENABLED", "");
     expect(sourceConnectable("gads")).toBe(false);
 
-    vi.stubEnv("GOOGLE_ADS_DEVELOPER_TOKEN", "dev");
+    vi.stubEnv("GOOGLE_ADS_ENABLED", "1");
     expect(sourceConnectable("gads")).toBe(true);
   });
 
