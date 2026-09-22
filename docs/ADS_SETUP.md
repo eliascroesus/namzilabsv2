@@ -198,7 +198,26 @@ Set it as `META_LOGIN_CONFIG_ID` and the connector sends `config_id` instead of
 get 60-day tokens until the app reaches Full Access (below), at which point
 Meta stops expiring them anyway.
 
-## 2f. Business Verification and App Review
+## 2f. The three URLs Meta asks for
+
+**App settings → Basic** has required fields that App Review checks are live.
+All three exist and are public:
+
+| Field | URL |
+|---|---|
+| Privacy Policy URL | `https://namzilabs.co/privacy` |
+| Terms of Service URL | `https://namzilabs.co/terms` |
+| User Data Deletion | choose **Data Deletion Instructions URL** → `https://namzilabs.co/data-deletion` |
+
+Meta offers a *Data Deletion Callback URL* as the alternative. Take the
+**Instructions URL** — the callback is a signed-request endpoint you would have
+to build and keep working, and the instructions page is equally accepted because
+deletion here is genuinely self-serve.
+
+TikTok and Google ask for the privacy policy in the same way; the deletion page
+serves all three.
+
+## 2g. Business Verification and App Review
 
 - **Business Verification** — App Dashboard → **Review → Business Verification
   → Start Verification**. Required before Advanced Access to ads permissions.
@@ -207,7 +226,7 @@ Meta stops expiring them anyway.
   campaigns, which this connector never does, and makes review harder for
   nothing.
 
-## 2g. Raise the rate limit when you can
+## 2h. Raise the rate limit when you can
 
 Meta scores requests rather than counting them: a read costs 1 point.
 
@@ -221,7 +240,7 @@ calls in 15 days with an error rate under 15%** — so it becomes reachable simp
 by running. When you clear it, raise `fleetLimits` on the `meta-ads` catalog
 entry from 12 to 1800; the comment there says so.
 
-## 2h. Verify
+## 2i. Verify
 
 ```
 META_ADS_TOKEN=EAA… pnpm tsx scripts/verify-meta-ads.ts
