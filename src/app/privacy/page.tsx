@@ -53,15 +53,18 @@ export default function PrivacyPage() {
 
       <LegalSection title="Your choices">
         <p>
-          You can disconnect any integration at any time, which stops further data collection from that source. You may
-          request deletion of your data by contacting us.
+          You can disconnect any integration at any time, which stops further data collection from that source. You can
+          also delete your data yourself, immediately and permanently — see{" "}
+          <LegalLink href="/data-deletion">Deleting your data</LegalLink> for the exact steps, including how to{" "}
+          remove a single connected app or the whole workspace.
         </p>
       </LegalSection>
 
       <LegalSection title="Contact">
         <p>
-          Questions or deletion requests? Email{" "}
-          <LegalLink href="mailto:support@namzilabs.com">support@namzilabs.com</LegalLink>.
+          Questions? Email <LegalLink href="mailto:support@namzilabs.com">support@namzilabs.com</LegalLink>. To delete
+          your data, you do not need to write to us at all —{" "}
+          <LegalLink href="/data-deletion">Deleting your data</LegalLink> covers the self-serve routes.
         </p>
       </LegalSection>
     </LegalPage>
