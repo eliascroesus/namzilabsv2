@@ -1129,11 +1129,20 @@
    It is the third thing that makes these read as the product's card rather
    than as a blue rectangle, after the gradient and the arc.
 
-   ONLY ON THE TWO SURFACES BIG ENOUGH TO SHOW A GRID. globals.css makes the
-   same call for the rail's invite card and gives the reason: 88px squares
-   behind a small card is one faint line at a random angle, which reads as a
-   smudge rather than as structure. S04's answer tile is 176 x 116 and the
-   board's backing is behind a screenshot, so neither gets one.
+   ONLY ON THE TWO PANELS, AND THE LINE IS NOT SIZE — IT IS DENSITY.
+   globals.css makes the same call for the rail's invite card and gives half
+   the reason: 88px squares behind a small card is one faint line at a random
+   angle, which reads as a smudge rather than as structure. The other half is
+   what the receipt's figure panel showed. At 530 x 374 with type over all of
+   it, four columns and three rows of grid land wherever they land — a
+   vertical line straight down through the `41` and through every source name,
+   a horizontal one immediately above `What each source said`. Two rhythms,
+   neither aligned to the other, and the eye reads the newer one as a defect.
+
+   S07's and S10's panels are five times the area with their type in the
+   upper-left of it, so the same grid is texture there and is gone before the
+   copy gets dense. S04's answer tile (176 x 116), the board's backing (behind
+   a screenshot) and the receipt's figure panel get none.
 
    `z-index: -1` paints it above the element's own background and below its
    content — which only holds inside a stacking context, so the surfaces that

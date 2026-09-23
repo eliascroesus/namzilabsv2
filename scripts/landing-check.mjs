@@ -453,7 +453,12 @@ const skin = await page.evaluate(() => {
     };
   });
 
-  return { rims, ruled };
+  const receipt = document.querySelector('[class*="receiptInk"]');
+  return {
+    rims,
+    ruled,
+    receiptRuled: receipt ? getComputedStyle(receipt, "::before").backgroundImage.includes("linear-gradient") : false,
+  };
 });
 
 for (const [name, rim] of Object.entries(skin.rims)) {
@@ -461,12 +466,25 @@ for (const [name, rim] of Object.entries(skin.rims)) {
     rim === null ? "surface not found" : `conic ${rim.conic} · solid border ${rim.stroke}`);
 }
 
-check(skin.ruled.length >= 3, "three surfaces carry the ruled paper", `${skin.ruled.length}`);
+check(skin.ruled.length === 2, "the two panels carry the ruled paper", `${skin.ruled.length}`);
 check(
-  skin.ruled.length >= 3 &&
+  skin.ruled.length === 2 &&
     skin.ruled.every((r) => r.lines >= 2 && r.size.length >= 2 && r.size.every((v) => v === "88px 88px") && r.masked),
-  "and every one of them draws an 88px grid that fades before the foot",
+  "and each draws an 88px grid that fades before the foot",
   JSON.stringify(skin.ruled[0] ?? null),
+);
+/**
+ * AND THE RECEIPT'S FIGURE PANEL DOES NOT, which is the half of the rule that
+ * a count alone would not hold. It had one for a build: at 530 x 374 with
+ * type over all of it, a vertical line ran straight down through the `41` and
+ * through every source name, and a horizontal one sat immediately above
+ * `What each source said`. Two rhythms, neither aligned to the other. The
+ * test is density rather than size, so the next dense surface to take the
+ * grid trips this rather than shipping.
+ */
+check(
+  !skin.receiptRuled,
+  "and the receipt's figure panel does not — its type runs over all of it",
 );
 
 // §7.2: five labelled nodes and one output, reading left to right. A node
