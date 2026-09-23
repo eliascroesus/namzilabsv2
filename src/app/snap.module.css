@@ -27,8 +27,8 @@
 
 .page {
   /* ── Canvas and ink (§6.1) ────────────────────────────────────────────── */
-  --canvas: #fbfafc;
-  --plate: #f5f4f9;
+  --canvas: #fafbfd;
+  --plate: #f3f5fa;
   --lift: #ffffff;
   --edge: #ecebf2;
   --ink: #14141c;
@@ -145,15 +145,23 @@
    stays legible. Static: no animation, no parallax.
    ────────────────────────────────────────────────────────────────────────── */
 
+/* ═══ COOL, AND ON ONE HUE ═══
+   The three blooms were peach, lilac and mint — a warm cream wash that read
+   as a template's default atmosphere and, with a warm-clay accent, is the
+   single commonest tell of a generated page. They are now one family walked
+   around the product's own blue: the brand blue itself top-left, a colder
+   steel-blue right, and a pale wash below. Same three-ellipse structure, same
+   blur, no warm hue anywhere on the page — which is also what lets the
+   board's screenshot sit on it without its greens fighting a peach ground. */
 .bloom {
   position: fixed;
   inset: 0;
   z-index: 0;
   pointer-events: none;
   background:
-    radial-gradient(44vw 44vw at 18% 12%, rgba(255, 227, 208, 0.9), transparent 70%),
-    radial-gradient(50vw 50vw at 82% 28%, rgba(230, 224, 255, 0.85), transparent 70%),
-    radial-gradient(40vw 40vw at 50% 68%, rgba(213, 245, 233, 0.6), transparent 70%);
+    radial-gradient(44vw 44vw at 16% 10%, rgba(86, 140, 255, 0.30), transparent 70%),
+    radial-gradient(52vw 52vw at 84% 26%, rgba(150, 183, 255, 0.34), transparent 70%),
+    radial-gradient(42vw 42vw at 52% 72%, rgba(206, 220, 242, 0.55), transparent 70%);
   filter: blur(60px);
   /* A static promoted layer that never repaints — a 60px blur recomputed on
      scroll is the single most expensive thing this page could do. */
@@ -178,7 +186,7 @@
 .belowFold {
   position: relative;
   z-index: 1;
-  background: linear-gradient(to bottom, rgba(251, 250, 252, 0.78), rgba(251, 250, 252, 0.78));
+  background: linear-gradient(to bottom, rgba(250, 251, 253, 0.78), rgba(250, 251, 253, 0.78));
 }
 
 /* ──────────────────────────────────────────────────────────────────────────
@@ -772,21 +780,32 @@
 /* ── S04 · The metric canvas (§7) ──────────────────────────────────────── */
 
 /* The frame is a card like every other card; what makes it read as an EDITOR
-   is the dot grid inside it, not a different border. */
+   is the dot grid inside it, not a different border.
+
+   THE HAIRLINE IS A SHADOW RING, NOT A BORDER, and that is arithmetic rather
+   than taste. A 1px border takes 2px out of the content box, so the 1200-wide
+   drawing inside a 1200-wide container overflowed by exactly two pixels — and
+   `overflow-x: auto` answered that with a full-width scrollbar along the
+   bottom of the card at every width, on every machine set to show scrollbars
+   always. A ring paints in the same place and costs no width. */
 .shot {
   position: relative;
   margin-top: 96px;
-  border: 1px solid var(--card-edge);
+  --cv-k: 1;
   border-radius: 24px;
-  box-shadow: var(--card-top), var(--sh-xl);
+  box-shadow: 0 0 0 1px var(--card-edge), var(--card-top), var(--sh-xl);
   overflow: hidden;
   background: #fafafc;
 }
 
-/* The scroller is a separate element from the frame so the right-edge fade can
-   sit on the FRAME and stay put. A pseudo-element on the scroller itself
-   scrolls away with the content, which is the opposite of a scroll cue. */
-.cvScroll { overflow-x: auto; overflow-y: hidden; }
+/* NOTHING SCROLLS SIDEWAYS HERE ANY MORE. The drawing is a fixed 1200 × 460
+   coordinate space and the frame is whatever the container is, so the two are
+   reconciled by SCALING the drawing — one dial, `--cv-k`, exactly as the fold
+   scales its rig — and the wrapper carries the scaled height as its layout
+   box. Below 1280 the drawing stops scaling and re-lays out instead: at the
+   0.74 a 1024 container would need, a node's label is under 11px. */
+.cvFit { overflow: hidden; height: calc(460px * var(--cv-k, 1)); }
+.cvStage { transform: scale(var(--cv-k, 1)); transform-origin: 0 0; }
 
 /* THE GRID IS THE CANVAS. 1.5px dots at 20px centres — a `radial-gradient`
    rather than an SVG pattern so it costs one paint and no DOM. */
@@ -794,6 +813,7 @@
   position: relative;
   width: 1200px;
   height: 460px;
+  transform-origin: 0 0;
   background-image: radial-gradient(circle at 1px 1px, #dedde7 0.75px, transparent 0.75px);
   background-size: 20px 20px;
   background-position: 9px 9px;
@@ -839,21 +859,35 @@
 .cvNodeName { font-weight: 600; white-space: nowrap; }
 .cvNodeSub { color: var(--ink-35); white-space: nowrap; }
 
-/* The one dark thing in the section, because it is the one answer. */
+/* THE ONE DARK THING IN THE SECTION, BECAUSE IT IS THE ONE ANSWER - and it
+   is now a card rather than a square.
+
+   At 164 x 108 holding two lines it was very nearly a cube of black sitting
+   at the end of a row of wide pale cards: heavier than anything near it,
+   shaped like nothing else on the page, and carrying a percentage with
+   nothing to check it against. The third line fixes both problems at once. It
+   gives the tile the landscape proportion every other node has, and it puts
+   the arithmetic beside the figure, which is the page's whole argument, made
+   at the one place a reader is looking at a number. */
 .cvOut {
-  width: 164px;
-  height: 108px;
+  width: 176px;
+  height: 116px;
   flex-direction: column;
   align-items: flex-start;
   justify-content: center;
-  gap: 4px;
+  gap: 2px;
+  padding-inline: 16px;
+  border-radius: 16px;
   border-color: var(--ink-edge);
   background: var(--ink-fill);
   box-shadow: var(--ink-top), var(--sh-ink);
 }
 
 .cvOutLabel { color: rgba(255, 255, 255, 0.55); }
-.cvOutFigure { font-size: 32px; font-weight: 800; letter-spacing: -0.03em; line-height: 1.1; color: #ffffff; font-variant-numeric: tabular-nums; }
+.cvOutFigure { font-size: 30px; font-weight: 800; letter-spacing: -0.03em; line-height: 1.12; color: #ffffff; font-variant-numeric: tabular-nums; }
+/* 0.5 is 5.15:1 on this fill at 13px - the same value, for the same reason,
+   as the figure's sub-line everywhere else on the page. */
+.cvOutFoot { margin-top: 4px; color: rgba(255, 255, 255, 0.5); }
 
 /* ── The build, once, on first entry (§7.3) ────────────────────────────── */
 
@@ -924,7 +958,10 @@
 .panelBloom { position: absolute; inset: 0; pointer-events: none; }
 .panelBloomLilac { background: radial-gradient(44% 44% at 18% 14%, rgba(230, 224, 255, 0.12), transparent 70%); filter: blur(80px); }
 .panelBloomMint { background: radial-gradient(36% 36% at 88% 86%, rgba(213, 245, 233, 0.06), transparent 70%); filter: blur(90px); }
-.panelBloomPeach { background: radial-gradient(50% 50% at 20% 80%, rgba(255, 227, 208, 0.08), transparent 70%); filter: blur(90px); }
+/* Was `panelBloomPeach`, and renamed with its colour rather than left as a
+   blue thing called peach — the closing panel's warm bloom was the last warm
+   value on the page. */
+.panelBloomSteel { background: radial-gradient(50% 50% at 20% 80%, rgba(86, 140, 255, 0.10), transparent 70%); filter: blur(90px); }
 
 /* An internal bloom, because a large flat black panel reads as a hole. */
 
@@ -1679,94 +1716,133 @@
 .s01, .s03, .s04, .s05, .s07, .s09, .s10, .plate { scroll-margin-top: 112px; }
 
 /* ──────────────────────────────────────────────────────────────────────────
-   S01 — the stage: the real board, wired to the tools that feed it.
+   S01 — the board, and the four tools plugged into its side.
 
-   The nodes are the SAME pills the source rail uses, deliberately: a reader
-   meets the pill here and meets it again a scroll later, so the rail reads as
-   more of the same thing rather than as a different component.
+   Replaces both the v3 "stage" (pills wired to a screenshot, dead in the file
+   for two builds) and the v4 deck of fanned cards. The argument the deck made
+   — three tools disagree, one card settles it — is made in words and real
+   figures in S03 and in a real receipt in S05, which is where it was always
+   strongest. The fold shows the product instead.
+
+   TWO COORDINATE SYSTEMS, AND ONLY ONE OF THEM IS FLUID. The board has no
+   width: it starts at the rig and ends at the right edge of the VIEWPORT, so
+   on a wide screen it grows rather than leaving a gutter beside it. The rig —
+   marks, wires, port — is a fixed 200 × 540 space pinned to the board's left
+   edge and scaled by one dial, so the wires keep landing on the board's
+   navigation rail at every width instead of drifting into the charts.
    ────────────────────────────────────────────────────────────────────────── */
 
-.stage {
+.shotStage {
   position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
   width: 100%;
-  max-width: 1200px;
-  aspect-ratio: 1200 / 420;
-  margin: 64px auto 0;
+  height: var(--board-h, 540px);
 }
 
-.nodeCol {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  align-items: flex-start;
-  width: 15.83%;
-  height: 71.4%;
-  z-index: 2;
-}
-
-.nodeColRight { align-items: flex-end; }
-
-/* The rail's pill, exactly. */
-.nodePill {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  height: 44px;
-  padding: 8px 18px 8px 8px;
-  border: 1px solid var(--edge);
-  border-radius: 999px;
-  background: var(--lift);
-  box-shadow: var(--sh-sm);
-  font-size: 15px;
-  font-weight: 500;
-  white-space: nowrap;
-  opacity: 0;
-  transform: translateY(8px);
-  animation: nodeIn 320ms var(--snapIn) forwards;
-}
-
-@keyframes nodeIn { to { opacity: 1; transform: translateY(0); } }
-
-.wires { position: absolute; inset: 0; z-index: 0; }
-
-/* ORTHOGONAL, NOT CURVES. Four soft converging arcs read as decoration; a bus
-   — each node straight to a trunk, the trunk straight into the board — reads
-   as wiring, which is what it is. 22% rather than 16%: a line too faint to
-   follow is the same failure as decoration too faint to read. */
-.wire {
-  fill: none;
-  stroke: var(--ink);
-  stroke-width: 1.5;
-  stroke-linejoin: round;
-  opacity: 0.22;
-  stroke-dasharray: 420;
-  stroke-dashoffset: 420;
-  animation: wireDraw 520ms var(--glide) 1600ms forwards;
-}
-
-@keyframes wireDraw { to { stroke-dashoffset: 0; } }
-
-.board {
-  display: block;
+/* THE RIGHT EDGE IS THE VIEWPORT'S, AND THAT IS THE WHOLE COMPOSITION.
+   `--bleed` is the distance from the container's right edge to the screen's:
+   half the leftover width plus the page gutter. It is arithmetic rather than
+   a guess, and it is why the frame has no right radius — there is no corner
+   to round, the picture has left the screen. Cropping to the left also means
+   the part that leaves is chart and the part that stays is the rail the
+   wires land on. */
+.boardFrame {
   position: absolute;
-  left: 23.333%;
-  top: 7.6%;
-  z-index: 1;
-  width: 53.333%;
-  border: 1px solid var(--card-edge);
-  border-radius: 20px;
-  background: var(--card-fill);
-  box-shadow: var(--card-top), var(--sh-xl);
+  z-index: 0;
+  inset: 0 calc(-1 * var(--bleed)) 0 calc(26px * var(--rig-k, 1));
+  border-radius: 24px 0 0 24px;
+  /* Ink, like every other answer on this page — and it is under the
+     screenshot rather than beside it, so a slow image shows the right
+     silhouette instead of a white hole. */
+  background: var(--ink-fill);
+  box-shadow: var(--ink-top), var(--sh-ink);
   overflow: hidden;
   opacity: 0;
-  transform: scale(0.98);
-  animation: boardIn 460ms var(--snapIn) 1000ms forwards;
+  transform: translateY(14px) scale(0.99);
+  animation: shotIn 560ms var(--snapIn) 820ms forwards;
 }
 
-@keyframes boardIn { to { opacity: 1; transform: scale(1); } }
+.boardImg { object-fit: cover; object-position: left center; }
+
+@keyframes shotIn { to { opacity: 1; transform: translateY(0) scale(1); } }
+
+/* ONE DIAL. §5.7's widths and §5.6's heights both shrink the rig, and the
+   board's left inset is written in terms of the same number so the marks
+   never stop straddling the edge. */
+.boardRig {
+  position: absolute;
+  z-index: 2;
+  left: 0;
+  top: 50%;
+  width: 200px;
+  height: 540px;
+  transform: translateY(-50%) scale(var(--rig-k, 1));
+  transform-origin: 0 50%;
+}
+
+.boardWires { position: absolute; left: 0; top: 0; pointer-events: none; }
+
+/* White, not ink: these cross the board's own dark rail, and a dark hairline
+   on a dark rail is a hairline nobody can follow. 0.55 is where a 1.5px line
+   stays legible over the rail without reading as a highlight. */
+.boardWire {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.55);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-dasharray: 320;
+  stroke-dashoffset: 320;
+  animation: cvDraw 420ms var(--glide) var(--d) forwards;
+}
+
+.boardPort { fill: #ffffff; opacity: 0; animation: fadeIn 220ms var(--glide) 1660ms forwards; }
+.boardPortRing { fill: rgba(255, 255, 255, 0.16); opacity: 0; animation: fadeIn 260ms var(--glide) 1620ms forwards; }
+
+/* HALF ON THE PAGE, HALF ON THE BOARD. A chip floating beside a picture is
+   decoration; a chip crossing its border is a connection, and that crossing
+   is the only reason this object says anything the screenshot alone does
+   not. */
+.boardChip {
+  position: absolute;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border: 1px solid var(--card-edge);
+  border-radius: 18px;
+  background: var(--card-fill);
+  box-shadow: var(--card-top), var(--sh-lg);
+  opacity: 0;
+  transform: scale(0.88);
+  animation: popIn 340ms var(--snapIn) var(--d) forwards;
+}
+
+/* Connected, stated in 9 pixels — and never on its own: the stage's label
+   says these four are connected in words, for a reader who gets no colour. */
+/* -1 rather than -3, which is a two-pixel move made for a measurable reason:
+   the chip's padding box is 54, and a dot hanging 3px past it made the chip
+   report a 57px scroll width — an overflow the geometry check reads as a row
+   blowing past its container, and rightly, because it cannot tell a designed
+   overhang from a broken one. At -1 the dot still sits on the corner and the
+   chip no longer overflows itself. */
+.boardChipDot {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 12px;
+  height: 12px;
+  border: 2.5px solid var(--lift);
+  border-radius: 50%;
+  background: var(--good);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .boardFrame, .boardChip { opacity: 1; transform: none; animation: none; }
+  .boardRig { transform: translateY(-50%) scale(var(--rig-k, 1)); }
+  .boardWire { stroke-dashoffset: 0; animation: none; }
+  .boardPort, .boardPortRing { opacity: 1; animation: none; }
+}
 
 
 /* ──────────────────────────────────────────────────────────────────────────
@@ -2067,15 +2143,11 @@
   .railScrolling { display: none; }
   .heroLine > span { clip-path: inset(0 0 0 0); transform: none; animation: none !important; }
   .heroSub, .heroActions, .heroReassurance { opacity: 1 !important; transform: none !important; animation: none !important; }
-  /* The deck lands dealt. Each tinted card keeps the transform its entrance
-     ENDS on — take those away and all four stack into one rectangle, which is
-     not the final state, it is a different picture. */
-  .deckCard, .deckFront { opacity: 1 !important; animation: none !important; transition: none !important; }
-  .deckCard1 { transform: translate(-102px, -156px) scale(0.88) rotate(-7.5deg); }
-  .deckCard2 { transform: translate(-68px, -104px) scale(0.92) rotate(-5deg); }
-  .deckCard3 { transform: translate(-34px, -52px) scale(0.96) rotate(-2.5deg); }
-  .deckFront { transform: none; }
-  .deckReconciled { opacity: 1 !important; animation: none !important; }
+  /* The board arrives built. Its own `prefers-reduced-motion` block (§S01)
+     holds the frame, the marks, the wires and the port; what is restated here
+     is only the `!important` the hero's other elements need to beat their
+     entrance delays. */
+  .boardFrame, .boardChip { opacity: 1 !important; animation: none !important; }
 }
 
 /* ──────────────────────────────────────────────────────────────────────────
@@ -2228,10 +2300,18 @@
    ────────────────────────────────────────────────────────────────────────── */
 
 /* ONE DECLARATION OF THE FRAME HEIGHT, because two things depend on it being
-   the same number: the hero section itself and the absolutely-positioned deck
-   that has to overlay it exactly. Written twice, they drift the first time
-   someone retunes one of them. */
-.fold { position: relative; --fold-h: clamp(600px, calc(100svh - 96px), 920px); }
+   the same number: the hero section itself and the absolutely-positioned
+   board that has to overlay it exactly. Written twice, they drift the first
+   time someone retunes one of them. */
+/* The rig's dial and the board's height are declared together because the two
+   have to agree: the rig is 540 tall in its own coordinate space, so a board
+   shorter than 540 × k crops its top and bottom marks. */
+.fold {
+  position: relative;
+  --fold-h: clamp(600px, calc(100svh - 96px), 920px);
+  --rig-k: 1;
+  --board-h: 540px;
+}
 
 .s01 {
   display: flex;
@@ -2245,8 +2325,8 @@
 .foldGrid {
   position: relative;
   width: 100%;
-  /* Encloses the deck, which hangs below the copy — otherwise the section
-     centres the copy alone and the deck falls out of the frame. */
+  /* The copy's own frame. The board is laid over the fold rather than into
+     this grid, so this height is what centres the copy against it. */
   min-height: 580px;
 }
 
@@ -2300,19 +2380,16 @@
 .heroActions { display: flex; align-items: center; gap: 12px; margin-top: 32px; opacity: 0; transform: scale(0.96); animation: popIn 300ms var(--snapIn) 740ms forwards; }
 .heroReassurance { margin-top: 16px; color: var(--ink-35); opacity: 0; animation: fadeIn 240ms var(--glide) 860ms forwards; }
 
-/* ── The deck ─────────────────────────────────────────────────────────── */
+/* ── The board, laid back over the hero ───────────────────────────────── */
 
-/* 159px = the status pill, its gap and headline line one — so the deck's top
-   edge sits 16px below the top of line two and rises alongside lines two and
-   three rather than below the whole headline. */
-/* THE DECK, PUT BACK WHERE IT LOOKS LIKE IT LIVES.
-   It is a sibling of the hero in the document (see page.tsx) and is laid back
+/* IT IS A SIBLING OF THE HERO IN THE DOCUMENT (see page.tsx) and is laid back
    over it here: same height as the frame, same container width and padding,
-   so `margin-left: auto` lands its right edge on the container's right edge
-   exactly as it did when it was a child. `pointer-events` is off on the
-   overlay and back on for the deck itself, so the invisible box does not
-   swallow clicks on the headline or the buttons beneath it. */
-.foldDeck {
+   so `margin-left: auto` lands the rig on the container's right-hand column
+   exactly as it would if it were a child. `pointer-events` is off on the
+   overlay and never switched back on — the board is a picture, and an
+   invisible box over the headline that swallowed clicks on the call to action
+   is the failure this page can least afford. */
+.foldShot {
   position: absolute;
   z-index: 2;
   left: 50%;
@@ -2325,134 +2402,28 @@
   padding-inline: var(--pad);
   transform: translateX(-50%);
   pointer-events: none;
+
+  /* THE DISTANCE FROM THE CONTAINER'S RIGHT EDGE TO THE SCREEN'S, in one
+     expression: half of whatever the container did not use, plus the gutter
+     it keeps. `min()` is what makes it correct below the container's own
+     max-width as well as above it — under 1360 there is no leftover and the
+     bleed is exactly the gutter. Measured: 120 at 1440, 360 at 1920, 80 at
+     1360, 64 at 1280. */
+  --bleed: calc((100vw - min(100vw, calc(var(--container) + var(--pad) * 2))) / 2 + var(--pad));
 }
 
-/* 79px BELOW the frame's centre line, which is the same thing the old
-   `top: 159px` said relative to the 580px copy block — measured, not
-   re-derived. That drop is what makes the deck rise alongside headline lines
-   two and three instead of sitting level with the whole block. */
-/* ONE DIAL FOR THE WHOLE DECK. §5.6's height tiers and §5.7's width tiers
-   both shrink it, and they have to agree about the layout box as well as the
-   drawing — a bare `scale()` would leave a 560px hole in the flow and a bare
-   width change would crop it. `transform-origin: 0 0` keeps the two in step:
-   the wrapper IS the scaled box. */
-.foldDeckInner {
+/* THE PART THAT LIVES INSIDE THE CONTAINER, and the only part that is
+   measured: 464 wide is what is left of the grid once the headline has taken
+   its 780, and 540 tall is the board. Everything to the right of this box is
+   bleed. */
+.foldShotInner {
   position: relative;
-  top: calc(79px * var(--deck-scale, 1));
-  width: calc(560px * var(--deck-scale, 1));
-  height: calc(420px * var(--deck-scale, 1));
+  width: calc(464px * var(--rig-k, 1));
+  height: var(--board-h, 540px);
   margin-left: auto;
-  pointer-events: auto;
+  pointer-events: none;
 }
 
-.foldDeckInner .deck { transform: scale(var(--deck-scale, 1)); transform-origin: 0 0; }
-
-.deck {
-  position: relative;
-  display: block;
-  width: 560px;
-  height: 420px;
-  text-decoration: none;
-  color: inherit;
-  cursor: pointer;
-}
-
-.deck:focus-visible { outline: 2px solid var(--ink); outline-offset: 6px; border-radius: 20px; }
-
-.deckCard,
-.deckFront {
-  position: absolute;
-  left: 140px;
-  top: 176px;
-  display: flex;
-  flex-direction: column;
-  width: 400px;
-  height: 232px;
-  border-radius: 20px;
-  overflow: hidden;
-}
-
-/* `transform-origin` at the bottom centre so the fan pivots like a held hand
-   rather than sliding. */
-.deckCard {
-  transform-origin: 50% 100%;
-  border: 1px solid var(--card-edge);
-  box-shadow: var(--card-top), var(--sh-lg);
-  opacity: 0;
-  transition: transform 420ms var(--snapIn);
-}
-
-.deckCard1 { z-index: 1; background: #eef3ff; animation: deckIn1 480ms var(--snapIn) 900ms forwards; }
-.deckCard2 { z-index: 2; background: #fff5e9; animation: deckIn2 480ms var(--snapIn) 1000ms forwards; }
-.deckCard3 { z-index: 3; background: #eaf6ee; animation: deckIn3 480ms var(--snapIn) 1100ms forwards; }
-
-@keyframes deckIn1 {
-  from { opacity: 0; transform: translate(-102px, -196px) scale(0.88) rotate(-14deg); }
-  to { opacity: 1; transform: translate(-102px, -156px) scale(0.88) rotate(-7.5deg); }
-}
-@keyframes deckIn2 {
-  from { opacity: 0; transform: translate(-68px, -144px) scale(0.92) rotate(-10deg); }
-  to { opacity: 1; transform: translate(-68px, -104px) scale(0.92) rotate(-5deg); }
-}
-@keyframes deckIn3 {
-  from { opacity: 0; transform: translate(-34px, -92px) scale(0.96) rotate(-6deg); }
-  to { opacity: 1; transform: translate(-34px, -52px) scale(0.96) rotate(-2.5deg); }
-}
-
-/* Only the top strip shows at rest, so it carries everything. */
-.deckHead { display: flex; align-items: center; gap: 10px; flex: none; height: 52px; padding-inline: 18px; }
-.deckName { font-size: 18px; font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; }
-/* NOT `--ink-35`. That grey is solved against the page's own near-white; on
-   the deck's tinted card fills (#eef3ff, #fff5e9, #eaf6ee) it lands at 4.49:1
-   and 4.50:1 — straddling AA. This one clears 5.8:1 on all three. */
-.deckLabel { font-size: 13px; font-weight: 500; color: #5c5c6e; white-space: nowrap; }
-.deckFigure { margin-left: auto; font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
-.deckBlindRow { display: flex; align-items: center; gap: 10px; margin-top: 16px; padding-inline: 18px; border-top: 1px solid rgba(20, 20, 28, 0.07); padding-top: 16px; opacity: 0; transition: opacity 260ms var(--glide); }
-.deckBlind { font-size: 15px; color: var(--ink-60); }
-
-.deckFront {
-  z-index: 4;
-  padding: 24px;
-  border: 1px solid var(--ink-edge);
-  background: var(--ink-fill);
-  box-shadow: var(--ink-top), var(--sh-ink);
-  color: #ffffff;
-  opacity: 0;
-  transform: translateY(40px) scale(0.94);
-  animation: frontIn 520ms var(--snapIn) 1320ms forwards;
-  transition: transform 420ms var(--snapIn), box-shadow 420ms var(--snapIn);
-}
-
-@keyframes frontIn { to { opacity: 1; transform: translateY(0) scale(1); } }
-
-.deckFrontTop { display: flex; align-items: center; gap: 10px; }
-.deckFrontName { font-size: 15px; font-weight: 600; }
-.deckReconciled { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; font-size: 13px; font-weight: 500; color: #5ee9a0; opacity: 0; animation: fadeIn 260ms var(--glide) 1940ms forwards; }
-.deckFrontLabel { margin-top: 14px; font-size: 15px; color: rgba(255, 255, 255, 0.55); }
-/* NO MARGIN, AND THAT IS ARITHMETIC RATHER THAN TASTE: the card is 232 with
-   24px padding and a 1px border, so the content box is exactly 182. The rows
-   are 28 + 14 + 28 + 84 + 28 = 182. A 2px nudge here overflowed the card by
-   2px and clipped the foot, which `overflow: hidden` hid instead of showing. */
-.deckFrontFigure { margin-top: 0; }
-.deckFrontFoot { display: flex; align-items: center; gap: 12px; margin-top: auto; }
-/* 0.5, NOT 0.45. Composited over #1c1c26 the dimmer value scores 4.42:1 at
-   13px — under AA by a margin no one would notice by eye and the gate reads
-   exactly. 0.5 is 5.15:1 and still sits below the 0.55 label. */
-.deckFrontSub { font-size: 13px; color: rgba(255, 255, 255, 0.5); }
-.deckFrontMarks { display: flex; margin-left: auto; }
-/* The ring is what separates overlapping marks. */
-.deckFrontMarkRing { display: inline-flex; border-radius: 50%; box-shadow: 0 0 0 2px #16161e; }
-.deckFrontMarkRing + .deckFrontMarkRing { margin-left: -6px; }
-
-/* ── The fan-out, pointer devices only ────────────────────────────────── */
-
-@media (hover: hover) and (pointer: fine) {
-  .deck:hover .deckCard1 { transform: translate(-132px, -200px) scale(0.88) rotate(-11deg); transition-delay: 80ms; }
-  .deck:hover .deckCard2 { transform: translate(-92px, -138px) scale(0.92) rotate(-7deg); transition-delay: 40ms; }
-  .deck:hover .deckCard3 { transform: translate(-48px, -72px) scale(0.96) rotate(-3.5deg); }
-  .deck:hover .deckBlindRow { opacity: 1; transition-delay: 160ms; }
-  .deck:hover .deckFront { transform: translateY(-2px); box-shadow: var(--ink-top), var(--sh-ink); }
-}
 
 /* ──────────────────────────────────────────────────────────────────────────
    S04 canvas — responsive (§7.4)
@@ -2460,28 +2431,24 @@
    Stated here rather than folded into the general breakpoint blocks above
    because this one element does three DIFFERENT things across three widths,
    and reading those three rules next to each other is the only way to keep
-   them consistent.
+   them consistent. What it no longer does at any width is scroll sideways.
    ────────────────────────────────────────────────────────────────────────── */
 
-/* LG — the canvas is wider than the container, so it scrolls and says so. */
-@media (max-width: 1279px) {
-  .shot::after {
-    content: "";
-    position: absolute;
-    z-index: 2;
-    inset: 0 0 0 auto;
-    width: 56px;
-    pointer-events: none;
-    background: linear-gradient(90deg, rgba(250, 250, 252, 0) 0%, #fafafc 100%);
-  }
+/* 1280-1359 — the gutter is still 80 but the container has stopped growing,
+   so the frame is up to 80px narrower than the drawing. 0.92 clears the
+   narrowest of those (1120) with room; the alternative is a scrollbar for a
+   deficit nobody can see. */
+@media (max-width: 1359px) {
+  .shot { --cv-k: 0.92; }
 }
 
-/* MD — it wraps instead. Two rows: the sources and Match, then Filter, Divide
-   and the answer. The edges cannot follow a wrapped layout, so they go; the
-   left-to-right reading order survives in the grid itself. */
-@media (max-width: 1023px) {
-  .shot::after { content: none; }
-  .cvScroll { overflow-x: visible; }
+/* Below 1280 it RE-LAYS OUT rather than shrinking further. Two rows: the
+   sources and Match, then Filter, Divide and the answer. The edges cannot
+   follow a wrapped layout, so they go; the left-to-right reading order
+   survives in the grid itself. Scaling instead would mean 0.74 at a 1024
+   container, where a node's label is under 11px. */
+@media (max-width: 1279px) {
+  .cvFit { height: auto; }
   .cvStage {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2490,31 +2457,27 @@
     height: auto;
     padding: 32px;
     background-position: 0 0;
+    transform: none;
   }
   .cvEdges,
   .cvHandles { display: none; }
   .cvNode { position: static; width: auto; }
   .cvNodeStd { height: 64px; }
-  .cvOut { height: 96px; }
+  .cvOut { width: auto; height: 104px; }
 }
 
-/* SM / XS — back to the full drawing, scrolled. A three-column grid at 375px
-   is three 90px cards, which is narrower than the words inside them. */
+/* SM / XS — ONE COLUMN. Three columns at 375 is three 90px cards, which is
+   narrower than the words inside them; the drawing used to go back to its
+   full 1200 here and scroll, which put a scrollbar under the one section on
+   the page that is a picture of a product. A single column reads top to
+   bottom, which is the direction a phone is read in anyway. */
 @media (max-width: 767px) {
-  .shot::after { content: ""; width: 48px; }
-  .cvScroll { overflow-x: auto; }
   .cvStage {
-    display: block;
-    width: 1200px;
-    height: 460px;
-    padding: 0;
-    background-position: 9px 9px;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+    padding: 20px;
   }
-  .cvEdges,
-  .cvHandles { display: block; }
-  .cvNode { position: absolute; }
-  .cvNodeStd { width: 200px; height: 64px; }
-  .cvOut { width: 164px; height: 108px; }
+  .cvOut { height: 108px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2532,81 +2495,69 @@
    DECLARED HERE, AT THE END, BECAUSE POSITION IN THIS FILE IS LOAD-BEARING.
    The block that calls itself "the narrow-viewport rules, restated in full"
    sits ABOVE the fold's own rules, so the same declarations written there
-   lost to the base every time — no error, no warning, just a deck lying over
-   the headline at 834px. Anything overriding `.fold*` has to come after it.
+   lost to the base every time — no error, no warning, just the hero's object
+   lying over the headline at 834px. Anything overriding `.fold*` has to come
+   after it.
    ────────────────────────────────────────────────────────────────────────── */
 
-/* MD — ONE COLUMN, AND THE RAIL COMES BEFORE THE DECK. The order is pill ·
-   headline · sub · buttons · reassurance · RAIL · deck, so the proof that 33
-   tools are being read is still inside the first screen on a tablet. The deck
-   is what moves below the fold, because it is the one element a reader can
-   infer from the copy. */
-@media (max-width: 1023px) {
-  .fold { display: flex; flex-direction: column; }
+/* BELOW 1280 — ONE COLUMN, AND THE RAIL COMES BEFORE THE BOARD. The order is
+   pill · headline · sub · buttons · reassurance · RAIL · board, so the proof
+   that 33 tools are being read is still inside the first screen on a tablet.
+   The board is what moves below the fold, because it is the one element a
+   reader can infer from the copy.
+
+   ═══ 1280, NOT 1024, AND THAT IS MEASURED ═══
+
+   The two-column fold ran down to 1024 when the object beside the headline
+   was a deck with 140px of empty space down its left side. The board has
+   none: its first mark is its left edge. At a 1024 container the 88px
+   headline ends at 607 and the first mark starts at 561, so Calendly's logo
+   sat on the `s` of `metrics` and the board covered `See a live metric`
+   outright. Shrinking the headline far enough to clear it means 64px, which
+   is a step down nobody asked for on a screen that is not small.
+
+   So the fold stacks a tier earlier instead, and the board gets the whole
+   width — which is the better picture at 1100 anyway. It is also the same
+   breakpoint S04's canvas re-lays out at, so below 1280 the entire page is
+   one column and there is one number to remember rather than two.
+
+   The board keeps bleeding off the right edge here, and that is not a
+   leftover from the XL layout: a picture that stops short of the screen on a
+   tablet reads as a small picture, and the one thing this object must not
+   read as is small. */
+@media (max-width: 1279px) {
+  .fold { display: flex; flex-direction: column; --rig-k: 0.95; --board-h: 520px; }
   .s01 { display: block; height: auto; padding-block: 88px 0; order: 0; }
   .foldGrid { min-height: 0; }
   .foldCopy { max-width: none; }
   .railLeadMobile { order: 1; }
   .rail { order: 2; margin-top: 40px; }
 
-  .foldDeck {
+  .foldShot {
     order: 3;
     position: static;
-    display: flex;
-    justify-content: center;
+    display: block;
     width: auto;
     max-width: none;
     height: auto;
     margin-top: 56px;
     padding-inline: var(--pad);
     transform: none;
+    /* No container left to be centred inside: the gutter IS the whole
+       distance to the edge of the screen. */
+    --bleed: var(--pad);
   }
 
-  /* 480 x 360 is the whole deck at 0.857 — scaled rather than re-laid-out, so
-     the composition tuned at 560 survives intact. The wrapper carries the
-     scaled size as its LAYOUT box; a bare `scale()` leaves a 560px hole in
-     the flow. */
-  .fold { --deck-scale: 0.857; }
-  .foldDeckInner { position: static; top: auto; margin-left: 0; }
-
-  /* Static below LG: the fan-out is a pointer gesture, and a tablet with a
-     mouse attached still reads this as the bottom of the first screen rather
-     than as the object it is at XL. Specificity beats the `(hover: hover)`
-     block rather than relying on source order. */
-  .foldDeck .deck:hover .deckCard1 { transform: translate(-102px, -156px) scale(0.88) rotate(-7.5deg); }
-  .foldDeck .deck:hover .deckCard2 { transform: translate(-68px, -104px) scale(0.92) rotate(-5deg); }
-  .foldDeck .deck:hover .deckCard3 { transform: translate(-34px, -52px) scale(0.96) rotate(-2.5deg); }
-  .foldDeck .deck:hover .deckBlindRow { opacity: 0; }
-  .foldDeck .deck:hover .deckFront { transform: none; box-shadow: var(--ink-top), var(--sh-ink); }
+  .foldShotInner { width: 100%; margin-left: 0; }
 }
 
-/* SM / XS — the rail tightens to 32px under the reassurance so that at
-   375 x 812 it is still above the fold, and the deck RE-LAYS OUT rather than
-   scaling further: at 0.58 the front card's labels would be under 9px. */
+/* SM / XS — the rig steps down rather than the board: at 0.68 the marks are
+   38px, which is still a recognisable logo, and the board keeps enough height
+   to show the figures above its chart. */
 @media (max-width: 767px) {
   .rail { margin-top: 32px; }
-  .foldDeck { margin-top: 40px; }
-  .fold { --deck-scale: 1; }
-  .foldDeckInner { width: 100%; height: 380px; }
-  .foldDeckInner .deck { width: 100%; height: 380px; transform: none; }
-
-  /* Bottom-anchored and full width. The HORIZONTAL offsets halve and the
-     rotations halve with them; the VERTICAL ones do not, and that is the
-     whole difference between a fan and a smudge. Each card is also scaled,
-     which pulls its top edge DOWN by (1 − scale) × 232 — so a y offset of 52
-     buys only ~43px of visible header, and halving it to 26 leaves 17px:
-     less than half of `.deckHead`, so every name and every figure was sliced
-     through the middle. Measured on screen, not reasoned about.
-
-     The entrance goes too: its keyframes end on the XL transforms, and a
-     performance that plays out below the rail on a phone is one nobody is
-     looking at. */
-  .deckCard, .deckFront { left: 0; top: auto; bottom: 0; width: 100%; height: 232px; }
-  .deckCard, .deckFront, .deckReconciled { opacity: 1; animation: none; }
-  .deckCard1 { transform: translate(-18px, -156px) scale(0.88) rotate(-3.75deg); }
-  .deckCard2 { transform: translate(-12px, -104px) scale(0.92) rotate(-2.5deg); }
-  .deckCard3 { transform: translate(-6px, -52px) scale(0.96) rotate(-1.25deg); }
-  .deckFront { transform: none; }
+  .foldShot { margin-top: 40px; }
+  .fold { --rig-k: 0.68; --board-h: 380px; }
 
   /* Two full-width controls, 12px apart. Side by side they are 170px each,
      which cuts `Connect your first tool` in half. */
@@ -2614,30 +2565,39 @@
   .btnHero, .ghostPill { width: 100%; justify-content: center; }
 }
 
-/* ──────────────────────────────────────────────────────────────────────────
-   The fold — width and height tiers (§5.6, §5.7)
+/* 1280–1359 — THE ONE WIDTH WHERE THE TWO COLUMNS NEARLY TOUCH, and it is
+   arithmetic rather than eyeballing. In this band the container has stopped
+   growing with the viewport (it is capped at 1360) but the gutter is already
+   back to 80, so the copy column stays put while the board's rig marches
+   left with the screen edge. Measured, the clearance between the widest thing
+   in the copy — `See a live metric`, not the headline — and the first mark is
+   `100vw − 1288`: 72px at 1360, and 8px of OVERLAP at 1280.
 
-   The frame is a viewport height, so the fold has to answer to BOTH axes. The
-   width tiers decide how much room the deck may take beside the copy; the
-   height tiers decide whether the whole block still fits above the rail.
-   ────────────────────────────────────────────────────────────────────────── */
-
-/* LG — the deck is capped at 46% of the container. At 1180 the full-size deck
-   reached x 595 and laid its farthest card straight over `See a live metric`,
-   which is a link nobody could read, let alone click. */
-@media (min-width: 1024px) and (max-width: 1279px) {
-  .fold { --deck-scale: 0.8; }
-  .heroSub { max-width: 420px; }
-  .foldCopy { max-width: 620px; }
+   0.88 is what buys the same 48px at the bottom of the band that the rest of
+   the range gets for free. Above 1360 the clearance is a constant 72 at every
+   width, because the copy and the rig then move apart together. */
+@media (min-width: 1280px) and (max-width: 1359px) {
+  .fold { --rig-k: 0.88; --board-h: 480px; }
 }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   The fold — height tiers (§5.6)
+
+   The frame is a viewport height, so a two-column fold has to answer to BOTH
+   axes: the width decides whether there are two columns at all (above), the
+   height decides whether the block still fits above the rail. Both tiers
+   below start at 1280 because that is where the two-column fold starts —
+   applied any lower they would shrink a headline that has a whole column to
+   itself.
+   ────────────────────────────────────────────────────────────────────────── */
 
 /* 756–875px tall — a 1366 x 768 laptop. Everything steps down by a fifth so
    the rail stays inside the first screen without the clamp having to fight
    the content. */
-@media (min-width: 1024px) and (max-height: 875px) {
+@media (min-width: 1280px) and (max-height: 875px) {
   .d0 { font-size: 74px; }
   .heroSub { font-size: 17px; }
-  .fold { --deck-scale: 0.86; }
+  .fold { --rig-k: 0.86; --board-h: 470px; }
   .foldGrid { min-height: 500px; }
   .statusPill { height: 30px; margin-bottom: 22px; }
   .heroSub { margin-top: 22px; }
@@ -2648,10 +2608,10 @@
 /* Under 756px tall — a 1280 x 720 screen, or a laptop with a browser bar and
    a dock. The status pill goes: it is the one element on the fold that
    repeats what the rail below it already shows. */
-@media (min-width: 1024px) and (max-height: 755px) {
+@media (min-width: 1280px) and (max-height: 755px) {
   .d0 { font-size: 64px; line-height: 0.94; }
   .heroSub { font-size: 16px; }
-  .fold { --deck-scale: 0.75; }
+  .fold { --rig-k: 0.75; --board-h: 412px; }
   .foldGrid { min-height: 440px; }
   .statusPill { display: none; }
   .heroSub { margin-top: 20px; }

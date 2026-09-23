@@ -47,7 +47,9 @@ import styles from "@/app/snap.module.css";
 
 const NODE_W = 200;
 const NODE_H = 64;
-const OUT_H = 108;
+/** 116, not 108: see `.cvOut` — the answer is a card, not a cube, and its
+    width (176) is the stylesheet's business because nothing here measures it. */
+const OUT_H = 116;
 
 type Src = { kind: "source"; id: string; x: number; y: number; source: string; name: string; sub: string };
 type Step = { kind: "step"; id: string; x: number; y: number; type: string; variant?: string; name: string; sub: string };
@@ -63,7 +65,7 @@ const STEPS: Step[] = [
   { kind: "step", id: "divide", x: 780, y: 198, type: "formula", variant: "formula_compare", name: "Divide", sub: "by booked" },
 ];
 
-const OUT = { x: 1000, y: 176 };
+const OUT = { x: 1000, y: 172 };
 
 const GLYPH: Record<string, typeof Blend> = { match: Blend, filter: Filter, divide: Divide };
 
@@ -129,13 +131,13 @@ export function CanvasShot() {
   }, []);
 
   return (
-    <div className={styles.cvScroll}>
+    <div className={styles.cvFit}>
       <div
         ref={stage}
         className={styles.cvStage}
         data-live={live ? "true" : undefined}
         role="img"
-        aria-label="A metric being built: Google Calendar's meetings and Google Sheets' show-ups are matched to the same person, filtered to held only, and divided by booked, giving a show-up rate of 66.8 per cent."
+        aria-label="A metric being built: Google Calendar's meetings and Google Sheets' show-ups are matched to the same person, filtered to held only, and divided by booked, giving a show-up rate of 66.8 per cent — 247 meetings held of 370 booked."
       >
         <svg className={styles.cvEdges} width="1200" height="460" viewBox="0 0 1200 460" aria-hidden focusable="false">
           {EDGES.map((e) => (
@@ -195,6 +197,12 @@ export function CanvasShot() {
           ))}
         </svg>
 
+        {/* THE ARITHMETIC IS ON THE CARD, and that is not a decoration on the
+            drawing — it is the drawing's conclusion. Four nodes above say what
+            was done; `247 of 370 booked` is what it produced, and it divides
+            out to the percentage beside it, which is a thing a reader can
+            check in their head and the page had not previously offered them
+            anywhere above the receipt. */}
         <div
           className={`${styles.cvNode} ${styles.cvOut}`}
           style={{ left: OUT.x, top: OUT.y, "--d": `${NODE_DELAY.out}ms` } as React.CSSProperties}
@@ -203,6 +211,7 @@ export function CanvasShot() {
           <span className={styles.cvOutFigure}>
             {live ? <CountUp to={66.8} from={0} delay={60} duration={620} format={(v) => `${v.toFixed(1)}%`} /> : "66.8%"}
           </span>
+          <span className={`${styles.caption} ${styles.cvOutFoot}`}>247 of 370 booked</span>
         </div>
       </div>
     </div>

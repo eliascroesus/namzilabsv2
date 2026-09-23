@@ -56,17 +56,21 @@ for (const vp of [
   const page = await browser.newPage({ viewport: { width: vp.width, height: vp.height } });
   const errors = [];
   /**
-   * THE HERO SHOT IS OPTIONAL, AND ITS ABSENCE IS NOT A BUG.
+   * THE HERO SHOT IS NOT OPTIONAL ANY MORE, AND ITS ABSENCE IS THE FAILURE
+   * THIS BLOCK EXISTS TO CATCH.
    *
-   * `public/dashboard.png` is a file the owner drops in; until it exists the
-   * page requests it, gets a 404 and falls back to the drawn card, which is
-   * the designed behaviour. The browser still logs "Failed to load resource"
-   * for it, so that ONE line is set aside — but narrowly: every other console
-   * error still fails, and the missing URLs are asserted separately below, so
-   * a genuinely broken asset cannot hide behind this.
+   * It used to be a file the owner might drop in, with a drawn card standing
+   * in until they did — so a 404 on it was excused here by name. The fold is
+   * now built ON the screenshot: without it the first screen is an ink
+   * rectangle with four logos stuck to the side of it. So the exemption is
+   * gone and `/dashboard.png` is asserted like every other asset.
    */
   const missingAssets = [];
-  page.on("response", (r) => r.status() >= 400 && missingAssets.push(`${r.status()} ${decodeURIComponent(r.url())}`));
+  const requested = [];
+  page.on("response", (r) => {
+    requested.push(decodeURIComponent(r.url()));
+    if (r.status() >= 400) missingAssets.push(`${r.status()} ${decodeURIComponent(r.url())}`);
+  });
   page.on("pageerror", (e) => errors.push(String(e)));
   page.on("console", (m) => {
     if (m.type() !== "error") return;
@@ -89,30 +93,66 @@ for (const vp of [
         blown.push(`${n.className.toString().replace(/snap-module__\w+__/g, "").slice(0, 30)} ${n.scrollWidth}>${n.clientWidth}`);
       }
     }
+    const scrollers = [];
+    for (const n of document.querySelectorAll("body *")) {
+      const cs = getComputedStyle(n);
+      if (cs.overflowX !== "auto" && cs.overflowX !== "scroll") continue;
+      if (n.scrollWidth <= n.clientWidth + 1) continue;
+      const name = n.className.toString().replace(/snap-module__\w+__/g, "");
+      /**
+       * TWO STRIPS OF CONTROLS MAY SCROLL AND NOTHING ELSE MAY. S05's metric
+       * tabs and S08's category filters are rows of BUTTONS that run off a
+       * narrow screen, and swiping a row of buttons is an affordance a reader
+       * already understands. A drawing that scrolls is the opposite: there is
+       * nothing to operate, so the bar along the bottom is just a picture that
+       * did not fit. Naming the two is what keeps a third from arriving
+       * unnoticed.
+       */
+      if (/^(receiptBar|filters)\b/.test(name)) continue;
+      scrollers.push(`${name.slice(0, 30)} ${n.scrollWidth}>${n.clientWidth}`);
+    }
     return {
       scrollWidth: document.documentElement.scrollWidth,
       inner: window.innerWidth,
-      // Two overhangs are the design: S04's track line runs 40px past the
-      // container at both ends so the process reads as continuing, and S07's
-      // preview card hangs 56px past its panel — that overhang is the
-      // section's whole structural idea. Everything else is a blow-out.
-      blown: blown.filter((b) => !/^(track|s07Panel|s07Grid|darkPanel s07Panel|aiCardCell) /.test(b)),
+      // The source rail is a marquee: its track is deliberately wider than
+      // its viewport and `overflow: hidden` means no scrollbar is drawn.
+      // Anything with `auto` or `scroll` is a real one.
+      scrollers,
+      // Four overhangs are the design: S04's track line runs 40px past the
+      // container at both ends so the process reads as continuing, S07's
+      // preview card hangs 56px past its panel, and the fold's board runs
+      // from the copy column to the right edge of the SCREEN — which is three
+      // nested boxes wide by exactly `--bleed`. Everything else is a blow-out.
+      blown: blown.filter(
+        (b) => !/^(track|s07Panel|s07Grid|darkPanel s07Panel|aiCardCell|foldShot|foldShotInner|shotStage) /.test(b),
+      ),
       h1Lines: document.querySelectorAll("h1 > span").length,
     };
   });
 
   check(m.scrollWidth <= m.inner + 1, `${vp.name}: the page does not scroll sideways`, `${m.scrollWidth} > ${m.inner}`);
+  /**
+   * AND NEITHER DOES ANYTHING ON IT. `main` clips, so a child that scrolls
+   * sideways inside its own box never moves the document's scrollWidth and
+   * the check above cannot see it — which is how S04's canvas shipped with a
+   * scrollbar along the bottom of the card at every width, caused by a 1px
+   * border taking two pixels out of a container sized to the drawing exactly.
+   * A sideways scrollbar inside a picture of a product is never the design
+   * here, so this looks for the scroller rather than for the overflow.
+   */
+  check(m.scrollers.length === 0, `${vp.name}: nothing on the page scrolls sideways`, m.scrollers.slice(0, 3).join(" · "));
   check(m.blown.length === 0, `${vp.name}: no grid or row blows past its container`, m.blown.slice(0, 3).join(" · "));
   check(errors.length === 0, `${vp.name}: no console errors`, errors.slice(0, 2).join(" | "));
 
+  check(missingAssets.length === 0, `${vp.name}: every asset the page asks for loads`, missingAssets.slice(0, 3).join(", "));
+
   // The shot is served through `next/image`, so its URL is the optimizer's
-  // with the real path as a query param — matched on the decoded URL so both
-  // spellings are covered.
-  const unexpected = missingAssets.filter((a) => !a.includes("/dashboard.png"));
-  check(unexpected.length === 0, `${vp.name}: no unexpected missing assets`, unexpected.slice(0, 3).join(", "));
-  if (missingAssets.length > unexpected.length) {
-    console.log("        (public/dashboard.png is absent — the hero is showing its drawn fallback, by design)");
-  }
+  // with the real path as a query param. Asserting that the REQUEST happened
+  // is what catches a hero that silently stopped rendering its picture — a
+  // `<div>` with no `<img>` in it produces no 404 and no console error, and
+  // every other check on this page would still pass.
+  const shotRequested = requested.some((u) => u.includes("/dashboard.png"));
+  check(shotRequested, `${vp.name}: the hero asks for the board screenshot`);
   // v4 §5.2: THREE fixed lines — `Your best metrics / live between / your
   // tools.` — in a left column beside the deck, rather than v3's two centred
   // ones above a full-width object.
@@ -135,6 +175,69 @@ for (const vp of [
     );
     check(small.length === 0, "XS: every tap target clears 44×44", small.slice(0, 4).join(", "));
   }
+  await page.close();
+}
+
+/* ── 1b. The fold's two columns do not touch ────────────────────────────── */
+
+/**
+ * THE ONE MEASUREMENT NOTHING ELSE ON THIS PAGE COULD MAKE.
+ *
+ * Above 1280 the fold is a headline on the left and a board on the right, and
+ * the board's first mark IS its left edge — there is no empty margin inside
+ * the object to absorb a headline that runs long. When that column was a deck
+ * of cards it had 140px of slack and this could not happen; with the board it
+ * happened immediately, at 1280, where the copy's widest element overlapped
+ * the first mark by 8px and the board covered `See a live metric` outright.
+ *
+ * Nothing already in this file sees it. The blow-out check measures boxes
+ * against their containers and both elements are inside theirs; the overlap
+ * is between two SIBLINGS that are supposed to sit side by side. And the
+ * widest thing in the copy is not the headline — it is the button row — so a
+ * check that measured the headline alone would have passed through the whole
+ * failure.
+ *
+ * `.heroLine > span` fills its column, so its bounding box says nothing about
+ * where the letters stop. A Range over the text node is what gives the ink.
+ */
+for (const vp of [
+  { name: "1280", width: 1280, height: 1000 },
+  { name: "1360", width: 1360, height: 1000 },
+  { name: "1440", width: 1440, height: 1000 },
+  { name: "1920", width: 1920, height: 1000 },
+]) {
+  const page = await browser.newPage({ viewport: { width: vp.width, height: vp.height } });
+  await settle(page, BASE);
+  await page.waitForTimeout(3600);
+
+  const fold = await page.evaluate(() => {
+    const inkRight = (n) => {
+      const range = document.createRange();
+      range.selectNodeContents(n);
+      return range.getBoundingClientRect().right;
+    };
+    const copy = [
+      ...[...document.querySelectorAll("h1 > span > span")].map(inkRight),
+      ...[...document.querySelectorAll('[class*="heroActions"] a')].map((a) => a.getBoundingClientRect().right),
+    ];
+    const chip = document.querySelector('[class*="boardChip"]:not([class*="Dot"])');
+    const frame = document.querySelector('[class*="boardFrame"]');
+    return {
+      copyRight: Math.max(...copy),
+      chipLeft: chip ? chip.getBoundingClientRect().left : 0,
+      // The bleed, restated as an assertion: the board reaches the screen.
+      frameRight: frame ? Math.round(frame.getBoundingClientRect().right) : 0,
+      inner: window.innerWidth,
+    };
+  });
+
+  const clearance = Math.round(fold.chipLeft - fold.copyRight);
+  check(clearance >= 40, `${vp.name}: the copy column clears the board's first mark`, `${clearance}px`);
+  check(
+    Math.abs(fold.frameRight - fold.inner) <= 1,
+    `${vp.name}: and the board reaches the right edge of the screen`,
+    `${fold.frameRight} vs ${fold.inner}`,
+  );
   await page.close();
 }
 
@@ -229,11 +332,16 @@ check(
 );
 
 /**
- * INK MEANS "AN ANSWER" and the page makes that claim three times: the hero's
- * front card, S04's output, S05's left panel. All three paint a GRADIENT, so
+ * INK MEANS "AN ANSWER" and the page makes that claim three times: the fold's
+ * board, S04's output, S05's left panel. All three paint a GRADIENT, so
  * nothing that reads `backgroundColor` can tell whether they are dark — which
  * is exactly how S05's panel spent a build as light grey while the rule it
  * was supposed to follow sat in the file above it.
+ *
+ * The board's frame paints ink UNDER its screenshot rather than beside it, so
+ * this reads the frame and not the picture: a slow image then shows the right
+ * silhouette instead of a white hole, and the measurement stays possible at
+ * all — a `<img>` has no background to read.
  */
 const ink = await page.evaluate(() => {
   const lum = (el) => {
@@ -246,7 +354,7 @@ const ink = await page.evaluate(() => {
   };
   const at = (sel) => { const el = document.querySelector(sel); return el ? lum(el) : null; };
   return {
-    deck: at('[class*="deckFront"]'),
+    board: at('[class*="boardFrame"]'),
     output: at('[class*="cvOut"]'),
     panel: at('[class*="receiptInk"]'),
   };
@@ -254,9 +362,9 @@ const ink = await page.evaluate(() => {
 
 const isInk = (v) => typeof v === "number" && v < 0.03;
 check(
-  isInk(ink.deck) && isInk(ink.output) && isInk(ink.panel),
+  isInk(ink.board) && isInk(ink.output) && isInk(ink.panel),
   "all three ink surfaces are actually ink",
-  `deck ${ink.deck} · S04 output ${ink.output} · S05 panel ${ink.panel}`,
+  `board ${ink.board} · S04 output ${ink.output} · S05 panel ${ink.panel}`,
 );
 
 // §7.2: five labelled nodes and one output, reading left to right. A node
@@ -581,7 +689,7 @@ const themed = await dark.evaluate(() => ({
 }));
 
 check(/dark/.test(themed.htmlClass), "the app really is in dark mode for this check", themed.htmlClass || "(none)");
-check(themed.pageBg === "rgb(251, 250, 252)", "the landing ground stays canvas", themed.pageBg);
+check(themed.pageBg === "rgb(250, 251, 253)", "the landing ground stays canvas", themed.pageBg);
 check(themed.headingColour === "rgb(20, 20, 28)", "the headline stays ink", themed.headingColour);
 await dark.close();
 
@@ -657,41 +765,42 @@ await still.waitForTimeout(400); // deliberately BEFORE the sequence would end
 
 const final = await still.evaluate(() => {
   /**
-   * THE CENTREPIECE IS THE DECK NOW, not the board screenshot v3 hung in the
-   * middle of the hero. The old assertion kept passing by accident once the
-   * screenshot was gone — `querySelector` returned null, `Boolean(null)` was
-   * false and the check failed loudly, which at least was honest; the drift
-   * check beside it was the quiet one, looking for a `chipRest` element that
-   * no longer exists and reporting "none" for it.
+   * THE CENTREPIECE IS THE BOARD, and reduced motion has a specific meaning
+   * for it: not "hold still" but "arrive built". Four marks at full opacity
+   * on a board at full opacity, with the wires already drawn — a wire left at
+   * its `stroke-dashoffset` is an invisible wire, so a reduced-motion reader
+   * would get four logos connected to nothing, which is a different picture
+   * and not the same picture unanimated.
    *
-   * Reduced motion has a specific meaning here and it is NOT "hold still". A
-   * deck whose four cards are all at transform: none is a stack of identical
-   * rectangles — a different picture, not the same picture unanimated. So the
-   * three tinted cards are asserted to hold the transform their entrance ENDS
-   * on, and the ink card in front to be fully opaque.
+   * The wire is the one that can fail quietly, because opacity is not what
+   * hides it. That is why the dash offset is read rather than inferred.
    */
-  const front = document.querySelector('[class*="deckFront"]');
-  const fan = [...document.querySelectorAll('[class*="deckCard"]')];
+  const frame = document.querySelector('[class*="boardFrame"]');
+  const img = document.querySelector('[class*="boardImg"]');
+  const chips = [...document.querySelectorAll('[class*="boardChip"]:not([class*="boardChipDot"])')];
+  const wires = [...document.querySelectorAll('path[class*="boardWire"]')];
   const settled = (n) => {
     const cs = getComputedStyle(n);
     return Number(cs.opacity) === 1 && cs.animationName === "none";
   };
   return {
-    // Three tinted source cards behind one ink answer — the whole argument of
-    // the fold, stated in objects.
-    dealt: fan.length === 3 && Boolean(front),
-    allSettled: Boolean(front) && settled(front) && fan.every(settled),
-    // …and fanned, not stacked. `none` for any of them means the reduced-motion
-    // block reset the transform instead of pinning it.
-    fanned: fan.every((n) => getComputedStyle(n).transform !== "none"),
-    frontOpacity: front ? getComputedStyle(front).opacity : "0",
+    // Four tools plugged into one board — the whole argument of the fold,
+    // stated in objects.
+    wired: chips.length === 4 && wires.length === 4 && Boolean(frame),
+    // A real <img> with a real source, not an empty frame: the picture IS the
+    // claim, and an ink rectangle would pass every other check on this page.
+    picture: Boolean(img) && /dashboard/.test(img?.currentSrc || img?.src || ""),
+    allSettled: Boolean(frame) && settled(frame) && chips.every(settled),
+    drawn: wires.every((w) => parseFloat(getComputedStyle(w).strokeDashoffset) === 0),
+    frameOpacity: frame ? getComputedStyle(frame).opacity : "0",
     railAnimation: getComputedStyle(document.querySelector('[class*="railTrack"]')).animationName,
   };
 });
 
-check(final.dealt, "the hero centrepiece is three source cards behind one answer");
-check(final.allSettled, "and is fully there at once, with nothing still animating", final.frontOpacity);
-check(final.fanned, "and still fanned rather than collapsed into a stack");
+check(final.wired, "the hero centrepiece is four tools plugged into one board");
+check(final.picture, "and the board is the real screenshot, not an empty frame");
+check(final.allSettled, "and is fully there at once, with nothing still animating", final.frameOpacity);
+check(final.drawn, "and its wires are drawn rather than left at their dash offset");
 check(final.railAnimation === "none", "the source rail does not scroll", final.railAnimation);
 
 await still.close();

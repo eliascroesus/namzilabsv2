@@ -10,7 +10,7 @@ import { ReceiptTabs, type Metric } from "@/components/marketing/snap/receipt-ta
 import { SourceIndex } from "@/components/marketing/snap/source-index";
 import { AiPanel } from "@/components/marketing/snap/ai-panel";
 import { INDEX_SOURCES } from "@/components/marketing/snap/source-taxonomy";
-import { Deck } from "@/components/marketing/snap/deck";
+import { BoardShot } from "@/components/marketing/snap/board-shot";
 import { StatusPill } from "@/components/marketing/snap/status-pill";
 import { CanvasShot } from "@/components/marketing/snap/canvas-shot";
 import { Mark, Tick, LogoMark } from "@/components/marketing/snap/marks";
@@ -313,17 +313,17 @@ export default async function Home() {
 
       <main id="main" className={styles.clip}>
         {/* ══ THE FOLD ═══════════════════════════════════════════════════
-            The hero, the deck and the source rail are wrapped together
+            The hero, the board and the source rail are wrapped together
             because on a narrow screen they have to REORDER: §5.7 puts the
-            rail directly under the reassurance line and the deck below the
+            rail directly under the reassurance line and the board below the
             rail, so that the rail — the proof that 33 tools are being read —
             is still in the first screen at 375 × 812.
 
-            That is only expressible if the deck and the rail are siblings, so
-            the deck sits OUTSIDE the hero section and is positioned back over
-            it at XL. It stays second in the document, between the copy it
-            belongs beside and the rail it precedes, so the reading order is
-            right at every width and no element is rendered twice. */}
+            That is only expressible if the board and the rail are siblings,
+            so the board sits OUTSIDE the hero section and is positioned back
+            over it at XL. It stays second in the document, between the copy
+            it belongs beside and the rail it precedes, so the reading order
+            is right at every width and no element is rendered twice. */}
         <div className={styles.fold}>
         {/* ══ S01 · Hero — the editorial stagger ═══════════════════════════
             Height is the viewport minus the rail, so the two together are
@@ -333,10 +333,9 @@ export default async function Home() {
           {/* EDITORIAL STAGGER, NOT A CENTRED STACK. A centred headline uses
               the full width for text, so the visual has to go underneath it
               and there is no vertical room left for the rail. Off-centre, the
-              headline's short second and third lines open a pocket on the
-              right and the deck rises into it — which is what lets the
-              headline, the call to action and the source rail share one
-              screen. */}
+              copy column ends where the board begins, and the board runs on
+              past the edge of the screen — which is what lets the headline,
+              the call to action and the source rail share one screen. */}
           <div className={styles.foldGrid}>
             <div className={styles.foldCopy}>
               <StatusPill count={CONNECTOR_CATALOG.length} />
@@ -379,10 +378,10 @@ export default async function Home() {
           </div>
         </section>
 
-        {/* Absolutely positioned over the hero at XL — see `.foldDeck`. */}
-        <div className={styles.foldDeck}>
-          <div className={styles.foldDeckInner}>
-            <Deck />
+        {/* Absolutely positioned over the hero at XL — see `.foldShot`. */}
+        <div className={styles.foldShot}>
+          <div className={styles.foldShotInner}>
+            <BoardShot />
           </div>
         </div>
 
@@ -560,7 +559,7 @@ export default async function Home() {
             <div className={`${styles.darkPanel} ${styles.s10Panel}`}>
               <div className={styles.panelBlooms} aria-hidden>
                 <div className={`${styles.panelBloom} ${styles.panelBloomLilac}`} />
-                <div className={`${styles.panelBloom} ${styles.panelBloomPeach}`} />
+                <div className={`${styles.panelBloom} ${styles.panelBloomSteel}`} />
               </div>
 
               {/* Eight real marks at 34% — legible as marks, unlike the dots
