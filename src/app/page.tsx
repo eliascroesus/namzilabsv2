@@ -520,7 +520,7 @@ export default async function Home() {
               insights", almost nobody can say the join across every tool
               already exists, because they built it. */}
           <section className={`${styles.container} ${styles.s07}`} id="ask-your-ai">
-            <div className={`${styles.darkPanel} ${styles.s07Panel}`}>
+            <div className={`${styles.darkPanel} ${styles.skyRuled} ${styles.s07Panel}`}>
               <div className={styles.s07Grid}>
                 <div className={styles.s07Copy}>
                   <h2 className={styles.d2}>Your AI can only see what you paste. Give it the <span className={styles.accent}>whole</span> business.</h2>
@@ -606,7 +606,7 @@ export default async function Home() {
               is also the page's argument in its last inch — eight colours
               gathered into one thing, on ink. */}
           <section className={`${styles.container} ${styles.s10}`}>
-            <div className={`${styles.darkPanel} ${styles.s10Panel}`}>
+            <div className={`${styles.darkPanel} ${styles.skyRuled} ${styles.s10Panel}`}>
               {/* Eight real marks at 34% — legible as marks, unlike the dots
                   they replace, and they restate the page's promise one last
                   time before the ask. Mailchimp stands in for Instantly, which

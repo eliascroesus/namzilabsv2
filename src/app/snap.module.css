@@ -106,36 +106,57 @@
    * INVITE CARD's geometry: 135 degrees, and the white bloom entering from
    * above the top-right corner.
    *
-   * ═══ THE RIM IS A GRADIENT BORDER, AND IT DOES NOT SPIN ═══
+   * ═══ THE RIM IS ONE ARC OF LIGHT, AND IT DOES NOT SPIN ═══
    *
    * The rail card runs a light around its edge on a 4s loop. One of those in
    * the chrome is the one moving thing in the app; four of them down a
-   * landing page is ambient motion, which §6.8 bans outright and which a
-   * reader who asked for less of it would be handed anyway. So the sweep is
-   * frozen at the angle it looks best at — a 1px border painted with a
-   * gradient, bright at the top-left and again at the bottom-right — which is
-   * the same signature at rest and costs nothing per frame.
+   * landing page is ambient motion, which §6.8 bans outright. So the sweep is
+   * frozen at the angle it looks best at — same signature at rest, nothing
+   * per frame.
    *
-   * The face clips to the PADDING box and the rim to the BORDER box, which is
-   * the whole trick: one element, no pseudo, and the contrast walker still
-   * reads the three opaque blues underneath because it takes every opaque
-   * stop as a candidate ground and keeps the worst. */
-  /* THE THREE BLUES ARE SPELLED ONCE. They were written twice — the flush
-     face and the card with a rim — and the difference only showed up under a
-     deliberate sabotage, where changing one of them left the other on the old
-     value and half the surfaces quietly right. `var()` substitutes tokens, so
-     the card is the face plus a rim rather than a second copy of it. */
-  --sky-face:
-    radial-gradient(120% 140% at 88% -20%, rgba(255, 255, 255, 0.2), transparent 60%),
-    linear-gradient(135deg, #16305e 0%, #22438f 55%, #2b53ae 100%);
-  --sky-rim: linear-gradient(
-    140deg,
-    rgba(255, 255, 255, 0.44) 0%,
-    rgba(255, 255, 255, 0.06) 36%,
-    rgba(255, 255, 255, 0.08) 64%,
-    rgba(255, 255, 255, 0.36) 100%
+   * IT WAS A LINEAR GRADIENT AND IT READ AS A WHITE OUTLINE, which is what
+   * the owner saw and asked about. Two mistakes, both mine. A linear ramp
+   * bright at BOTH ends leaves no dark side, so the eye joins it up into a
+   * continuous stroke — the rail card's is conic and spends 250 of its 360
+   * degrees at nothing, which is what makes the bright part read as a
+   * highlight rather than as a border. And the face's bloom was clipped to
+   * the BORDER box rather than the padding box, so a 20% white radial was
+   * painting over the rim as well and lifting the half that was supposed to
+   * be invisible.
+   *
+   * So the rim now carries its OWN GROUND — the same body gradient as the
+   * face, which makes the border invisible by default — with a single arc
+   * over it. The face's two layers are both pinned to the padding box.
+   *
+   * ═══ THE BLUES ARE SPELLED ONCE ═══
+   *
+   * They were written twice — the flush face and the card with a rim — and
+   * the difference only showed up under a deliberate sabotage, where changing
+   * one left the other on the old value and half the surfaces quietly right.
+   * `var()` substitutes tokens, so every surface composes from `--sky-body`.
+   */
+  --sky-body: linear-gradient(135deg, #16305e 0%, #22438f 55%, #2b53ae 100%);
+  --sky-bloom: radial-gradient(120% 140% at 88% -20%, rgba(255, 255, 255, 0.2), transparent 60%);
+  --sky-face: var(--sky-bloom), var(--sky-body);
+
+  /* ONE ARC, PEAKING AT THE TOP-LEFT, where light comes from everywhere else
+     on this page. 250 degrees of nothing, then a soft rise — a single hard
+     wedge blinks at one side, a ramp reads as light travelling along an edge
+     even when it is standing still. */
+  --sky-arc: conic-gradient(
+    from 0deg at 50% 50%,
+    transparent 0deg,
+    transparent 250deg,
+    rgba(255, 255, 255, 0.06) 292deg,
+    rgba(255, 255, 255, 0.5) 330deg,
+    rgba(255, 255, 255, 0.06) 353deg,
+    transparent 360deg
   );
-  --sky-card: var(--sky-face) padding-box, var(--sky-rim) border-box;
+  --sky-card:
+    var(--sky-bloom) padding-box,
+    var(--sky-body) padding-box,
+    var(--sky-arc) border-box,
+    var(--sky-body) border-box;
 
   /* TWO PALE BLUES, NOT TWO WHITES AT AN ALPHA. White at 0.72 over the face's
      lightest stop is 4.50:1 — exactly on the line, which is not a margin. A
@@ -1102,8 +1123,40 @@
  * looks like. Ink with an internal bloom reads as a considered object; ink
  * with a grid reads as a section header somebody downloaded.
  */
+/* ═══ THE RULED PAPER UNDER THE TYPE ═══
+   88px squares at 6% white, masked out before they reach the foot: visible as
+   texture at a glance, gone by the time you are reading a word on top of it.
+   It is the third thing that makes these read as the product's card rather
+   than as a blue rectangle, after the gradient and the arc.
+
+   ONLY ON THE TWO SURFACES BIG ENOUGH TO SHOW A GRID. globals.css makes the
+   same call for the rail's invite card and gives the reason: 88px squares
+   behind a small card is one faint line at a random angle, which reads as a
+   smudge rather than as structure. S04's answer tile is 176 x 116 and the
+   board's backing is behind a screenshot, so neither gets one.
+
+   `z-index: -1` paints it above the element's own background and below its
+   content — which only holds inside a stacking context, so the surfaces that
+   carry it declare `isolation: isolate`. */
+.skyRuled { isolation: isolate; }
+
+.skyRuled::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+  background-size: 88px 88px;
+  mask-image: linear-gradient(180deg, #000 0%, #000 54%, transparent 86%);
+}
+
 .darkPanel {
   position: relative;
+  isolation: isolate;
   border: 1px solid transparent;
   border-radius: 24px;
   background: var(--sky-card);
@@ -2043,6 +2096,7 @@
    that is supposed to read as one surface. */
 .receiptInk {
   position: relative;
+  isolation: isolate;
   flex: none;
   width: 44%;
   padding: 32px;

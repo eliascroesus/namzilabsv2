@@ -118,14 +118,30 @@ for (const vp of [
       // its viewport and `overflow: hidden` means no scrollbar is drawn.
       // Anything with `auto` or `scroll` is a real one.
       scrollers,
-      // Four overhangs are the design: S04's track line runs 40px past the
-      // container at both ends so the process reads as continuing, S07's
-      // preview card hangs 56px past its panel, and the fold's board runs
-      // from the copy column to the right edge of the SCREEN — which is three
-      // nested boxes wide by exactly `--bleed`. Everything else is a blow-out.
-      blown: blown.filter(
-        (b) => !/^(track|s07Panel|s07Grid|darkPanel s07Panel|aiCardCell|foldShot|foldShotInner|shotStage) /.test(b),
-      ),
+      /**
+       * Four overhangs are the design: S04's track line runs 40px past the
+       * container at both ends so the process reads as continuing, S07's
+       * preview card hangs 56px past its panel, and the fold's board runs
+       * from the copy column to the right edge of the SCREEN — three nested
+       * boxes wide by exactly `--bleed`. Everything else is a blow-out.
+       *
+       * MATCHED PER CLASS NAME, NOT AGAINST THE WHOLE STRING. The list used
+       * to carry `darkPanel s07Panel` as one entry, so adding a third class
+       * to that element unallowed it and the check failed on an overhang it
+       * had been told about. A class list is a set; it is read as one here.
+       */
+      blown: blown.filter((entry) => {
+        const allowed = new Set([
+          "track",
+          "s07Panel",
+          "s07Grid",
+          "aiCardCell",
+          "foldShot",
+          "foldShotInner",
+          "shotStage",
+        ]);
+        return !entry.split(" ").slice(0, -1).some((name) => allowed.has(name));
+      }),
       h1Lines: document.querySelectorAll("h1 > span").length,
     };
   });
@@ -391,6 +407,67 @@ for (const [name, surface] of Object.entries(sky)) {
     surface === null ? "no opaque stops found" : `lightest rgb(${surface.lightest}) · luminance ${surface.lum.toFixed(3)}`,
   );
 }
+
+/**
+ * THE TWO THINGS THAT MAKE IT THE PRODUCT'S CARD RATHER THAN A BLUE BOX, and
+ * neither of them was asserted by anything until both had already gone wrong
+ * once. The gradient is measured above; this is the rim and the ruled paper.
+ *
+ * THE RIM HAS TO BE CONIC. A linear ramp bright at both ends has no dark side,
+ * so the eye joins it into a continuous white outline — which is what shipped,
+ * and what the owner asked about. A conic spends most of its sweep at nothing,
+ * which is the whole reason the bright part reads as a highlight. Asserting
+ * the SHAPE rather than a colour is what makes this survive a retint: the
+ * failure mode is a stroke, and a stroke is not conic.
+ *
+ * A solid border colour is the same failure by another route, so it is closed
+ * here too — the rim only works while the border itself is transparent.
+ */
+const skin = await page.evaluate(() => {
+  const rimmed = {
+    output: '[class*="cvOut"]',
+    panel: '[class*="darkPanel"]',
+    board: '[class*="boardFrame"]',
+  };
+  const rims = {};
+  for (const [name, sel] of Object.entries(rimmed)) {
+    const el = document.querySelector(sel);
+    if (!el) { rims[name] = null; continue; }
+    const cs = getComputedStyle(el);
+    rims[name] = {
+      conic: /conic-gradient/.test(cs.backgroundImage),
+      // `transparent` computes to rgba(0, 0, 0, 0); anything else is a stroke.
+      stroke: cs.borderTopStyle !== "none" && cs.borderTopColor !== "rgba(0, 0, 0, 0)",
+    };
+  }
+
+  const ruled = [...document.querySelectorAll('[class*="skyRuled"]')].map((el) => {
+    const b = getComputedStyle(el, "::before");
+    return {
+      lines: (b.backgroundImage.match(/linear-gradient/g) ?? []).length,
+      // One value per layer, so it computes to `88px 88px, 88px 88px`.
+      size: b.backgroundSize.split(",").map((v) => v.trim()),
+      // Without the mask the grid runs into the foot of the panel, where a
+      // white rule on a lighter blue reads as dirt rather than as structure.
+      masked: (b.maskImage ?? b.webkitMaskImage) !== "none",
+    };
+  });
+
+  return { rims, ruled };
+});
+
+for (const [name, rim] of Object.entries(skin.rims)) {
+  check(rim !== null && rim.conic && !rim.stroke, `the ${name} surface's rim is an arc, not a stroke`,
+    rim === null ? "surface not found" : `conic ${rim.conic} · solid border ${rim.stroke}`);
+}
+
+check(skin.ruled.length >= 3, "three surfaces carry the ruled paper", `${skin.ruled.length}`);
+check(
+  skin.ruled.length >= 3 &&
+    skin.ruled.every((r) => r.lines >= 2 && r.size.length >= 2 && r.size.every((v) => v === "88px 88px") && r.masked),
+  "and every one of them draws an 88px grid that fades before the foot",
+  JSON.stringify(skin.ruled[0] ?? null),
+);
 
 // §7.2: five labelled nodes and one output, reading left to right. A node
 // that loses its label is the failure this drawing was rebuilt to fix.

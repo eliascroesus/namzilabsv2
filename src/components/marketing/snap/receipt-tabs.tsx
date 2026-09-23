@@ -112,7 +112,7 @@ export function ReceiptTabs({ metrics }: { metrics: Metric[] }) {
       </div>
 
       <div className={styles.receiptSplit}>
-        <div className={styles.receiptInk}>
+        <div className={`${styles.receiptInk} ${styles.skyRuled}`}>
           <div className={styles.receiptInkBody}>
             <span className={`${styles.bodyS} ${styles.figureLabel}`}>{active.tab}</span>
             <span className={`${styles.f2} ${styles.figureValue}`} key={active.tab}>
