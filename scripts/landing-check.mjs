@@ -282,7 +282,15 @@ const rhythm = await page.evaluate(() => {
 });
 
 check(rhythm.dark === 2, "exactly two dark sections", `${rhythm.dark}`);
-check(rhythm.fullBleed === 2, "exactly two full-bleed sections", `${rhythm.fullBleed}`);
+/**
+ * THREE, AND THE THIRD ONE ARRIVED ON PURPOSE. S02 reads the tools, S04b
+ * reads the metrics those tools produce, S08 is the index. The rule the
+ * design states is not "two" — it is that a band is a band and a section is a
+ * section, and that the page never grows a fourth one by accident. Two bands
+ * a scroll apart also have to run in OPPOSITE directions or they read as one
+ * belt the whole page is sitting on, which is asserted below.
+ */
+check(rhythm.fullBleed === 3, "exactly three full-bleed bands", `${rhythm.fullBleed}`);
 // v4 §5: the fold is a two-column layout with the headline in the left one,
 // which spends the last centred heading on the page. Zero is therefore the
 // assertion — a heading that drifts back to centre is a regression, not a
@@ -384,6 +392,52 @@ const canvas = await page.evaluate(() => {
 check(canvas.nodes === 5 && canvas.output, "S04 draws five nodes into one output", `${canvas.nodes} nodes`);
 check(canvas.labelled, "and every node says what it does");
 check(canvas.edges === 5, "and five edges join them", `${canvas.edges}`);
+
+/* ── 2b. The call to action ──────────────────────────────────────────────── */
+
+console.log("\nThe call");
+
+const call = await page.evaluate(() => {
+  const lum = (rgb) => {
+    const [r, g, b] = rgb.match(/[\d.]+/g).map(Number);
+    const f = (c) => { const v = c / 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+    return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+  };
+  const rows = [...document.querySelectorAll('[class*="ctaRow"]')];
+  const fills = [...document.querySelectorAll('a[class*="btn"]:not([class*="btnPaper"]):not([class*="btnOnDark"])')];
+  const google = [...document.querySelectorAll('a[href="/auth/google"]')];
+  const brand = document.querySelector("header a[aria-label]");
+  const tracks = [...document.querySelectorAll('[class*="railScrolling"]')];
+  return {
+    rows: rows.length,
+    email: document.querySelectorAll('a[href="/signup"]').length,
+    google: google.length,
+    // Google's mark is four colours and is never recoloured, so every one of
+    // these buttons has to be carrying a real <svg>, not a letter.
+    googleMarked: google.every((a) => a.querySelector("svg path[fill='#4285F4']")),
+    // NOT INK. The whole point of the change: a filled action that measures as
+    // black is one of four black rectangles on this page and reads as none of
+    // them in particular.
+    fillLum: fills.length ? lum(getComputedStyle(fills[0]).backgroundColor) : null,
+    // A wordmark, and only a wordmark.
+    brandText: brand ? (brand.textContent || "").trim() : "",
+    brandHasMark: brand ? Boolean(brand.querySelector("svg")) : true,
+    // Two bands, running opposite ways.
+    directions: [...new Set(tracks.map((t) => getComputedStyle(t).animationName))].length,
+    trackCount: tracks.length,
+  };
+});
+
+check(call.rows >= 4, "the page asks for the sign-up more than once", `${call.rows} calls`);
+check(call.email >= 4 && call.google >= 4, "and every one of them offers both doors", `${call.email} email / ${call.google} Google`);
+check(call.googleMarked, "Google's mark is drawn on every Google button");
+check(
+  typeof call.fillLum === "number" && call.fillLum > 0.03,
+  "the filled action is not ink",
+  call.fillLum === null ? "no filled action found" : `luminance ${call.fillLum?.toFixed(3)}`,
+);
+check(call.brandText === "Namzilabs" && !call.brandHasMark, "the nav's brand is the word alone", `${call.brandText}${call.brandHasMark ? " + a mark" : ""}`);
+check(call.trackCount === 2 && call.directions === 2, "the two bands run in opposite directions", `${call.trackCount} bands, ${call.directions} directions`);
 
 /* ── 3. Type ─────────────────────────────────────────────────────────────── */
 

@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import styles from "@/app/snap.module.css";
-import { LogoMark } from "./marks";
 
 const LINKS = [
   { label: "How it works", href: "#how-it-works", id: "how-it-works" },
@@ -162,8 +161,12 @@ export function SnapNav({
         // Tab from the hero lands on a control nobody can see.
         inert={!revealed || undefined}
       >
-        <Link className={styles.footerBrand} href="/" aria-label="Namzilabs home">
-          <LogoMark />
+        {/* A WORDMARK, NOT A MARK AND A WORDMARK. The two dots beside the
+            name were doing the job the name was already doing, in a pill that
+            has four links and a button to fit as well — and at the owner's
+            ask. The footer keeps the mark, where it has room and no
+            competition. */}
+        <Link className={styles.navBrand} href="/" aria-label="Namzilabs home">
           <span className={styles.wordmark}>Namzilabs</span>
         </Link>
 
@@ -200,8 +203,7 @@ export function SnapNav({
       {menuOpen ? (
         <div className={styles.menuOverlay} role="dialog" aria-modal="true" aria-label="Menu">
           <div className={styles.menuTop}>
-            <span className={styles.footerBrand}>
-              <LogoMark />
+            <span className={styles.navBrand}>
               <span className={styles.wordmark}>Namzilabs</span>
             </span>
             <button type="button" className={styles.textBtn} onClick={() => setMenuOpen(false)} autoFocus>

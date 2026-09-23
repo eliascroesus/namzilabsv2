@@ -49,6 +49,17 @@
   --good: #16a34a;
   --flag: #f0553d;
 
+  /* THE ACTION'S COLOUR, AND THE ONE THAT REPLACED INK ON THE BUTTONS.
+     #2F5FD8 is the app kit's `brand-800`, chosen from the ramp by measurement
+     rather than by eye: `brand-400` (#568CFF) is the product's fill but it
+     carries white text at only 3.18:1, and `brand-500` at 4.37 still misses.
+     This is 5.58:1 with white at 16px, which is the number that decides it.
+     Hover walks DOWN the ramp rather than up — on a near-white page a button
+     that lightens on hover reads as receding. */
+  --accent-fill: #2f5fd8;
+  --accent-hover: #2a55c4;
+  --accent-active: #24489f;
+
   /* ── Elevation (§6.4). Nothing on this page sits flat. ────────────────── */
   --sh-sm: 0 1px 2px rgba(20, 20, 28, 0.04), 0 4px 10px rgba(20, 20, 28, 0.05);
   --sh-md: 0 2px 4px rgba(20, 20, 28, 0.04), 0 10px 24px rgba(20, 20, 28, 0.07);
@@ -219,8 +230,12 @@
    page: on a 900px viewport the entire first screen was text. */
 .s01 { padding-block: 120px 104px; }
 .s03 { padding-block: 144px; }
-.s04 { padding-block: 144px 120px; }
-.s05 { padding-block: 144px; }
+/* S04 and S05 close up around the band between them: 96 above it and 112
+   below, rather than 120 and 144. A full-bleed band with a section's worth of
+   air on both sides reads as an island; the same band held close reads as the
+   seam between the thing being built and the receipt for it. */
+.s04 { padding-block: 144px 96px; }
+.s05 { padding-block: 112px 144px; }
 .s07 { padding-block: 160px; }
 .s08 { padding-block: 120px; }
 .s09 { padding-block: 96px; }
@@ -269,8 +284,21 @@
 .measure { max-width: 474px; }
 
 /* ──────────────────────────────────────────────────────────────────────────
-   Buttons (§7.2). `ink` is the only button fill on light; white is the only
-   fill on dark. A source colour never fills a button.
+   Buttons (§7.2). A SOURCE colour never fills a button — that rule is the
+   page's argument and it has not moved. The brand's own blue is not a source
+   colour, and it is the fill now.
+
+   ═══ WHY INK LOST THE BUTTONS ═══
+
+   Ink won them when the page's atmosphere was a peach-and-lilac bloom: a soft
+   blue pill on a soft blue-pink wash had almost no separation, so the most
+   important element in the fold was also its quietest. The bloom is a cool
+   blue now, and the fix for a blue button on a blue ground is not to abandon
+   the colour, it is to stop using a PALE one — `brand-800` is four steps down
+   the ramp from the fill the product uses and it separates from the wash by a
+   mile. Ink also had a second cost: with the board in the fold and two dark
+   panels below, the page had four different black rectangles and the reader
+   had no way to tell the one that was an action.
    ────────────────────────────────────────────────────────────────────────── */
 
 .btn {
@@ -281,11 +309,7 @@
   padding-inline: 32px;
   border: none;
   border-radius: 999px;
-  /* INK, NOT THE KIT'S BLUE — reverted on the design's instruction and for a
-     reason worth keeping: a soft blue pill on a soft blue-pink bloom has
-     almost no separation, so the most important element in the fold was also
-     its quietest. Ink is the only button fill on this page. */
-  background: var(--ink);
+  background: var(--accent-fill);
   color: var(--lift);
   box-shadow: var(--sh-md);
   font-family: inherit;
@@ -301,12 +325,13 @@
 }
 
 .btn:hover {
-  background: var(--ink-hover);
+  background: var(--accent-hover);
   box-shadow: var(--sh-lg);
   transform: translateY(-2px);
 }
 
 .btn:active {
+  background: var(--accent-active);
   transform: translateY(1px);
   box-shadow: var(--sh-sm);
 }
@@ -317,6 +342,52 @@
 }
 
 .btnNav { height: 44px; padding-inline: 22px; }
+
+/* THE SECOND DOOR. Google's mark is drawn to sit on white and is never
+   recoloured, so this button is white — which also gives the pair a hierarchy
+   without either of them shouting: one filled, one paper, same height, same
+   radius. */
+.btnPaper {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 56px;
+  padding-inline: 26px;
+  border: 1px solid var(--edge);
+  border-radius: 999px;
+  background: var(--lift);
+  box-shadow: var(--sh-sm);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--t-quick) var(--quick),
+    box-shadow var(--t-quick) var(--quick),
+    transform var(--t-quick) var(--quick);
+}
+
+.btnPaper:hover { background: #f7f8fc; box-shadow: var(--sh-md); transform: translateY(-2px); }
+.btnPaper:active { transform: translateY(1px); box-shadow: var(--sh-sm); }
+.btnPaper:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+
+/* On the closing panel both buttons are paper, for the reason the sign-up
+   card gives: the four-colour mark on a dark fill is the one element fighting
+   its background. They are told apart by a half-step of grey and by the mark
+   itself, not by colour. */
+.btnPaperOnDark { border-color: transparent; background: #edecf4; }
+.btnPaperOnDark:hover { background: #ffffff; }
+.btnPaperOnDark:focus-visible { outline-color: var(--lift); }
+
+/* ONE ROW, USED SIX TIMES. Every call to action on the page is this pair in
+   this row; the section it sits in supplies only the margin above it. */
+.ctaRow { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.ctaRowCentre { justify-content: center; }
+.sectionCta { margin-top: 44px; }
 
 .btnOnDark {
   background: var(--lift);
@@ -457,6 +528,10 @@
 .nav:hover .navDotA { cx: 14; r: 4.5; }
 .nav:hover .navDotB { cx: 14; r: 4.5; opacity: 0; }
 
+/* The nav's brand link, which no longer has a mark beside it to align to. */
+.navBrand { display: inline-flex; align-items: center; text-decoration: none; }
+.navBrand .wordmark { margin-left: 0; }
+
 .wordmark {
   margin-left: 10px;
   font-size: 18px;
@@ -581,11 +656,11 @@
    recognition trigger. */
 .heroSub strong { font-weight: 600; color: var(--ink); }
 
+/* LEFT, WITH THE COPY. It was centred inside the copy column, which put the
+   page's one action 117px right of every other line in the fold and read as
+   a stray indent rather than as a decision. `.ctaRow` owns the layout; this
+   owns the margin and the entrance. */
 .heroActions {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
   margin-top: 36px;
   opacity: 0;
   transform: scale(0.96);
@@ -665,6 +740,56 @@
 
 .railStatic { display: none; }
 .railLeadMobile { display: none; }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   S04b — the second band: the same object, the other half of the sentence.
+
+   S02 lists what gets READ and S04b lists what comes OUT, so they are built
+   from the same rules on purpose — a reader meets this shape once, learns
+   that a band is something to scan rather than stop at, and meets it again a
+   scroll later already knowing that. Everything below is a difference from
+   S02, and there are only three: the direction, the pill's contents, and a
+   top border that is already there from the section above it.
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* IT SITS ON THE PLATE, WHICH IS THE ONLY THING THAT MAKES IT A DIFFERENT
+   OBJECT FROM S02. The source rail sits on the page's own canvas, flush under
+   the hero; this one is a seam between two sections, and a half-step of grey
+   under it is what says so without adding a rule, a heading or a third
+   border. Its pills are `--lift`, so they lift off it rather than melting in
+   the way they would on canvas. */
+.metricRail { background: var(--plate); }
+
+/* AGAINST S02'S DIRECTION. Two marquees a scroll apart running the same way
+   read as one long belt the whole page is sitting on; running opposite ways
+   they read as two separate instruments, which is what they are. */
+.metricTrack { animation-name: marqueeBack; }
+
+@keyframes marqueeBack {
+  from { transform: translateX(-50%); }
+  to { transform: translateX(0); }
+}
+
+/* The source rail's pill, with a figure where the mark was — so the two bands
+   are the same silhouette at a glance and different the moment you read one.
+   The name is quiet and the figure is ink: the page's one typographic rule,
+   applied at its smallest scale. */
+.metricPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  flex: none;
+  height: 44px;
+  padding: 0 20px;
+  border: 1px solid var(--edge);
+  border-radius: 999px;
+  background: var(--lift);
+  box-shadow: var(--sh-sm);
+  white-space: nowrap;
+}
+
+.metricName { font-size: 15px; font-weight: 500; color: var(--ink-60); }
+.metricFigure { font-size: 16px; font-weight: 700; letter-spacing: -0.01em; color: var(--ink); font-variant-numeric: tabular-nums; }
 
 /* ──────────────────────────────────────────────────────────────────────────
    S03 — The disagreement. Sticky left column, one tall stack. The densest
@@ -1080,64 +1205,9 @@
 
 }
 
-/* ──────────────────────────────────────────────────────────────────────────
-   S01 additions — the status pill, the ambient chips, the two-part CTA
-   ────────────────────────────────────────────────────────────────────────── */
-
-.statusPill {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: fit-content;
-  height: 34px;
-  margin: 0 auto 36px;
-  padding: 6px 16px 6px 12px;
-  border: 1px solid var(--edge);
-  border-radius: 999px;
-  background: color-mix(in srgb, #ffffff 70%, transparent);
-  backdrop-filter: blur(16px);
-  box-shadow: var(--sh-sm);
-  opacity: 0;
-  transform: scale(0.9);
-  animation: popIn 280ms var(--snapIn) 60ms forwards;
-}
-
-.statusDot {
-  flex: none;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--good);
-  animation: livePulse 2s ease-in-out infinite;
-}
-
-@keyframes livePulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.35; transform: scale(1.35); }
-}
-
-.statusDivider { width: 1px; height: 14px; background: var(--edge); }
 
 
 
-
-
-.btnHero:hover { box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.14), var(--sh-xl); }
-.btnHero:active { box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.14), var(--sh-md); }
-
-.btnHeroLabel { font-size: 17px; font-weight: 600; }
-.btnHeroDivider { width: 1px; height: 26px; margin-inline: 16px; background: rgba(255, 255, 255, 0.18); }
-
-/* The second piece of information is what brightens on hover — the whole pill
-   reacts, but the eye is sent to the part it had not read yet. */
-.btnHeroNote {
-  font-size: 13px;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.62);
-  transition: color var(--t-control) var(--quick);
-}
-
-.btnHero:hover .btnHeroNote { color: #ffffff; }
 
 /* Bare text beside a heavy pill looks unfinished, which is half of why the
    pair read weak. */
@@ -1666,9 +1736,6 @@
   .s01 { padding-block: 64px 56px; }
   .s07 { padding-block: 64px; }
 
-  .statusPill { margin-bottom: 28px; }
-  .btnHero { width: 100%; height: 56px; justify-content: center; padding-inline: 20px; }
-  .ghostPill { width: 100%; }
 
   .figureCard { padding: 24px; }
   .s07Panel { padding: 40px 24px; }
@@ -1699,8 +1766,6 @@
    header's dot — all stop. Continuous ambient motion is an accessibility
    problem, not a style preference. */
 @media (prefers-reduced-motion: reduce) {
-  .statusDot, .aiReadingMark { animation: none; }
-  .statusPill { opacity: 1; transform: none; }
 }
 
 /* §0: AN IN-PAGE LINK USED TO LAND ITS HEADING UNDER THE FLOATING NAV.
@@ -1977,7 +2042,6 @@
 .s10Sub { margin-top: 20px; color: var(--d-60); }
 .s10Actions { margin-top: 40px; }
 .s10Foot { margin-top: 20px; color: rgba(255, 255, 255, 0.5); }
-.btnLarge { height: 64px; padding-inline: 40px; font-size: 17px; }
 
 /* ──────────────────────────────────────────────────────────────────────────
    S11 — five columns, not "brand left, links right".
@@ -2084,12 +2148,6 @@
 
   /* The hero pair stacks and both fill the width; the two-part pill centres
      its group rather than pushing the note off the right edge. */
-  .heroActions { flex-direction: column; align-items: stretch; gap: 10px; }
-  .btnHero, .ghostPill { width: 100%; }
-  .btnHero { height: 56px; justify-content: center; padding-inline: 14px; }
-  .btnHeroLabel { font-size: 16px; }
-  .btnHeroDivider { margin-inline: 12px; }
-  .btnHeroNote { font-size: 12px; }
 
   .receiptCard { border-radius: 20px; }
   .receiptInk, .receiptWhite { padding: 20px; }
@@ -2106,18 +2164,19 @@
   .proofLogo:nth-of-type(n + 5) { display: none; }
   .moreMD { display: none; }
   .moreSM { display: inline; }
-  .btnLarge { width: 100%; height: 56px; }
 
   .footerGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px var(--gutter); }
   .footerGroup:nth-child(2), .footerGroup:nth-child(4) { grid-column: 1; }
   .footerGroup:nth-child(3), .footerGroup:nth-child(5) { grid-column: 2; }
   .footerBottom { flex-direction: column; gap: 12px; }
-  /* Measured at 375: mark + wordmark + Menu + the CTA label is 390px of
-     content in a 341px pill. The CTA label is final copy and the menu is the
-     only route to the rest of the page, so the wordmark's TEXT gives — the
-     mark still carries the brand and still links home, at a 44px target. */
-  .nav .wordmark { display: none; }
-  .nav .footerBrand { min-width: 44px; min-height: 44px; justify-content: center; }
+  /* THE WORDMARK STAYS AND THE MARK IS WHAT WENT. It used to be the other way
+     round — at 375 the text was hidden and the two dots carried the brand in a
+     44px target — which stops working the moment the mark is removed, because
+     hiding the text then leaves an empty link. So the name is the brand at
+     every width, at 15px here, and the room comes from the pill's padding and
+     the two controls beside it instead. */
+  .nav .wordmark { font-size: 15px; }
+  .nav .navBrand { min-height: 44px; }
   .nav { gap: 4px; padding-left: 16px; }
   /* §9's 44x44 reaches the nav's own button too. */
   .btnNav { height: 44px; padding-inline: 12px; font-size: 14px; }
@@ -2134,7 +2193,7 @@
      hero is an argument; somebody who asked for less motion should get its
      conclusion, not a shorter performance. */
   .nodePill, .board { opacity: 1 !important; transform: none !important; animation: none !important; }
-  .statusDot, .footerDot, .aiReadingMark { animation: none !important; }
+  .footerDot, .aiReadingMark { animation: none !important; }
   .railTrack { animation: none !important; transform: none !important; }
   .railStatic { display: flex; }
   .railScrolling { display: none; }
@@ -2329,40 +2388,6 @@
 
 .foldCopy { max-width: 780px; }
 
-.statusPill {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: fit-content;
-  height: 34px;
-  margin: 0 0 28px;
-  padding: 6px 16px 6px 12px;
-  border: 1px solid var(--edge);
-  border-radius: 999px;
-  background: color-mix(in srgb, #ffffff 70%, transparent);
-  backdrop-filter: blur(16px);
-  box-shadow: var(--sh-sm);
-  opacity: 0;
-  transform: scale(0.9);
-  animation: popIn 280ms var(--snapIn) 60ms forwards;
-}
-
-.statusDot {
-  flex: none;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--good);
-  animation: livePulse 2s ease-in-out infinite;
-}
-
-@keyframes livePulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.35; transform: scale(1.35); }
-}
-
-.statusDivider { width: 1px; height: 14px; background: var(--edge); }
-
 /* The italic leans in — a small settle that makes the accent read as a
    deliberate voice rather than as a font that failed to match. */
 .accentHero {
@@ -2374,7 +2399,6 @@
 @keyframes leanIn { to { transform: skewX(0) translateY(0); } }
 
 .heroSub { max-width: 480px; margin: 28px 0 0; color: var(--ink-60); opacity: 0; transform: translateY(10px); animation: riseIn 320ms var(--glide) 600ms forwards; }
-.heroActions { display: flex; align-items: center; gap: 12px; margin-top: 32px; opacity: 0; transform: scale(0.96); animation: popIn 300ms var(--snapIn) 740ms forwards; }
 .heroReassurance { margin-top: 16px; color: var(--ink-35); opacity: 0; animation: fadeIn 240ms var(--glide) 860ms forwards; }
 
 /* ── The board, laid back over the hero ───────────────────────────────── */
@@ -2558,8 +2582,10 @@
 
   /* Two full-width controls, 12px apart. Side by side they are 170px each,
      which cuts `Connect your first tool` in half. */
-  .heroActions { flex-direction: column; align-items: stretch; gap: 12px; }
-  .btnHero, .ghostPill { width: 100%; justify-content: center; }
+  /* Two full-width controls, 12px apart. Side by side they are 170px each,
+     which cuts `Start free with Google` in half. */
+  .ctaRow { flex-direction: column; align-items: stretch; }
+  .ctaRow > * { width: 100%; }
 }
 
 /* 1280–1359 — THE ONE WIDTH WHERE THE TWO COLUMNS NEARLY TOUCH, and it is
@@ -2596,7 +2622,6 @@
   .heroSub { font-size: 17px; }
   .fold { --rig-k: 0.86; --board-h: 470px; }
   .foldGrid { min-height: 500px; }
-  .statusPill { height: 30px; margin-bottom: 22px; }
   .heroSub { margin-top: 22px; }
   .heroActions { margin-top: 26px; }
   .heroReassurance { margin-top: 13px; }
@@ -2610,7 +2635,6 @@
   .heroSub { font-size: 16px; }
   .fold { --rig-k: 0.75; --board-h: 412px; }
   .foldGrid { min-height: 440px; }
-  .statusPill { display: none; }
   .heroSub { margin-top: 20px; }
   .heroActions { margin-top: 24px; }
   .heroReassurance { margin-top: 12px; }

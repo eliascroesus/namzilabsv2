@@ -445,7 +445,11 @@ const RULES: Rule[] = [
       // The Google "G" on the sign-in button, for the same reason: Google's
       // brand terms require the mark in its own four colours, and a token here
       // would be us redrawing it. Every other colour on that screen is a token.
-      "src/app/(auth)/auth-shell.tsx": "Google's own mark on the sign-in button; their brand terms forbid recolouring it",
+      // Google's mark now lives in ONE file — the sign-in card and the landing
+      // page's own button both draw it from here — so the entry moved with it.
+      // Their brand terms forbid recolouring it, which is why it cannot be a
+      // token: the four hexes ARE the asset.
+      "src/components/google-mark.tsx": "Google's own mark, shared by the sign-up card and the landing page; their brand terms forbid recolouring it",
       "src/app/design/page.tsx": "the kit page prints hex VALUES as documentation labels",
       "src/app/design/brand-sheet.tsx": "the same kit page, split out — it prints the brand sheet's own hex values as labels",
       // Next emits <meta name="theme-color"> from a build-time literal, so it

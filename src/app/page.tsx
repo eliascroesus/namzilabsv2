@@ -11,7 +11,8 @@ import { SourceIndex } from "@/components/marketing/snap/source-index";
 import { AiPanel } from "@/components/marketing/snap/ai-panel";
 import { INDEX_SOURCES } from "@/components/marketing/snap/source-taxonomy";
 import { BoardShot } from "@/components/marketing/snap/board-shot";
-import { StatusPill } from "@/components/marketing/snap/status-pill";
+import { StartButtons } from "@/components/marketing/snap/start-buttons";
+import { MetricRail } from "@/components/marketing/snap/metric-rail";
 import { CanvasShot } from "@/components/marketing/snap/canvas-shot";
 import { Mark, Tick, LogoMark } from "@/components/marketing/snap/marks";
 
@@ -22,11 +23,16 @@ import { Mark, Tick, LogoMark } from "@/components/marketing/snap/marks";
  *
  * Five tools each hold a piece of an answer; they snap together into one.
  * Scattered and colourful resolves into single and certain. Every source owns
- * a bright colour and they float, tilted, separate; the thing that reconciles
- * them is a solid ink-black card holding one number. COLOUR IS THE PROBLEM.
- * INK IS THE ANSWER. That is not a skin over the argument, it IS the argument,
- * which is why a source colour may never fill a button and a resolved figure
- * may never be anything but ink.
+ * a bright colour and they float, separate; the thing that reconciles them is
+ * ink. A SOURCE colour is the problem and INK IS THE ANSWER — which is why a
+ * source colour may never fill a button and a resolved figure may never be
+ * anything but ink.
+ *
+ * The BRAND's blue is not a source colour, and since the atmosphere went cool
+ * it is what fills the buttons. Ink held them while the page's wash was peach
+ * and lilac and a pale blue pill disappeared into it; with a board, two dark
+ * panels and an ink answer tile all on screen, a fourth black rectangle that
+ * was supposed to be the action was the one nobody could pick out.
  *
  * ═══ THE SCROLL RHYTHM, WHICH IS THE PART A FUTURE EDIT WILL BREAK ═══
  *
@@ -34,7 +40,7 @@ import { Mark, Tick, LogoMark } from "@/components/marketing/snap/marks";
  * centred heading over a grid of cards, it reads as generated no matter how
  * good the palette is. So density, alignment and weight change as you scroll:
  *
- *   big · thin · dense · wide · medium · heavy · wide · thin · heavy
+ *   big · thin · dense · wide · thin · medium · heavy · wide · thin · heavy
  *
  * S06 was cut; the numbering keeps its gap on purpose, as a marker that a
  * section was deliberately removed rather than lost. Its claim survives inside
@@ -42,11 +48,14 @@ import { Mark, Tick, LogoMark } from "@/components/marketing/snap/marks";
  *
  * No two neighbours match, and three rules enforce it:
  *
- *   1. ONLY S01 centres its heading. S07's moved left when it became the dark
- *      section, which makes the fold the single centred moment on the page.
+ *   1. NO LIGHT SECTION centres its heading. The fold spends the page's last
+ *      centred moment on a two-column layout; S07's went left when it became
+ *      the dark section.
  *   2. ONLY S07 and S10 are dark, separated by two light sections.
- *   3. ONLY S02 and S08 break the container to full bleed, and they sit at
- *      opposite ends of the page.
+ *   3. THREE BANDS break the container to full bleed, and a band is never a
+ *      section: S02 (the tools), S04b (the metrics those tools make) and S08
+ *      (the index). The two marquees run in OPPOSITE directions — same way
+ *      round and they read as one belt the whole page is sitting on.
  *
  * Section padding is per-section rather than a global constant for the same
  * reason. Adding a fourth centred heading, a third dark panel or a uniform
@@ -295,13 +304,21 @@ const FOOTER_GROUPS = [
 export default async function Home() {
   const { user } = await withAuth();
 
-  // The LABEL never changes — "Connect your first tool" is the one action this
-  // page exists to produce, and swapping it for "Go to dashboard" mid-scroll
-  // makes it two different pages depending on a cookie. Where it POINTS does
-  // change, because sending a signed-in reader back through sign-up is a dead
-  // end rather than a message.
-  const cta = user ? "/dashboard" : "/sign-up";
-  const ctaLabel = "Connect your first tool";
+  /**
+   * ONE FORK, READ ONCE AND PASSED DOWN.
+   *
+   * Every call to action on this page is the same `StartButtons`, and what it
+   * offers depends on this single boolean: two ways to start for a visitor,
+   * one way back to work for somebody who already has an account. Sending a
+   * signed-in reader through sign-up is a dead end rather than a message, and
+   * offering them `Start free` is worse than a dead end — it is wrong.
+   *
+   * `cta` survives for the nav's own button and for S08's request cell, which
+   * are links rather than the page's action.
+   */
+  const signedIn = Boolean(user);
+  const cta = signedIn ? "/dashboard" : "/signup";
+  const ctaLabel = signedIn ? "Go to your dashboard" : "Start free";
 
   return (
     <div className={`${styles.page} ${switzer.variable} ${instrumentSerif.variable}`}>
@@ -338,8 +355,12 @@ export default async function Home() {
               the call to action and the source rail share one screen. */}
           <div className={styles.foldGrid}>
             <div className={styles.foldCopy}>
-              <StatusPill count={CONNECTOR_CATALOG.length} />
-
+              {/* THE STATUS PILL IS GONE, at the owner's ask, and it was the
+                  right thing to lose: it claimed `last sweep 2 min ago` on a
+                  page with no workspace behind it, and the rail six inches
+                  below already says how many sources are read — in a band that
+                  shows them rather than counting them. The headline now owns
+                  the top of the fold outright. */}
               <h1 className={styles.d0}>
                 <span className={styles.heroLine}>
                   <span>Your best metrics</span>
@@ -361,18 +382,11 @@ export default async function Home() {
                 same person, and builds the number none of them can.
               </p>
 
-              <div className={styles.heroActions}>
-                <Link className={`${styles.btn} ${styles.btnHero}`} href={cta}>
-                  <span className={styles.btnHeroLabel}>{ctaLabel}</span>
-                  <span className={styles.btnHeroDivider} aria-hidden />
-                  <span className={styles.btnHeroNote}>No card required</span>
-                </Link>
-                <Link className={styles.ghostPill} href="#receipts">
-                  See a live metric
-                </Link>
-              </div>
+              <StartButtons signedIn={signedIn} className={styles.heroActions} />
 
-              <p className={`${styles.caption} ${styles.heroReassurance}`}>Read-only. Disconnect anytime.</p>
+              <p className={`${styles.caption} ${styles.heroReassurance}`}>
+                Free to start, no card. Read-only — disconnect anytime.
+              </p>
             </div>
 
           </div>
@@ -403,6 +417,11 @@ export default async function Home() {
                   Each one tells the truth about its own slice and cannot see the other nine. Namzilabs reads them
                   together.
                 </p>
+
+                {/* The call sits in the STICKY column, so it is on screen for
+                    the whole scroll of the six rows beside it — which is the
+                    minute the reader spends recognising their own stack. */}
+                <StartButtons signedIn={signedIn} className={styles.sectionCta} />
               </div>
 
               <div className={styles.stack}>
@@ -453,6 +472,14 @@ export default async function Home() {
             <p className={`${styles.caption} ${styles.shotNote}`}>A published metric recomputes every 10 minutes.</p>
           </section>
 
+          {/* ══ S04b · The second band — what the building is FOR ══════════
+              S02 says what gets read; this says what comes out, and it sits
+              exactly between the metric being assembled and that metric's
+              receipt. It is the same object as the source rail on purpose —
+              a reader has met this band before and knows not to stop for it —
+              running the other way so the two do not read as one belt. */}
+          <MetricRail />
+
           {/* ══ S05 · The receipt — off-centre pair, tabbed ════════════════ */}
           <section className={`${styles.container} ${styles.s05}`} id="receipts">
             {/* Heading left, body right on a shared top edge — an editorial
@@ -468,6 +495,8 @@ export default async function Home() {
             </div>
 
             <ReceiptTabs metrics={METRICS} />
+
+            <StartButtons signedIn={signedIn} className={styles.sectionCta} />
           </section>
 
           {/* ══ S07 · Give your AI the numbers — THE dark section ═════════
@@ -529,6 +558,8 @@ export default async function Home() {
           <section className={styles.plate} id="sources">
             <div className={`${styles.container} ${styles.s08}`}>
               <SourceIndex sources={INDEX_SOURCES} cta={cta} />
+
+              <StartButtons signedIn={signedIn} align="centre" className={styles.sectionCta} />
             </div>
           </section>
 
@@ -587,11 +618,7 @@ export default async function Home() {
               <p className={`${styles.bodyL} ${styles.s10Sub}`}>
                 Connect one tool and build your first metric this afternoon.
               </p>
-              <div className={styles.s10Actions}>
-                <Link className={`${styles.btn} ${styles.btnOnDark} ${styles.btnLarge}`} href={cta}>
-                  {ctaLabel}
-                </Link>
-              </div>
+              <StartButtons signedIn={signedIn} tone="dark" align="centre" className={styles.s10Actions} />
               <p className={`${styles.caption} ${styles.s10Foot}`}>Read-only. No card required.</p>
             </div>
           </section>

@@ -44,13 +44,43 @@ describe("homepage (logged out)", () => {
    * than through the redirect, which is one hop fewer for a real person;
    * `/sign-in` still redirects for old invite emails and bookmarks, and
    * tests/auth-routes.test.ts is what guarantees that, independently of which
-   * path this page chooses today.
+   * path this page chooses today. The same is now true of the sign-up pair:
+   * the buttons go to `/signup`, where the form actually lives, and `/sign-up`
+   * still redirects there — so this accepts either rather than pinning the
+   * page to the spelling it happens to use this week.
    */
   it("offers sign-up and log-in, and no dashboard link", async () => {
     const element = await Home();
     const html = renderToStaticMarkup(element);
-    expect(html).toContain('href="/sign-up"');
+    expect(html).toMatch(/href="\/sign-?up"/);
     expect(html).toMatch(/href="\/(login|sign-in)"/);
     expect(html).not.toContain('href="/dashboard"');
+  });
+
+  /**
+   * THE SECOND DOOR IS PART OF THE INVARIANT NOW, and it is the one that can
+   * disappear without anything else noticing: `/auth/google` is a route
+   * handler, so a button that stops pointing at it still renders, still looks
+   * right, and simply stops being a Google sign-up. The page offers both ways
+   * to start or it is not doing its job.
+   */
+  it("offers the Google door as well as the email one", async () => {
+    const html = renderToStaticMarkup(await Home());
+    expect(html).toContain('href="/auth/google"');
+  });
+
+  /**
+   * A signed-in reader is offered NEITHER. `Start free` is a false statement
+   * to somebody who already has an account, and both links would walk them
+   * through sign-up to arrive back where they started.
+   */
+  it("offers a signed-in reader their dashboard instead of a sign-up", async () => {
+    const { withAuth } = await import("@workos-inc/authkit-nextjs");
+    vi.mocked(withAuth).mockResolvedValueOnce({ user: { id: "user_1" } } as never);
+
+    const html = renderToStaticMarkup(await Home());
+    expect(html).toContain('href="/dashboard"');
+    expect(html).not.toContain("Start free with");
+    expect(html).not.toContain('href="/auth/google"');
   });
 });
