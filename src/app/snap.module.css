@@ -78,11 +78,6 @@
     0 4px 8px rgba(20, 20, 28, 0.05),
     0 16px 28px -6px rgba(20, 20, 28, 0.09),
     0 36px 56px -16px rgba(20, 20, 28, 0.12);
-  --sh-ink:
-    0 2px 2px rgba(20, 20, 28, 0.06),
-    0 6px 13px rgba(20, 20, 28, 0.08),
-    0 26px 45px -10px rgba(20, 20, 28, 0.14),
-    0 58px 90px -26px rgba(20, 20, 28, 0.19);
 
   /* The card's own surface: a barely perceptible falloff so it reads as
      material rather than as a flat white rectangle, plus a hairline of light
@@ -90,9 +85,76 @@
   --card-fill: linear-gradient(180deg, #ffffff 0%, #fbfbfd 100%);
   --card-edge: rgba(20, 20, 28, 0.07);
   --card-top: inset 0 1px 0 rgba(255, 255, 255, 0.9);
-  --ink-fill: linear-gradient(180deg, #1c1c26 0%, #121218 100%);
-  --ink-edge: rgba(255, 255, 255, 0.08);
-  --ink-top: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+
+  /* ══ THE SKY — the product's own card, and now this page's dark surface ══
+   *
+   * Every dark object here used to be INK, on the argument that a source
+   * colour is the problem and ink is the answer. The owner's call is that the
+   * answer should look like the product: the rail's `Invite & earn` card and
+   * the refer board wear a deep blue sky with a lit edge, and a landing page
+   * whose four biggest objects are black rectangles was selling something
+   * that does not exist anywhere in the app.
+   *
+   * ═══ WHICH SKY, AND THE ONE THING THAT DECIDES IT ═══
+   *
+   * globals.css ships two, and the difference between them is a contrast
+   * floor rather than a preference. `.sky-card` opens up to #3F73E6, which is
+   * right for an object whose type sits in its top half; white on it is
+   * 4.37:1 and fails as body copy. `.sky-panel` never opens past #2B53AE,
+   * where white is 7.1:1. Every dark surface on this page has text running
+   * all the way down it, so all of them take the panel's range — with the
+   * INVITE CARD's geometry: 135 degrees, and the white bloom entering from
+   * above the top-right corner.
+   *
+   * ═══ THE RIM IS A GRADIENT BORDER, AND IT DOES NOT SPIN ═══
+   *
+   * The rail card runs a light around its edge on a 4s loop. One of those in
+   * the chrome is the one moving thing in the app; four of them down a
+   * landing page is ambient motion, which §6.8 bans outright and which a
+   * reader who asked for less of it would be handed anyway. So the sweep is
+   * frozen at the angle it looks best at — a 1px border painted with a
+   * gradient, bright at the top-left and again at the bottom-right — which is
+   * the same signature at rest and costs nothing per frame.
+   *
+   * The face clips to the PADDING box and the rim to the BORDER box, which is
+   * the whole trick: one element, no pseudo, and the contrast walker still
+   * reads the three opaque blues underneath because it takes every opaque
+   * stop as a candidate ground and keeps the worst. */
+  /* THE THREE BLUES ARE SPELLED ONCE. They were written twice — the flush
+     face and the card with a rim — and the difference only showed up under a
+     deliberate sabotage, where changing one of them left the other on the old
+     value and half the surfaces quietly right. `var()` substitutes tokens, so
+     the card is the face plus a rim rather than a second copy of it. */
+  --sky-face:
+    radial-gradient(120% 140% at 88% -20%, rgba(255, 255, 255, 0.2), transparent 60%),
+    linear-gradient(135deg, #16305e 0%, #22438f 55%, #2b53ae 100%);
+  --sky-rim: linear-gradient(
+    140deg,
+    rgba(255, 255, 255, 0.44) 0%,
+    rgba(255, 255, 255, 0.06) 36%,
+    rgba(255, 255, 255, 0.08) 64%,
+    rgba(255, 255, 255, 0.36) 100%
+  );
+  --sky-card: var(--sky-face) padding-box, var(--sky-rim) border-box;
+
+  /* TWO PALE BLUES, NOT TWO WHITES AT AN ALPHA. White at 0.72 over the face's
+     lightest stop is 4.50:1 — exactly on the line, which is not a margin. A
+     tint carries the same two tiers with room to spare and stays in the
+     panel's own family: 5.6:1 and 4.9:1 on #2B53AE. */
+  --sky-fg: #ffffff;
+  --sky-70: #dbe5fb;
+  --sky-55: #c7d6f5;
+  --sky-edge: rgba(255, 255, 255, 0.18);
+  --sky-chip: rgba(255, 255, 255, 0.12);
+
+  /* The invite card's halo, as a shadow rather than a blurred pseudo-element:
+     blue-tinted, so these objects sit in the page's cool wash instead of
+     punching a neutral hole in it. */
+  --sh-sky:
+    0 2px 2px rgba(15, 32, 70, 0.1),
+    0 8px 18px rgba(15, 32, 70, 0.14),
+    0 26px 46px -12px rgba(22, 48, 94, 0.26),
+    0 58px 92px -30px rgba(22, 48, 94, 0.34);
 
   /* ── Motion (§6.8). Overshoot is wanted, and capped at 1.26. ──────────── */
   --snapIn: cubic-bezier(0.34, 1.26, 0.42, 1);
@@ -1000,16 +1062,16 @@
   gap: 2px;
   padding-inline: 16px;
   border-radius: 16px;
-  border-color: var(--ink-edge);
-  background: var(--ink-fill);
-  box-shadow: var(--ink-top), var(--sh-ink);
+  border-color: transparent;
+  background: var(--sky-card);
+  box-shadow: var(--sh-sky);
 }
 
-.cvOutLabel { color: rgba(255, 255, 255, 0.55); }
+.cvOutLabel { color: var(--sky-70); }
 .cvOutFigure { font-size: 30px; font-weight: 800; letter-spacing: -0.03em; line-height: 1.12; color: #ffffff; font-variant-numeric: tabular-nums; }
 /* 0.5 is 5.15:1 on this fill at 13px - the same value, for the same reason,
    as the figure's sub-line everywhere else on the page. */
-.cvOutFoot { margin-top: 4px; color: rgba(255, 255, 255, 0.5); }
+.cvOutFoot { margin-top: 4px; color: var(--sky-70); }
 
 /* ── The build, once, on first entry (§7.3) ────────────────────────────── */
 
@@ -1042,48 +1104,35 @@
  */
 .darkPanel {
   position: relative;
-  border: 1px solid var(--ink-edge);
+  border: 1px solid transparent;
   border-radius: 24px;
-  background: var(--ink-fill);
-  box-shadow: var(--ink-top), var(--sh-ink);
+  background: var(--sky-card);
+  box-shadow: var(--sh-sky);
   /* VISIBLE, because S07's preview card is supposed to hang past this edge —
      that overhang is the section's one structural idea and `hidden` ate it.
      The blooms get their own clipped layer below instead, since a blurred
      radial with no clip would spill past the rounded corners. */
   overflow: visible;
-  --d-fg: #ffffff;
-  --d-60: #a3a3b4;
-  /* SOLVED AGAINST THE GROUND THAT IS ACTUALLY THERE, and that ground moved.
-     #7d7d91 cleared 4.5:1 on the old flat #14141C; §3's ink recipe made the
-     panel a gradient whose TOP stop is #1c1c26, and against that the same grey
-     is 4.19:1. The regression was invisible for a build because the contrast
-     walker could not read a gradient at all — see landing-check.mjs. Worst
-     stop, not the average: #87879A is 4.79:1 on #1c1c26 and better below it. */
-  --d-35: #87879a;
-  --d-edge: rgba(255, 255, 255, 0.12);
-  --d-good: #5ee9a0;
-  --d-flag: #ff7a63;
+  --d-fg: var(--sky-fg);
+  --d-60: var(--sky-70);
+  /* SOLVED AGAINST THE GROUND THAT IS ACTUALLY THERE, and that ground has now
+     moved twice: first when §3's ink recipe turned a flat #14141C into a
+     gradient, and again when the panel became sky. A neutral grey was right
+     for neither — on #2B53AE the old #87879A is 2.9:1 — so both tiers are the
+     sky's own tints, measured against the face's LIGHTEST stop rather than
+     its average. */
+  --d-35: var(--sky-55);
+  --d-edge: var(--sky-edge);
   color: var(--d-fg);
 }
 
-/* The clip the panel gave up, scoped to the only thing that needed it. */
-.panelBlooms {
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  overflow: hidden;
-  pointer-events: none;
-}
+/* THE PANELS' AMBIENT BLOOMS ARE GONE, and it is a deletion rather than a
+   retheme. They existed to keep a large flat black rectangle from reading as
+   a hole — three blurred radials, clipped, at 6–14% alpha. The sky face
+   carries its own bloom in its first layer, at 20% and aimed from above the
+   top-right corner, so a second set underneath it was three blurred layers
+   doing nothing but costing a paint. */
 
-/* Two blooms rather than one: these panels are far wider than they are tall,
-   and a single radial leaves one end visibly flat. */
-.panelBloom { position: absolute; inset: 0; pointer-events: none; }
-.panelBloomLilac { background: radial-gradient(44% 44% at 18% 14%, rgba(230, 224, 255, 0.12), transparent 70%); filter: blur(80px); }
-.panelBloomMint { background: radial-gradient(36% 36% at 88% 86%, rgba(213, 245, 233, 0.06), transparent 70%); filter: blur(90px); }
-/* Was `panelBloomPeach`, and renamed with its colour rather than left as a
-   blue thing called peach — the closing panel's warm bloom was the last warm
-   value on the page. */
-.panelBloomSteel { background: radial-gradient(50% 50% at 20% 80%, rgba(86, 140, 255, 0.10), transparent 70%); filter: blur(90px); }
 
 /* An internal bloom, because a large flat black panel reads as a hole. */
 
@@ -1285,7 +1334,7 @@
    floor for 13px text, and the browser gate fails it. 0.55 white composites to
    5.95:1 and is the same label treatment the hero's front card uses, so the
    two ink surfaces speak with one voice. */
-.figureLabel { color: rgba(255, 255, 255, 0.55); }
+.figureLabel { color: var(--sky-70); }
 .figureValue { margin-top: 12px; color: #ffffff; }
 
 .changeBadge {
@@ -1293,9 +1342,9 @@
   margin-top: 20px;
   padding: 5px 12px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid var(--ink-edge);
-  color: rgba(255, 255, 255, 0.75);
+  background: var(--sky-chip);
+  border: 1px solid var(--sky-edge);
+  color: var(--sky-fg);
 }
 
 /* ── What each source said (§8.2) ──────────────────────────────────────── */
@@ -1304,7 +1353,7 @@
    of the panel — the block is pinned to the figure it explains, not to the
    panel's floor. The auto margin went on the label for one build and opened a
    90px hole between the label and its own rows. */
-.saidLabel { margin: 24px 0 0; color: rgba(255, 255, 255, 0.55); }
+.saidLabel { margin: 24px 0 0; color: var(--sky-70); }
 .saidRows { display: flex; flex-direction: column; margin: 12px 0 auto; }
 
 .saidRow {
@@ -1329,7 +1378,7 @@
      `overflow: hidden`. */
   inset: 1px 0;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.1);
   opacity: 0;
   transition: opacity 220ms var(--glide) var(--stagger, 0ms);
 }
@@ -1337,12 +1386,12 @@
 .saidRowLit::before { opacity: 1; }
 
 .saidMark { position: relative; z-index: 1; display: inline-flex; flex: none; }
-.saidNoMark { display: block; width: 20px; height: 20px; border-radius: 50%; background: rgba(255, 255, 255, 0.1); }
-.saidName { position: relative; z-index: 1; margin-right: auto; color: #a3a3b4; white-space: nowrap; transition: color var(--t-quick) var(--quick); }
+.saidNoMark { display: block; width: 20px; height: 20px; border-radius: 50%; background: var(--sky-chip); }
+.saidName { position: relative; z-index: 1; margin-right: auto; color: var(--sky-55); white-space: nowrap; transition: color var(--t-quick) var(--quick); }
 .saidValue { position: relative; z-index: 1; font-weight: 600; color: #ffffff; font-variant-numeric: tabular-nums; }
 
 /* The row's own hover, at zero delay whatever the stagger says. */
-.saidRowHot .saidName { color: #ffffff; }
+.saidRowHot .saidName { color: var(--sky-fg); }
 
 .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 24px; }
 
@@ -1351,8 +1400,8 @@
   padding-inline: 14px;
   border: none;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.65);
+  background: var(--sky-chip);
+  color: var(--sky-70);
   font-family: inherit;
   font-size: 13px;
   font-weight: 500;
@@ -1361,7 +1410,7 @@
   transition: background-color var(--t-quick) var(--quick), color var(--t-quick) var(--quick);
 }
 
-.tabDark:hover { background: rgba(255, 255, 255, 0.18); }
+.tabDark:hover { background: rgba(255, 255, 255, 0.22); }
 .tabDarkActive { background: #ffffff; color: var(--ink); }
 .tabDark:focus-visible { outline: 2px solid #ffffff; outline-offset: 3px; }
 
@@ -1826,11 +1875,13 @@
   z-index: 0;
   inset: 0 calc(-1 * var(--bleed)) 0 calc(26px * var(--rig-k, 1));
   border-radius: 24px 0 0 24px;
-  /* Ink, like every other answer on this page — and it is under the
-     screenshot rather than beside it, so a slow image shows the right
-     silhouette instead of a white hole. */
-  background: var(--ink-fill);
-  box-shadow: var(--ink-top), var(--sh-ink);
+  /* The same sky as every other dark surface — and it is under the screenshot
+     rather than beside it, so a slow image shows the right silhouette instead
+     of a white hole. The 1px rim survives the image, which covers the padding
+     box only, so the board reads as the same object as the panels below it. */
+  border: 1px solid transparent;
+  background: var(--sky-card);
+  box-shadow: var(--sh-sky);
   overflow: hidden;
   opacity: 0;
   transform: translateY(14px) scale(0.99);
@@ -1987,14 +2038,16 @@
    colour as the problem; the problem was that the panel was mostly empty.
    Ink on this page means "an answer" — the hero's front card and the canvas
    output are the other two — and this is the page's central answer. */
+/* THE FACE WITHOUT THE RIM. This is one half of a card rather than a card, so
+   a lit border around it would draw an edge through the middle of an object
+   that is supposed to read as one surface. */
 .receiptInk {
   position: relative;
   flex: none;
   width: 44%;
   padding: 32px;
-  background: var(--ink-fill);
-  box-shadow: var(--ink-top);
-  color: #ffffff;
+  background: var(--sky-face);
+  color: var(--sky-fg);
   overflow: hidden;
 }
 
@@ -2059,7 +2112,7 @@
   background: #ffffff;
   /* The ring is the panel's own ink, so the discs read as overlapping rather
      than as a row of touching circles. */
-  box-shadow: 0 0 0 2px #16161e;
+  box-shadow: 0 0 0 2px #1a3a74;
 }
 
 .proofLogo + .proofLogo { margin-left: -9px; }
@@ -2073,14 +2126,14 @@
   height: 28px;
   padding-inline: 12px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.62);
+  background: var(--sky-chip);
+  color: var(--sky-fg);
 }
 
 .s10Heading { max-width: 620px; margin-top: 44px; }
 .s10Sub { margin-top: 18px; color: var(--d-60); }
 .s10Actions { margin-top: 36px; }
-.s10Foot { margin-top: 18px; color: rgba(255, 255, 255, 0.5); }
+.s10Foot { margin-top: 18px; color: var(--sky-70); }
 
 /* ──────────────────────────────────────────────────────────────────────────
    S11 — five columns, not "brand left, links right".

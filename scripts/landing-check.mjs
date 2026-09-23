@@ -340,40 +340,57 @@ check(
 );
 
 /**
- * INK MEANS "AN ANSWER" and the page makes that claim three times: the fold's
- * board, S04's output, S05's left panel. All three paint a GRADIENT, so
- * nothing that reads `backgroundColor` can tell whether they are dark — which
- * is exactly how S05's panel spent a build as light grey while the rule it
- * was supposed to follow sat in the file above it.
+ * THE DARK SURFACES ARE THE PRODUCT'S SKY, AND NOT THE OTHER ONE.
  *
- * The board's frame paints ink UNDER its screenshot rather than beside it, so
- * this reads the frame and not the picture: a slow image then shows the right
- * silhouette instead of a white hole, and the measurement stays possible at
- * all — a `<img>` has no background to read.
+ * They were ink, and the check asked whether they were dark. That question is
+ * no longer the interesting one: globals.css ships TWO skies and the
+ * difference between them is a contrast floor. `.sky-card` opens up to
+ * #3F73E6, where white is 4.37:1 and fails as body copy; `.sky-panel` stops
+ * at #2B53AE, where it is 7.1:1. Every dark surface here has text running all
+ * the way down it, so every one of them has to stay in the panel's range —
+ * and "it looks blue" is exactly the kind of judgement that lets the lighter
+ * one in one surface at a time.
+ *
+ * So the stops are read the same way the contrast walker reads them: every
+ * OPAQUE stop is a candidate, the translucent bloom on top is ignored, and
+ * the LIGHTEST is the one that has to hold. Reading the first stop instead is
+ * how the old version of this check reported a luminance of 1.0 for all three
+ * the moment a white bloom was painted over them.
  */
-const ink = await page.evaluate(() => {
-  const lum = (el) => {
-    const img = getComputedStyle(el).backgroundImage;
-    const stop = (img.match(/rgba?\([^)]*\)/) ?? [])[0];
-    if (!stop) return null;
-    const [r, g, b] = stop.match(/[\d.]+/g).map(Number);
+const sky = await page.evaluate(() => {
+  const lum = ([r, g, b]) => {
     const f = (c) => { const v = c / 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
     return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
   };
-  const at = (sel) => { const el = document.querySelector(sel); return el ? lum(el) : null; };
+  const read = (sel) => {
+    const el = document.querySelector(sel);
+    if (!el) return null;
+    const stops = (getComputedStyle(el).backgroundImage.match(/rgba?\([^)]*\)/g) ?? [])
+      .map((v) => (v.match(/[\d.]+/g) ?? []).map(Number))
+      .filter((n) => n.length < 4 || n[3] >= 1)
+      .map((n) => n.slice(0, 3));
+    if (stops.length === 0) return null;
+    const lightest = stops.reduce((a, b) => (lum(b) > lum(a) ? b : a));
+    return { count: stops.length, lightest, lum: lum(lightest), blue: lightest[2] > lightest[0] && lightest[2] > lightest[1] };
+  };
   return {
-    board: at('[class*="boardFrame"]'),
-    output: at('[class*="cvOut"]'),
-    panel: at('[class*="receiptInk"]'),
+    board: read('[class*="boardFrame"]'),
+    output: read('[class*="cvOut"]'),
+    receipt: read('[class*="receiptInk"]'),
+    panel: read('[class*="darkPanel"]'),
   };
 });
 
-const isInk = (v) => typeof v === "number" && v < 0.03;
-check(
-  isInk(ink.board) && isInk(ink.output) && isInk(ink.panel),
-  "all three ink surfaces are actually ink",
-  `board ${ink.board} · S04 output ${ink.output} · S05 panel ${ink.panel}`,
-);
+/* #2B53AE is 0.0979. The margin is for a future stop nudged a shade, not for
+   a different sky. */
+const isSky = (v) => v !== null && v.blue && v.lum <= 0.11;
+for (const [name, surface] of Object.entries(sky)) {
+  check(
+    isSky(surface),
+    `the ${name} surface is the panel sky`,
+    surface === null ? "no opaque stops found" : `lightest rgb(${surface.lightest}) · luminance ${surface.lum.toFixed(3)}`,
+  );
+}
 
 // §7.2: five labelled nodes and one output, reading left to right. A node
 // that loses its label is the failure this drawing was rebuilt to fix.

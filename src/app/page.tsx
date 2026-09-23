@@ -24,15 +24,23 @@ import { Mark, Tick, LogoMark } from "@/components/marketing/snap/marks";
  * Five tools each hold a piece of an answer; they snap together into one.
  * Scattered and colourful resolves into single and certain. Every source owns
  * a bright colour and they float, separate; the thing that reconciles them is
- * ink. A SOURCE colour is the problem and INK IS THE ANSWER — which is why a
- * source colour may never fill a button and a resolved figure may never be
- * anything but ink.
+ * one surface in the BRAND's colour. A source colour is the problem and the
+ * brand is the answer — which is why a source colour may never fill a button
+ * and a resolved figure never sits on anything but the sky.
  *
- * The BRAND's blue is not a source colour, and since the atmosphere went cool
- * it is what fills the buttons. Ink held them while the page's wash was peach
- * and lilac and a pale blue pill disappeared into it; with a board, two dark
- * panels and an ink answer tile all on screen, a fourth black rectangle that
- * was supposed to be the action was the one nobody could pick out.
+ * ═══ IT WAS INK, AND THE REASON IT STOPPED BEING INK ═══
+ *
+ * Ink was right while the page's wash was peach and lilac: black separated
+ * from it and a pale blue pill disappeared into it. Two things then changed.
+ * The atmosphere went cool, and the owner asked for the dark surfaces to be
+ * the card the product actually ships — the rail's `Invite & earn` and the
+ * refer board, which are a deep blue sky with a lit edge. A landing page
+ * whose four biggest objects were black rectangles was selling a surface that
+ * exists nowhere in the app.
+ *
+ * WHICH sky is a contrast floor rather than a taste: see `--sky-face` in the
+ * stylesheet. The short version is that the lighter of the app's two carries
+ * white body copy at 3.5:1, and `pnpm landing` fails on it.
  *
  * ═══ THE SCROLL RHYTHM, WHICH IS THE PART A FUTURE EDIT WILL BREAK ═══
  *
@@ -513,11 +521,6 @@ export default async function Home() {
               already exists, because they built it. */}
           <section className={`${styles.container} ${styles.s07}`} id="ask-your-ai">
             <div className={`${styles.darkPanel} ${styles.s07Panel}`}>
-              <div className={styles.panelBlooms} aria-hidden>
-                <div className={`${styles.panelBloom} ${styles.panelBloomLilac}`} />
-                <div className={`${styles.panelBloom} ${styles.panelBloomMint}`} />
-              </div>
-
               <div className={styles.s07Grid}>
                 <div className={styles.s07Copy}>
                   <h2 className={styles.d2}>Your AI can only see what you paste. Give it the <span className={styles.accent}>whole</span> business.</h2>
@@ -604,11 +607,6 @@ export default async function Home() {
               gathered into one thing, on ink. */}
           <section className={`${styles.container} ${styles.s10}`}>
             <div className={`${styles.darkPanel} ${styles.s10Panel}`}>
-              <div className={styles.panelBlooms} aria-hidden>
-                <div className={`${styles.panelBloom} ${styles.panelBloomLilac}`} />
-                <div className={`${styles.panelBloom} ${styles.panelBloomSteel}`} />
-              </div>
-
               {/* Eight real marks at 34% — legible as marks, unlike the dots
                   they replace, and they restate the page's promise one last
                   time before the ask. Mailchimp stands in for Instantly, which
