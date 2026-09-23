@@ -238,8 +238,8 @@
 .s05 { padding-block: 112px 144px; }
 .s07 { padding-block: 160px; }
 .s08 { padding-block: 120px; }
-.s09 { padding-block: 96px; }
-.s10 { padding-block: 120px 144px; }
+.s09 { padding-block: 96px 76px; }
+.s10 { padding-block: 84px 132px; }
 
 /* ──────────────────────────────────────────────────────────────────────────
    Type (§6.2). One family. No monospace anywhere — a wide mono on figures is
@@ -1095,34 +1095,48 @@
    the boundary with it. */
 
 /* ──────────────────────────────────────────────────────────────────────────
-   S09 — What it asks of you. One inline row, dividers, no cards, no heading.
-   ────────────────────────────────────────────────────────────────────────── */
+   S09 — What it asks of you. ONE card, split internally, no heading.
 
-.asksRule { height: 1px; background: var(--edge); }
+   It was four columns floating on the page with a hairline above them and
+   hairlines between them — which is the shape of a comparison table, and read
+   as one: four things being weighed against each other rather than four
+   halves of a single reassurance. S05 had already solved this a section
+   earlier, and its note is the argument here too: there is nothing left to
+   connect once it is one surface.
+
+   The claim also got its weight back. `Read-only` is the last thing a reader
+   is told before being asked to sign in, and it was set at 18px — two points
+   SMALLER than the sentence explaining it. It leads now, and the explanation
+   sits under it where an explanation belongs.
+   ────────────────────────────────────────────────────────────────────────── */
 
 .asks {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--gutter);
-  margin-top: 32px;
+  border-radius: 24px;
+  box-shadow: 0 0 0 1px var(--card-edge), var(--card-top), var(--sh-lg);
+  background: var(--card-fill);
+  overflow: hidden;
 }
 
-.ask { position: relative; padding-left: 0; }
+/* The dividers are the CARD's now, not the columns'. Drawn as a left border
+   on every cell but the first, they stop at the card's padding instead of
+   running off into the page. */
+.ask { padding: 34px 32px 36px; }
+.ask + .ask { border-left: 1px solid var(--edge); }
 
-.ask + .ask { padding-left: calc(var(--gutter) / 2); }
-
-.ask + .ask::before {
-  content: "";
-  position: absolute;
-  left: calc(var(--gutter) / -2);
-  top: 0;
-  bottom: 0;
-  width: 1px;
-  background: var(--edge);
+/* The tick sits ON the title's line rather than above it. Alone on a line it
+   read as an orphan — a green mark with nothing to mark. */
+.askTitle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 21px;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+  font-weight: 650;
 }
-
-.askTop { display: flex; align-items: center; gap: 10px; }
-.askBody { max-width: 220px; margin-top: 10px; color: var(--ink-60); }
+.askBody { margin-top: 10px; color: var(--ink-60); }
 
 /* ──────────────────────────────────────────────────────────────────────────
    Breakpoints (§5.1, §9)
@@ -2008,53 +2022,98 @@
    S10 — a panel with something to hold.
    ────────────────────────────────────────────────────────────────────────── */
 
-/* §3.3: everything centred, horizontally and vertically. The old block
-   carried this and the rewrite dropped it, which left the whole composition
-   hanging off the left edge of 1200px of black. */
+/* §3.3: everything centred, horizontally and vertically.
+
+   THE FIXED 520px HEIGHT IS GONE. It was set when this panel held more, and
+   with `justify-content: center` it left the composition floating in a large
+   void with 90px of nothing under the last line — which is what made the end
+   of the page read as unfinished rather than as closed. The panel is the size
+   of what it holds now, and the padding is what gives it its presence. */
 .s10Panel {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  height: 520px;
-  padding: 56px 40px;
+  padding: 88px 40px 84px;
   text-align: center;
 }
 
-/* What replaces the dots. Real marks, real information, and legible — 34% on
-   ink reads as a row of logos rather than as dust on the screen. */
-.proofRow { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 28px; }
+/* ═══ THE MARKS, ON WHITE, GATHERED INTO ONE OBJECT ═══
+
+   Flattening them to white silhouettes at 34% was the second version of the
+   same mistake the drifting dots were: a reader could see that something was
+   there and could not name any of it. A brand mark is drawn to sit on white,
+   so each one gets a white disc in its own colour, and the discs OVERLAP —
+   eight separate things gathered into a single shape, on ink, which is the
+   page's whole argument restated in its last inch. */
+.proofRow { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 14px; }
+
+.proofStack { display: inline-flex; align-items: center; }
 
 .proofLogo {
   display: inline-flex;
-  /* Forced to white regardless of whether a mark is a paintable silhouette or
-     an official multi-colour file — `logoColor` cannot reach the baked fills
-     in the second kind. */
-  filter: brightness(0) invert(1);
-  opacity: 0.34;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: #ffffff;
+  /* The ring is the panel's own ink, so the discs read as overlapping rather
+     than as a row of touching circles. */
+  box-shadow: 0 0 0 2px #16161e;
 }
+
+.proofLogo + .proofLogo { margin-left: -9px; }
 
 /* 0.5, NOT 0.45, on every dark panel: composited over #1c1c26 the dimmer
    value is 4.43:1 at 13px — just under AA, and only measurable once the gate
    could see the gradient beneath it. */
-.proofMore { margin-left: 8px; color: rgba(255, 255, 255, 0.5); }
-.s10Heading { max-width: 620px; margin-top: 48px; }
-.s10Sub { margin-top: 20px; color: var(--d-60); }
-.s10Actions { margin-top: 40px; }
-.s10Foot { margin-top: 20px; color: rgba(255, 255, 255, 0.5); }
+.proofMore {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding-inline: 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.s10Heading { max-width: 620px; margin-top: 44px; }
+.s10Sub { margin-top: 18px; color: var(--d-60); }
+.s10Actions { margin-top: 36px; }
+.s10Foot { margin-top: 18px; color: rgba(255, 255, 255, 0.5); }
 
 /* ──────────────────────────────────────────────────────────────────────────
    S11 — five columns, not "brand left, links right".
    ────────────────────────────────────────────────────────────────────────── */
 
-.footer { padding-block: 72px 40px; }
+/* A RULE ACROSS THE TOP, because the footer had no edge of its own: it began
+   wherever the closing panel's shadow stopped, which on a pale ground is
+   nowhere in particular.
+
+   THE SPACE ABOVE IT IS PADDING, NOT MARGIN, and that is not a preference.
+   `main` and this footer each paint the canvas wash that everything below the
+   fold sits on; a margin between them is OUTSIDE both, so 120px of the raw
+   blue bloom showed through as a band across the page directly under the
+   closing panel. Padding is inside the wash. */
+.footer { padding-block: 96px 40px; border-top: 1px solid var(--edge); }
 
 .footerGrid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: var(--gutter); }
-.footerBrandCol { grid-column: 1 / span 3; }
+
+/* FOUR COLUMNS, NOT THREE. At three the brand's column was narrower than the
+   sentence in it, and column four was left empty — so the row read as a
+   short block, a hole, and then the links crammed against the right edge.
+   Widening it closes the hole without moving a single link. */
+.footerBrandCol { grid-column: 1 / span 4; }
+
+/* IT HAD NO RULE AT ALL. The class was written in two components and defined
+   in neither, so CSS Modules handed back `undefined`, the span rendered
+   `class="undefined"`, and the reset's `svg { display: block }` put the mark
+   on one line and the wordmark on the next. */
+.footerBrand { display: inline-flex; align-items: center; }
 
 /* Without these two the brand column is one word and the layout tips right
    again, which is the thing being fixed. */
-.footerDescriptor { max-width: 240px; margin-top: 16px; color: var(--ink-60); }
+.footerDescriptor { max-width: 260px; margin-top: 18px; color: var(--ink-60); }
 
 .footerPill {
   display: inline-flex;
@@ -2069,16 +2128,28 @@
   color: var(--ink-60);
 }
 
-/* Static: a second pulsing dot in the footer is noise, not life. */
-.footerDot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); }
+/* ONE LIVE DOT, USED THREE TIMES — the footer's `Reading 36 sources`, the AI
+   card's workspace line and the receipt's `Recomputed` stamp.
+
+   It was `.statusDot`, which belonged to the hero's status pill; when the
+   pill was deleted the rule went with it and the other two callers were left
+   pointing at a class that no longer existed. Nothing saw that until
+   `check:ui` learned to read the stylesheet, which is the check that found
+   it. Renamed as well as restored: a dot named for a component that no
+   longer exists is the next version of the same bug.
+
+   Static, deliberately: a pulsing dot in three places at once is noise rather
+   than life. The hero's pill was the one thing on the page allowed to breathe
+   and it is gone. */
+.liveDot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--good); }
 
 .footerGroup:nth-child(2) { grid-column: 5 / span 2; }
 .footerGroup:nth-child(3) { grid-column: 7 / span 2; }
 .footerGroup:nth-child(4) { grid-column: 9 / span 2; }
 .footerGroup:nth-child(5) { grid-column: 11 / span 2; }
 
-.footerTitle { margin-bottom: 14px; color: var(--ink-35); }
-.footerList { display: flex; flex-direction: column; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.footerTitle { margin-bottom: 16px; color: var(--ink); font-weight: 600; }
+.footerList { display: flex; flex-direction: column; gap: 14px; margin: 0; padding: 0; list-style: none; }
 
 .footerLink {
   font-size: 15px;
@@ -2093,8 +2164,8 @@
   display: flex;
   justify-content: space-between;
   gap: 24px;
-  margin-top: 56px;
-  padding-top: 24px;
+  margin-top: 64px;
+  padding-top: 28px;
   border-top: 1px solid var(--edge);
   color: var(--ink-35);
 }
@@ -2193,7 +2264,7 @@
      hero is an argument; somebody who asked for less motion should get its
      conclusion, not a shorter performance. */
   .nodePill, .board { opacity: 1 !important; transform: none !important; animation: none !important; }
-  .footerDot, .aiReadingMark { animation: none !important; }
+  .liveDot, .aiReadingMark { animation: none !important; }
   .railTrack { animation: none !important; transform: none !important; }
   .railStatic { display: flex; }
   .railScrolling { display: none; }
@@ -2279,10 +2350,9 @@
   .filters::-webkit-scrollbar { display: none; }
   .filter { flex: none; }
 
-  .asks { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 40px var(--gutter); }
-  .ask:nth-child(odd) { padding-left: 0; }
-  .ask:nth-child(odd)::before { display: none; }
-  .ask:nth-child(n + 3) { padding-top: 40px; border-top: 1px solid var(--edge); }
+  .asks { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ask:nth-child(odd) { border-left: none; }
+  .ask:nth-child(n + 3) { border-top: 1px solid var(--edge); }
 }
 
 @media (max-width: 767px) {
@@ -2320,11 +2390,10 @@
   .indexDesc { -webkit-line-clamp: unset; line-clamp: unset; display: block; height: auto; }
   .filter, .requestPill { height: 44px; }
 
-  .asks { grid-template-columns: minmax(0, 1fr); gap: 24px; }
-  .ask, .ask + .ask { padding-left: 0; padding-top: 24px; border-top: 1px solid var(--edge); }
-  .ask + .ask::before { display: none; }
-  .ask:first-child { padding-top: 0; border-top: none; }
-  .askBody { max-width: none; }
+  .asks { grid-template-columns: minmax(0, 1fr); border-radius: 20px; }
+  .ask { padding: 26px 24px 28px; }
+  .ask + .ask { border-left: none; border-top: 1px solid var(--edge); }
+  .askTitle { font-size: 19px; }
 
   .s07Panel { padding: 40px 24px; }
   .aiCardBody { padding: 18px; }

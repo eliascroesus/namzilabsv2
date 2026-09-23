@@ -106,7 +106,7 @@ export function ReceiptTabs({ metrics }: { metrics: Metric[] }) {
           ))}
         </div>
         <span className={`${styles.caption} ${styles.receiptStamp}`}>
-          <span className={styles.statusDot} aria-hidden />
+          <span className={styles.liveDot} aria-hidden />
           Recomputed 2 minutes ago
         </span>
       </div>

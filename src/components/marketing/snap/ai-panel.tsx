@@ -41,7 +41,7 @@ export function AiPanel() {
         <span className={styles.aiAssistantMark} aria-hidden />
         <span className={`${styles.bodyS} ${styles.aiAssistant}`}>Claude</span>
         <span className={styles.aiCardHeadRight}>
-          <span className={styles.statusDot} aria-hidden />
+          <span className={styles.liveDot} aria-hidden />
           <span className={`${styles.caption} ${styles.faint}`}>Namzilabs workspace</span>
         </span>
       </div>

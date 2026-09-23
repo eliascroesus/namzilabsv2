@@ -13,7 +13,7 @@
  * is how the next drift gets waved through.
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
-import { join, relative } from "node:path";
+import { dirname, join, relative } from "node:path";
 
 const ROOT = process.cwd();
 const SRC = join(ROOT, "src");
@@ -535,6 +535,7 @@ type Hit = { rule: Rule; file: string; line: number; token: string };
 const hits: Hit[] = [];
 const allowed: Hit[] = [];
 
+
 for (const file of files) {
   const rel = relative(ROOT, file);
   const lines = stripComments(readFileSync(file, "utf8").split("\n"));
@@ -552,6 +553,76 @@ for (const file of files) {
 console.log(`Scanned ${files.length} source files against ${RULES.length} kit rules.\n`);
 
 if (hits.length === 0) {
+  /**
+ * ═══ A CSS MODULE CLASS THAT DOES NOT EXIST IS SILENT ═══
+ *
+ * `styles.footerBrand` was written in two components and defined in neither.
+ * CSS Modules resolve a missing key to `undefined`, React renders
+ * `class="undefined"`, and NOTHING in this repository could see it: the
+ * markup is right, the class name is spelled right, TypeScript types the
+ * import as a string index, and the only tell in the browser is that the
+ * footer's logo sat on top of its own wordmark because the reset's
+ * `svg { display: block }` had nothing left to override it.
+ *
+ * It shipped that way for a while. This is the cheapest possible guard — the
+ * stylesheet's own class list, against every `styles.x` that reaches for one.
+ *
+ * DELIBERATELY NOT A RULE IN THE ARRAY ABOVE: those match line by line inside
+ * one file, and this has to read two.
+ */
+type ModuleMiss = { file: string; line: number; key: string; module: string };
+const moduleMisses: ModuleMiss[] = [];
+let moduleRefs = 0;
+
+for (const file of files) {
+  const rel = relative(ROOT, file);
+  if (!/\.tsx?$/.test(file)) continue;
+  const source = readFileSync(file, "utf8");
+  const importMatch = source.match(/import\s+(\w+)\s+from\s+"([^"]+\.module\.css)"/);
+  if (!importMatch) continue;
+
+  const [, binding, spec] = importMatch;
+  const modulePath = spec.startsWith("@/")
+    ? join(SRC, spec.slice(2))
+    : join(dirname(file), spec);
+  let css: string;
+  try {
+    css = readFileSync(modulePath, "utf8");
+  } catch {
+    moduleMisses.push({ file: rel, line: 1, key: "(the file itself)", module: spec });
+    continue;
+  }
+
+  const defined = new Set([...css.matchAll(/\.([a-zA-Z][\w-]*)/g)].map((m) => m[1]));
+  const lines = source.split("\n");
+  lines.forEach((text, i) => {
+    for (const m of text.matchAll(new RegExp(`\\b${binding}\\.([a-zA-Z]\\w*)`, "g"))) {
+      moduleRefs += 1;
+      if (!defined.has(m[1])) moduleMisses.push({ file: rel, line: i + 1, key: m[1], module: spec });
+    }
+  });
+}
+
+/**
+ * THE COUNT IS PART OF THE ASSERTION. "No missing classes" is also what a
+ * broken parser reports, and a regex that matched nothing would pass this
+ * check for the rest of its life.
+ */
+if (moduleRefs < 100) {
+  console.log(`FAIL — the CSS-module pass found only ${moduleRefs} class references, so it is not reading them.`);
+  process.exit(1);
+}
+
+if (moduleMisses.length > 0) {
+  console.log(`FAIL — ${moduleMisses.length} CSS module class(es) referenced but never defined:\n`);
+  for (const miss of moduleMisses.slice(0, 20)) {
+    console.log(`    ✗ ${miss.file}:${miss.line}  styles.${miss.key} — not in ${miss.module}`);
+  }
+  console.log("\nA missing key resolves to `undefined` and renders as class=\"undefined\".");
+  process.exit(1);
+}
+
+  console.log(`…and ${moduleRefs} CSS module class references all resolve.`);
   console.log("PASS — the UI speaks the kit's vocabulary everywhere it must.");
   process.exit(0);
 }

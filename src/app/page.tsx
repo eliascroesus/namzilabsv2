@@ -563,16 +563,25 @@ export default async function Home() {
             </div>
           </section>
 
-          {/* ══ S09 · What it asks of you — one inline row, no heading ═════ */}
+          {/* ══ S09 · What it asks of you — ONE card, split internally ═════
+              It was four columns floating on the page with hairlines between
+              them, which is the shape of a comparison table and read as one:
+              four things being weighed against each other rather than four
+              halves of a single reassurance. S05 solved exactly this a
+              section earlier — one surface, divided inside — and there is
+              nothing left to connect once it is one object.
+
+              The claims also got their weight back. `Read-only` is the last
+              thing a reader is told before being asked to sign in, and it was
+              set two points smaller than the body copy explaining it. */}
           <section className={`${styles.container} ${styles.s09}`}>
-            <div className={styles.asksRule} aria-hidden />
             <div className={styles.asks}>
               {ASKS.map((ask) => (
                 <div className={styles.ask} key={ask.title}>
-                  <div className={styles.askTop}>
-                    <Tick />
-                    <h3 className={styles.h4}>{ask.title}</h3>
-                  </div>
+                  <h3 className={styles.askTitle}>
+                    <Tick size={20} />
+                    {ask.title}
+                  </h3>
                   <p className={`${styles.bodyS} ${styles.askBody}`}>{ask.body}</p>
                 </div>
               ))}
@@ -580,12 +589,19 @@ export default async function Home() {
           </section>
 
           {/* ══ S10 · Final CTA — dark panel, centred ══════════════════════
-              The five drifting dots are GONE. Ten pixels at 22% on a large
-              black panel read as dust on the screen, which is the same failure
-              as the hero's ambient chips: decoration too faint to be
-              understood is indistinguishable from a defect. What replaces them
-              carries real information — the marks of eight sources the product
-              actually reads, legible at 34%. */}
+              THE MARKS ARE THE BRANDS' OWN NOW, ON WHITE CHIPS.
+
+              This row has been wrong twice for the same reason. First it was
+              five drifting dots at 22%, which read as dust. Then it was eight
+              real marks flattened to white silhouettes at 34% — which is not
+              a row of logos, it is a row of grey smudges, and a reader cannot
+              name one of them. Both failures are the same one: decoration too
+              faint to be understood is indistinguishable from a defect.
+
+              A brand mark is drawn to sit on white, so each one gets a white
+              disc and its own colour, overlapping into a single object. That
+              is also the page's argument in its last inch — eight colours
+              gathered into one thing, on ink. */}
           <section className={`${styles.container} ${styles.s10}`}>
             <div className={`${styles.darkPanel} ${styles.s10Panel}`}>
               <div className={styles.panelBlooms} aria-hidden>
@@ -599,11 +615,13 @@ export default async function Home() {
                   ships no redistributable logo; a lettered tile forced white
                   would have been a blank square in a row of marks. */}
               <div className={styles.proofRow}>
-                {PROOF_LOGOS.map((source) => (
-                  <span className={styles.proofLogo} key={source}>
-                    <Mark source={source} size={26} />
-                  </span>
-                ))}
+                <span className={styles.proofStack}>
+                  {PROOF_LOGOS.map((source) => (
+                    <span className={styles.proofLogo} key={source}>
+                      <Mark source={source} size={22} radius="50%" />
+                    </span>
+                  ))}
+                </span>
                 {/* Three labels, one shown per breakpoint, because the row
                     drops logos as it narrows and a count that did not follow
                     would be a number the page could be caught on. */}
@@ -631,17 +649,26 @@ export default async function Home() {
           <div className={styles.footerGrid}>
             {/* The descriptor and the static pill are what fill this column.
                 Without them the brand column is one word and the whole layout
-                tips right again, which is the thing being fixed. */}
+                tips right again, which is the thing being fixed.
+
+                `.footerBrand` HAD NO RULE IN THE STYLESHEET — it was written
+                here and in the nav, and only the nav's own `display: flex`
+                was making it lay out. CSS Modules resolve a missing class to
+                `undefined`, so this span rendered `class="undefined"`, and
+                the reset's `svg { display: block }` then put the mark on its
+                own line with the wordmark under it. Silent in every check the
+                repo has: the markup is right, the class name is spelled
+                right, and the only tell is a logo stacked on a word. */}
             <div className={styles.footerBrandCol}>
               <span className={styles.footerBrand}>
-                <LogoMark />
+                <LogoMark size={26} />
                 <span className={styles.wordmark}>Namzilabs</span>
               </span>
               <p className={`${styles.bodyS} ${styles.footerDescriptor}`}>
                 The number none of your tools can build alone.
               </p>
               <span className={`${styles.caption} ${styles.footerPill}`}>
-                <span className={styles.footerDot} aria-hidden />
+                <span className={styles.liveDot} aria-hidden />
                 Reading {CONNECTOR_CATALOG.length} sources
               </span>
             </div>
