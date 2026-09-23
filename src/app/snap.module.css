@@ -389,7 +389,6 @@
 .mark { transition: transform var(--t-control) var(--snapIn); }
 
 .tick { flex: none; color: var(--good); }
-.tickOnDark { color: #5ee9a0; }
 
 /* ──────────────────────────────────────────────────────────────────────────
    Card (§7.3)
@@ -451,8 +450,6 @@
    a SECOND one behind it, and the pair only agreed because both resolved to
    ink. `flex: none` was also declared twice. Colour is set once, on `color`. */
 .navMark { flex: none; color: var(--ink); }
-.navMarkOnDark { color: rgba(255, 255, 255, 0.16); }
-.navMarkOnDark .navDotA, .navMarkOnDark .navDotB { fill: #ffffff; }
 
 /* Two dots that merge into one on hover: two become one, which is the whole
    product stated in a logo. The only piece of wit on the page. */

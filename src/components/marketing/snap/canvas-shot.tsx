@@ -30,9 +30,9 @@ import styles from "@/app/snap.module.css";
  *
  * ═══ THE OUTPUT IS INK BECAUSE IT IS AN ANSWER ═══
  *
- * Same rule as the hero deck, restated at 164px: the sources are paper, the
- * reconciled figure is ink. That is the only dark thing in the section and it
- * is the thing the section is about.
+ * Same rule as the fold's board, restated at 176px: the sources are paper and
+ * the reconciled figure is ink. That is the only dark thing in the section
+ * and it is the thing the section is about.
  *
  * ═══ HTML NODES, SVG EDGES, ONE PIXEL GRID ═══
  *

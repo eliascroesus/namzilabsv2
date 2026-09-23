@@ -127,7 +127,7 @@ export function ReceiptTabs({ metrics }: { metrics: Metric[] }) {
                 column already states in words. Three numbers that do not
                 match do the work instead: 41, 38 and 44 are what the apps
                 each believe, and the figure above is the one that survives
-                reconciliation. It is the same claim the hero deck makes,
+                reconciliation. It is the same claim the fold's board makes,
                 restated with the arithmetic visible. */}
             <p className={`${styles.caption} ${styles.saidLabel}`}>What each source said</p>
             <div className={styles.saidRows}>
