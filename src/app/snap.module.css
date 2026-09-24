@@ -1935,7 +1935,11 @@
 .boardFrame {
   position: absolute;
   z-index: 0;
-  inset: 0 calc(-1 * var(--bleed)) 0 calc(26px * var(--rig-k, 1));
+  /* 50, not the 26 that put each mark's centre on the edge: half a 56px chip
+     sat over the rail's own menu, and the rail's content starts 9px in. At 50
+     a chip overlaps the board by 6 — its green dot lands on the border and the
+     menu reads clear. `PORT_X` in board-shot.tsx moved by the same 24. */
+  inset: 0 calc(-1 * var(--bleed)) 0 calc(50px * var(--rig-k, 1));
   border-radius: 24px 0 0 24px;
   /* The same sky as every other dark surface — and it is under the screenshot
      rather than beside it, so a slow image shows the right silhouette instead

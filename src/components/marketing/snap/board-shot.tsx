@@ -23,9 +23,10 @@ import styles from "@/app/snap.module.css";
  * ═══ THE CONNECTION IS DRAWN, BECAUSE IT IS THE PRODUCT ═══
  *
  * A screenshot alone says "we have a dashboard", which is the least
- * interesting true thing about this product. Four source marks straddle the
- * board's left edge — half on the page, half on the board — and a hairline
- * runs from each one across the board's own navigation rail to a single port.
+ * interesting true thing about this product. Four source marks rest on the
+ * board's left edge — almost all on the page, their green dots on the border,
+ * so they cross it without covering the rail's menu — and a hairline runs
+ * from each one across the board's own navigation rail to a single port.
  * Four separate tools entering one place, physically. That is the sentence
  * the headline makes, made again in objects, and it is why the marks sit ON
  * the edge rather than beside it: a chip floating near a picture is
@@ -46,13 +47,14 @@ import styles from "@/app/snap.module.css";
 /** The rig's coordinate space. Everything below is in it. */
 const CHIP = 56;
 /**
- * 134 rather than the rail's exact edge. The board's navigation rail is ~131
- * CSS px wide at every tier (its width follows the board's HEIGHT, which the
- * rig's dial tracks), so 134 in rig units lands the port inside the dark
- * rather than straddling the boundary — where the port's own ring painted
- * half onto white and read as a chipped dot.
+ * 158 rather than the rail's exact edge. The board starts at 50 in rig units
+ * (`.boardFrame`'s inset — the two move together) and its navigation rail is
+ * ~131 CSS px wide at every tier (its width follows the board's HEIGHT, which
+ * the rig's dial tracks), so 158 lands the port inside the dark rather than
+ * straddling the boundary — where the port's own ring painted half onto white
+ * and read as a chipped dot.
  */
-const PORT_X = 134;
+const PORT_X = 158;
 const PORT_Y = 270;
 
 /**
