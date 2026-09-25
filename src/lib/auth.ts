@@ -3,7 +3,8 @@ import { cache } from "react";
 import { redirect } from "next/navigation";
 import { getReadDb } from "@/db/client";
 import { effectiveAccess } from "@/lib/permissions";
-import { withAuth } from "@workos-inc/authkit-nextjs";
+import { getWorkOS, withAuth } from "@workos-inc/authkit-nextjs";
+import { checkSeat } from "@/lib/billing/seats";
 import type { UserInfo } from "@workos-inc/authkit-nextjs";
 
 /**
@@ -27,8 +28,31 @@ export async function requireOrg(): Promise<OrgContext> {
   if (!auth.organizationId) {
     redirect("/onboarding");
   }
+  // A member past the plan's seats sees /seat instead — every page and action
+  // comes through here, so none can be reached around it.
+  if (!(await seatFor(auth.organizationId, auth.user.id))) redirect("/seat");
   return { userId: auth.user.id, orgId: auth.organizationId, role: auth.role, auth };
 }
+
+/**
+ * THE SEAT CHECK, once per request (see lib/billing/seats.ts). Free for the
+ * owner and while billing is off; one membership list otherwise.
+ *
+ * FAILS OPEN. A WorkOS or database hiccup must never lock a team out of its
+ * own workspace — a missed paywall for the length of an outage is the cheaper
+ * mistake by far.
+ */
+const seatFor = cache(async (orgId: string, userId: string): Promise<boolean> => {
+  try {
+    return await checkSeat(getReadDb(), orgId, userId, async () => {
+      const r = await getWorkOS().userManagement.listOrganizationMemberships({ organizationId: orgId, statuses: ["active"], limit: 100 });
+      return r.data.map((m) => ({ userId: m.userId, createdAt: m.createdAt }));
+    });
+  } catch (e) {
+    console.error("[seats] check failed; letting them in", e);
+    return true;
+  }
+});
 
 /**
  * For route handlers: resolve the tenant context from the session without
