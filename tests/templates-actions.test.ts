@@ -31,6 +31,7 @@ const hoisted = vi.hoisted(() => ({
   redirect: { url: "" as string },
   jar: new Map<string, string>(),
   switched: { orgId: "", returnTo: "" },
+  memberships: [] as Array<{ organizationId: string; organizationName: string }>,
   user: { id: "user_student", createdAt: new Date().toISOString(), firstName: "Sam", lastName: "Student" },
 }));
 
@@ -72,7 +73,7 @@ vi.mock("@workos-inc/authkit-nextjs", () => ({
   signOut: async () => {},
   getWorkOS: () => ({
     userManagement: {
-      listOrganizationMemberships: async () => ({ data: [] }),
+      listOrganizationMemberships: async () => ({ data: hoisted.memberships }),
       createOrganizationMembership: async () => ({ id: "mem_1" }),
       updateOrganizationMembership: async () => ({}),
     },
@@ -103,6 +104,7 @@ beforeEach(async () => {
   hoisted.jar.clear();
   hoisted.redirect.url = "";
   hoisted.switched.orgId = "";
+  hoisted.memberships = [];
   ctx = {
     orgId: "org_author",
     userId: "user_coach",
@@ -139,7 +141,9 @@ describe("sharing a template", () => {
   it("is refused to a member who does not govern the workspace", async () => {
     ctx.role = "member";
     const url = await landsOn(createTemplateAction(form({ name: "Scorecard", views: ["canvas"] })));
-    expect(new URL(url, "http://local").searchParams.get("template_error")).toBe("Only workspace admins can share templates.");
+    // A CODE, never a sentence — a crafted settings link must not be able to
+    // put words on an admin's screen (see lib/templates/messages.ts).
+    expect(new URL(url, "http://local").searchParams.get("template_error")).toBe("admin");
     expect(await db.select().from(workspaceTemplates)).toEqual([]);
   });
 
@@ -238,6 +242,24 @@ describe("creating a workspace from a template", () => {
     await createOrganizationAction(form({ name: "Sam's agency", template: code }));
     expect(hoisted.switched).toEqual({ orgId: "org_new", returnTo: "/dashboard" });
     expect(await db.select().from(dashboardViews).where(eq(dashboardViews.orgId, "org_new"))).toEqual([]);
+  });
+
+  it("sends a new workspace named after an existing one back to pick another name", async () => {
+    const { code } = await share();
+    hoisted.memberships = [{ organizationId: "org_existing", organizationName: "Sam's agency" }];
+    await expect(createOrganizationAction(form({ name: "Sam's agency", template: code }))).rejects.toThrow("NEXT_REDIRECT");
+    expect(hoisted.redirect.url).toBe(`/t/${code}?error=name`);
+    expect(hoisted.switched.orgId).toBe("");
+  });
+
+  it("still treats a double-submit as one — the first press already took the template", async () => {
+    const { code } = await share();
+    await createOrganizationAction(form({ name: "Sam's agency", template: code }));
+    hoisted.memberships = [{ organizationId: "org_new", organizationName: "Sam's agency" }];
+    hoisted.switched.orgId = "";
+    await createOrganizationAction(form({ name: "Sam's agency", template: code }));
+    expect(hoisted.switched).toEqual({ orgId: "org_new", returnTo: "/dashboard" });
+    expect(await db.select().from(dashboardViews).where(eq(dashboardViews.orgId, "org_new"))).toHaveLength(1);
   });
 
   it("does not credit anybody for an account that is not new", async () => {

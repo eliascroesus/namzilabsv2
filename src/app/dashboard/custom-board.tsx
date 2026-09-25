@@ -1412,7 +1412,7 @@ function TileMenu({
      note. */
   const commitNote = () => {
     setNoting(false);
-    const next = noteDraft.trim().slice(0, 280);
+    const next = Array.from(noteDraft.trim()).slice(0, 280).join("");
     if (next !== note) onNote(next);
   };
 
@@ -1448,7 +1448,11 @@ function TileMenu({
           if (!o) {
             setConfirming(false);
             setEditing(false);
-            setNoting(false);
+            /* A CLICK OUTSIDE SAVES THE NOTE rather than dropping it. The menu
+               closes on the outside press, which unmounts the field before its
+               blur can fire — so a half-typed note used to vanish unless the
+               author pressed Enter. Closing is the same "I'm done" as blur. */
+            if (noting) commitNote();
           }
         }}
         fixed

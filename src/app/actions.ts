@@ -14,7 +14,7 @@ import { boardHref } from "@/lib/board/href";
 import { REFERRAL_COOKIE } from "@/lib/referral";
 import { recordReferral } from "@/lib/referral-store";
 import { TEMPLATE_COOKIE } from "@/lib/templates/cookie";
-import { getTemplateByCode } from "@/lib/templates/store";
+import { getTemplateByCode, normaliseTemplateCode, templatePath, templateTakenBy } from "@/lib/templates/store";
 import { takeTemplate } from "@/lib/templates/use";
 
 /**
@@ -43,6 +43,19 @@ export async function createOrganizationAction(formData: FormData): Promise<void
     (m) => (m.organizationName ?? "").trim().toLowerCase() === name.toLowerCase(),
   );
   if (dup) {
+    /**
+     * A TEMPLATE CHANGES WHAT A DUPLICATE MEANS. Without one, a same-named
+     * workspace is the double-submit this guard exists for. With one, it is
+     * either that (the first press created it AND took the template, which the
+     * use row proves) or somebody naming a NEW workspace after one they already
+     * have — and switching them into the old one would silently drop the
+     * template they came for. That second case is sent back to the template's
+     * page to pick another name.
+     */
+    const code = normaliseTemplateCode(String(formData.get("template") ?? ""));
+    if (code && !(await templateTakenBy(getDb(), code, dup.organizationId).catch(() => true))) {
+      redirect(`${templatePath(code)}?error=name`);
+    }
     await switchToOrganization(dup.organizationId, { returnTo: "/dashboard" });
     return;
   }

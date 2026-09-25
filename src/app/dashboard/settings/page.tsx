@@ -25,8 +25,8 @@ import { MemberRankSelect, RanksPanel } from "./RanksPanel";
 import { AiAssistantsSection } from "./AiAssistantsSection";
 import { TemplatesSection, type TemplateListItem } from "./TemplatesSection";
 import { navViewsOrNone } from "@/lib/board/nav-views";
-import { summarize } from "@/lib/templates/snapshot";
 import { listTemplates, templatePath, TemplatesUnavailable } from "@/lib/templates/store";
+import { templateErrorMessage } from "@/lib/templates/messages";
 
 export const dynamic = "force-dynamic";
 
@@ -157,7 +157,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const inviteError = one(sp.invite_error);
   const aiError = one(sp.ai_error);
   const dangerError = one(sp.danger_error);
-  const templateError = one(sp.template_error);
+  // A CODE from the URL, turned into our own words — see `lib/templates/messages.ts`.
+  const templateError = templateErrorMessage(one(sp.template_error));
   const templateMade = one(sp.template_made) || null;
   const shareView = one(sp.share) || null;
   const workos = getWorkOS();
@@ -270,7 +271,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       path: templatePath(t.code),
       link: `${base}${templatePath(t.code)}`,
       enabled: t.enabled,
-      views: t.snapshot ? summarize(t.snapshot).views : 0,
+      views: t.views,
       uses: t.uses,
       updated: formatDate(t.updatedAt),
     }));

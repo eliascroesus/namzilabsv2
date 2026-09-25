@@ -20,7 +20,7 @@ import { asViewKind, UNSET_TILE_KEY, visibilityKeyOf, type BoardTileRow } from "
 import { GROUP_ACCENT } from "@/components/flow/node-accent";
 import type { BoardGroup } from "@/lib/board/types";
 import type { DB } from "@/db/types";
-import { TemplatesUnavailable, writeNote } from "@/lib/templates/store";
+import { deleteNotes, TemplatesUnavailable, writeNote } from "@/lib/templates/store";
 
 /**
  * EVERY WAY THE BOARD CAN BE REARRANGED, AND THE ONE GATE THEY ALL PASS.
@@ -358,6 +358,7 @@ export async function deleteGroupAction(id: string, viewId: string | null = null
     }
 
     await db.delete(dashboardGroups).where(and(eq(dashboardGroups.id, id), eq(dashboardGroups.orgId, ctx.orgId)));
+    await deleteNotes(db, ctx.orgId, { groupId: id });
     /**
      * THE KEYS IT ACTUALLY WROTE GO BACK TO THE CLIENT.
      *
@@ -1069,6 +1070,9 @@ export async function deleteViewAction(id: string): Promise<Result> {
   if (await blocked(ctx)) return fail(RANK_BLOCKS);
   if (!idSchema.safeParse(id).success) return fail("Unknown view.");
   try {
+    // The notes first: they find this view's columns by `view_id`, which the
+    // cascade below is about to remove. Never fatal — see `deleteNotes`.
+    await deleteNotes(getDb(), ctx.orgId, { viewId: id });
     await getDb().delete(dashboardViews).where(and(eq(dashboardViews.id, id), eq(dashboardViews.orgId, ctx.orgId)));
     return { ok: true };
   } catch (e) {

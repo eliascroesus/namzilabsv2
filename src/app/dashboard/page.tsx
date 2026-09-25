@@ -315,7 +315,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
        * second query spelling the same thing is the drift this board keeps
        * avoiding elsewhere.
        */
-      [placements, notes] = await Promise.all([listTilePlacements(db, orgId, activeView), readNotes(db, orgId)]);
+      [placements, notes] = await Promise.all([listTilePlacements(db, orgId, activeView), readNotes(db, orgId, activeView)]);
     } else {
       /**
        * BOTH AT ONCE, AND THE COST ARGUMENT FLIPPED WHEN IT WAS MEASURED.
@@ -341,7 +341,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       [groups, placements, notes] = await Promise.all([
         listBoardGroups(db, orgId, activeView),
         listTilePlacements(db, orgId, activeView),
-        readNotes(db, orgId),
+        activeView ? readNotes(db, orgId, activeView) : new Map<string, { note: string | null; apps: string[] }>(),
       ]);
       groups = groups.map((g) => {
         const n = notes.get(`group:${g.id}`);

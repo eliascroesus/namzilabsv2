@@ -131,6 +131,13 @@ export function BoardColumn({
     setMenuOpen(false);
   };
 
+  /* Blur, Enter or closing the menu: the note is done. Empty clears it. */
+  const commitNote = () => {
+    setNoting(false);
+    const next = Array.from(noteDraft.trim()).slice(0, 280).join("");
+    if (next !== (g.note ?? "")) onNote(g.id, next);
+  };
+
   const commit = () => {
     setEditing(false);
     const next = draft.trim();
@@ -296,7 +303,8 @@ export function BoardColumn({
                 if (o) setInstant(false);
                 if (!o) {
                   setConfirming(false);
-                  setNoting(false);
+                  // Saved, not dropped — see the tile menu's same line.
+                  if (noting) commitNote();
                 }
               }}
               /**
@@ -341,11 +349,7 @@ export function BoardColumn({
                       value={noteDraft}
                       maxLength={280}
                       onChange={(e) => setNoteDraft(e.target.value)}
-                      onBlur={() => {
-                        setNoting(false);
-                        const next = noteDraft.trim().slice(0, 280);
-                        if (next !== (g.note ?? "")) onNote(g.id, next);
-                      }}
+                      onBlur={commitNote}
                       onKeyDown={(e) => {
                         if (e.key === "Enter") {
                           e.preventDefault();

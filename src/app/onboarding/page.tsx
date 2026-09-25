@@ -5,7 +5,7 @@ import { getReadDb } from "@/db/client";
 import { Checkbox } from "@/components/ui/checkbox";
 import { summarize } from "@/lib/templates/snapshot";
 import { TEMPLATE_COOKIE } from "@/lib/templates/cookie";
-import { getTemplateByCode } from "@/lib/templates/store";
+import { getPublicTemplate } from "@/lib/templates/store";
 import { ArrowRight, ChevronRight } from "lucide-react";
 import { createOrganizationAction, switchOrgAction } from "@/app/actions";
 import { Button } from "@/components/ui/button";
@@ -42,7 +42,7 @@ export default async function OnboardingPage() {
    * offer, since this page's job is making a workspace and it must not fail at
    * that over a template.
    */
-  const pending = await getTemplateByCode(getReadDb(), (await cookies()).get(TEMPLATE_COOKIE)?.value).catch(() => null);
+  const pending = await getPublicTemplate(getReadDb(), (await cookies()).get(TEMPLATE_COOKIE)?.value).catch(() => null);
   const template =
     pending?.enabled && pending.snapshot
       ? { code: pending.code, name: pending.name, author: pending.authorName, views: summarize(pending.snapshot).views }

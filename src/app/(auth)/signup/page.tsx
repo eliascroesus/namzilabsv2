@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { withAuth } from "@workos-inc/authkit-nextjs";
 import { getReadDb } from "@/db/client";
 import { TEMPLATE_COOKIE } from "@/lib/templates/cookie";
-import { getTemplateByCode } from "@/lib/templates/store";
+import { getPublicTemplate } from "@/lib/templates/store";
 import { AuthCard, AuthFooterLink, CredentialsForm } from "../auth-shell";
 import { signUpAction } from "../actions";
 import { safeNext } from "../next-path";
@@ -38,7 +38,7 @@ export default async function SignUpPage({
    * them — it is the one question in their head at this step. A cookie that
    * names nothing live reads as no subtitle, never as an error.
    */
-  const template = await getTemplateByCode(getReadDb(), (await cookies()).get(TEMPLATE_COOKIE)?.value).catch(() => null);
+  const template = await getPublicTemplate(getReadDb(), (await cookies()).get(TEMPLATE_COOKIE)?.value).catch(() => null);
   const subtitle =
     template?.enabled && template.snapshot ? `Your workspace will start from \u201c${template.name}\u201d.` : undefined;
 

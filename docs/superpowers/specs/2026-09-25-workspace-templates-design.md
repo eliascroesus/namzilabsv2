@@ -77,8 +77,28 @@ the whitelist was deliberately broken once to prove the test fails.
 - **Caps.** Adding a template refuses to push a workspace past its view cap (30) or group cap
   (100), and writes nothing when it refuses.
 - **A disabled link** refuses on the page and again inside `takeTemplate`.
-- **Errors on `/t/<code>` arrive as codes**, never as text, so a crafted link can't print
+- **Errors arrive as codes**, never as text, on `/t/<code>` (`?error=`) and in Settings
+  (`?template_error=`, mapped in `lib/templates/messages.ts`). A crafted link can't print
   arbitrary words under our domain.
+- **Egress.** A snapshot is capped at 256KB when it's written. The public read is cached per code
+  for an hour and cleared (`updateTag`) by every update, link toggle and delete. The Settings list
+  counts views in SQL instead of shipping snapshots.
+- **Only what the author can see.** A tile or calendar whose metric the author's role hides is
+  left out entirely: its box, its chart kind and its note.
+- **Storable means readable.** Every write checks the snapshot with the same schema the link reads
+  it with (30 views at most). Notes are clipped within zod's UTF-16 budget without ever splitting
+  a character.
+- **Notes don't pile up.** The board reads only the notes for the current view (joined through
+  its columns), and deleting a column or a view deletes its notes.
+- **A same-named new workspace** with a template goes back to `/t/<code>?error=name`. A
+  double-submit, which the use row proves, still just switches into the workspace it created.
+
+## Review
+
+An independent review found 8 issues after the first commit (a91c00b). All 8 are fixed and each
+has a test. The first was the only data leak: a note on a hidden tile was published. The note
+editors now also save on a click outside the menu. This was checked in a browser, and a sabotage
+run confirmed the check fails without the fix.
 
 ## Not built (later, if wanted)
 

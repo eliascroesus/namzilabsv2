@@ -16,6 +16,7 @@ import type { DB } from "@/db/types";
 import {
   applySnapshot,
   createTemplate,
+  deleteNotes,
   deleteTemplate,
   getTemplateByCode,
   listTemplates,
@@ -103,6 +104,22 @@ describe("building a snapshot from a workspace", () => {
     if (canvas.kind !== "custom") throw new Error("kind");
     expect(canvas.tiles[0].note).toBeNull();
     expect(JSON.stringify(got)).not.toContain("Revenue");
+  });
+
+  it("leaves out a tile its author's role hides — box, note and all", async () => {
+    // A teammate with wider access wrote this note about the hidden metric.
+    await db
+      .update(dashboardTiles)
+      .set({ config: { note: "Client X margin, from Stripe" } })
+      .where(eq(dashboardTiles.id, "t1"));
+    const got = await snapshotViews(db, A, ["canvas", "cal"], (key) => key !== `flow:${FLOW_ID}`);
+    const json = JSON.stringify(got);
+    expect(json).not.toContain("Client X");
+    const [canvas, cal] = got!.snapshot.views;
+    if (canvas.kind !== "custom") throw new Error("kind");
+    // Only the text block survives; the calendar keeps its shape and loses its metric.
+    expect(canvas.tiles.map((t) => t.chart)).toEqual(["text"]);
+    expect(cal).toEqual({ kind: "calendar", name: "Days", note: null, apps: [] });
   });
 
   it("cannot read another workspace's views, however the ids arrive", async () => {
@@ -206,7 +223,77 @@ describe("templates as rows", () => {
   });
 });
 
+describe("what a template may store", () => {
+  it("refuses a snapshot its own link could not read back, and writes nothing", async () => {
+    const { snapshot } = (await snapshotViews(db, A, ["canvas"], everything))!;
+    const tooMany = { ...snapshot, views: Array.from({ length: 31 }, () => snapshot.views[0]) };
+    await expect(
+      createTemplate(db, { orgId: A, createdBy: "u", authorName: null, name: "Big", description: null, snapshot: tooMany, sourceViewIds: [] }),
+    ).rejects.toMatchObject({ reason: "views" });
+    expect(await db.select().from(workspaceTemplates)).toEqual([]);
+  });
+
+  it("refuses one too large to serve to strangers on every visit", async () => {
+    const { snapshot } = (await snapshotViews(db, A, ["canvas"], everything))!;
+    const view = snapshot.views[0];
+    if (view.kind !== "custom") throw new Error("kind");
+    const wordy = {
+      ...snapshot,
+      views: Array.from({ length: 30 }, () => ({
+        ...view,
+        tiles: Array.from({ length: 60 }, () => ({ ...view.tiles[1], config: { text: "x".repeat(2000) } })),
+      })),
+    };
+    await expect(
+      createTemplate(db, { orgId: A, createdBy: "u", authorName: null, name: "Wordy", description: null, snapshot: wordy, sourceViewIds: [] }),
+    ).rejects.toMatchObject({ reason: "size" });
+  });
+
+  it("never cuts a note inside an emoji — jsonb refuses half of one", async () => {
+    // A DERIVED note has no schema cap of its own — it is the metric's name, and
+    // a name can be any length. UTF-16 slicing would cut this one at the
+    // rocket's high surrogate.
+    await db.update(flowResults).set({ tile: { name: `${"a".repeat(278)}🚀zzz` } }).where(eq(flowResults.flowId, FLOW_ID));
+    const { snapshot } = (await snapshotViews(db, A, ["canvas"], everything))!;
+    const { code } = await createTemplate(db, {
+      orgId: A,
+      createdBy: "u",
+      authorName: null,
+      name: "Emoji",
+      description: null,
+      snapshot,
+      sourceViewIds: [],
+    });
+    const stored = await getTemplateByCode(db, code);
+    const note = stored?.snapshot?.views[0].kind === "custom" ? stored.snapshot.views[0].tiles[0].note : null;
+    expect(note).toMatch(/…$/);
+    expect(note).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/);
+  });
+});
+
 describe("notes on columns and calendars", () => {
+  it("reads one view's notes — never another view's, never a deleted column's", async () => {
+    await db.insert(dashboardViews).values({ id: "cols2", orgId: A, name: "Other", pos: "x", kind: "groups" });
+    await db.insert(dashboardGroups).values({ id: "grp2", orgId: A, name: "Elsewhere", color: "teal", pos: "i", viewId: "cols2" });
+    await writeNote(db, A, { kind: "group", id: "grp" }, "Mine");
+    await writeNote(db, A, { kind: "group", id: "grp2" }, "Theirs");
+    await writeNote(db, A, { kind: "group", id: "deleted-group" }, "Orphan");
+    await writeNote(db, A, { kind: "view", id: "cols" }, "The view's own");
+    expect(await readNotes(db, A, "cols")).toEqual(
+      new Map([
+        ["group:grp", { note: "Mine", apps: [] }],
+        ["view:cols", { note: "The view's own", apps: [] }],
+      ]),
+    );
+  });
+
+  it("forgets a column's note with the column, and a view's with the view", async () => {
+    await writeNote(db, A, { kind: "group", id: "grp" }, "Mine");
+    await writeNote(db, A, { kind: "view", id: "cols" }, "The view's own");
+    await deleteNotes(db, A, { viewId: "cols" });
+    expect(await readNotes(db, A)).toEqual(new Map());
+  });
+
   it("writes, overwrites and clears a note", async () => {
     await writeNote(db, A, { kind: "group", id: "grp" }, "Cash only");
     await writeNote(db, A, { kind: "group", id: "grp" }, "Cash, not invoices");

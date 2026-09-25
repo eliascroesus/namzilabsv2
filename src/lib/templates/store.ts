@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
-import { and, count, eq, inArray, sql } from "drizzle-orm";
+import { unstable_cache } from "next/cache";
+import { and, count, eq, inArray, or, sql } from "drizzle-orm";
 import {
   dashboardGroups,
   dashboardNotes,
@@ -24,6 +25,7 @@ import {
   buildSnapshot,
   parseSnapshot,
   planApply,
+  storable,
   type MetricFacts,
   type SourceView,
   type TemplateSnapshot,
@@ -62,10 +64,12 @@ export class TemplatesUnavailable extends Error {
  * `reason` is what a page shows when it must not print a message it was handed
  * (see `src/app/t/actions.ts`); the message is for pages that may.
  */
+export type RefusalReason = "limit" | "groups" | "off" | "views" | "size" | "shape";
+
 export class TemplateRefusal extends Error {
   constructor(
     message: string,
-    readonly reason: "limit" | "off" = "limit",
+    readonly reason: RefusalReason = "limit",
   ) {
     super(message);
     this.name = "TemplateRefusal";
@@ -165,6 +169,39 @@ export async function getTemplateByCode(db: DB, rawCode: string | null | undefin
   });
 }
 
+/** The cache tag for one template's public read — cleared by every act that changes it. */
+export const templateTag = (code: string) => `template:${code}`;
+
+/**
+ * THE SAME READ, FOR PAGES STRANGERS OPEN — cached across requests.
+ *
+ * `/t/<code>` is `force-dynamic` and passed round a whole course; uncached, it
+ * would read the snapshot from the database on every visit, and every byte of
+ * it is billed against the account-wide egress allowance. Cached per code for
+ * an hour, and cleared the moment the author changes anything (`templateTag`,
+ * via `updateTag` in the Settings actions), so an update or a link switched
+ * off is seen on the very next visit rather than within the hour.
+ *
+ * WHAT IS CACHED IS THE ROW, NOT A DECISION: a disabled template is cached as
+ * disabled, and the page decides. An error is never cached (`unstable_cache`
+ * does not store a throw), so "not switched on yet" cannot outlive the paste.
+ */
+export async function getPublicTemplate(db: DB, rawCode: string | null | undefined): Promise<TemplateRow | null> {
+  const code = normaliseTemplateCode(rawCode);
+  if (!code) return null;
+  const read = unstable_cache(
+    async () => {
+      const row = await getTemplateByCode(db, code);
+      // Dates do not survive the cache's JSON; send the one this page never reads as a string.
+      return row ? { ...row, updatedAt: row.updatedAt.toISOString() } : null;
+    },
+    ["template-by-code", code],
+    { revalidate: 3600, tags: [templateTag(code)] },
+  );
+  const row = await read();
+  return row ? { ...row, updatedAt: new Date(row.updatedAt) } : null;
+}
+
 export async function getTemplate(db: DB, orgId: string, id: string): Promise<TemplateRow | null> {
   return guarded(async () => {
     const [row] = await db
@@ -176,10 +213,31 @@ export async function getTemplate(db: DB, orgId: string, id: string): Promise<Te
   });
 }
 
-/** This workspace's templates, newest first, each with how many times it was used. */
-export async function listTemplates(db: DB, orgId: string): Promise<Array<TemplateRow & { uses: number }>> {
+export type TemplateListRow = Omit<TemplateRow, "snapshot" | "sourceViewIds"> & { views: number; uses: number };
+
+/**
+ * This workspace's templates, newest first, each with how many views it holds
+ * and how many times it was used. THE SNAPSHOT ITSELF IS NOT READ — the list
+ * shows a count, and Postgres can count a jsonb array without shipping it.
+ */
+export async function listTemplates(db: DB, orgId: string): Promise<TemplateListRow[]> {
   return guarded(async () => {
-    const rows = (await db.select(COLUMNS).from(workspaceTemplates).where(eq(workspaceTemplates.orgId, orgId))).map(toRow);
+    const rows = await db
+      .select({
+        id: workspaceTemplates.id,
+        orgId: workspaceTemplates.orgId,
+        code: workspaceTemplates.code,
+        createdBy: workspaceTemplates.createdBy,
+        authorName: workspaceTemplates.authorName,
+        name: workspaceTemplates.name,
+        description: workspaceTemplates.description,
+        version: workspaceTemplates.version,
+        enabled: workspaceTemplates.enabled,
+        updatedAt: workspaceTemplates.updatedAt,
+        views: sql<number>`coalesce(jsonb_array_length(${workspaceTemplates.snapshot} -> 'views'), 0)::int`,
+      })
+      .from(workspaceTemplates)
+      .where(eq(workspaceTemplates.orgId, orgId));
     if (rows.length === 0) return [];
     const counts = await db
       .select({ templateId: workspaceTemplateUses.templateId, n: count() })
@@ -188,7 +246,7 @@ export async function listTemplates(db: DB, orgId: string): Promise<Array<Templa
       .groupBy(workspaceTemplateUses.templateId);
     const uses = new Map(counts.map((c) => [c.templateId, Number(c.n)]));
     return rows
-      .map((r) => ({ ...r, uses: uses.get(r.id) ?? 0 }))
+      .map((r) => ({ ...r, views: Number(r.views), uses: uses.get(r.id) ?? 0 }))
       .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
   });
 }
@@ -205,6 +263,7 @@ export async function createTemplate(
     sourceViewIds: string[];
   },
 ): Promise<{ id: string; code: string }> {
+  assertStorable(input.snapshot);
   return guarded(async () => {
     const id = crypto.randomUUID();
     /**
@@ -243,6 +302,7 @@ export async function updateTemplate(
     if (patch.enabled !== undefined) set.enabled = patch.enabled;
     if (patch.sourceViewIds !== undefined) set.sourceViewIds = patch.sourceViewIds;
     if (patch.snapshot !== undefined) {
+      assertStorable(patch.snapshot);
       set.snapshot = patch.snapshot;
       set.version = sql`${workspaceTemplates.version} + 1`;
     }
@@ -255,6 +315,19 @@ export async function updateTemplate(
   });
 }
 
+/** Refuse a snapshot its own link could not read back — see `storable`. */
+function assertStorable(snapshot: TemplateSnapshot): void {
+  const verdict = storable(snapshot);
+  if (verdict.ok) return;
+  const message =
+    verdict.reason === "views"
+      ? "A template can hold at most 30 views. Untick a few and try again."
+      : verdict.reason === "size"
+        ? "These views hold too much text to share as one template. Share fewer views, or shorten the longest text blocks."
+        : "Something on these views couldn't be turned into a template.";
+  throw new TemplateRefusal(message, verdict.reason);
+}
+
 export async function deleteTemplate(db: DB, orgId: string, id: string): Promise<boolean> {
   return guarded(async () => {
     const done = await db
@@ -263,6 +336,29 @@ export async function deleteTemplate(db: DB, orgId: string, id: string): Promise
       .returning({ id: workspaceTemplates.id });
     return done.length > 0;
   });
+}
+
+/**
+ * HAS THIS WORKSPACE ALREADY TAKEN THIS TEMPLATE? What tells a double-submit of
+ * "create my workspace from it" (yes — the first press did it) from somebody
+ * naming a new workspace after one they already have (no). A missing table is
+ * "yes": nothing could have been applied, so there is nothing to refuse.
+ */
+export async function templateTakenBy(db: DB, rawCode: string, orgId: string): Promise<boolean> {
+  const code = normaliseTemplateCode(rawCode);
+  if (!code) return true;
+  try {
+    const [row] = await db
+      .select({ id: workspaceTemplateUses.id })
+      .from(workspaceTemplateUses)
+      .innerJoin(workspaceTemplates, eq(workspaceTemplates.id, workspaceTemplateUses.templateId))
+      .where(and(eq(workspaceTemplates.code, code), eq(workspaceTemplateUses.orgId, orgId)))
+      .limit(1);
+    return row != null;
+  } catch (e) {
+    if (isUndefinedTableError(e)) return true;
+    throw e;
+  }
 }
 
 export async function recordTemplateUse(
@@ -351,19 +447,32 @@ export async function snapshotViews(
     readNotes(db, orgId),
   ]);
 
+  /**
+   * A TILE ITS AUTHOR'S ROLE HIDES IS NOT IN THE TEMPLATE AT ALL — not its box,
+   * not its chart kind, and above all not its NOTE, which a teammate with
+   * wider access may have written about the very metric the role hides ("Client
+   * X margin, from Stripe"). The board drops these rows for this author
+   * entirely; the template does the same, so it can only ever publish what its
+   * author could see on their own screen. Blocks and empty slots name no
+   * metric and always pass. Same for a calendar whose metric is hidden: it
+   * keeps its shape and loses the metric.
+   */
+  const visible = (key: string) => {
+    const vis = visibilityKeyOf(key);
+    return vis == null || canSee(vis);
+  };
+  const shown = tiles.filter((t) => visible(t.tileKey));
+
   // Every key a name might be wanted for — the tiles, their composed parts,
   // every placement and every calendar's metric.
   const keys = new Set<string>();
-  for (const t of tiles) {
+  for (const t of shown) {
     keys.add(t.tileKey);
     const c = parseTileConfig(t.config);
     for (const k of [...(c.parts ?? []), ...(c.exits ?? [])]) keys.add(k);
   }
   for (const p of placements) keys.add(p.tileKey);
-  const facts = await metricFacts(db, orgId, [...keys].filter((k) => {
-    const vis = visibilityKeyOf(k);
-    return vis != null && canSee(vis);
-  }));
+  const facts = await metricFacts(db, orgId, [...keys].filter((k) => visibilityKeyOf(k) != null && visible(k)));
 
   const source: SourceView[] = views.map((v) => {
     const kind = asViewKind(v.kind);
@@ -379,10 +488,11 @@ export async function snapshotViews(
     return {
       name: v.name,
       kind,
-      tiles: tiles.filter((t) => t.viewId === v.id),
+      tiles: shown.filter((t) => t.viewId === v.id),
       groups: viewGroups,
       placements: viewPlacements,
-      calendarKey: kind === "calendar" ? (viewPlacements[0]?.tileKey ?? null) : null,
+      calendarKey:
+        kind === "calendar" && viewPlacements[0] && visible(viewPlacements[0].tileKey) ? viewPlacements[0].tileKey : null,
       notes: ownNotes,
     };
   });
@@ -481,12 +591,38 @@ function graphApps(graph: unknown): string[] {
  * calls it on every render of a groups or calendar view, and a dashboard must
  * never fail over a paste that has not happened yet.
  */
-export async function readNotes(db: DB, orgId: string): Promise<Map<string, { note: string | null; apps: string[] }>> {
+export async function readNotes(
+  db: DB,
+  orgId: string,
+  /**
+   * ONE VIEW'S NOTES, for the board: its own (a calendar's) and its columns',
+   * the columns joined in so a note left behind by a deleted column is never
+   * read again — the board runs this on every twelve-second poll, and the
+   * table must not be able to grow what that poll reads. Omitted, it reads the
+   * whole workspace's, which is what building a template wants.
+   */
+  viewId?: string,
+): Promise<Map<string, { note: string | null; apps: string[] }>> {
   try {
-    const rows = await db
-      .select({ kind: dashboardNotes.targetKind, id: dashboardNotes.targetId, note: dashboardNotes.note, apps: dashboardNotes.apps })
-      .from(dashboardNotes)
-      .where(eq(dashboardNotes.orgId, orgId));
+    const columns = { kind: dashboardNotes.targetKind, id: dashboardNotes.targetId, note: dashboardNotes.note, apps: dashboardNotes.apps };
+    const rows = viewId
+      ? await db
+          .select(columns)
+          .from(dashboardNotes)
+          .leftJoin(
+            dashboardGroups,
+            and(eq(dashboardGroups.id, dashboardNotes.targetId), eq(dashboardGroups.orgId, dashboardNotes.orgId)),
+          )
+          .where(
+            and(
+              eq(dashboardNotes.orgId, orgId),
+              or(
+                and(eq(dashboardNotes.targetKind, "view"), eq(dashboardNotes.targetId, viewId)),
+                and(eq(dashboardNotes.targetKind, "group"), eq(dashboardGroups.viewId, viewId)),
+              ),
+            ),
+          )
+      : await db.select(columns).from(dashboardNotes).where(eq(dashboardNotes.orgId, orgId));
     return new Map(
       rows.map((r) => [
         `${r.kind}:${r.id}`,
@@ -533,6 +669,45 @@ export async function writeNote(
   });
 }
 
+/**
+ * FORGET THE NOTES OF SOMETHING BEING DELETED — a column, or a view and every
+ * column on it. Called by the delete actions so a note does not outlive what
+ * it described. BEST-EFFORT AND NEVER FATAL: a delete the person asked for
+ * must not fail over its note, and before migration 0034 there is no table to
+ * clean (the one case that is silently fine rather than logged).
+ */
+export async function deleteNotes(db: DB, orgId: string, target: { groupId: string } | { viewId: string }): Promise<void> {
+  try {
+    if ("groupId" in target) {
+      await db
+        .delete(dashboardNotes)
+        .where(
+          and(eq(dashboardNotes.orgId, orgId), eq(dashboardNotes.targetKind, "group"), eq(dashboardNotes.targetId, target.groupId)),
+        );
+      return;
+    }
+    const groups = await db
+      .select({ id: dashboardGroups.id })
+      .from(dashboardGroups)
+      .where(and(eq(dashboardGroups.orgId, orgId), eq(dashboardGroups.viewId, target.viewId)));
+    await db
+      .delete(dashboardNotes)
+      .where(
+        and(
+          eq(dashboardNotes.orgId, orgId),
+          or(
+            and(eq(dashboardNotes.targetKind, "view"), eq(dashboardNotes.targetId, target.viewId)),
+            groups.length
+              ? and(eq(dashboardNotes.targetKind, "group"), inArray(dashboardNotes.targetId, groups.map((g) => g.id)))
+              : sql`false`,
+          ),
+        ),
+      );
+  } catch (e) {
+    if (!isUndefinedTableError(e)) console.error("[notes] cleanup failed", e);
+  }
+}
+
 // ─── Applying a snapshot ─────────────────────────────────────────────────
 
 /**
@@ -564,7 +739,7 @@ export async function applySnapshot(db: DB, orgId: string, snapshot: TemplateSna
   const newGroups = snapshot.views.reduce((n, v) => n + (v.kind === "groups" ? v.groups.length : 0), 0);
   const groupCap = boardGroupCap();
   if (Number(groupCount?.n ?? 0) + newGroups > groupCap) {
-    throw new TemplateRefusal(`This template's columns would take this workspace past its limit of ${groupCap} groups.`);
+    throw new TemplateRefusal(`This template's columns would take this workspace past its limit of ${groupCap} groups.`, "groups");
   }
 
   const last = views.map((v) => v.pos).sort(compareKeys).at(-1) ?? null;

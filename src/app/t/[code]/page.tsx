@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
+import { cache } from "react";
 import { getWorkOS, withAuth } from "@workos-inc/authkit-nextjs";
 import { getReadDb } from "@/db/client";
-import { getTemplateByCode, TemplatesUnavailable, type TemplateRow } from "@/lib/templates/store";
+import { getPublicTemplate, TemplatesUnavailable, type TemplateRow } from "@/lib/templates/store";
 import { TemplateLanding, TemplateUnavailable, type TemplateViewer } from "../landing";
 
 export const dynamic = "force-dynamic";
@@ -31,14 +32,18 @@ type SP = Promise<Record<string, string | string[] | undefined>>;
  * NOT INDEXED. A template link is unlisted, like a Notion page shared by link:
  * the coach decides who gets it, and a search engine is not on that list.
  */
-async function load(raw: string): Promise<{ template: TemplateRow | null; unavailable: boolean }> {
+/**
+ * ONE READ PER REQUEST, not two: `generateMetadata` and the page both need the
+ * template, and `cache()` makes the second ask the first one's answer.
+ */
+const load = cache(async (raw: string): Promise<{ template: TemplateRow | null; unavailable: boolean }> => {
   try {
-    return { template: await getTemplateByCode(getReadDb(), raw), unavailable: false };
+    return { template: await getPublicTemplate(getReadDb(), raw), unavailable: false };
   } catch (e) {
     if (e instanceof TemplatesUnavailable) return { template: null, unavailable: true };
     throw e;
   }
-}
+});
 
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
   const { code } = await params;
@@ -56,6 +61,8 @@ const ERRORS: Record<string, string> = {
   rank: "Your role in this workspace doesn't allow adding views. Ask a workspace admin, or start a new workspace from it.",
   limit:
     "This workspace doesn't have room for this template's views. Delete a view or two first, or start a new workspace from it.",
+  groups: "This template's columns would take this workspace past its limit of groups. Delete a few first, or start a new workspace from it.",
+  name: "You already have a workspace with that name. Pick another name for the new one, or add the template to that workspace from here.",
   off: "The person who shared this template has turned its link off.",
   failed: "Something went wrong adding it. Nothing was changed — try again in a moment.",
 };

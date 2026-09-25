@@ -130,6 +130,31 @@ export function parseSnapshot(raw: unknown): TemplateSnapshot | null {
   return parsed.data;
 }
 
+/**
+ * THE LARGEST SNAPSHOT A TEMPLATE MAY STORE, serialized.
+ *
+ * The public page is read by strangers, and every read of a stored snapshot
+ * is billed egress on an account-wide allowance (see the Neon notes in the
+ * project memory). Thirty views of sixty 2000-character text blocks is ~3.8MB,
+ * and a link passed round a course would read that on every visit. 256KB is
+ * roughly a hundred times what a real board measures, so no genuine template
+ * meets it; the ones that do are the ones that would have hurt.
+ */
+export const SNAPSHOT_MAX_BYTES = 256 * 1024;
+
+/**
+ * MAY THIS SNAPSHOT BE STORED? The same schema `parseSnapshot` reads with, so a
+ * template can never be written that its own link would then call
+ * unavailable — the fate of a thirty-one-view workspace before this existed:
+ * "Link ready" in Settings, "isn't available" at the link. Plus the size cap.
+ */
+export function storable(snapshot: TemplateSnapshot): { ok: true } | { ok: false; reason: "views" | "size" | "shape" } {
+  if (snapshot.views.length > 30) return { ok: false, reason: "views" };
+  if (!snapshotSchema.safeParse(snapshot).success) return { ok: false, reason: "shape" };
+  if (new TextEncoder().encode(JSON.stringify(snapshot)).length > SNAPSHOT_MAX_BYTES) return { ok: false, reason: "size" };
+  return { ok: true };
+}
+
 // ─── Building one ────────────────────────────────────────────────────────
 
 /** What the builder needs to know about a metric the author can see. */
@@ -356,15 +381,37 @@ export function summarize(snapshot: TemplateSnapshot): { views: number; slots: n
 
 // ─── Small, total helpers ────────────────────────────────────────────────
 
+/**
+ * CUT WITHIN A UTF-16 BUDGET, BUT NEVER INSIDE A CHARACTER — both halves were
+ * bugs.
+ *
+ * `String.slice` counts code units, so a note whose 280th unit was the first
+ * half of an emoji kept a lone surrogate, which Postgres' jsonb refuses
+ * outright ("invalid input syntax for type json") — one emoji in one metric's
+ * name failed the whole template. Cutting by code points instead fixed that and
+ * broke the other side: zod's `.max(280)`, which is what reads the snapshot
+ * back, counts UNITS, so 280 characters holding an emoji is 281 and the stored
+ * template came back unreadable. So: whole code points, while the units fit.
+ */
+function clipUnits(s: string, maxUnits: number): string {
+  if (s.length <= maxUnits) return s;
+  let out = "";
+  for (const ch of s) {
+    if (out.length + ch.length > maxUnits) break;
+    out += ch;
+  }
+  return out;
+}
+
 function clip(s: string, n: number): string {
-  return s.trim().slice(0, n).trim();
+  return clipUnits(s.trim(), n).trim();
 }
 
 function clipNote(s: string | null | undefined): string | null {
   if (!s) return null;
   const t = s.replace(/\s+/g, " ").trim();
   if (!t) return null;
-  return t.length <= NOTE_MAX ? t : `${t.slice(0, NOTE_MAX - 1).trimEnd()}…`;
+  return t.length <= NOTE_MAX ? t : `${clipUnits(t, NOTE_MAX - 1).trimEnd()}…`;
 }
 
 function listNames(names: string[]): string | null {
