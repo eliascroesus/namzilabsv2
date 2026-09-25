@@ -3,6 +3,7 @@ import { reconcileAll, reconcileOne } from "./reconcile";
 import { materializeFlowFn } from "./materialize";
 import { runFlowTest } from "./test-run";
 import { syncConnection, reprocessConnectionFn, flowDataChanged, recomputeStaleFlows, materializeStale, pruneStorage, runBackfill } from "./sync";
+import { trialReminders } from "./billing";
 
 export const functions = [
   processEvent,
@@ -17,4 +18,5 @@ export const functions = [
   materializeStale,
   pruneStorage,
   runBackfill,
+  trialReminders,
 ];

@@ -66,7 +66,10 @@ export async function choosePlanAction(formData: FormData): Promise<void> {
     await applyPlan(db, ctx.orgId).catch(() => {});
     await recordAudit(db, { action: "billing.trial_start", orgId: ctx.orgId, actorId: ctx.userId, detail: { plan } });
     try {
-      await inngest.send({ name: "billing/trial.started", data: { orgId: ctx.orgId, userId: ctx.userId, plan, endsAt: trial.endsAt.toISOString() } });
+      await inngest.send({
+        name: "billing/trial.started",
+        data: { orgId: ctx.orgId, userId: ctx.userId, email: ctx.auth.user.email, plan, endsAt: trial.endsAt.toISOString() },
+      });
     } catch (e) {
       // Reminders are a courtesy; the trial itself is already granted.
       console.error("[billing] trial reminder scheduling failed", e);
