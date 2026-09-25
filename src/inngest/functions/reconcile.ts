@@ -5,6 +5,7 @@ import { expireAgedResults, markStaleForSource, materializeStaleAll } from "@/li
 import { runnableJobForConnection } from "@/lib/backfill/jobs";
 import { runBackfillSlice } from "@/lib/backfill/run";
 import { sweepGateOpen } from "@/lib/sweep/gate";
+import { enforceAppLimit } from "@/lib/billing/pauses";
 import { wakeSweeper } from "@/lib/sweep/wake";
 
 /**
@@ -102,14 +103,25 @@ export const reconcileOne = inngest.createFunction(
     triggers: [{ event: "ingest/reconcile.requested" }],
   },
   async ({ event, step }) => {
-    const { connectionId, jitterMs } = event.data as { connectionId: string; jitterMs?: number };
+    const { connectionId, jitterMs, orgId } = event.data as { connectionId: string; jitterMs?: number; orgId?: string };
     // F.4, durable form: step.sleep suspends the run WITHOUT holding a
     // concurrency slot (an in-process sleep would idle one of the 10 global
     // workers). Costs one extra step, only on sweep-lane runs; the Q8 sharded
     // scheduler replaces this dispatcher before that step count matters.
     const wait = Math.min(Math.max(jitterMs ?? 0, 0), 10_000);
     if (wait > 0) await step.sleep("jitter", wait);
-    const r = await step.run("reconcile", () => reconcileConnection(getDb(), connectionId));
+    const r = await step.run("reconcile", async () => {
+      const db = getDb();
+      /**
+       * THE PLAN'S APP LIMIT, applied lazily and inside this step (no extra
+       * step to pay for): after a trial or a grant ends, the next sweep of an
+       * app past the new limit pauses it rather than polling it, and
+       * `reconcileConnection` then defers it like any other pause. A no-op
+       * while billing is off; a failure here never blocks the sweep.
+       */
+      if (orgId) await enforceAppLimit(db, orgId).catch((e) => console.error("[plan] app limit check failed", e));
+      return reconcileConnection(db, connectionId);
+    });
     if (reconcileChanged(r)) {
       /**
        * Staleness is written HERE, in the same function that ingested the
