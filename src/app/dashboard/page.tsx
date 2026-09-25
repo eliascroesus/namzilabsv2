@@ -47,6 +47,7 @@ import {
 } from "@/lib/board/types";
 import { importProgressByStreamRef } from "@/lib/backfill/jobs";
 import { calendarFlowTiles, resultsVersion, unpublishedFlowIds } from "@/lib/flow/materialize";
+import { applyMetricLocks, isLockedRow, lockRow, metricKey, metricLocksFor } from "@/lib/billing/locks";
 import { versionedFlowTiles } from "@/lib/flow/tile-cache";
 import { listFlowNames } from "@/lib/flow/store";
 import { CalendarBoard, type CalendarMetric } from "@/components/calendar/calendar-board";
@@ -213,6 +214,20 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       console.error("[dashboard] published tiles read failed", e);
       return null;
     });
+  /**
+   * THE PLAN'S METRIC LOCKS — which of those rows this workspace may read.
+   * Applied to the rows AFTER the cached read (the cache key is the results
+   * version, which a plan change does not move), and before anything renders,
+   * sorts, composes or fills the calendar: a locked row reaches the client as
+   * a name and a chart kind, never a number. See `lib/billing/locks.ts`.
+   *
+   * A failed lock read shows the numbers rather than hiding the board: they
+   * are the workspace's own data, and an outage must not look like a paywall.
+   */
+  const metricLocksP = metricLocksFor(db, orgId).catch((e) => {
+    console.error("[dashboard] metric locks read failed", e);
+    return new Set<string>();
+  });
 
   const boardSource = one(sp.source) || null;
   /**
@@ -460,7 +475,10 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     for (const r of allRows) existingKeys.add(tileKeyOfFlow(r.flowId, r.outputNodeId));
     // Same as the metrics filter above: drop hidden flows at the source, so
     // neither the tiles nor the import-badge join below ever see them.
-    const rows = access.admin ? allRows : allRows.filter((r) => access.canSeeMetric(`flow:${r.flowId}`));
+    const rows = applyMetricLocks(
+      access.admin ? allRows : allRows.filter((r) => access.canSeeMetric(`flow:${r.flowId}`)),
+      await metricLocksP,
+    );
 
     /**
      * Phase 8 — import state is joined HERE, at read time, and deliberately not
@@ -680,11 +698,15 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       } catch {
         // A missing hint costs a subtitle, never the board.
       }
+      const locked = await metricLocksP;
       calendarMetrics = calRows
         // THE SAME RANK GATE THE BOARD APPLIES. A metric hidden from a member on
         // one view must be hidden on every other way of looking at it, or the
         // restriction is decoration.
         .filter((r) => access.canSeeMetric(`flow:${r.flowId}`))
+        // A LOCKED METRIC IS NOT ON THE CALENDAR AT ALL: the calendar has no
+        // locked state to draw, and its day values are exactly what is withheld.
+        .filter((r) => !locked.has(metricKey(r.flowId, r.outputNodeId)))
         .map((r) => {
           const stored = (r.tile ?? {}) as Record<string, unknown> & { byDay?: CalendarMetric["days"] };
           return {
@@ -1113,6 +1135,14 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     });
 
     const composeConfig = parseTileConfig(row.config);
+    /**
+     * A CHART BUILT FROM A LOCKED METRIC IS LOCKED. Its own numbers are derived
+     * from the locked one, and drawing the funnel with a stage missing would
+     * be both wrong and a hint at what is withheld.
+     */
+    const composedFromLocked = [...(composeConfig.parts ?? []), ...(composeConfig.exits ?? [])].some((k) =>
+      isLockedRow(flowByKey.get(k)),
+    );
     const parts = resolveMembers(composeConfig.parts ?? []);
     /**
      * THE EXIT STRIP'S NUMBERS, DOWN THE IDENTICAL PATH.
@@ -1130,7 +1160,14 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
      */
     const exits = resolveMembers(composeConfig.exits ?? []);
 
-    const source: CustomTileSource | null = flow
+    const source: CustomTileSource | null = flow && (isLockedRow(flow) || composedFromLocked)
+      ? {
+          kind: "flow",
+          tile: lockRow(flow).tile,
+          flowId: flow.flowId,
+          locked: true,
+        }
+      : flow
       ? {
           kind: "flow",
           tile: flow.tile,

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { publishedFlowTiles, unpublishedFlowIds, calendarFlowTiles } from "@/lib/flow/materialize";
+import { applyMetricLocks, metricLocksFor } from "@/lib/billing/locks";
 import { listFlowNames, getFlowName } from "@/lib/flow/store";
 import { listMetrics, getMetric } from "@/lib/metrics/store";
 import { computeAggregate, computeFunnel } from "@/lib/metrics/compute";
@@ -111,12 +112,16 @@ function classicEntryOf(m: ClassicMetricRow): CatalogEntry {
  * instead, which costs one row read rather than this whole-org catalog.
  */
 export async function metricCatalog(ctx: McpCallContext): Promise<CatalogEntry[]> {
-  const [tiles, edited, names, classic] = await Promise.all([
+  const [rawTiles, edited, names, classic, locked] = await Promise.all([
     publishedFlowTiles(ctx.db, ctx.orgId),
     unpublishedFlowIds(ctx.db, ctx.orgId),
     listFlowNames(ctx.db, ctx.orgId),
     listMetrics(ctx.orgId),
+    metricLocksFor(ctx.db, ctx.orgId),
   ]);
+  // The plan's locks, exactly as the dashboard applies them: a locked metric
+  // reaches the assistant as a name with no value.
+  const tiles = applyMetricLocks(rawTiles, locked);
   const nameOf = new Map(names.map((n) => [n.id, n.name]));
   const out: CatalogEntry[] = [];
   for (const t of tiles) out.push(flowEntryOf(t, edited.has(t.flowId), nameOf.get(t.flowId) ?? "Untitled"));
@@ -159,7 +164,7 @@ async function entryFor(ctx: McpCallContext, id: string): Promise<CatalogEntry |
     const m = await getMetric(ctx.orgId, parsed.metricId);
     return m ? classicEntryOf(m) : null;
   }
-  const tiles = await publishedFlowTiles(ctx.db, ctx.orgId, { flowId: parsed.flowId });
+  const tiles = applyMetricLocks(await publishedFlowTiles(ctx.db, ctx.orgId, { flowId: parsed.flowId }), await metricLocksFor(ctx.db, ctx.orgId));
   const t = tiles.find((r) => r.outputNodeId === parsed.outputNodeId);
   if (!t) return null;
   // The dashboard's own board tiles fall back straight from `tile.name` to
@@ -178,7 +183,7 @@ async function entryFor(ctx: McpCallContext, id: string): Promise<CatalogEntry |
 /** The one calendar tile a flow-scoped read needs — shared by `get_metric`'s day branch and `get_metric_days`. */
 async function calendarTileFor(ctx: McpCallContext, flowId: string | undefined, outputNodeId: string | undefined) {
   if (!flowId || !outputNodeId) return null;
-  const tiles = await calendarFlowTiles(ctx.db, ctx.orgId, { flowId });
+  const tiles = applyMetricLocks(await calendarFlowTiles(ctx.db, ctx.orgId, { flowId }), await metricLocksFor(ctx.db, ctx.orgId));
   return tiles.find((t) => t.outputNodeId === outputNodeId) ?? null;
 }
 

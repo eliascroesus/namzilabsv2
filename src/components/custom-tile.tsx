@@ -142,6 +142,12 @@ export type CustomTileSource =
       error?: string | null;
       flowId?: string;
       /**
+       * The workspace's plan does not include this metric (or a metric this
+       * chart is built from). The source then carries a name and a chart kind
+       * and nothing measured — see `lib/billing/locks.ts`.
+       */
+      locked?: boolean;
+      /**
        * The metrics named by `config.parts`, in the author's stored order —
        * absent when this tile composes nothing. A key that no longer resolves
        * (unpublished, deleted, or hidden by the viewer's rank) is simply not in
