@@ -113,7 +113,7 @@ const TABLES: Record<string, Classification> = {
   audit_log: {
     kind: "bounded",
     by:
-      "one row per GOVERNANCE ACT — eighteen action types, every one a human decision behind a rank or owner gate: " +
+      "one row per GOVERNANCE ACT — twenty-three action types, every one a human decision behind a rank or owner gate: " +
       "an invite, a rank edit, a connection, a deletion, the AI switch. Nothing automated writes here and nothing " +
       "per-delivery, per-sync or per-call does either, which is the whole reason the action list is closed and short " +
       "(src/lib/audit.ts explains what is deliberately left out). A busy workspace produces a few hundred rows a year. " +
@@ -139,6 +139,27 @@ const TABLES: Record<string, Classification> = {
   dashboard_tile_placements: {
     kind: "bounded",
     by: "at most one row per (org, tile) — the composite PK enforces it, and a drag is an upsert rather than an append. Placements outlive their tile ON PURPOSE (a republished flow gets its column back), so the ceiling is every tile the workspace has ever published rather than the tiles it has now; deleting the flow or metric clears them, and the write action caps the set",
+  },
+
+  workspace_templates: {
+    kind: "bounded",
+    by:
+      "one row per template an admin SHARED — a human act behind the manage-workspace gate. Updating one rewrites " +
+      "its row in place (the version is a counter, not a history), and deleting the workspace deletes its templates",
+  },
+  workspace_template_uses: {
+    kind: "bounded",
+    by:
+      "one row per time a person took a template: creating a workspace from it, or pressing Add on its page. Both are " +
+      "deliberate human acts, so it grows no faster than workspaces are made plus those presses. It goes with the " +
+      "workspace that received the copy, and cascades away with the template",
+  },
+  dashboard_notes: {
+    kind: "bounded",
+    by:
+      "at most one row per (org, column or calendar view) — the composite PK enforces it and every write is an upsert. " +
+      "A note whose column is later deleted stays behind unread (there is no foreign key to a polymorphic target), so " +
+      "the ceiling is every column that ever carried a note; deleting the workspace clears them all",
   },
 
   referral_codes: {

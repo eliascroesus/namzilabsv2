@@ -583,8 +583,15 @@ export function AppDirectory({
   connected,
   connectionsUnavailable,
   tally,
+  initialConnect,
 }: {
   apps: DirectoryApp[];
+  /**
+   * OPEN ON THIS APP'S CONNECT DIALOG — `/integrations?connect=stripe`, the
+   * link an empty template slot offers ("Connect Stripe"). A slug that names no
+   * app in `apps` opens nothing, so a hand-edited link is just the Apps page.
+   */
+  initialConnect?: string;
   connected: ManagedConnection[];
   /** The connection read FAILED — distinct from "there are none". */
   connectionsUnavailable: boolean;
@@ -597,7 +604,9 @@ export function AppDirectory({
   // The dialog is identified by SOURCE, not by the object: the apps array is a
   // fresh set of props on every server render, and holding the entry itself
   // would pin a stale form node open across one.
-  const [connecting, setConnecting] = useState<string | null>(null);
+  const [connecting, setConnecting] = useState<string | null>(() =>
+    initialConnect && apps.some((a) => a.source === initialConnect) ? initialConnect : null,
+  );
 
   const needle = query.trim().toLowerCase();
   const matches = (...fields: string[]) => !needle || fields.some((f) => f.toLowerCase().includes(needle));
@@ -812,6 +821,18 @@ export function AppDirectory({
             </Button>
           </div>
           {openApp.form}
+          {/* A DIALOG OPENED BY LINK (`initialConnect`) CAN NAME AN APP WITH NO
+              FORM — an OAuth source connects by leaving, and a card never opens
+              this for one. So the dialog carries that app's one act, or the
+              sentence saying why there is none, instead of an empty box. */}
+          {!openApp.form &&
+            (openApp.unavailable ? (
+              <p className="mt-4 text-sm text-muted-foreground">{openApp.unavailable}</p>
+            ) : openApp.oauthHref ? (
+              <a href={openApp.oauthHref} className={cn(buttonVariants({ variant: "accent" }), "mt-4 w-full")}>
+                {openApp.oauthLabel ?? `Connect ${openApp.name}`}
+              </a>
+            ) : null)}
         </Modal>
       )}
     </>

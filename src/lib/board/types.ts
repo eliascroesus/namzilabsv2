@@ -119,6 +119,15 @@ export type BoardGroup = {
   color: string;
   pos: string;
   sortKey: GroupSortKey;
+  /**
+   * WHAT GOES IN THIS COLUMN, from `dashboard_notes` rather than this row — a
+   * column has no config bag of its own (see the schema). Optional because
+   * only the page that reads notes fills it; everything else, and every board
+   * whose notes table is not there yet, simply has none.
+   */
+  note?: string | null;
+  /** The connector slugs the note is about — a template's, never typed. */
+  apps?: string[];
 };
 
 /** A `dashboard_tile_placements` row. `groupId: null` is the ungrouped row. */

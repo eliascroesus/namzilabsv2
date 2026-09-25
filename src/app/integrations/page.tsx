@@ -229,6 +229,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
         <AppDirectory
           key={errorCode || "ok"}
           apps={apps}
+          initialConnect={one(sp.connect) || undefined}
           connectionsUnavailable={connectionsUnavailable}
           tally={tally.join(" · ")}
           connected={connected.map((c) => ({

@@ -232,6 +232,13 @@
       "when": 1787184000009,
       "tag": "0033_audit_log",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1787184000010,
+      "tag": "0034_workspace_templates",
+      "breakpoints": true
     }
   ]
 }

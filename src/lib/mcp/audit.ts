@@ -1,6 +1,7 @@
 import { and, eq, gt, inArray, lt, sql } from "drizzle-orm";
 import { mcpBindings, mcpCalls } from "@/db/schema";
 import type { DB } from "@/db/types";
+import { isUndefinedTableError } from "@/lib/db-errors";
 
 export const USER_PER_MINUTE = 60;
 export const ORG_PER_HOUR = 600;
@@ -79,23 +80,7 @@ export function skippedResult(inspect: boolean | undefined): McpPruneResult {
   return { inspected: Boolean(inspect), callsPastRetention: 0, bindingsExpired: 0, callsDeleted: 0, bindingsDeleted: 0, skipped: true };
 }
 
-/**
- * Postgres' "undefined_table" (SQLSTATE 42P01), however the driver hands it
- * back: a direct `pg` client puts the code on the error itself, but the http
- * driver some deployments use wraps the original error under `.cause` and can
- * lose the code along the way — so the message text is checked too, but
- * narrowly: `/relation .* does not exist/i`, never a bare `/does not exist/i`,
- * which would also match "column ... does not exist" or "function ... does
- * not exist" — a real query bug wearing the same words, silently reported as
- * "not migrated yet" instead of surfacing as the bug it is.
- */
-function isUndefinedTableError(e: unknown): boolean {
-  if (!e || typeof e !== "object") return false;
-  const err = e as { code?: unknown; message?: unknown; cause?: { code?: unknown; message?: unknown } };
-  if (err.code === "42P01" || err.cause?.code === "42P01") return true;
-  const message = `${typeof err.message === "string" ? err.message : ""} ${typeof err.cause?.message === "string" ? err.cause.message : ""}`;
-  return /relation .* does not exist/i.test(message);
-}
+/** See `@/lib/db-errors` — shared now that templates need the same answer. */
 
 /**
  * Nightly retention for the two MCP tables that grow: calls past 90 days and

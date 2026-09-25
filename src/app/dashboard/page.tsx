@@ -1,6 +1,6 @@
 import { ChartLine, ChevronDown, RefreshCw, X } from "lucide-react";
 import Link from "next/link";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 import { getReadDb } from "@/db/client";
 import { connections, flows } from "@/db/schema";
 import { requireOrg, requestAccess } from "@/lib/auth";
@@ -31,6 +31,7 @@ import { navViews } from "@/lib/board/nav-views";
 import { boardHref } from "@/lib/board/href";
 import { UNSET_TILE_KEY } from "@/lib/board/types";
 import { listBoardTiles } from "@/lib/board/tiles-store";
+import { readNotes } from "@/lib/templates/store";
 import {
   canvasRowFate,
   tileKeyOfFlow,
@@ -233,6 +234,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   /** The default view has no row, so this has to answer when there is nothing to read. */
   let activeKind: BoardViewKind = "groups";
   let canvasRows: BoardTileRow[] = [];
+  /** Column and calendar notes — see `readNotes`. Custom tiles carry theirs in `config`. */
+  let notes = new Map<string, { note: string | null; apps: string[] }>();
   let loadError: string | null = null;
 
   /**
@@ -312,7 +315,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
        * second query spelling the same thing is the drift this board keeps
        * avoiding elsewhere.
        */
-      placements = await listTilePlacements(db, orgId, activeView);
+      [placements, notes] = await Promise.all([listTilePlacements(db, orgId, activeView), readNotes(db, orgId)]);
     } else {
       /**
        * BOTH AT ONCE, AND THE COST ARGUMENT FLIPPED WHEN IT WAS MEASURED.
@@ -331,10 +334,19 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
        * Trading a certain 110ms for an occasional empty query is the right way
        * round; the old comment had the ledger but not the clock.
        */
-      [groups, placements] = await Promise.all([
+      /* THE NOTES RIDE IN THE SAME ROUND TRIP — a column's "which metrics go
+         here" lives in `dashboard_notes` (a column has no config bag), and a
+         third read in parallel costs this page no depth. `readNotes` answers
+         a missing table with no notes, so the board never waits on a paste. */
+      [groups, placements, notes] = await Promise.all([
         listBoardGroups(db, orgId, activeView),
         listTilePlacements(db, orgId, activeView),
+        readNotes(db, orgId),
       ]);
+      groups = groups.map((g) => {
+        const n = notes.get(`group:${g.id}`);
+        return n ? { ...g, note: n.note, apps: n.apps } : g;
+      });
       // A plain grid has no lanes to place into, so anything read above is not
       // merely unused — it cannot be meaningful. Dropped rather than rendered.
       if (groups.length === 0) placements = [];
@@ -1389,6 +1401,28 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     />
   );
 
+  /**
+   * WHICH APPS ARE CONNECTED — asked only when this view has an empty slot or
+   * column that names one (a template's note), so an empty spot can offer
+   * "Connect Stripe" to somebody who has not. Every other render of this page
+   * skips the query entirely: a board with no template notes on it pays
+   * nothing for the feature. A failed read offers no button, which is the
+   * quiet direction.
+   */
+  const wantsApps =
+    (activeKind === "custom" &&
+      canvasTiles.some((t) => t.tileKey === UNSET_TILE_KEY && (t.config.noteApps?.length ?? 0) > 0)) ||
+    (activeKind === "groups" && groups.some((g) => (g.apps?.length ?? 0) > 0));
+  const connectedApps = wantsApps
+    ? await db
+        .selectDistinct({ source: connections.source })
+        .from(connections)
+        .where(and(eq(connections.orgId, orgId), ne(connections.status, "disabled")))
+        .then((rows) => rows.map((r) => r.source))
+        .catch(() => undefined)
+    : undefined;
+  const calendarNote = activeKind === "calendar" && activeView ? (notes.get(`view:${activeView}`)?.note ?? null) : null;
+
   return (
     /**
      * THE PROVIDER WRAPS THE SHELL, because the band left the page body.
@@ -1677,6 +1711,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 // square for anyone east of Greenwich after midnight.
                 todayKey={dayKey(new Date())}
                 selectedId={calendarSelected}
+                note={calendarNote}
                 // The two slots above are this page's; the board fills them.
                 hosted
                 /* A SERVER ACTION, bound to this view — which is what crosses
@@ -1713,6 +1748,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 options={tileOptions}
                 rangeKey={rangeKey}
                 canEdit={access.can("create_flows")}
+                connectedApps={connectedApps}
                 /**
                  * WHY THE ARRANGEMENT IS FROZEN FOR THIS VIEWER — computed on
                  * the server, because the client cannot see what was omitted.
@@ -1740,6 +1776,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
               groups={groups}
               placements={placements}
               canEdit={access.can("create_flows")}
+              connectedApps={connectedApps}
             />
             )}
           </TileArea>

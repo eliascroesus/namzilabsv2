@@ -73,6 +73,18 @@ describe("every server action is gated", () => {
     signInAction: "creates the session; a session gate would be circular. Credentials are forwarded to WorkOS, never judged here",
     signUpAction: "same — it creates the account, then delegates to signInAction",
     verifyEmailAction: "finishes a sign-in with a WorkOS pending token held in an httpOnly cookie; there is no session yet by definition",
+    /**
+     * THE SIGNED-OUT HALF OF A TEMPLATE LINK. Its whole audience is people with
+     * no account — a coach's students — so a session gate would refuse exactly
+     * who it is for. It reads a template by its public code (what anybody
+     * holding the link can already see on the page), sets two first-party
+     * cookies — the choice, and the author's derived referral code — and sends
+     * the visitor to sign up. It writes no row. Each cookie only ever takes
+     * effect through a GATED act: the template through `createOrganizationAction`
+     * (requireOrg's sibling, `withAuth`), the referral through `recordReferral`'s
+     * new-account and self-referral guards.
+     */
+    startWithTemplateAction: "reads a public template by its code and sets two cookies before sign-up; writes nothing, and each cookie only acts through a gated action",
   };
 
   it("has no action that skips both gates", () => {

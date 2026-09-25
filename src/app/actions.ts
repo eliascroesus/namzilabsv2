@@ -8,7 +8,14 @@ import { workspaceOwners } from "@/db/schema";
 import { workspaceCap } from "@/lib/limits";
 import { canManageRanks } from "@/lib/permissions";
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 import { recordAudit } from "@/lib/audit";
+import { boardHref } from "@/lib/board/href";
+import { REFERRAL_COOKIE } from "@/lib/referral";
+import { recordReferral } from "@/lib/referral-store";
+import { TEMPLATE_COOKIE } from "@/lib/templates/cookie";
+import { getTemplateByCode } from "@/lib/templates/store";
+import { takeTemplate } from "@/lib/templates/use";
 
 /**
  * Create a new WorkOS organization (the tenant/workspace), add the current user
@@ -106,7 +113,73 @@ export async function createOrganizationAction(formData: FormData): Promise<void
     /* no admin role configured — the workspace_owners row is the authority */
   }
 
-  await switchToOrganization(org.id, { returnTo: "/dashboard" });
+  const landing = await startFromTemplate(formData.get("template"), org.id, auth.user.id);
+  await creditReferral(auth.user.id, auth.user.createdAt);
+
+  await switchToOrganization(org.id, { returnTo: landing });
+}
+
+/**
+ * A WORKSPACE THAT STARTS FROM A TEMPLATE — the form carries the code when the
+ * person left "Start from …" ticked, on `/onboarding` or on the template's own
+ * page. Returns where to land: the template's first view, so the first thing
+ * a new account sees is the board they signed up for.
+ *
+ * NEVER FATAL. The workspace already exists and belongs to them; a template
+ * that fails to land costs them the layout, not the account, and an error page
+ * here would strand somebody who has done everything right. The operator gets
+ * the log line.
+ *
+ * The cookie goes either way: they have answered the question it was carrying,
+ * whether by using the template or by unticking it.
+ */
+async function startFromTemplate(raw: FormDataEntryValue | null, orgId: string, userId: string): Promise<string> {
+  let landing = "/dashboard";
+  if (typeof raw === "string" && raw) {
+    try {
+      const db = getDb();
+      const template = await getTemplateByCode(db, raw);
+      if (template) {
+        const { viewIds } = await takeTemplate(db, { template, orgId, userId, newWorkspace: true });
+        landing = boardHref({ view: viewIds[0] });
+      }
+    } catch (e) {
+      console.error(`[onboarding] template not applied to ${orgId}`, e);
+    }
+  }
+  try {
+    (await cookies()).delete(TEMPLATE_COOKIE);
+  } catch {
+    /* a cookie that cannot be cleared expires on its own */
+  }
+  return landing;
+}
+
+/**
+ * THE REFERRAL, RECORDED WHERE EVERY NEW ACCOUNT PASSES.
+ *
+ * `/callback` records it on sign-in — but only a Google or hosted sign-in ever
+ * reaches `/callback`. The email-and-password form saves its session directly
+ * (`land()` in `(auth)/actions.ts`), so every referral that signed up with a
+ * password was dropped. Creating a first workspace is the one step every new
+ * account takes whichever door it came through, so this is the second net.
+ *
+ * Recording twice is impossible rather than merely unlikely: `recordReferral`
+ * refuses an account older than its window and `referred_user_id` is UNIQUE.
+ * Same rule as `/callback` for the cookie — cleared only when a row was
+ * written, so a refusal cannot throw away an attribution that might still
+ * land.
+ */
+async function creditReferral(userId: string, createdAt: string | undefined): Promise<void> {
+  try {
+    const jar = await cookies();
+    const raw = jar.get(REFERRAL_COOKIE)?.value;
+    if (!raw) return;
+    const written = await recordReferral({ rawCode: raw, newUserId: userId, createdAt: createdAt ? new Date(createdAt) : null });
+    if (written) jar.delete(REFERRAL_COOKIE);
+  } catch (err) {
+    console.error("[referral] onboarding attribution failed", err);
+  }
 }
 
 /**

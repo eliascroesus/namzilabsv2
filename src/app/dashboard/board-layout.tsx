@@ -23,6 +23,7 @@ import {
   createGroupAction,
   deleteGroupAction,
   renameGroupAction,
+  setGroupNoteAction,
   setGroupColorAction,
   setGroupPositionsAction,
   setGroupSortAction,
@@ -70,11 +71,14 @@ export function BoardLayout({
   placements: seedPlacements,
   canEdit,
   viewId,
+  connectedApps,
 }: {
   tiles: BoardTile[];
   groups: BoardGroup[];
   placements: TilePlacement[];
   canEdit: boolean;
+  /** Connected app slugs, read only when a column's note names an app — see `CustomBoard`. */
+  connectedApps?: string[];
   /**
    * Which view this board IS. `null` is the default one.
    *
@@ -187,6 +191,18 @@ export function BoardLayout({
     });
     settle(renameGroupAction(id, name), () =>
       setGroups((prev) => prev.map((g) => (g.id === id && undo != null ? { ...g, name: undo } : g))),
+    );
+  }, [settle]);
+
+  /* Optimistic like a rename, and cleared by an empty string like one. */
+  const noteGroup = useCallback((id: string, note: string) => {
+    let undo: string | null | undefined;
+    setGroups((prev) => {
+      undo = prev.find((g) => g.id === id)?.note ?? null;
+      return prev.map((g) => (g.id === id ? { ...g, note: note || null } : g));
+    });
+    settle(setGroupNoteAction(id, note), () =>
+      setGroups((prev) => prev.map((g) => (g.id === id ? { ...g, note: undo ?? null } : g))),
     );
   }, [settle]);
 
@@ -474,6 +490,8 @@ export function BoardLayout({
                     busy={busy}
                     lanes={laneNames}
                     onRename={renameGroup}
+                    onNote={noteGroup}
+                    connectedApps={connectedApps}
                     onRecolour={recolourGroup}
                     onDelete={removeGroup}
                     onPlace={placeTile}

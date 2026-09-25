@@ -1378,3 +1378,113 @@ export const auditLog = pgTable(
   // index serves the other question an incident asks: everything one person did.
   (t) => [index("audit_log_org_at_idx").on(t.orgId, t.at.desc()), index("audit_log_actor_at_idx").on(t.actorId, t.at.desc())],
 );
+
+/**
+ * A WORKSPACE TEMPLATE — a frozen copy of some views' STRUCTURE, shared by link.
+ *
+ * A coach builds a board, presses "Share as template", and sends the link to
+ * thirty students; each of them signs up and starts with the same views, the
+ * same charts in the same places, and a note on every empty slot saying which
+ * metric goes there. See docs/superpowers/specs/2026-09-25-workspace-templates-design.md.
+ *
+ * A SNAPSHOT, NEVER A LIVE POINTER INTO THE AUTHOR'S WORKSPACE, and that is the
+ * design's whole safety argument. The public page renders `snapshot` and reads
+ * nothing else, so no request that arrives with a link can reach a row of the
+ * author's workspace — not a tile title typed last night, not a metric id. The
+ * snapshot is built by a whitelist (`src/lib/templates/snapshot.ts`): positions,
+ * chart kinds, text blocks, group names, notes, app slugs. No tile key, no
+ * target, no number, no connection. Every copy made from it is independent, and
+ * pressing "Update" writes a new snapshot that only FUTURE uses receive.
+ *
+ * `code` IS THE CAPABILITY. It is random (not derived like a referral code),
+ * travels in URLs, and is the only thing a stranger needs to see the template.
+ * Turning a link off is `enabled = false`, which makes the page and every use
+ * of it answer "not available" at once.
+ *
+ * `source_view_ids` stays OUT of the snapshot because it names rows in the
+ * author's workspace — useful to "Update from workspace", meaningless and
+ * internal to anyone else.
+ */
+export const workspaceTemplates = pgTable(
+  "workspace_templates",
+  {
+    id: text("id").primaryKey(),
+    /** The AUTHOR's workspace. Deleting it deletes its templates. */
+    orgId: text("org_id").notNull(),
+    /** The public link token — `/t/<code>`. Random, unique, never derived. */
+    code: text("code").notNull().unique(),
+    /** Who made it — the WorkOS user a signup through the link is credited to. */
+    createdBy: text("created_by").notNull(),
+    /** "Shared by …" on the public page. Taken once, at creation; null prints nothing. */
+    authorName: text("author_name"),
+    name: text("name").notNull(),
+    description: text("description"),
+    /** `TemplateSnapshot` — structure only. See the note above. */
+    snapshot: jsonb("snapshot").notNull(),
+    /** The author's views this was built from, for "Update from workspace". */
+    sourceViewIds: jsonb("source_view_ids").$type<string[]>().default([]).notNull(),
+    /** Bumped by every update; each use records the version it received. */
+    version: integer("version").default(1).notNull(),
+    enabled: boolean("enabled").default(true).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("workspace_templates_org_idx").on(t.orgId)],
+);
+
+/**
+ * ONE ROW PER TIME A TEMPLATE WAS USED — the "Used by 12" on the author's list.
+ *
+ * `org_id` is the RECIPIENT's workspace, so this table is walled by the tenant
+ * that received the copy, and deleting that workspace takes its row with it.
+ * The author reads it only as a COUNT per template, never as a list of who.
+ */
+export const workspaceTemplateUses = pgTable(
+  "workspace_template_uses",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    templateId: text("template_id")
+      .notNull()
+      .references(() => workspaceTemplates.id, { onDelete: "cascade" }),
+    /** The workspace the copy landed in. */
+    orgId: text("org_id").notNull(),
+    userId: text("user_id").notNull(),
+    /** Which snapshot they got — the template's `version` at that moment. */
+    version: integer("version").notNull(),
+    /** True when the template created the workspace rather than joining one. */
+    newWorkspace: boolean("new_workspace").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("workspace_template_uses_template_idx").on(t.templateId), index("workspace_template_uses_org_idx").on(t.orgId)],
+);
+
+/**
+ * A NOTE ON A PART OF THE BOARD THAT HAS NO `config` OF ITS OWN TO HOLD ONE.
+ *
+ * A custom view's tile keeps its note in `dashboard_tiles.config` — that bag
+ * exists for exactly this. A GROUPS view's column and a CALENDAR view have no
+ * such bag, and this is the smallest thing that gives them one without
+ * altering either table: adding a column to `dashboard_groups` would change
+ * every existing full-row select on it the moment `schema.ts` declared it (see
+ * drizzle/HAND_APPLY.md, step 3), and this feature ships before its paste.
+ *
+ * `target_kind` is `group` (a column of a groups view) or `view` (a calendar).
+ * There is no foreign key because the target is one of two tables; a note
+ * whose group was deleted is simply never read again, since every read joins
+ * from the ids the board already has.
+ *
+ * `apps` is the connector slugs the note is about — what lets an empty column
+ * draw Stripe's mark and offer "Connect Stripe" instead of only saying so.
+ */
+export const dashboardNotes = pgTable(
+  "dashboard_notes",
+  {
+    orgId: text("org_id").notNull(),
+    targetKind: text("target_kind").notNull(),
+    targetId: text("target_id").notNull(),
+    note: text("note"),
+    apps: jsonb("apps").$type<string[]>().default([]).notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [primaryKey({ name: "dashboard_notes_pk", columns: [t.orgId, t.targetKind, t.targetId] })],
+);

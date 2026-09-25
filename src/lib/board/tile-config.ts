@@ -239,6 +239,36 @@ const KEYS = {
     .array(z.string().regex(/^flow:[^:]+:.+$/).max(200))
     .max(EXITS_MAX)
     .refine((a) => new Set(a).size === a.length, "A metric can only appear once."),
+  /**
+   * WHAT GOES HERE — a sentence for whoever fills this spot in, written by the
+   * person who laid the board out.
+   *
+   * It is the reason a TEMPLATE can be followed. A template carries positions
+   * and chart kinds and never a metric (`lib/templates/snapshot.ts`), so the
+   * thirty students a coach sends it to would otherwise open thirty boards of
+   * identical dashed boxes saying "Pick a metric" and nothing about which. The
+   * note is what the empty slot says instead — "Revenue this month, from
+   * Stripe" — and a filled tile keeps it, reachable from its menu, because the
+   * sentence was about the SPOT and the spot is still there.
+   *
+   * 280, not the 2000 a text block allows: this is a label on a box, read at a
+   * glance, and a box has a few lines of room before the note becomes the
+   * tile's content.
+   */
+  note: z.string().trim().min(1).max(280),
+  /**
+   * THE APPS THE NOTE IS ABOUT — connector slugs, derived when a template is
+   * built from the metric that filled this spot, never typed by a person.
+   *
+   * It is what turns "from Stripe" into Stripe's mark and a "Connect Stripe"
+   * button on the empty slot, for somebody who has not connected it yet. Slugs
+   * are checked for shape only: one that names no connector draws no mark,
+   * which is the same "unknown reads as nothing" rule every key here follows.
+   */
+  noteApps: z
+    .array(z.string().regex(/^[a-z0-9][a-z0-9_-]{0,39}$/))
+    .max(8)
+    .refine((a) => new Set(a).size === a.length, "An app can only appear once."),
 } as const;
 
 export type TileConfig = { [K in keyof typeof KEYS]?: z.infer<(typeof KEYS)[K]> };
@@ -435,7 +465,13 @@ export function stageFill(index: number, count: number, accent: string): string 
  * source being a flow — see its note above; that is a fact about the data, not
  * about the chart, so it lives at the call site rather than in this table.
  */
-const EVERY_TILE = ["title", "rangeKey"] as const;
+/*
+ * `note` and `noteApps` are on every chart for the same reason — they describe
+ * the SPOT, and every chart is a spot somebody may need telling how to fill.
+ * No mark reads either; the empty slot and the tile menu read the raw bag.
+ * Blocks carry neither: a heading IS its own words.
+ */
+const EVERY_TILE = ["title", "rangeKey", "note", "noteApps"] as const;
 
 export const CONFIG_FIELDS = {
   number: [...EVERY_TILE, "color", "precision", "showSpark", "showGoal", "target"],

@@ -20,6 +20,7 @@ import { asViewKind, UNSET_TILE_KEY, visibilityKeyOf, type BoardTileRow } from "
 import { GROUP_ACCENT } from "@/components/flow/node-accent";
 import type { BoardGroup } from "@/lib/board/types";
 import type { DB } from "@/db/types";
+import { TemplatesUnavailable, writeNote } from "@/lib/templates/store";
 
 /**
  * EVERY WAY THE BOARD CAN BE REARRANGED, AND THE ONE GATE THEY ALL PASS.
@@ -269,6 +270,40 @@ export async function setGroupColorAction(id: string, color: string): Promise<Re
       .where(and(eq(dashboardGroups.id, id), eq(dashboardGroups.orgId, ctx.orgId)));
     return { ok: true };
   } catch (e) {
+    return oops(e);
+  }
+}
+
+/**
+ * WHAT GOES IN THIS COLUMN — the note an empty column shows, and what a
+ * template built from this board tells whoever receives it.
+ *
+ * A column has no config bag, so the note lives in `dashboard_notes` (see the
+ * schema). The group is re-walled to the org BEFORE the write rather than by
+ * the write: the note table has no foreign key to lean on, and a note filed
+ * against another workspace's group id would otherwise sit there harmlessly
+ * forever — harmless is not the same as allowed.
+ *
+ * An empty note CLEARS it, the rule every text setting on the board follows.
+ */
+export async function setGroupNoteAction(id: string, note: string): Promise<Result> {
+  const ctx = await requireOrg();
+  if (await blocked(ctx)) return fail(RANK_BLOCKS);
+  if (!idSchema.safeParse(id).success) return fail("Unknown group.");
+  const parsed = z.string().trim().max(280, "Keep the note under 280 characters.").safeParse(note);
+  if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "That note won't work.");
+  try {
+    const db = getDb();
+    const [group] = await db
+      .select({ id: dashboardGroups.id })
+      .from(dashboardGroups)
+      .where(and(eq(dashboardGroups.id, id), eq(dashboardGroups.orgId, ctx.orgId)))
+      .limit(1);
+    if (!group) return fail("Unknown group.");
+    await writeNote(db, ctx.orgId, { kind: "group", id }, parsed.data || null);
+    return { ok: true };
+  } catch (e) {
+    if (e instanceof TemplatesUnavailable) return fail("Column notes aren't switched on yet — the database update for them is still pending.");
     return oops(e);
   }
 }

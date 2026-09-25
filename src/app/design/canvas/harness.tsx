@@ -31,6 +31,7 @@ export function CanvasHarness({
   options,
   layoutFrozen = false,
   slotId = "canvas-add-chart",
+  connectedApps,
 }: {
   tiles: CanvasTile[];
   options: CustomTileOption[];
@@ -45,6 +46,8 @@ export function CanvasHarness({
    * check written to press it.
    */
   slotId?: string;
+  /** Passed through — see `CustomBoard`. The template specimens use it. */
+  connectedApps?: string[];
 }) {
   const [tiles, setTiles] = useState(initial);
   const minted = useRef(0);
@@ -144,6 +147,7 @@ export function CanvasHarness({
         layoutFrozen={layoutFrozen}
         actions={actions}
         slotId={slotId}
+        connectedApps={connectedApps}
       />
     </div>
   );

@@ -21,7 +21,7 @@
 -- ============================================================================
 
 -- ---------------------------------------------------------------------------
--- QUERY 1 — tables and columns (30 tables, 269 columns).
+-- QUERY 1 — tables and columns (33 tables, 295 columns).
 -- This is the one to run. Self-contained; nothing above is needed.
 -- ---------------------------------------------------------------------------
 WITH expected (tbl, col) AS (
@@ -83,6 +83,12 @@ WITH expected (tbl, col) AS (
     ('dashboard_groups', 'view_id'),
     ('dashboard_groups', 'created_at'),
     ('dashboard_groups', 'updated_at'),
+    ('dashboard_notes', 'org_id'),
+    ('dashboard_notes', 'target_kind'),
+    ('dashboard_notes', 'target_id'),
+    ('dashboard_notes', 'note'),
+    ('dashboard_notes', 'apps'),
+    ('dashboard_notes', 'updated_at'),
     ('dashboard_tile_placements', 'org_id'),
     ('dashboard_tile_placements', 'tile_key'),
     ('dashboard_tile_placements', 'group_id'),
@@ -294,7 +300,27 @@ WITH expected (tbl, col) AS (
     ('workspace_ranks', 'created_at'),
     ('workspace_settings', 'org_id'),
     ('workspace_settings', 'ai_assistants_enabled'),
-    ('workspace_settings', 'updated_at')
+    ('workspace_settings', 'updated_at'),
+    ('workspace_template_uses', 'id'),
+    ('workspace_template_uses', 'template_id'),
+    ('workspace_template_uses', 'org_id'),
+    ('workspace_template_uses', 'user_id'),
+    ('workspace_template_uses', 'version'),
+    ('workspace_template_uses', 'new_workspace'),
+    ('workspace_template_uses', 'created_at'),
+    ('workspace_templates', 'id'),
+    ('workspace_templates', 'org_id'),
+    ('workspace_templates', 'code'),
+    ('workspace_templates', 'created_by'),
+    ('workspace_templates', 'author_name'),
+    ('workspace_templates', 'name'),
+    ('workspace_templates', 'description'),
+    ('workspace_templates', 'snapshot'),
+    ('workspace_templates', 'source_view_ids'),
+    ('workspace_templates', 'version'),
+    ('workspace_templates', 'enabled'),
+    ('workspace_templates', 'created_at'),
+    ('workspace_templates', 'updated_at')
 ),
 checked AS (
   SELECT
@@ -319,7 +345,7 @@ ORDER BY
   col;
 
 -- ---------------------------------------------------------------------------
--- QUERY 2 (optional) — indexes (51 expected).
+-- QUERY 2 (optional) — indexes (54 expected).
 -- A missing index never breaks a query, it only makes it slow, so this is
 -- separate and can be ignored while chasing a real outage.
 -- ---------------------------------------------------------------------------
@@ -375,7 +401,10 @@ WITH expected (tbl, idx) AS (
     ('usage_ledger', 'usage_ledger_bucket_uq'),
     ('usage_ledger', 'usage_ledger_window_idx'),
     ('workspace_ranks', 'workspace_ranks_org_idx'),
-    ('workspace_ranks', 'workspace_ranks_org_name_uq')
+    ('workspace_ranks', 'workspace_ranks_org_name_uq'),
+    ('workspace_template_uses', 'workspace_template_uses_template_idx'),
+    ('workspace_template_uses', 'workspace_template_uses_org_idx'),
+    ('workspace_templates', 'workspace_templates_org_idx')
 )
 SELECT
   e.tbl AS "table",

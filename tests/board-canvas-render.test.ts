@@ -174,7 +174,10 @@ describe("the page branches on the view's kind", () => {
     // What the old assertion really protected is that a plain grid renders no
     // placements, and that is still true — it is now a filter rather than a
     // skipped read.
-    expect(page).toMatch(/\[groups, placements\] = await Promise\.all\(/);
+    // The column notes (`dashboard_notes`, added with workspace templates on
+    // 25 Sep 2026) ride in the SAME Promise.all as a third member, so they
+    // cost the page no depth — which is exactly what this pin is for.
+    expect(page).toMatch(/\[groups, placements(, notes)?\] = await Promise\.all\(/);
     expect(page).toMatch(/if \(groups\.length === 0\) placements = \[\]/);
     expect(page, "the serial pair must not come back").not.toMatch(
       /if \(groups\.length > 0\) placements = await listTilePlacements/,

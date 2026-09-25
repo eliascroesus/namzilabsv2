@@ -2,31 +2,21 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
-  AreaChart,
   ArrowDown,
   ArrowLeft,
   ArrowRight,
   ArrowUp,
-  BarChart3,
-  BarChartHorizontal,
   Copy as CopyIcon,
-  FilterX,
   Hash,
-  Heading2,
   LayoutGrid,
-  Minus,
   MoreHorizontal,
   PenLine,
-  PieChart,
   Plus,
   Repeat,
-  Rows3,
   SlidersHorizontal,
-  Table as TableIcon,
-  Target,
-  TrendingUp,
-  Type,
+  StickyNote,
   Trash2,
 } from "lucide-react";
 import { canvasCells, compact, GRID_COLS, type GridBox } from "@/lib/board/grid";
@@ -41,6 +31,9 @@ import { UNSET_TILE_KEY, type BoardTileRow, type CustomTileOption } from "@/lib/
 import type { TileConfig } from "@/lib/board/tile-config";
 import { CustomTile, type CustomTileSource } from "@/components/custom-tile";
 import { PortalSlot } from "@/components/portal-slot";
+import { CHART_ICONS } from "@/lib/board/chart-icons";
+import { SourceMark } from "@/components/source-mark";
+import { sourceStyle } from "@/components/flow/controls/source-style";
 import { CANVAS_ATTR, CELL_ATTR, HANDLE_ATTR, useCanvasDrag } from "./canvas-drag";
 import { useSettle } from "./board-settle";
 import { MetricPicker } from "./add-tile-picker";
@@ -162,6 +155,7 @@ export function CustomBoard({
   computingFlows = [],
   canEdit,
   layoutFrozen = false,
+  connectedApps,
   actions: actionOverrides,
   slotId = "canvas-add-chart",
 }: {
@@ -193,6 +187,13 @@ export function CustomBoard({
    * those writes touch one row and move nothing.
    */
   layoutFrozen?: boolean;
+  /**
+   * THE APPS THIS WORKSPACE HAS CONNECTED, as connector slugs — read only when
+   * an empty slot on this view names an app (a template's note), so an empty
+   * slot can offer "Connect Stripe" to somebody who has not, and stay quiet for
+   * somebody who has. Undefined means nobody asked, and no button is offered.
+   */
+  connectedApps?: string[];
   /** Test seam only — see `CanvasActions`. The dashboard leaves it unset. */
   actions?: Partial<CanvasActions>;
   /**
@@ -782,6 +783,7 @@ export function CustomBoard({
                   tile={byId.get(tile.id)!}
                   index={i}
                   onRename={(t) => editTile(tile.id, { title: t })}
+                  onNote={(n) => editTile(tile.id, n ? { config: { note: n } } : { clear: ["note"] })}
                   onConfigure={() => setConfiguring(tile.id)}
                   onChangeMetric={() => setRepointing(tile.id)}
                   onDuplicate={() => duplicateTile(tile.id)}
@@ -810,7 +812,16 @@ export function CustomBoard({
                  * would be the same wiring with an extra hop.
                  */
                 if (t.tileKey === UNSET_TILE_KEY) {
-                  return <EmptyTile chart={t.chart} canEdit={canEdit} onPick={() => setRepointing(tile.id)} />;
+                  return (
+                    <EmptyTile
+                      chart={t.chart}
+                      canEdit={canEdit}
+                      onPick={() => setRepointing(tile.id)}
+                      note={t.config.note}
+                      apps={t.config.noteApps}
+                      connectedApps={connectedApps}
+                    />
+                  );
                 }
                 return (
                   <CustomTile
@@ -980,22 +991,6 @@ export function CustomBoard({
   );
 }
 
-/** Chart id → its icon, shared by the Add menu and nothing else yet. */
-const CHART_ICONS: Record<ChartId, typeof Hash> = {
-  number: Hash,
-  line: TrendingUp,
-  area: AreaChart,
-  bar: BarChart3,
-  category: Rows3,
-  ranked: BarChartHorizontal,
-  pie: PieChart,
-  progress: Target,
-  pipeline: FilterX,
-  table: TableIcon,
-  heading: Heading2,
-  text: Type,
-  divider: Minus,
-};
 
 /**
  * THE ADD MENU — chart types only, in the `+ view` menu's own shape.
@@ -1146,9 +1141,37 @@ function AddChartMenu({
  * already rules out, and an empty tile is still worth drawing — it is where the
  * board's author has said something will be.
  */
-function EmptyTile({ chart, canEdit, onPick }: { chart: string; canEdit: boolean; onPick: () => void }) {
+function EmptyTile({
+  chart,
+  canEdit,
+  onPick,
+  note,
+  apps,
+  connectedApps,
+}: {
+  chart: string;
+  canEdit: boolean;
+  onPick: () => void;
+  /** What the board's author said goes here — usually a template's. */
+  note?: string;
+  /** The connector slugs the note is about. */
+  apps?: string[];
+  connectedApps?: string[];
+}) {
   const Icon = CHART_ICONS[asChartId(chart)];
   const label = CHARTS.find((c) => c.id === chart)?.label ?? "chart";
+  if (note || apps?.length) {
+    return (
+      <GuidedSlot
+        Icon={Icon}
+        canEdit={canEdit}
+        onPick={onPick}
+        note={note}
+        apps={apps ?? []}
+        connectedApps={connectedApps}
+      />
+    );
+  }
   const face = (
     <>
       <Icon className="size-5 text-muted-foreground" />
@@ -1205,6 +1228,106 @@ function EmptyTile({ chart, canEdit, onPick }: { chart: string; canEdit: boolean
 }
 
 /**
+ * AN EMPTY SLOT THAT SAYS WHICH METRIC GOES IN IT.
+ *
+ * The plain empty tile asks "Pick a metric" and nothing else, which is right
+ * for a chart the person just added — they know what they meant. It is wrong
+ * for a slot somebody ELSE laid out: a student opening a coach's template to
+ * thirty dashed boxes saying "Pick a metric" learns nothing about which. So
+ * when the slot carries a note, the note is the headline and the instruction
+ * becomes a button beneath it.
+ *
+ * THE APPS ARE MARKS AND A LINK, NOT WORDS. "from Stripe" is recognised by
+ * Stripe's mark before it is read, and a slot whose app is not connected yet
+ * offers the one act that unblocks it — the Apps page, opened on that app's
+ * connect dialog — rather than a picker with nothing in it to pick.
+ *
+ * TOP-ALIGNED, NOT CENTRED, and the reason was a screenshot. Centred with
+ * `overflow-hidden`, a slot whose buttons wrapped to a second row grew past
+ * its box and lost the NOTE off the top — the one line it exists to show. The
+ * note leads from the top edge now, the furniture sits at the foot, and
+ * anything that must give way is clipped from the bottom. It is also the
+ * template preview's own shape (`template-preview.tsx`), so the board a
+ * student receives looks like the page that promised it.
+ *
+ * "Connect" RIDES ON THE APPS LINE rather than being a second button: two
+ * buttons side by side did not fit a quarter-width tile, and the link is
+ * next to the mark it is about.
+ *
+ * NOT ONE BIG BUTTON, unlike the plain tile, because it holds two acts; a
+ * button inside a button is invalid and a screen reader reads it as one. The
+ * card's own surface still picks (the press most people will aim at), and the
+ * named controls are what a keyboard reaches. The press stops here rather
+ * than bubbling to the cell, whose click opens the settings panel.
+ */
+function GuidedSlot({
+  Icon,
+  canEdit,
+  onPick,
+  note,
+  apps,
+  connectedApps,
+}: {
+  Icon: typeof Hash;
+  canEdit: boolean;
+  onPick: () => void;
+  note?: string;
+  apps: string[];
+  connectedApps?: string[];
+}) {
+  const names = apps.map((a) => sourceStyle(a).label);
+  /* Only when the page said what is connected, and only to somebody who may
+     act: offering "Connect Stripe" to a workspace that has it would be a link
+     that lies. */
+  const missing = canEdit && connectedApps ? apps.find((a) => !connectedApps.includes(a)) : undefined;
+  return (
+    <div
+      {...{ "data-tile-empty": "", "data-tile-note": "" }}
+      onClick={(e) => {
+        e.stopPropagation();
+        if (canEdit && !(e.target as HTMLElement).closest("a, button")) onPick();
+      }}
+      className={`flex h-full w-full flex-col gap-1.5 overflow-hidden rounded-surface border border-dashed border-border bg-card/40 p-3 text-left ${
+        canEdit ? "cursor-pointer transition-colors duration-(--duration-fast) hover:border-marker hover:bg-card/60" : ""
+      }`}
+    >
+      <p className={`line-clamp-3 text-sm ${note ? "font-medium text-foreground" : "text-muted-foreground"}`}>
+        {note ?? "Any metric from these apps"}
+      </p>
+      <p className="mt-auto flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+        <Icon className="size-3.5 shrink-0" aria-hidden />
+        {apps.length > 0 && (
+          <>
+            <span className="flex shrink-0 items-center gap-1" aria-hidden>
+              {apps.slice(0, 3).map((a) => (
+                <SourceMark key={a} source={a} size={14} />
+              ))}
+            </span>
+            <span className="min-w-0 truncate">{names.join(", ")}</span>
+          </>
+        )}
+        {missing && (
+          <Link
+            href={`/integrations?connect=${encodeURIComponent(missing)}`}
+            className="shrink-0 font-medium text-marker underline-offset-4 hover:underline"
+            aria-label={`Connect ${sourceStyle(missing).label}`}
+          >
+            Connect
+          </Link>
+        )}
+      </p>
+      {canEdit ? (
+        <Button variant="secondary" size="sm" onClick={onPick} className="self-start">
+          Pick a metric
+        </Button>
+      ) : (
+        <span className="text-xs text-muted-foreground">No metric yet</span>
+      )}
+    </div>
+  );
+}
+
+/**
  * A box whose card has not arrived yet — the moment between this client
  * writing a row and the refresh carrying its server-rendered card. It holds
  * the tile's exact footprint so nothing below it moves when the card lands.
@@ -1233,6 +1356,7 @@ function TileMenu({
   tile,
   index,
   onRename,
+  onNote,
   onConfigure,
   onChangeMetric,
   onDuplicate,
@@ -1249,6 +1373,8 @@ function TileMenu({
   /** Open the settings panel — the menu is the path a keyboard can take. */
   onConfigure: () => void;
   onRename: (title: string) => void;
+  /** Write the spot's note; an empty string clears it. */
+  onNote: (note: string) => void;
   onChangeMetric: () => void;
   onDuplicate: () => void;
   /** False when a row on this view is hidden from the viewer — see `layoutFrozen`. */
@@ -1262,6 +1388,9 @@ function TileMenu({
   const [editing, setEditing] = useState(false);
   const title = tile.config.title || tile.metricName;
   const [draft, setDraft] = useState(title);
+  const [noting, setNoting] = useState(false);
+  const note = tile.config.note ?? "";
+  const [noteDraft, setNoteDraft] = useState(note);
 
   /** Do it, then get out of the way — every item below moves what is underneath. */
   const act = (fn: () => void) => {
@@ -1275,6 +1404,16 @@ function TileMenu({
     // An empty name CLEARS the override, so the tile follows its metric again.
     // Unchanged means nothing happened, which is true.
     if (next !== title) onRename(next);
+  };
+
+  /* The rename's contract exactly: Return or leaving the field saves, Escape
+     abandons, empty clears. 280 is the schema's cap, trimmed here rather than
+     refused there — a note one word too long should lose the word, not the
+     note. */
+  const commitNote = () => {
+    setNoting(false);
+    const next = noteDraft.trim().slice(0, 280);
+    if (next !== note) onNote(next);
   };
 
 
@@ -1309,6 +1448,7 @@ function TileMenu({
           if (!o) {
             setConfirming(false);
             setEditing(false);
+            setNoting(false);
           }
         }}
         fixed
@@ -1377,6 +1517,51 @@ function TileMenu({
             >
               <PenLine />
               Rename
+            </Button>
+          )}
+
+          {/* THE SPOT'S NOTE — what goes here, for whoever fills it in.
+              It lives in the menu rather than the settings panel because an
+              EMPTY slot has no panel (pressing it opens the metric picker),
+              and the empty slot is exactly where a note matters most: it is
+              what a template's reader sees instead of "Pick a metric". A
+              written note shows its first lines here, so a filled tile's
+              note is never lost behind the chart that answered it. */}
+          {blockKindOf(tile.tileKey) ? null : noting ? (
+            <div className="px-1 py-1">
+              <GrowingTextarea
+                autoFocus
+                value={noteDraft}
+                maxLength={280}
+                onChange={(e) => setNoteDraft(e.target.value)}
+                onBlur={commitNote}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    commitNote();
+                  }
+                  if (e.key === "Escape") setNoting(false);
+                }}
+                aria-label={`Note for ${title}`}
+                placeholder="What goes here, e.g. revenue from Stripe"
+                className="text-sm"
+              />
+            </div>
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-auto min-h-8 w-full items-start justify-start py-1.5 text-left whitespace-normal"
+              onClick={() => {
+                setNoteDraft(note);
+                setNoting(true);
+              }}
+            >
+              <StickyNote className="mt-0.5" />
+              <span className="flex min-w-0 flex-col">
+                <span>{note ? "Edit note" : "Add note"}</span>
+                {note && <span className="line-clamp-2 text-xs font-normal text-muted-foreground">{note}</span>}
+              </span>
             </Button>
           )}
 

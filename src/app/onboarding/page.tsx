@@ -1,5 +1,11 @@
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { withAuth, signOut, getWorkOS } from "@workos-inc/authkit-nextjs";
+import { getReadDb } from "@/db/client";
+import { Checkbox } from "@/components/ui/checkbox";
+import { summarize } from "@/lib/templates/snapshot";
+import { TEMPLATE_COOKIE } from "@/lib/templates/cookie";
+import { getTemplateByCode } from "@/lib/templates/store";
 import { ArrowRight, ChevronRight } from "lucide-react";
 import { createOrganizationAction, switchOrgAction } from "@/app/actions";
 import { Button } from "@/components/ui/button";
@@ -28,6 +34,19 @@ export default async function OnboardingPage() {
     .catch(() => []);
   const orgs = memberships.map((m) => ({ id: m.organizationId, name: m.organizationName ?? "Workspace" }));
   const hasWorkspaces = orgs.length > 0;
+
+  /**
+   * THE TEMPLATE THEY CAME FOR, if a template link sent them here — see
+   * `TEMPLATE_COOKIE` for the paths that lose `next` and land here instead.
+   * Offered ticked on the create form; any failure to read it is simply no
+   * offer, since this page's job is making a workspace and it must not fail at
+   * that over a template.
+   */
+  const pending = await getTemplateByCode(getReadDb(), (await cookies()).get(TEMPLATE_COOKIE)?.value).catch(() => null);
+  const template =
+    pending?.enabled && pending.snapshot
+      ? { code: pending.code, name: pending.name, author: pending.authorName, views: summarize(pending.snapshot).views }
+      : null;
 
   return (
     <main id="main" className="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-6">
@@ -61,12 +80,12 @@ export default async function OnboardingPage() {
             ))}
           </Card>
 
-          <details className="group mt-6">
+          <details className="group mt-6" open={template != null}>
             <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground [&::-webkit-details-marker]:hidden">
               <ChevronRight size={14} className="transition-transform group-open:rotate-90" />
               Create another workspace
             </summary>
-            <CreateForm className="mt-4" />
+            <CreateForm className="mt-4" template={template} />
           </details>
         </>
       ) : (
@@ -76,7 +95,7 @@ export default async function OnboardingPage() {
             A workspace is your organization&rsquo;s private space. All connected integrations and data
             live inside it.
           </p>
-          <CreateForm className="mt-8" />
+          <CreateForm className="mt-8" template={template} />
         </>
       )}
 
@@ -89,9 +108,27 @@ export default async function OnboardingPage() {
   );
 }
 
-function CreateForm({ className }: { className?: string }) {
+type PendingTemplate = { code: string; name: string; author: string | null; views: number } | null;
+
+function CreateForm({ className, template }: { className?: string; template: PendingTemplate }) {
   return (
     <form action={createOrganizationAction} className={cn("space-y-4", className)}>
+      {template && (
+        /* TICKED, NOT SILENT. They chose this template a page or two ago, so
+           the default is to honour it — but it is said out loud and can be
+           unticked, because a workspace is theirs and a layout they did not
+           expect is the one surprise onboarding should never spring. */
+        <label className="flex cursor-pointer items-start gap-3 rounded-card border border-border bg-card p-4">
+          <Checkbox name="template" value={template.code} defaultChecked className="mt-0.5" />
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold text-foreground">Start from &ldquo;{template.name}&rdquo;</span>
+            <span className="mt-0.5 block text-xs text-muted-foreground">
+              {`${template.views} ${template.views === 1 ? "view" : "views"}${template.author ? `, shared by ${template.author}` : ""}. `}
+              Your workspace opens with its layout and notes — none of anyone else&rsquo;s data.
+            </span>
+          </span>
+        </label>
+      )}
       <div>
         <FieldLabel htmlFor="name">Workspace name</FieldLabel>
         <Input id="name" name="name" required placeholder="Acme Inc" />

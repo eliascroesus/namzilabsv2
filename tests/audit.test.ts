@@ -116,6 +116,12 @@ describe("the audit trail records the acts that matter", () => {
       // Where the data can GO, which is its own category.
       "ai.access_toggle",
       "ai.assistant_disconnect",
+      // A workspace's STRUCTURE leaving it, by public link.
+      "template.create",
+      "template.update",
+      "template.link_toggle",
+      "template.delete",
+      "template.use",
     ]) {
       expect(actions, `no recordAudit call writes ${required}`).toContain(required);
     }
@@ -127,7 +133,7 @@ describe("the audit trail records the acts that matter", () => {
     // union without meaning to — the failure mode the memory on this repo
     // records as "widening a union is when it bites".
     const declared = new Set([...audit.matchAll(/^\s*\| "([a-z._]+)";?$/gm)].map((m) => m[1]));
-    expect(declared.size, "the AuditAction union could not be parsed — this check would pass vacuously").toBe(18);
+    expect(declared.size, "the AuditAction union could not be parsed — this check would pass vacuously").toBe(23);
     for (const site of callSites()) {
       for (const [, action] of site.text.matchAll(/action: "([a-z._]+)"/g)) {
         expect(declared, `${site.file} writes ${action}, which is not in the AuditAction union`).toContain(action);

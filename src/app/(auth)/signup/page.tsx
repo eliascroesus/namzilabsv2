@@ -1,5 +1,9 @@
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { withAuth } from "@workos-inc/authkit-nextjs";
+import { getReadDb } from "@/db/client";
+import { TEMPLATE_COOKIE } from "@/lib/templates/cookie";
+import { getTemplateByCode } from "@/lib/templates/store";
 import { AuthCard, AuthFooterLink, CredentialsForm } from "../auth-shell";
 import { signUpAction } from "../actions";
 import { safeNext } from "../next-path";
@@ -25,6 +29,19 @@ export default async function SignUpPage({
   const { user } = await withAuth();
   if (user) redirect(next);
 
+  /**
+   * THE ONE SUBTITLE THIS CARD CARRIES, AND ONLY WHEN IT IS NEWS.
+   *
+   * The note below explains why the card has no pitch. A template is not a
+   * pitch: somebody pressed "Use this template" a moment ago, and the page
+   * that asks for their email should say that what they chose is coming with
+   * them — it is the one question in their head at this step. A cookie that
+   * names nothing live reads as no subtitle, never as an error.
+   */
+  const template = await getTemplateByCode(getReadDb(), (await cookies()).get(TEMPLATE_COOKIE)?.value).catch(() => null);
+  const subtitle =
+    template?.enabled && template.snapshot ? `Your workspace will start from \u201c${template.name}\u201d.` : undefined;
+
   return (
     <AuthCard
       /* NO SUBTITLE. It carried the product's pitch — "every number on your
@@ -34,9 +51,14 @@ export default async function SignUpPage({
          them and that. The pitch belongs on the landing page, which is where
          they read it before clicking through. */
       title="Create your account"
+      subtitle={subtitle}
       footer={
         <>
-          Already have an account? <AuthFooterLink href="/login">Sign in</AuthFooterLink>
+          {/* CARRY THE DESTINATION ACROSS. Somebody sent here from a template's
+              page with `next` who turns out to have an account would otherwise
+              sign in and land on the dashboard, their template forgotten. */}
+          Already have an account?{" "}
+          <AuthFooterLink href={next === "/dashboard" ? "/login" : `/login?next=${encodeURIComponent(next)}`}>Sign in</AuthFooterLink>
         </>
       }
     >

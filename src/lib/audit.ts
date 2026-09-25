@@ -21,7 +21,7 @@ import type { DB } from "@/db/types";
  * not here, and leaving them out is the point: an audit log that records
  * everything is a log nobody can read, and the signal that matters — a rank
  * changed at 3am — would be four hundred rows deep in somebody rearranging a
- * dashboard. A log with 18 action types can be read top to bottom by a human
+ * dashboard. A log with 23 action types can be read top to bottom by a human
  * during an incident, which is the only time it will ever be read.
  *
  * ═══ NO PERSONAL DATA AND NO USER CONTENT REACHES THIS TABLE ═══
@@ -43,7 +43,7 @@ import type { DB } from "@/db/types";
  *     anybody. `detail` is enum values, counts and flags.
  *
  * Which is also why the rows are kept with no cutoff: there is nothing in here
- * that a retention window would be protecting, and eighteen human-gated action
+ * that a retention window would be protecting, and twenty-three human-gated action
  * types do not grow a table. See the schema comment on `audit_log`.
  *
  * ═══ IT NEVER THROWS, AND THAT IS A JUDGEMENT WITH A COST ═══
@@ -96,7 +96,13 @@ type AuditAction =
   | "connection.delete"
   // ── Paths for data to LEAVE, which is its own category ──────────────────
   | "ai.access_toggle"
-  | "ai.assistant_disconnect";
+  | "ai.assistant_disconnect"
+  // ── A workspace's STRUCTURE leaving it, by link (see lib/templates) ──────
+  | "template.create"
+  | "template.update"
+  | "template.link_toggle"
+  | "template.delete"
+  | "template.use";
 
 /**
  * Enum values, counts and flags. Strings are permitted because provider slugs

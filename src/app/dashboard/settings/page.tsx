@@ -23,6 +23,10 @@ import { CopyField } from "@/components/copy-field";
 import { inviteMemberAction, revokeInviteAction } from "./actions";
 import { MemberRankSelect, RanksPanel } from "./RanksPanel";
 import { AiAssistantsSection } from "./AiAssistantsSection";
+import { TemplatesSection, type TemplateListItem } from "./TemplatesSection";
+import { navViewsOrNone } from "@/lib/board/nav-views";
+import { summarize } from "@/lib/templates/snapshot";
+import { listTemplates, templatePath, TemplatesUnavailable } from "@/lib/templates/store";
 
 export const dynamic = "force-dynamic";
 
@@ -153,6 +157,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const inviteError = one(sp.invite_error);
   const aiError = one(sp.ai_error);
   const dangerError = one(sp.danger_error);
+  const templateError = one(sp.template_error);
+  const templateMade = one(sp.template_made) || null;
+  const shareView = one(sp.share) || null;
   const workos = getWorkOS();
   const db = getReadDb(); // read-only page load: rides the DB_DRIVER_READ soak seam (B.3)
   // Emails via one org-scoped listUsers, not a getUser per membership: the
@@ -233,6 +240,43 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
    * `deleteWorkspaceAction` reads the name again and compares there, so a
    * wrong label here cannot destroy anything — it can only fail to match.
    */
+  /**
+   * TEMPLATES — only for someone who may share one (the actions re-check; this
+   * is the courtesy), and only read then, so a member's settings page costs
+   * nothing for the feature. A missing table reads as "being switched on"
+   * rather than failing the whole page, since everything else here is unrelated
+   * to it.
+   */
+  let templates: TemplateListItem[] = [];
+  let templatesUnavailable = false;
+  let shareableViews: Array<{ id: string; name: string; kind: "groups" | "custom" | "calendar" }> = [];
+  if (isAdmin) {
+    const base = (process.env.APP_BASE_URL ?? "").replace(/\/+$/, "");
+    const [rows, views] = await Promise.all([
+      listTemplates(db, orgId).catch((e) => {
+        if (e instanceof TemplatesUnavailable) {
+          templatesUnavailable = true;
+          return [];
+        }
+        console.error("[settings] template list failed", e);
+        return [];
+      }),
+      navViewsOrNone(orgId),
+    ]);
+    templates = rows.map((t) => ({
+      id: t.id,
+      name: t.name,
+      description: t.description,
+      path: templatePath(t.code),
+      link: `${base}${templatePath(t.code)}`,
+      enabled: t.enabled,
+      views: t.snapshot ? summarize(t.snapshot).views : 0,
+      uses: t.uses,
+      updated: formatDate(t.updatedAt),
+    }));
+    shareableViews = views.flatMap((v) => (v.id ? [{ id: v.id, name: v.name, kind: v.kind }] : []));
+  }
+
   const workspaceName = await getWorkOS()
     .organizations.getOrganization(orgId)
     .then((o) => o.name)
@@ -548,6 +592,38 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             >
               <RanksPanel ranks={rankRows} memberCounts={memberCounts} catalogue={catalogue} />
             </SettingsSection>
+          )}
+
+          {isAdmin ? (
+            /* `id="templates"` is where every template act lands back — see
+               `template-actions.ts` — and where the view menu's "Share as
+               template" points, with that view ticked. */
+            <div id="templates" className="scroll-mt-24">
+              {templateError && (
+                <p role="alert" className="mb-3 rounded-card border border-danger-soft bg-danger-soft/50 px-4 py-3 text-sm text-danger-ink">
+                  {templateError}
+                </p>
+              )}
+              <SettingsSection
+                label="Templates"
+                count={templates.length}
+                description="Share this workspace's layout as a link: views, charts and a note on every spot saying which metric goes there. Never its data, apps or members."
+              >
+                <TemplatesSection
+                  templates={templates}
+                  views={shareableViews}
+                  preselect={shareView}
+                  made={templateMade}
+                  unavailable={templatesUnavailable}
+                />
+              </SettingsSection>
+            </div>
+          ) : (
+            shareView && (
+              <p id="templates" className="rounded-card border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
+                Only a workspace admin can share views as a template. Ask one to share this view for you.
+              </p>
+            )
           )}
 
           <AiAssistantsSection

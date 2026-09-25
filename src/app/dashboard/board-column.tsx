@@ -1,12 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowLeft, ArrowRight, ArrowUpDown, Check, MoreHorizontal, Trash2 } from "lucide-react";
+import Link from "next/link";
+import { ArrowLeft, ArrowRight, ArrowUpDown, Check, MoreHorizontal, StickyNote, Trash2 } from "lucide-react";
 import type { BoardLane } from "@/lib/board/arrange";
 import type { BoardGroup, GroupSortKey } from "@/lib/board/types";
 import { GROUP_ACCENT, groupAccent, groupBadge, groupInk, groupWash } from "@/components/flow/node-accent";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { GrowingTextarea, Input } from "@/components/ui/input";
+import { SourceMark } from "@/components/source-mark";
+import { sourceStyle } from "@/components/flow/controls/source-style";
 import { SectionHeading } from "@/components/ui/page";
 import { Popover } from "@/components/flow/controls/Popover";
 import { cn } from "@/lib/utils";
@@ -54,6 +57,8 @@ export function BoardColumn({
   busy,
   lanes,
   onRename,
+  onNote,
+  connectedApps,
   onRecolour,
   onDelete,
   onPlace,
@@ -73,6 +78,10 @@ export function BoardColumn({
   busy: boolean;
   lanes: Array<{ id: string; name: string }>;
   onRename: (id: string, name: string) => void;
+  /** Write the column's note; an empty string clears it. */
+  onNote: (id: string, note: string) => void;
+  /** Connected app slugs, when the page read them — see `CustomBoard`. */
+  connectedApps?: string[];
   onRecolour: (id: string, color: string) => void;
   onDelete: (id: string) => void;
   onPlace: (tileKey: string, groupId: string | null, index: number) => void;
@@ -95,6 +104,8 @@ export function BoardColumn({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(g.name);
   const [confirming, setConfirming] = useState(false);
+  const [noting, setNoting] = useState(false);
+  const [noteDraft, setNoteDraft] = useState(g.note ?? "");
   /** See TileSlot: no fade when the act that closed the menu moves its anchor. */
   const [instant, setInstant] = useState(false);
 
@@ -283,7 +294,10 @@ export function BoardColumn({
               setOpen={(o) => {
                 setMenuOpen(o);
                 if (o) setInstant(false);
-                if (!o) setConfirming(false);
+                if (!o) {
+                  setConfirming(false);
+                  setNoting(false);
+                }
               }}
               /**
                * FIXED, SO IT ESCAPES THE SCROLLER IT LIVES IN.
@@ -316,6 +330,57 @@ export function BoardColumn({
               }
             >
               <div {...{ [MENU_ATTR]: "" }} className="cursor-default overflow-y-auto p-1.5">
+                {/* WHAT GOES IN THIS COLUMN — shown inside it while it is empty,
+                    and carried by any template made from this board. First in
+                    the menu because it is the one thing here that is words for
+                    another person rather than a setting for this one. */}
+                {noting ? (
+                  <div className="px-1 pb-1">
+                    <GrowingTextarea
+                      autoFocus
+                      value={noteDraft}
+                      maxLength={280}
+                      onChange={(e) => setNoteDraft(e.target.value)}
+                      onBlur={() => {
+                        setNoting(false);
+                        const next = noteDraft.trim().slice(0, 280);
+                        if (next !== (g.note ?? "")) onNote(g.id, next);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          (e.target as HTMLTextAreaElement).blur();
+                        }
+                        if (e.key === "Escape") {
+                          setNoteDraft(g.note ?? "");
+                          setNoting(false);
+                        }
+                      }}
+                      aria-label={`Note for ${g.name}`}
+                      placeholder="Which metrics go here, e.g. calls booked, show rate"
+                      className="text-sm"
+                    />
+                  </div>
+                ) : (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setNoteDraft(g.note ?? "");
+                      setNoting(true);
+                    }}
+                    className={cn(MENU_ROW, "h-auto min-h-8 items-start py-1.5 text-left whitespace-normal")}
+                  >
+                    <StickyNote className="mt-0.5" />
+                    <span className="flex min-w-0 flex-col">
+                      <span>{g.note ? "Edit note" : "Add note"}</span>
+                      {g.note && <span className="line-clamp-2 text-xs font-normal text-muted-foreground">{g.note}</span>}
+                    </span>
+                  </Button>
+                )}
+
+                <div className="my-1.5 h-px bg-border" />
+
                 {/* THE COLOURS, as a grid of the thing being chosen. A list of
                     names would be twelve rows to say what twelve swatches say
                     at a glance, and two rows of six reads as a spectrum rather
@@ -508,10 +573,17 @@ export function BoardColumn({
                dashed box reads as a thing that failed rather than a place to put
                something. */
             <div
-              className="flex flex-1 items-center justify-center rounded-surface border border-dashed px-4 text-center text-xs"
+              className="flex flex-1 flex-col items-center justify-center gap-1.5 rounded-surface border border-dashed px-4 py-4 text-center text-xs"
               style={{ borderColor: `${groupAccent(g.color)}59`, color: groupInk(g.color) }}
             >
-              Drop a metric here
+              {/* A NOTE MAKES THE EMPTY COLUMN SAY WHICH METRICS BELONG IN IT —
+                  the column's own members, named, when it came from a
+                  template. The ink is the group's, solved against its wash like
+                  the name above it; the apps are marks, and an app the workspace
+                  has not connected yet is one link away. */}
+              {g.note && <p className="line-clamp-4 text-sm font-medium">{g.note}</p>}
+              {g.apps && g.apps.length > 0 && <ColumnApps apps={g.apps} connectedApps={canEdit ? connectedApps : undefined} />}
+              <span className={g.note ? "opacity-80" : undefined}>Drop a metric here</span>
             </div>
           ) : (
             withGap(lane.tiles, gapIndex, heldKey).map((slot) =>
@@ -539,5 +611,29 @@ export function BoardColumn({
         </div>
       </div>
     </section>
+  );
+}
+
+/**
+ * THE APPS A COLUMN'S METRICS COME FROM — marks, and a way to connect the
+ * first one missing. `connectedApps` is only passed to someone who may act on
+ * it, and only when the page read it; absent, the marks stand alone.
+ */
+function ColumnApps({ apps, connectedApps }: { apps: string[]; connectedApps?: string[] }) {
+  const missing = connectedApps ? apps.find((a) => !connectedApps.includes(a)) : undefined;
+  return (
+    <span className="flex flex-col items-center gap-1.5">
+      <span className="flex items-center gap-1" title={apps.map((a) => sourceStyle(a).label).join(", ")}>
+        {apps.slice(0, 5).map((a) => (
+          <SourceMark key={a} source={a} size={16} />
+        ))}
+        <span className="sr-only">{`From ${apps.map((a) => sourceStyle(a).label).join(", ")}`}</span>
+      </span>
+      {missing && (
+        <Button variant="secondary" size="sm" asChild>
+          <Link href={`/integrations?connect=${encodeURIComponent(missing)}`}>Connect {sourceStyle(missing).label}</Link>
+        </Button>
+      )}
+    </span>
   );
 }

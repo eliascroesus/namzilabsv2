@@ -164,6 +164,7 @@ export function CalendarBoard({
   selectedId,
   hosted = false,
   onPick,
+  note,
 }: {
   metrics: CalendarMetric[];
   /** Oldest first; the last is the current month. */
@@ -211,6 +212,13 @@ export function CalendarBoard({
    * later and on a different screen.
    */
   onPick?: (fd: FormData) => Promise<{ ok: boolean; error?: string }>;
+  /**
+   * WHICH METRIC THIS CALENDAR IS MEANT FOR, when somebody said — a
+   * template's note, "Booked calls". Shown until a metric has been chosen for
+   * the view, and in the empty state, where it turns "build a flow" into
+   * "build THIS flow".
+   */
+  note?: string | null;
 }) {
   /**
    * The stored choice SEEDS the picker; it does not own it. The switch has to
@@ -310,7 +318,11 @@ export function CalendarBoard({
         className="mt-8"
         icon={<CalendarDays />}
         title="No published metrics yet"
-        description="The calendar breaks a published metric down day by day. Build a flow, publish it, and it appears in the picker here."
+        description={
+          note
+            ? `This calendar is for: ${note}. Build it as a flow, publish it, and it appears in the picker here.`
+            : "The calendar breaks a published metric down day by day. Build a flow, publish it, and it appears in the picker here."
+        }
         action={
           // THE BRAND, spent on the one act this screen exists for — and it is
           // a BUTTON, which is the only shape the fill is legible in: a
@@ -629,6 +641,16 @@ export function CalendarBoard({
           calendar claiming this metric had a quiet month; the truth is that
           there is no metric to have had one. */}
       {gone}
+
+      {/* THE NOTE, UNTIL THE VIEW HAS A METRIC OF ITS OWN. A calendar made
+          from a template opens on whichever metric sorts first — that is the
+          old rule, and picking one is one press — so this says which one the
+          view was meant for while nobody has chosen. */}
+      {note && !selectedId && (
+        <p className="mt-2 text-sm text-muted-foreground">
+          Meant for: <span className="font-medium text-foreground">{note}</span>
+        </p>
+      )}
 
       {/* THE GRID SCROLLS RATHER THAN CRUSHING ITS SQUARES. Seven columns of a
           readable width need ~640px; below that the sheet scrolls sideways

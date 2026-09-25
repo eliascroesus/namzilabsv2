@@ -25,7 +25,16 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   return (
     <AuthCard
       title="Welcome back"
-      footer={<>New here? <AuthFooterLink href="/signup">Create an account</AuthFooterLink></>}
+      footer={
+        <>
+          New here?{" "}
+          {/* `next` goes with them, so a template's "Sign in" link that turns out
+              to need an account still comes back to the template. */}
+          <AuthFooterLink href={next === "/dashboard" ? "/signup" : `/signup?next=${encodeURIComponent(next)}`}>
+            Create an account
+          </AuthFooterLink>
+        </>
+      }
     >
       <CredentialsForm action={signInAction} next={next} mode="sign-in" submitLabel="Sign in" pendingLabel="Signing in…" />
     </AuthCard>

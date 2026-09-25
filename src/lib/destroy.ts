@@ -3,6 +3,7 @@ import {
   backfillJobs,
   connections,
   dashboardGroups,
+  dashboardNotes,
   dashboardTilePlacements,
   dashboardTiles,
   dashboardViews,
@@ -29,8 +30,11 @@ import {
   workspaceOwners,
   workspaceRanks,
   workspaceSettings,
+  workspaceTemplateUses,
+  workspaceTemplates,
 } from "@/db/schema";
 import type { DB } from "@/db/types";
+import { isUndefinedTableError } from "@/lib/db-errors";
 import { deleteConnectionData } from "@/lib/sync/delete-connection";
 
 /**
@@ -80,6 +84,8 @@ export type DestroyResult = { rows: Record<string, number>; connections: number 
  */
 const ORG_TABLES = [
   // Dashboard: placements reference views and groups; tiles reference views.
+  // Notes reference either by id with no foreign key, so their place is free.
+  { name: "dashboard_notes", table: dashboardNotes, late: true },
   { name: "dashboard_tile_placements", table: dashboardTilePlacements },
   { name: "dashboard_tiles", table: dashboardTiles },
   { name: "dashboard_views", table: dashboardViews },
@@ -95,6 +101,11 @@ const ORG_TABLES = [
   { name: "workspace_ranks", table: workspaceRanks },
   { name: "workspace_settings", table: workspaceSettings },
   { name: "workspace_owners", table: workspaceOwners },
+  // Sharing. A use row is the RECIPIENT's (its org is the workspace the copy
+  // landed in); a template is the AUTHOR's, and deleting it cascades every
+  // use of it in other workspaces — their copies stay, only the count goes.
+  { name: "workspace_template_uses", table: workspaceTemplateUses, late: true },
+  { name: "workspace_templates", table: workspaceTemplates, late: true },
   // The assistant's access to this workspace.
   { name: "mcp_bindings", table: mcpBindings },
   { name: "mcp_calls", table: mcpCalls },
@@ -152,10 +163,30 @@ export async function destroyWorkspaceData(db: DB, orgId: string): Promise<Destr
     rows.sync_state = (rows.sync_state ?? 0) + gone.length;
   }
 
-  for (const { name, table } of ORG_TABLES) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const gone = await db.delete(table as any).where(eq((table as any).orgId, orgId)).returning();
-    rows[name] = (rows[name] ?? 0) + gone.length;
+  for (const entry of ORG_TABLES) {
+    const { name, table } = entry;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const gone = await db.delete(table as any).where(eq((table as any).orgId, orgId)).returning();
+      rows[name] = (rows[name] ?? 0) + gone.length;
+    } catch (e) {
+      /**
+       * A TABLE WHOSE MIGRATION HAS NOT BEEN PASTED YET HOLDS NOTHING TO DELETE.
+       *
+       * Migrations here are applied by hand, so a deploy can run before the
+       * tables it added exist. Without this, the three sharing tables would
+       * have made "Delete workspace" throw in production for every workspace
+       * until the paste — an irreversible act the owner had already confirmed,
+       * failing over rows that cannot exist. Only tables marked `late` are
+       * excused, and only for "relation does not exist": a missing column, a
+       * permission error or a lock timeout on any table still fails loudly.
+       */
+      if ("late" in entry && entry.late && isUndefinedTableError(e)) {
+        rows[name] = rows[name] ?? 0;
+        continue;
+      }
+      throw e;
+    }
   }
 
   return { rows, connections: conns.length };
@@ -194,6 +225,28 @@ export async function destroyUserData(db: DB, userId: string): Promise<Record<st
   await count("rank_assignments", () => db.delete(rankAssignments).where(eq(rankAssignments.userId, userId)).returning());
   await count("mcp_grants", () => db.delete(mcpGrants).where(eq(mcpGrants.userId, userId)).returning());
   await count("mcp_bindings", () => db.delete(mcpBindings).where(eq(mcpBindings.userId, userId)).returning());
+  /**
+   * THE SHARING TABLES NAME PEOPLE TOO. A use row records that THIS person
+   * took a template; a template records who shared it, under their name, and
+   * is what their referral credit was keyed on. Both are records OF the person,
+   * so both go — a template made inside somebody else's workspace included,
+   * since the name on its public page is theirs. `late` for the same reason as
+   * in `destroyWorkspaceData`: a missing table holds nothing to delete.
+   */
+  const late = async (name: string, run: () => Promise<Array<unknown>>) => {
+    try {
+      await count(name, run);
+    } catch (e) {
+      if (!isUndefinedTableError(e)) throw e;
+      rows[name] = 0;
+    }
+  };
+  await late("workspace_template_uses", () =>
+    db.delete(workspaceTemplateUses).where(eq(workspaceTemplateUses.userId, userId)).returning(),
+  );
+  await late("workspace_templates", () =>
+    db.delete(workspaceTemplates).where(eq(workspaceTemplates.createdBy, userId)).returning(),
+  );
 
   return rows;
 }

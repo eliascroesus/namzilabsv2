@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Box, CalendarDays, ChevronDown, Copy as CopyIcon, LayoutDashboard, MoreHorizontal, PenLine, Trash2, Users } from "lucide-react";
+import { Box, CalendarDays, ChevronDown, Copy as CopyIcon, LayoutDashboard, LayoutTemplate, MoreHorizontal, PenLine, Trash2, Users } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TilePlaceholder } from "@/components/tile-placeholder";
 import { Button } from "@/components/ui/button";
@@ -972,6 +972,28 @@ export function ViewTab({
               >
                 <CopyIcon />
                 Duplicate
+              </Button>
+            )}
+
+            {/* SHARE AS TEMPLATE — this view's layout as a link somebody else
+                can start a workspace from. It opens Settings → Templates with
+                this view ticked rather than a dialog of its own, so there is
+                one form for one act whether it began here or there: tick more
+                views and the same form shares the whole workspace. A router
+                push, not an anchor, for the same reason every other row here is
+                a Button — see `MENU_ROW`. */}
+            {hasRow && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className={MENU_ROW}
+                onClick={() => {
+                  setMenuOpen(false);
+                  router.push(`/dashboard/settings?share=${encodeURIComponent(viewId!)}#templates`);
+                }}
+              >
+                <LayoutTemplate />
+                Share as template
               </Button>
             )}
 
