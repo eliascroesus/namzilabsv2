@@ -1488,3 +1488,159 @@ export const dashboardNotes = pgTable(
   },
   (t) => [primaryKey({ name: "dashboard_notes_pk", columns: [t.orgId, t.targetKind, t.targetId] })],
 );
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * BILLING, ACCESS AND WHERE CUSTOMERS COME FROM — migration 0035.
+ *
+ * See docs/superpowers/specs/2026-09-25-billing-and-admin-design.md. Every
+ * table here is NEW: nothing that already runs reads them, so the deploy is
+ * safe before the migration is pasted, and `BILLING_ENABLED` keeps every
+ * billing path dark until launch.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * THE STRIPE SIDE OF A WORKSPACE — its Customer, and the subscription it pays
+ * through. A MIRROR, written only by `lib/billing/stripe.ts` from the object
+ * Stripe returns (webhooks arrive out of order, so the row is always rebuilt
+ * from a fresh read, never patched from an event body).
+ *
+ * The customer is created at first checkout; the subscription columns stay
+ * null until one exists. `plan` / `interval` come from the price's lookup key.
+ */
+export const billingSubscriptions = pgTable("billing_subscriptions", {
+  orgId: text("org_id").primaryKey(),
+  stripeCustomerId: text("stripe_customer_id").notNull().unique(),
+  stripeSubscriptionId: text("stripe_subscription_id").unique(),
+  plan: text("plan"),
+  interval: text("interval"),
+  status: text("status"),
+  currentPeriodEnd: timestamp("current_period_end", { withTimezone: true }),
+  cancelAtPeriodEnd: boolean("cancel_at_period_end").default(false).notNull(),
+  trialEnd: timestamp("trial_end", { withTimezone: true }),
+  amountCents: integer("amount_cents"),
+  currency: text("currency"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+/**
+ * AN ACCESS CODE THE OWNER HANDS OUT — "Growth free for 3 months". Redeeming
+ * one writes an `access_grants` row; this table only describes the offer.
+ * `months` null = lifetime. `code` is stored upper-case.
+ */
+export const promoCodes = pgTable("promo_codes", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  code: text("code").notNull().unique(),
+  plan: text("plan").notNull(),
+  months: integer("months"),
+  maxRedemptions: integer("max_redemptions"),
+  redeemBy: timestamp("redeem_by", { withTimezone: true }),
+  note: text("note"),
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  disabledAt: timestamp("disabled_at", { withTimezone: true }),
+});
+
+/**
+ * A PLAN HELD WITHOUT A CHARGE — trials, codes, the owner's own grants,
+ * referral rewards and launch trials, one row each. `ends_at` null = lifetime.
+ * Revoking sets `revoked_at`; nothing is ever deleted, so the admin page can
+ * show what a workspace has ever held.
+ *
+ * The partial unique indexes are the rules, enforced where a race cannot beat
+ * them: one redemption of a code per workspace, one reward per referral rung,
+ * one launch trial.
+ */
+export const accessGrants = pgTable(
+  "access_grants",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    orgId: text("org_id").notNull(),
+    plan: text("plan").notNull(),
+    kind: text("kind").notNull(),
+    startsAt: timestamp("starts_at", { withTimezone: true }).defaultNow().notNull(),
+    endsAt: timestamp("ends_at", { withTimezone: true }),
+    promoCodeId: uuid("promo_code_id").references(() => promoCodes.id, { onDelete: "set null" }),
+    referralRung: integer("referral_rung"),
+    grantedBy: text("granted_by"),
+    note: text("note"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    revokedBy: text("revoked_by"),
+  },
+  (t) => [
+    index("access_grants_org_idx").on(t.orgId),
+    index("access_grants_code_idx").on(t.promoCodeId),
+    uniqueIndex("access_grants_org_code_uq").on(t.orgId, t.promoCodeId).where(sql`promo_code_id is not null`),
+    uniqueIndex("access_grants_org_rung_uq").on(t.orgId, t.referralRung).where(sql`referral_rung is not null`),
+    uniqueIndex("access_grants_org_launch_uq").on(t.orgId).where(sql`kind = 'launch'`),
+  ],
+);
+
+/** ONE TRIAL PER PERSON, not per workspace — keyed by the WorkOS user id. */
+export const trialClaims = pgTable("trial_claims", {
+  userId: text("user_id").primaryKey(),
+  orgId: text("org_id").notNull(),
+  plan: text("plan").notNull(),
+  claimedAt: timestamp("claimed_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+/**
+ * THE APPS PAUSED BECAUSE A PLAN SHRANK — so an upgrade resumes exactly these,
+ * and never a connection paused for its own reasons (a breaker, a rate limit).
+ * The pause itself lives on the connection's existing `paused_until`, which the
+ * sweep and its gate already honour.
+ */
+export const planPauses = pgTable(
+  "plan_pauses",
+  {
+    connectionId: uuid("connection_id")
+      .primaryKey()
+      .references(() => connections.id, { onDelete: "cascade" }),
+    orgId: text("org_id").notNull(),
+    pausedAt: timestamp("paused_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("plan_pauses_org_idx").on(t.orgId)],
+);
+
+/** A LINK THE OWNER POSTS SOMEWHERE — `namzilabs.co/go/<slug>`. */
+export const trackingLinks = pgTable("tracking_links", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  slug: text("slug").notNull().unique(),
+  label: text("label").notNull(),
+  source: text("source").notNull(),
+  medium: text("medium").notNull(),
+  campaign: text("campaign"),
+  destination: text("destination").default("/").notNull(),
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  archivedAt: timestamp("archived_at", { withTimezone: true }),
+});
+
+/** ONE ROW PER HUMAN CLICK. No IP, no user agent — a count, not a profile. */
+export const linkClicks = pgTable(
+  "link_clicks",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    linkId: uuid("link_id")
+      .notNull()
+      .references(() => trackingLinks.id, { onDelete: "cascade" }),
+    at: timestamp("at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("link_clicks_link_at_idx").on(t.linkId, t.at)],
+);
+
+/**
+ * WHERE A WORKSPACE CAME FROM — the last tracking link its creator clicked in
+ * the 30 days before signing up, snapshotted so renaming or archiving a link
+ * never rewrites history. No row = Direct.
+ */
+export const workspaceAcquisitions = pgTable("workspace_acquisitions", {
+  orgId: text("org_id").primaryKey(),
+  linkId: uuid("link_id").references(() => trackingLinks.id, { onDelete: "set null" }),
+  source: text("source").notNull(),
+  medium: text("medium").notNull(),
+  campaign: text("campaign"),
+  clickedAt: timestamp("clicked_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
