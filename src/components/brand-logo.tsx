@@ -1,6 +1,6 @@
-import { logoColor, sourceStyle } from "@/components/flow/controls/source-style";
+import { logoColor, logoColorOnDark, sourceStyle } from "@/components/flow/controls/source-style";
 import { SOURCE_LOGOS } from "@/connectors/logos";
-import { uploadedIcon } from "@/connectors/app-icons";
+import { uploadedIcon, uploadedIconMono } from "@/connectors/app-icons";
 
 /**
  * A CONNECTOR'S REAL MARK, DRAWN ONCE.
@@ -57,6 +57,45 @@ export function BrandLogo({
    * recoloured, because whoever uploaded it chose exactly those pixels.
    */
   const uploaded = uploadedIcon(source);
+  const mono = uploadedIconMono(source);
+  if (uploaded && mono) {
+    /**
+     * A ONE-COLOUR UPLOAD IS A SILHOUETTE, SO IT IS PAINTED, NOT PASTED: the
+     * file becomes a mask and the ink is chosen per ground. `light-dark()`
+     * follows the ground's `color-scheme` — dark under `html.dark`, light
+     * everywhere else, including the landing page, which pins itself light —
+     * so Retell's navy dots turn white on near-black and stay navy on white.
+     *
+     * The ink rides in `background-image` over a plain `background-color` on
+     * purpose: a browser without `light-dark()` drops the gradient as invalid
+     * and paints the file's own colour, which is exactly what it showed before.
+     */
+    const light = logoColor(mono);
+    const ink = `light-dark(${light}, ${logoColorOnDark(mono)})`;
+    const url = `url("${uploaded}")`;
+    return (
+      <span
+        role="img"
+        aria-label={s.label}
+        title={s.label}
+        className={`inline-block shrink-0${className ? ` ${className}` : ""}`}
+        style={{
+          width: size,
+          height: size,
+          backgroundColor: light,
+          backgroundImage: `linear-gradient(${ink}, ${ink})`,
+          WebkitMaskImage: url,
+          maskImage: url,
+          WebkitMaskSize: "contain",
+          maskSize: "contain",
+          WebkitMaskRepeat: "no-repeat",
+          maskRepeat: "no-repeat",
+          WebkitMaskPosition: "center",
+          maskPosition: "center",
+        }}
+      />
+    );
+  }
   if (uploaded) {
     return (
       // A plain <img>: a 14-56px icon from our own origin gains nothing from

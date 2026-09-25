@@ -4,8 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { scanAppIcons } from "../scripts/lib/app-icons.mjs";
-import { uploadedIcon } from "@/connectors/app-icons";
+import { monoColor, scanAppIcons } from "../scripts/lib/app-icons.mjs";
+import { uploadedIcon, uploadedIconMono } from "@/connectors/app-icons";
+import { logoColorOnDark } from "@/components/flow/controls/source-style";
 import { BrandLogo, hasBrandLogo } from "@/components/brand-logo";
 import { SourceMark } from "@/components/source-mark";
 
@@ -23,7 +24,7 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-const env = (entries: Array<{ key: string; src: string }>) => vi.stubEnv("APP_ICONS", JSON.stringify(entries));
+const env = (entries: Array<{ key: string; src: string; mono?: string }>) => vi.stubEnv("APP_ICONS", JSON.stringify(entries));
 
 describe("the build's scan of the folder", () => {
   it("lists images, skips everything else, and versions each by its content", () => {
@@ -92,5 +93,69 @@ describe("the marks prefer an upload", () => {
     env([]);
     expect(hasBrandLogo("instantly")).toBe(false);
     expect(hasBrandLogo("calendly")).toBe(true);
+  });
+});
+
+/**
+ * A ONE-COLOUR MARK ON A DARK GROUND.
+ *
+ * Logos are drawn bare, so an uploaded mark inherits whatever surface it lands
+ * on — and Retell's navy `#00122E` is 1.1:1 on the dark theme's `#121212`,
+ * which is to say invisible. The build now reads a one-colour SVG's paint, and
+ * the mark is painted per ground instead of pasted: its own colour on light,
+ * white on dark. A logo with more than one colour, or any raster, is never
+ * touched.
+ */
+describe("a one-colour upload is painted for its ground", () => {
+  it("reads the single paint of an SVG, and refuses anything it cannot be sure of", () => {
+    expect(monoColor('<svg fill="none"><path fill="#00122E"/><path fill="#00122e"/></svg>')).toBe("#00122e");
+    expect(monoColor("<svg><style>.a{fill:#1A73E8}</style><path class=\"a\"/></svg>")).toBe("#1a73e8");
+    expect(monoColor('<svg><path fill-rule="evenodd" fill="#123"/></svg>')).toBe("#112233");
+    expect(monoColor('<svg><path d="M0 0h1"/></svg>')).toBe("#000000"); // SVG's default paint
+    expect(monoColor('<svg><path fill="#ffffff"/><path fill="#000000"/></svg>')).toBeUndefined();
+    expect(monoColor('<svg><linearGradient id="g"><stop stop-color="#f00"/></linearGradient><path fill="url(#g)"/></svg>')).toBeUndefined();
+    expect(monoColor('<svg><path fill="rgb(0,0,0)"/></svg>')).toBeUndefined();
+  });
+
+  it("marks only one-colour SVGs in the build's list — never a bitmap", () => {
+    const dir = mkdtempSync(join(tmpdir(), "app-icons-mono-"));
+    writeFileSync(join(dir, "retell.svg"), '<svg fill="none"><path fill="#00122E"/></svg>');
+    writeFileSync(join(dir, "stripe.svg"), '<svg><path fill="#635BFF"/><path fill="#ffffff"/></svg>');
+    writeFileSync(join(dir, "tally.png"), "png-bytes");
+    const byKey = Object.fromEntries(scanAppIcons(dir).map((e) => [e.key, e]));
+    expect(byKey.retell.mono).toBe("#00122e");
+    expect(byKey.stripe.mono).toBeUndefined();
+    expect(byKey.tally.mono).toBeUndefined();
+  });
+
+  it("keeps a colour the dark ground can show, and reverses one it cannot", () => {
+    expect(logoColorOnDark("#00122e")).toBe("#ffffff");
+    expect(logoColorOnDark("#000000")).toBe("#ffffff");
+    expect(logoColorOnDark("#568cff")).toBe("#568cff");
+  });
+
+  it("paints the mark through a mask, navy on light and white on dark", () => {
+    env([{ key: "retell", src: "/app-icons/retell.svg?v=1", mono: "#00122e" }]);
+    const html = renderToStaticMarkup(createElement(SourceMark, { source: "retell", size: 20 }));
+    expect(html).not.toContain("<img");
+    expect(html).toContain('role="img"');
+    expect(html).toContain('aria-label="Retell AI"');
+    expect(html).toContain("mask-image:url(&quot;/app-icons/retell.svg?v=1&quot;)");
+    expect(html).toContain("light-dark(#00122e, #ffffff)");
+    // The fallback a browser without light-dark() keeps: the file's own colour.
+    expect(html).toContain("background-color:#00122e");
+  });
+
+  it("leaves a many-coloured upload exactly as it was drawn", () => {
+    env([{ key: "retell", src: "/app-icons/retell.svg?v=1" }]);
+    expect(renderToStaticMarkup(createElement(BrandLogo, { source: "retell", size: 20 }))).toContain(
+      '<img src="/app-icons/retell.svg?v=1"',
+    );
+  });
+
+  it("accepts nothing but a plain hex from the list, so it cannot carry CSS", () => {
+    env([{ key: "retell", src: "/app-icons/retell.svg?v=1", mono: "red;background:url(https://evil.example)" }]);
+    expect(uploadedIconMono("retell")).toBeUndefined();
+    expect(renderToStaticMarkup(createElement(BrandLogo, { source: "retell", size: 20 }))).toContain("<img");
   });
 });

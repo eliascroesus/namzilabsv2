@@ -100,3 +100,29 @@ export function logoColor(color: string): string {
   return "#000000";
 }
 
+/**
+ * THE SAME ONE-COLOUR MARK ON A DARK GROUND — its own colour where that is
+ * visible on the dark theme's `#121212`, white where it is not.
+ *
+ * `logoColor` answers for the light surface and argues one value can serve
+ * both themes, which holds for every colour that is bright enough to need
+ * darkening. It does not hold for a mark that is ALREADY near-black: Retell's
+ * navy `#00122E` is 1.1:1 against `#121212`, a logo that is simply not there.
+ * White is what vendors ship as their own reversed mark, so a silhouette that
+ * fails 3:1 on the dark ground is drawn white there; one that passes keeps its
+ * colour. Only ever applied to a mark known to be ONE colour (an uploaded SVG
+ * whose paint the build read) — a multi-colour logo is never recoloured.
+ */
+export function logoColorOnDark(color: string): string {
+  const hex = color.replace("#", "");
+  if (hex.length !== 6 || !/^[0-9a-fA-F]{6}$/.test(hex)) return color;
+  const lin = (c: number) => {
+    const v = c / 255;
+    return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  };
+  const [r, g, b] = [0, 2, 4].map((i) => lin(parseInt(hex.slice(i, i + 2), 16)));
+  const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  const GROUND = lin(0x12);
+  return (lum + 0.05) / (GROUND + 0.05) >= 3 ? color : "#ffffff";
+}
+

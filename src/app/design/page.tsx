@@ -865,7 +865,7 @@ export default function DesignPage() {
                 A connector&rsquo;s brand tile, at list scale — rows are read by shape before they are read by word.
               </p>
               <div className="mt-3 flex flex-wrap items-center gap-3">
-                {["gsheets", "close", "gcal", "whop", "calendly", "instantly", "webhook"].map((s) => (
+                {["gsheets", "close", "gcal", "whop", "calendly", "retell", "instantly", "webhook"].map((s) => (
                   <span key={s} className="flex items-center gap-1.5">
                     <SourceMark source={s} />
                     <code className="font-mono text-xs text-muted-foreground">{s}</code>
