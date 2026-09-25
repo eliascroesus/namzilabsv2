@@ -39,6 +39,20 @@ import { uploadedIcon, uploadedIconMono } from "@/connectors/app-icons";
  * it is load-bearing) fits the mark inside the square and centres it, so a wide
  * logo is drawn wide and short rather than squashed.
  */
+/**
+ * A SOFT CORNER ON AN UPLOADED ICON — the owner's ask, 25 Sep 2026.
+ *
+ * Uploads are often a full-bleed square — Instantly's blue tile, Smartlead's
+ * purple one — and drawn bare, their corners read sharp beside everything else.
+ * About a fifth of the side, the way an app icon is rounded: smooth, still
+ * plainly a square, and softer than the lettered tiles' 30% because it was
+ * asked for small. A transparent mark has transparent corners, so rounding
+ * changes nothing there.
+ */
+function uploadRadius(size: number): number {
+  return Math.max(2, Math.round(size * 0.22));
+}
+
 export function BrandLogo({
   source,
   size = 20,
@@ -82,6 +96,7 @@ export function BrandLogo({
         style={{
           width: size,
           height: size,
+          borderRadius: uploadRadius(size),
           backgroundColor: light,
           backgroundImage: `linear-gradient(${ink}, ${ink})`,
           WebkitMaskImage: url,
@@ -109,7 +124,7 @@ export function BrandLogo({
         title={s.label}
         draggable={false}
         className={`inline-block shrink-0 object-contain${className ? ` ${className}` : ""}`}
-        style={{ width: size, height: size }}
+        style={{ width: size, height: size, borderRadius: uploadRadius(size) }}
       />
     );
   }

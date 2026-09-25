@@ -82,6 +82,15 @@ describe("the marks prefer an upload", () => {
     expect(hasBrandLogo("instantly")).toBe(true);
   });
 
+  it("rounds an upload's corners a little, at every size", () => {
+    // Full-bleed square uploads read sharp drawn bare; about a fifth of the side.
+    env([{ key: "instantly", src: "/app-icons/instantly.png?v=9" }]);
+    expect(renderToStaticMarkup(createElement(SourceMark, { source: "instantly", size: 44 }))).toContain("border-radius:10px");
+    expect(renderToStaticMarkup(createElement(SourceMark, { source: "instantly", size: 20 }))).toContain("border-radius:4px");
+    env([{ key: "retell", src: "/app-icons/retell.svg?v=1", mono: "#00122e" }]);
+    expect(renderToStaticMarkup(createElement(SourceMark, { source: "retell", size: 28 }))).toContain("border-radius:6px");
+  });
+
   it("lets an upload replace a built-in mark too", () => {
     env([{ key: "calendly", src: "/app-icons/calendly.svg?v=1" }]);
     expect(renderToStaticMarkup(createElement(BrandLogo, { source: "calendly", size: 24 }))).toContain(
