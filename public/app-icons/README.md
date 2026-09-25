@@ -24,23 +24,8 @@ A file here also **replaces** a built-in logo. To use a better Calendly mark, ad
 
 | App | File name |
 |---|---|
-| Instantly | `instantly.png` |
 | Custom Webhook | `webhook.png` |
 | Cal.com | `calcom.png` |
-| Typeform | `typeform.png` |
-| Tally | `tally.png` |
-| Smartlead | `smartlead.png` |
-| lemlist | `lemlist.png` |
-| OnceHub | `oncehub.png` |
-| SavvyCal | `savvycal.png` |
-| Thinkific | `thinkific.png` |
-| ThriveCart | `thrivecart.png` |
-| WooCommerce | `woocommerce.png` |
-| Klaviyo | `klaviyo.png` |
-| Fathom | `fathom.png` |
-| Meta Ads | `meta-ads.png` |
-| TikTok Ads | `tiktok-ads.png` |
-| Google Ads | `gads.png` |
 
 (Any image extension works in place of `.png`.)
 
