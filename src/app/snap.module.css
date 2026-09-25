@@ -600,30 +600,14 @@
 
 .navScrolled { height: 54px; background: rgba(255, 255, 255, 0.84); }
 
-/* The SVG draws its own tile from `currentColor`; the background here painted
-   a SECOND one behind it, and the pair only agreed because both resolved to
-   ink. `flex: none` was also declared twice. Colour is set once, on `color`. */
-.navMark { flex: none; color: var(--ink); }
-
-/* Two dots that merge into one on hover: two become one, which is the whole
-   product stated in a logo. The only piece of wit on the page. */
-.navDotA, .navDotB { fill: var(--lift); transition: cx 260ms var(--snapIn), r 260ms var(--snapIn), opacity 260ms var(--snapIn); }
-.nav:hover .navDotA { cx: 14; r: 4.5; }
-.nav:hover .navDotB { cx: 14; r: 4.5; opacity: 0; }
+/* The owner's logo (`components/namzilabs-logo.tsx`) paints with
+   `currentColor`, so its colour is set here, once, on `color`. `display:
+   block` because the reset's inline SVG baseline gap would otherwise sit under
+   it and push the nav pill's brand off centre. */
+.brandLogo { display: block; flex: none; color: var(--ink); }
 
 /* The nav's brand link, which no longer has a mark beside it to align to. */
 .navBrand { display: inline-flex; align-items: center; text-decoration: none; }
-.navBrand .wordmark { margin-left: 0; }
-
-.wordmark {
-  margin-left: 10px;
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: var(--ink);
-  text-decoration: none;
-  white-space: nowrap;
-}
 
 .navLinks {
   display: flex;
@@ -2366,7 +2350,7 @@
      hiding the text then leaves an empty link. So the name is the brand at
      every width, at 15px here, and the room comes from the pill's padding and
      the two controls beside it instead. */
-  .nav .wordmark { font-size: 15px; }
+  .nav .brandLogo { height: 12.5px; width: auto; } /* the 18px → 15px step the typeset name took */
   .nav .navBrand { min-height: 44px; }
   .nav { gap: 4px; padding-left: 16px; }
   /* §9's 44x44 reaches the nav's own button too. */

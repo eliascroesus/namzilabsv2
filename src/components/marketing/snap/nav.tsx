@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import styles from "@/app/snap.module.css";
+import { NamzilabsWordmark } from "@/components/namzilabs-logo";
 
 const LINKS = [
   { label: "How it works", href: "#how-it-works", id: "how-it-works" },
@@ -165,9 +166,10 @@ export function SnapNav({
             name were doing the job the name was already doing, in a pill that
             has four links and a button to fit as well — and at the owner's
             ask. The footer keeps the mark, where it has room and no
-            competition. */}
+            competition. The name is the owner's own lettering now, lifted
+            from the lockup, not the page's typeface set bold. */}
         <Link className={styles.navBrand} href="/" aria-label="Namzilabs home">
-          <span className={styles.wordmark}>Namzilabs</span>
+          <NamzilabsWordmark height={15} className={styles.brandLogo} decorative />
         </Link>
 
         <nav className={styles.navLinks} aria-label="Primary">
@@ -204,7 +206,7 @@ export function SnapNav({
         <div className={styles.menuOverlay} role="dialog" aria-modal="true" aria-label="Menu">
           <div className={styles.menuTop}>
             <span className={styles.navBrand}>
-              <span className={styles.wordmark}>Namzilabs</span>
+              <NamzilabsWordmark height={15} className={styles.brandLogo} />
             </span>
             <button type="button" className={styles.textBtn} onClick={() => setMenuOpen(false)} autoFocus>
               <span>Close</span>

@@ -531,9 +531,13 @@ const call = await page.evaluate(() => {
     // black is one of four black rectangles on this page and reads as none of
     // them in particular.
     fillLum: fills.length ? lum(getComputedStyle(fills[0]).backgroundColor) : null,
-    // A wordmark, and only a wordmark.
-    brandText: brand ? (brand.textContent || "").trim() : "",
-    brandHasMark: brand ? Boolean(brand.querySelector("svg")) : true,
+    // A wordmark, and only a wordmark. Since 25 Sep 2026 the word is the
+    // owner's own lettering — one outlined path — so the name is read off the
+    // link's label, and "a mark" means the logo's rings (circles) appearing
+    // beside it, not the presence of an <svg>.
+    brandText: brand ? (brand.getAttribute("aria-label") || "").replace(/ home$/, "") : "",
+    brandIsLettering: Boolean(brand?.querySelector("svg path")),
+    brandHasMark: brand ? Boolean(brand.querySelector("svg circle, svg rect, img")) : true,
     // Two bands, running opposite ways.
     directions: [...new Set(tracks.map((t) => getComputedStyle(t).animationName))].length,
     trackCount: tracks.length,
@@ -548,7 +552,11 @@ check(
   "the filled action is not ink",
   call.fillLum === null ? "no filled action found" : `luminance ${call.fillLum?.toFixed(3)}`,
 );
-check(call.brandText === "Namzilabs" && !call.brandHasMark, "the nav's brand is the word alone", `${call.brandText}${call.brandHasMark ? " + a mark" : ""}`);
+check(
+  call.brandText === "Namzilabs" && call.brandIsLettering && !call.brandHasMark,
+  "the nav's brand is the word alone, in the owner's lettering",
+  `${call.brandText}${call.brandIsLettering ? "" : " (typeset, not the logo's lettering)"}${call.brandHasMark ? " + a mark" : ""}`,
+);
 check(call.trackCount === 2 && call.directions === 2, "the two bands run in opposite directions", `${call.trackCount} bands, ${call.directions} directions`);
 
 /* ── 3. Type ─────────────────────────────────────────────────────────────── */

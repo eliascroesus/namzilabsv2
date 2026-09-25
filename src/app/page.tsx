@@ -14,7 +14,8 @@ import { BoardShot } from "@/components/marketing/snap/board-shot";
 import { StartButtons } from "@/components/marketing/snap/start-buttons";
 import { MetricRail } from "@/components/marketing/snap/metric-rail";
 import { CanvasShot } from "@/components/marketing/snap/canvas-shot";
-import { Mark, Tick, LogoMark } from "@/components/marketing/snap/marks";
+import { Mark, Tick } from "@/components/marketing/snap/marks";
+import { NamzilabsLockup } from "@/components/namzilabs-logo";
 
 /**
  * THE FRONT DOOR — "Snap".
@@ -659,8 +660,7 @@ export default async function Home() {
                 right, and the only tell is a logo stacked on a word. */}
             <div className={styles.footerBrandCol}>
               <span className={styles.footerBrand}>
-                <LogoMark size={26} />
-                <span className={styles.wordmark}>Namzilabs</span>
+                <NamzilabsLockup height={24} className={styles.brandLogo} />
               </span>
               <p className={`${styles.bodyS} ${styles.footerDescriptor}`}>
                 The number none of your tools can build alone.
