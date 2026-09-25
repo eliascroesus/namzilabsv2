@@ -458,6 +458,7 @@ const RULES: Rule[] = [
       // rather than trusted, because a theme change that misses it leaves a
       // grey band above the app on mobile and nothing fails.
       "src/app/layout.tsx": "themeColor must be a literal for the meta tag; pinned to --background by test",
+      "src/lib/billing/emails.ts": "an HTML email: mail clients load no stylesheet and resolve no CSS variables, so the brand colours travel as inline literals",
     },
   },
   {

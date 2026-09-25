@@ -4,7 +4,7 @@ import { flowResults, flows } from "@/db/schema";
 import type { DB } from "@/db/types";
 import { grantPlan } from "@/lib/billing/state";
 import { countApps, countMetrics } from "@/lib/billing/usage";
-import { PlanLimitError, assertCanAddApp, assertCanInvite, assertCanPublish, assertFeature, upgradeHref } from "@/lib/billing/limits";
+import { PlanLimitError, assertCanAddApp, assertCanInvite, assertCanPublish, assertFeature, upgradeHref, upgradeMessage } from "@/lib/billing/limits";
 import { connectionCap, flowCap } from "@/lib/limits";
 
 /**
@@ -123,6 +123,19 @@ describe("features", () => {
     await grantPlan(db, { orgId: ORG, plan: "growth", kind: "manual", endsAt: null, grantedBy: "s" });
     await expect(assertFeature(db, ORG, "shareTemplates")).resolves.toBeUndefined();
     expect(await thrown(assertFeature(db, ORG, "aiAssistant"))).not.toBeNull();
+  });
+});
+
+describe("the sentence the plan page shows for a refusal", () => {
+  it("says the same thing the refusal said", () => {
+    expect(upgradeMessage("apps", "free")).toBe("You've reached the 3 apps included in the Free plan. Upgrade to add more.");
+    expect(upgradeMessage("members", "free")).toBe("You've reached the 1 member included in the Free plan. Upgrade to add more.");
+    expect(upgradeMessage("aiAssistant", "growth")).toBe("The AI assistant isn't included in the Growth plan. Upgrade to use it.");
+  });
+
+  it("shows nothing for a kind it does not know", () => {
+    expect(upgradeMessage("constructor", "free")).toBeNull();
+    expect(upgradeMessage("", "free")).toBeNull();
   });
 });
 

@@ -145,6 +145,15 @@ describe("Checkout", () => {
     expect((calls.checkout[0].subscription_data as Record<string, unknown>).trial_end).toBeUndefined();
   });
 
+  it("keeps a free period longer than Stripe allows inside its two-year limit", async () => {
+    const { client, calls } = fakeStripe();
+    const before = Date.now();
+    await createCheckout(db, { orgId: ORG, plan: "growth", interval: "month", ...who, trialEnd: new Date(before + 1000 * DAY), returnBase: "https://namzilabs.co" }, client);
+    const sent = (calls.checkout[0].subscription_data as Record<string, number>).trial_end * 1000;
+    expect(sent).toBeLessThanOrEqual(Date.now() + 730 * DAY);
+    expect(sent).toBeGreaterThan(before + 720 * DAY);
+  });
+
   it("creates one Stripe customer per workspace and reuses it", async () => {
     const { client, calls } = fakeStripe();
     expect(await ensureCustomer(db, ORG, who, client)).toBe("cus_1");

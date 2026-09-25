@@ -2,12 +2,14 @@
 
 import { redirect } from "next/navigation";
 import { getWorkOS } from "@workos-inc/authkit-nextjs";
+// Only a path inside this app — never somewhere a crafted form could send them.
+import { safeNext } from "@/app/(auth)/next-path";
 import { getDb } from "@/db/client";
 import { inngest } from "@/inngest/client";
 import { recordAudit } from "@/lib/audit";
 import { requireOrg, type OrgContext } from "@/lib/auth";
 import { applyPlan } from "@/lib/billing/pauses";
-import { isPaidPlan, type Interval, type PaidPlanId } from "@/lib/billing/plans";
+import { isPaidPlan, planRank, type Interval, type PaidPlanId } from "@/lib/billing/plans";
 import { billingEnabled, redeemCode, startTrial, workspacePlan } from "@/lib/billing/state";
 import { createCheckout, createPortal } from "@/lib/billing/stripe";
 import { canManageRanks } from "@/lib/permissions";
@@ -21,11 +23,6 @@ import { canManageRanks } from "@/lib/permissions";
 
 const BILLING_PAGE = "/dashboard/settings/billing";
 
-/** Only a path inside this app — never somewhere a crafted form could send them. */
-function safeNext(raw: FormDataEntryValue | null): string {
-  const s = typeof raw === "string" ? raw : "";
-  return s.startsWith("/") && !s.startsWith("//") && !s.startsWith("/\\") ? s : "/dashboard";
-}
 const withParam = (path: string, param: string) => `${path}${path.includes("?") ? "&" : "?"}${param}`;
 const appBase = () => (process.env.APP_BASE_URL ?? "https://namzilabs.co").replace(/\/$/, "");
 const intervalOf = (raw: FormDataEntryValue | null): Interval => (raw === "year" ? "year" : "month");
@@ -34,11 +31,22 @@ async function mustGovern(ctx: OrgContext): Promise<void> {
   if (!(await canManageRanks(getDb(), ctx))) redirect(`${BILLING_PAGE}?error=role`);
 }
 
-/** Checkout for a plan, keeping whatever is left of a running trial. */
+/**
+ * Checkout for a plan, keeping whatever free time is left. A running trial
+ * carries to either paid plan. Free months from a code, a referral or a launch
+ * gift carry only to the same plan or a lower one — adding a card to keep
+ * Growth must not charge before the months they were given run out, but
+ * moving UP to Scale is paying for something they were not given.
+ */
 async function checkoutUrl(ctx: OrgContext, plan: PaidPlanId, interval: Interval): Promise<string> {
   const db = getDb();
   const current = await workspacePlan(db, ctx.orgId);
-  const trialEnd = current.source === "trial" ? current.endsAt : null;
+  const trialEnd =
+    current.source === "trial"
+      ? current.endsAt
+      : current.source !== "subscription" && current.source !== "free" && planRank(plan) <= planRank(current.plan)
+        ? current.endsAt
+        : null;
   const name = await getWorkOS()
     .organizations.getOrganization(ctx.orgId)
     .then((o) => o.name)
@@ -108,7 +116,9 @@ export async function redeemCodeAction(formData: FormData): Promise<void> {
   await mustGovern(ctx);
   const db = getDb();
   const r = await redeemCode(db, { orgId: ctx.orgId, code: String(formData.get("code") ?? "") });
-  if (!r.ok) redirect(`${BILLING_PAGE}?code_error=${r.reason}`);
+  // Back to the page the code was typed on (the plan step), else Plan & billing.
+  const back = formData.get("back");
+  if (!r.ok) redirect(withParam(back ? safeNext(back) : BILLING_PAGE, `code_error=${r.reason}`));
   await applyPlan(db, ctx.orgId).catch(() => {});
   await recordAudit(db, { action: "billing.code_redeem", orgId: ctx.orgId, actorId: ctx.userId, detail: { plan: r.plan, lifetime: r.endsAt == null } });
   const next = formData.get("next");

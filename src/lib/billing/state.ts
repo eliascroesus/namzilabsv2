@@ -1,5 +1,5 @@
 import { and, count, desc, eq, isNull, sql } from "drizzle-orm";
-import { accessGrants, billingSubscriptions, promoCodes } from "@/db/schema";
+import { accessGrants, billingSubscriptions, promoCodes, trialClaims } from "@/db/schema";
 import type { DB } from "@/db/types";
 import { TRIAL_DAYS, isPaidPlan, type GrantKind, type PaidPlanId } from "./plans";
 import { resolvePlan, type GrantInput, type ResolvedPlan, type SubscriptionInput } from "./resolve";
@@ -143,6 +143,12 @@ export async function startTrial(
   `);
   if (rowsOf<{ id: string }>(result).length === 0) return { ok: false, reason: "already_trialed" };
   return { ok: true, endsAt };
+}
+
+/** Whether this person has spent their one trial — the picker then shows a price, not "FREE". */
+export async function hasTrialed(db: DB, userId: string): Promise<boolean> {
+  const [row] = await db.select({ userId: trialClaims.userId }).from(trialClaims).where(eq(trialClaims.userId, userId)).limit(1);
+  return row != null;
 }
 
 /** Upper-case, 3–32 of A–Z, 0–9, "-" and "_". Anything else is not a code. */

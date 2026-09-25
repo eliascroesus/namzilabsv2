@@ -135,6 +135,19 @@ describe("paying and managing", () => {
   it("opens the billing portal", async () => {
     expect(await run(actions.openPortalAction())).toBe("https://billing.stripe.test/p_1");
   });
+
+  it("does not charge a workspace on free months until they end, when it adds a card for the same plan", async () => {
+    await run(actions.redeemCodeAction(form({ code: "STUDENTS30" })));
+    const [grant] = await db.select().from(accessGrants);
+    await run(actions.startCheckoutAction(form({ plan: "growth", interval: "month" })));
+    expect(hoisted.checkout[0].trialEnd).toEqual(grant.endsAt);
+  });
+
+  it("charges at once for a plan above the one it was given", async () => {
+    await run(actions.redeemCodeAction(form({ code: "STUDENTS30" })));
+    await run(actions.startCheckoutAction(form({ plan: "scale", interval: "month" })));
+    expect(hoisted.checkout[0].trialEnd).toBeNull();
+  });
 });
 
 describe("redeemCodeAction", () => {
@@ -145,6 +158,12 @@ describe("redeemCodeAction", () => {
 
   it("says why a code did not work", async () => {
     expect(await run(actions.redeemCodeAction(form({ code: "NOPE" })))).toBe("/dashboard/settings/billing?code_error=unknown");
+  });
+
+  it("sends a code that did not work back to the page it was typed on", async () => {
+    const back = "/onboarding/plan?next=%2Fdashboard";
+    expect(await run(actions.redeemCodeAction(form({ code: "NOPE", next: "/dashboard", back })))).toBe(`${back}&code_error=unknown`);
+    expect(await run(actions.redeemCodeAction(form({ code: "NOPE", back: "https://evil.example" })))).toBe("/dashboard?code_error=unknown");
   });
 });
 

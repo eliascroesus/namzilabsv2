@@ -27,6 +27,8 @@ import { TemplatesSection, type TemplateListItem } from "./TemplatesSection";
 import { navViewsOrNone } from "@/lib/board/nav-views";
 import { listTemplates, templatePath, TemplatesUnavailable } from "@/lib/templates/store";
 import { templateErrorMessage } from "@/lib/templates/messages";
+import { describePlan } from "@/lib/billing/describe";
+import { billingEnabled, workspacePlan } from "@/lib/billing/state";
 
 export const dynamic = "force-dynamic";
 
@@ -163,6 +165,12 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const shareView = one(sp.share) || null;
   const workos = getWorkOS();
   const db = getReadDb(); // read-only page load: rides the DB_DRIVER_READ soak seam (B.3)
+  // One line about the plan, linking to Plan & billing — absent until billing is switched on.
+  const planSummary = billingEnabled()
+    ? await workspacePlan(db, orgId)
+        .then((p) => describePlan(p))
+        .catch(() => null)
+    : null;
   // Emails via one org-scoped listUsers, not a getUser per membership: the
   // N+1 here would be one WorkOS round trip per member on every page view.
   const [memberships, orgUsers, invitations, rankRows, assignments] = await Promise.all([
@@ -381,6 +389,16 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         )}
 
         <div className="mt-6 flex flex-col gap-4">
+          {planSummary && (
+            <SettingsSection label="Plan & billing" description={planSummary.detail}>
+              <div className="flex items-center justify-between gap-4 px-4 py-3">
+                <span className="text-sm font-medium text-foreground">{planSummary.title}</span>
+                <Link href="/dashboard/settings/billing" className={buttonVariants({ variant: "default" })}>
+                  View plans
+                </Link>
+              </div>
+            </SettingsSection>
+          )}
           <SettingsSection
             label="Members"
             count={members.length}

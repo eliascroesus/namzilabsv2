@@ -84,8 +84,9 @@ export async function ensureCustomer(
   return inserted[0]?.customer ?? (await customerOf(db, orgId)) ?? created.id;
 }
 
-/** Stripe refuses a Checkout trial ending less than 48 hours out. */
+/** Stripe refuses a Checkout trial ending less than 48 hours out, or more than two years out. */
 const MIN_TRIAL_MS = 48 * 3_600_000;
+const MAX_TRIAL_MS = 729 * 86_400_000;
 
 /**
  * A Checkout Session for a plan. A workspace still in its trial keeps the rest
@@ -118,7 +119,9 @@ export async function createCheckout(
     metadata: { org_id: input.orgId },
     subscription_data: {
       metadata: { org_id: input.orgId },
-      ...(keepTrial ? { trial_end: Math.floor(input.trialEnd!.getTime() / 1000) } : {}),
+      // A free period longer than Stripe allows (a long access code) is kept
+      // up to the limit; the first charge lands then instead of never.
+      ...(keepTrial ? { trial_end: Math.floor(Math.min(input.trialEnd!.getTime(), Date.now() + MAX_TRIAL_MS) / 1000) } : {}),
     },
     success_url: `${base}/dashboard/settings/billing?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${base}/dashboard/settings/billing?checkout=cancelled`,

@@ -50,6 +50,13 @@ export class PlanLimitError extends Error {
   }
 }
 
+/** The sentence the plan page shows for a `?upgrade=` kind — the refusal's own words. Null for anything else. */
+export function upgradeMessage(kind: string, plan: PlanId): string | null {
+  if (kind === "apps" || kind === "metrics" || kind === "members") return new PlanLimitError(kind, plan, PLANS[plan].limits[kind]).message;
+  if (kind === "shareTemplates" || kind === "aiAssistant") return new PlanLimitError("feature", plan, 0, kind).message;
+  return null;
+}
+
 /** Where every refusal sends someone: the plan page, told why they came. */
 export function upgradeHref(kind: LimitKind | FeatureKey): string {
   return `/dashboard/settings/billing?upgrade=${kind}`;

@@ -6,6 +6,7 @@ import {
   addMonths,
   billingEnabled,
   grantPlan,
+  hasTrialed,
   listGrants,
   normaliseCode,
   redeemCode,
@@ -113,6 +114,13 @@ describe("startTrial", () => {
       reason: "already_trialed",
     });
     expect((await workspacePlan(db, "org_b", NOW)).plan).toBe("free");
+  });
+
+  it("knows who has had their trial, so the picker offers them a price instead", async () => {
+    expect(await hasTrialed(db, "user_1")).toBe(false);
+    await startTrial(db, { orgId: "org_a", userId: "user_1", plan: "growth", now: NOW });
+    expect(await hasTrialed(db, "user_1")).toBe(true);
+    expect(await hasTrialed(db, "user_2")).toBe(false);
   });
 
   it("does not start a trial on a workspace that already has a paid plan", async () => {
