@@ -25,5 +25,13 @@
 export function safeNext(next: unknown): string {
   const raw = typeof next === "string" ? next : "";
   if (!raw.startsWith("/") || raw.startsWith("//")) return "/dashboard";
+  /**
+   * NO BACKSLASH AND NO CONTROL CHARACTER, ANYWHERE. A browser reads `\` as
+   * `/` in an http(s) URL and strips tabs and newlines before parsing, so
+   * `/\evil.example` and `/<tab>/evil.example` both arrive as `//evil.example`
+   * — the protocol-relative hop the clause above exists to stop. No path in
+   * this app contains either.
+   */
+  if (/[\\\u0000-\u001f\u007f]/.test(raw)) return "/dashboard";
   return raw;
 }

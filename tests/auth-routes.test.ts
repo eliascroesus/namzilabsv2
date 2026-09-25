@@ -37,6 +37,14 @@ describe("where a sign-in is allowed to send somebody", () => {
       // what a bare `startsWith("/")` check lets through.
       "//evil.example",
       "//evil.example/dashboard",
+      // A backslash is a slash to a browser in an http(s) URL, and tabs and
+      // newlines are stripped before parsing — each of these becomes
+      // `//evil.example` once it reaches the Location header.
+      "/\\evil.example",
+      "/\\/evil.example",
+      "/\t/evil.example",
+      "/\n/evil.example",
+      "/\r/evil.example",
       "javascript:alert(1)",
       "data:text/html,<script>",
       "evil.example",
