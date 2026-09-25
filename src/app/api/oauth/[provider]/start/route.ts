@@ -5,6 +5,7 @@ import { getDb } from "@/db/client";
 import { oauthProvider, oauthProviderFor, sourceConnectable } from "@/lib/oauth/providers";
 import { buildAuthUrl } from "@/lib/oauth/flow";
 import { createOAuthState, OAUTH_STATE_COOKIE } from "@/lib/oauth-state";
+import { PlanLimitError, assertCanAddApp, upgradeHref } from "@/lib/billing/limits";
 
 export const runtime = "nodejs";
 
@@ -31,6 +32,14 @@ export async function GET(req: Request, ctx: { params: Promise<{ provider: strin
    */
   if (!sourceConnectable(source)) {
     return NextResponse.redirect(new URL("/integrations?error=oauth_unavailable", req.url));
+  }
+  // At the plan's app limit, say so BEFORE the provider's consent screen — not
+  // after someone has granted access we then refuse to use.
+  try {
+    await assertCanAddApp(getDb(), org.orgId);
+  } catch (e) {
+    if (e instanceof PlanLimitError) return NextResponse.redirect(new URL(upgradeHref("apps"), req.url));
+    throw e;
   }
   const { state, nonce } = createOAuthState({ provider: provider.key, source });
   const res = NextResponse.redirect(buildAuthUrl(provider, { source, state }));

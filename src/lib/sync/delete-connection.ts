@@ -5,6 +5,7 @@ import {
   deadLetter,
   deliveryLog,
   events,
+  planPauses,
   rawEvents,
   sourceStreams,
   streamFields,
@@ -297,6 +298,8 @@ export async function deleteConnectionData(
   rows.dead_letter = await count(db.delete(deadLetter).where(eq(deadLetter.connectionId, id)).returning({ id: deadLetter.id }));
   rows.stream_fields = await count(db.delete(streamFields).where(eq(streamFields.connectionId, id)).returning({ id: streamFields.id }));
   rows.backfill_jobs = await count(db.delete(backfillJobs).where(eq(backfillJobs.connectionId, id)).returning({ id: backfillJobs.id }));
+  // The foreign key would cascade this too; named anyway so the count says so.
+  rows.plan_pauses = await count(db.delete(planPauses).where(eq(planPauses.connectionId, id)).returning({ id: planPauses.connectionId }));
 
   rows.connections = await count(
     db.delete(connections).where(and(eq(connections.id, id), eq(connections.orgId, orgId))).returning({ id: connections.id }),

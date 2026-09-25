@@ -9,6 +9,7 @@ import { exchangeCode } from "@/lib/oauth/flow";
 import { createConnection } from "@/lib/connections";
 import { CapError } from "@/lib/limits";
 import { parseOAuthState, isValidOAuthState, OAUTH_STATE_COOKIE } from "@/lib/oauth-state";
+import { PlanLimitError, upgradeHref } from "@/lib/billing/limits";
 
 export const runtime = "nodejs";
 
@@ -61,7 +62,12 @@ export async function GET(req: Request, ctx: { params: Promise<{ provider: strin
     });
     return clearStateCookie(NextResponse.redirect(new URL(`/connections/${conn.id}`, req.url)));
   } catch (err) {
-    const dest = err instanceof CapError ? "/integrations?error=connection_limit" : "/integrations?error=oauth_exchange";
+    const dest =
+      err instanceof CapError
+        ? "/integrations?error=connection_limit"
+        : err instanceof PlanLimitError
+          ? upgradeHref("apps")
+          : "/integrations?error=oauth_exchange";
     return clearStateCookie(NextResponse.redirect(new URL(dest, req.url)));
   }
 }

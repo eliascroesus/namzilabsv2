@@ -12,6 +12,7 @@ import { requireOrg } from "@/lib/auth";
 import { invitationBelongsToOrg } from "@/lib/org-invites";
 import { PERMISSIONS, type RankRow, canManageRanks } from "@/lib/permissions";
 import { emailDomain, pseudonym, recordAudit } from "@/lib/audit";
+import { PlanLimitError, assertCanInvite, upgradeHref } from "@/lib/billing/limits";
 
 /**
  * Team invitations, riding entirely on WorkOS: `sendInvitation` sends the
@@ -50,6 +51,13 @@ export async function inviteMemberAction(formData: FormData): Promise<void> {
   if (!(await canManageRanks(getDb(), ctx))) redirect("/dashboard/settings?invite_error=Your role doesn't allow inviting members.");
   const parsed = emailSchema.safeParse(formData.get("email"));
   if (!parsed.success) redirect("/dashboard/settings?invite_error=That doesn't look like an email address.");
+  // A seat is held from the moment an invitation is sent — see countMembers.
+  try {
+    await assertCanInvite(getDb(), orgId);
+  } catch (e) {
+    if (e instanceof PlanLimitError) redirect(upgradeHref("members"));
+    throw e;
+  }
 
   try {
     await getWorkOS().userManagement.sendInvitation({

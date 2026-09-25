@@ -20,6 +20,7 @@ import {
   templateTag,
   updateTemplate,
 } from "@/lib/templates/store";
+import { PlanLimitError, assertFeature, upgradeHref } from "@/lib/billing/limits";
 
 /**
  * SHARING A WORKSPACE'S STRUCTURE — the four acts on the Settings page.
@@ -78,6 +79,13 @@ async function authorName(ctx: Awaited<ReturnType<typeof requireOrg>>): Promise<
 export async function createTemplateAction(fd: FormData): Promise<void> {
   const ctx = await requireOrg();
   await mustManage(ctx);
+  // Sharing templates is part of every paid plan; nothing changes with billing off.
+  try {
+    await assertFeature(getDb(), ctx.orgId, "shareTemplates");
+  } catch (e) {
+    if (e instanceof PlanLimitError) redirect(upgradeHref("shareTemplates"));
+    throw e;
+  }
   const name = nameSchema.safeParse(fd.get("name"));
   if (!name.success) refuse("name");
   const description = descriptionSchema.safeParse(fd.get("description") ?? "");
@@ -124,6 +132,13 @@ export async function createTemplateAction(fd: FormData): Promise<void> {
 export async function updateTemplateAction(fd: FormData): Promise<void> {
   const ctx = await requireOrg();
   await mustManage(ctx);
+  // Sharing templates is part of every paid plan; nothing changes with billing off.
+  try {
+    await assertFeature(getDb(), ctx.orgId, "shareTemplates");
+  } catch (e) {
+    if (e instanceof PlanLimitError) redirect(upgradeHref("shareTemplates"));
+    throw e;
+  }
   const id = idSchema.safeParse(fd.get("id"));
   if (!id.success) refuse("gone");
   const name = nameSchema.safeParse(fd.get("name"));

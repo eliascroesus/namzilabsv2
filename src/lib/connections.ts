@@ -28,6 +28,7 @@ import { claimCalls, isPaused } from "@/lib/provider-gateway/budget";
 import { pollOperation } from "@/lib/provider-gateway/operations";
 import { formatTime } from "@/lib/format";
 import { wakeSweeper } from "@/lib/sweep/wake";
+import { assertCanAddApp } from "@/lib/billing/limits";
 
 export type Connection = typeof connections.$inferSelect;
 
@@ -109,6 +110,9 @@ export async function createConnection(input: CreateConnectionInput): Promise<Co
     .where(eq(connections.orgId, input.orgId));
   const cap = connectionCap();
   if (Number(existing) >= cap) throw new CapError("connections", cap);
+  // The PLAN's app limit, in the same single writer for the same reason —
+  // every connect path is covered. A no-op while billing is off.
+  await assertCanAddApp(db, input.orgId);
 
   /**
    * C21 — a pasted webhook signing secret (Whop's optional `webhookSecret`

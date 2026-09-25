@@ -24,6 +24,7 @@ import { CapError } from "@/lib/limits";
 import { replayRawEvent } from "@/ingestion/pipeline";
 import { setEventTime, type EventTimeChoice } from "@/lib/webhooks/event-time";
 import { recordAudit } from "@/lib/audit";
+import { PlanLimitError, upgradeHref } from "@/lib/billing/limits";
 
 /**
  * The rank gate, on every MUTATION in this file: connecting, removing, syncing
@@ -91,6 +92,7 @@ export async function connectApiKeyAction(formData: FormData): Promise<void> {
     // The cap is a friendly banner, not a stack trace — same surface as the
     // OAuth error codes (integrations/error-messages.ts).
     if (e instanceof CapError) redirect("/integrations?error=connection_limit");
+    if (e instanceof PlanLimitError) redirect(upgradeHref("apps"));
     throw e;
   }
 

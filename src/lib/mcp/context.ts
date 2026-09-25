@@ -6,6 +6,7 @@ import type { McpAuth } from "@/lib/mcp/auth";
 import { resolveWorkspace, assistantsEnabled } from "@/lib/mcp/workspace";
 import { checkRateLimit, recordCall, summarizeArgs } from "@/lib/mcp/audit";
 import { fail, ok, type ToolResult } from "@/lib/mcp/result";
+import { PlanLimitError, assertFeature } from "@/lib/billing/limits";
 
 export type McpCallContext = {
   db: DB; orgId: string; userId: string; role?: string; access: Access; clientId: string; bindingKey: string; workspaceName: string;
@@ -163,6 +164,12 @@ export function withToolContext<A>(tool: string, opts: ToolOptions, run: ToolRun
         if (!limit.allowed) return finish(orgId, fail(limit.reason));
 
         if (!(await assistantsEnabled(db, orgId))) return finish(orgId, fail("AI assistants are turned off for this workspace by its owner."));
+        try {
+          await assertFeature(db, orgId, "aiAssistant");
+        } catch (e) {
+          if (e instanceof PlanLimitError) return finish(orgId, fail("The AI assistant is part of the Scale plan. Ask the workspace owner to upgrade at namzilabs.co/pricing."));
+          throw e;
+        }
         const access = await effectiveAccess(db, { orgId, userId, role });
         for (const key of permissions) if (!access.can(key)) return finish(orgId, fail(deniedMessage(key)));
         ctx = { db, orgId, userId, role, access, clientId: auth.clientId, bindingKey: auth.extra.bindingKey, workspaceName: await getWorkspaceName(orgId) };

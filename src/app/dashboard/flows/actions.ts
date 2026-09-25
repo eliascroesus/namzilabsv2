@@ -27,6 +27,7 @@ import { connectionImportStatus, type ImportStatus } from "@/lib/sync/import-sta
 import type { SourceOption } from "@/connectors/types";
 import { inngest } from "@/inngest/client";
 import { wakeSweeper } from "@/lib/sweep/wake";
+import { PlanLimitError, assertCanPublish } from "@/lib/billing/limits";
 
 /**
  * The rank gate, on MUTATIONS only: viewing is not editing, so the list and
@@ -494,10 +495,32 @@ export async function refreshAllFlowsAction(): Promise<void> {
 
 export async function publishFlowAction(
   id: string,
-): Promise<{ ok: true; version: number; warning?: string } | { ok: false; error: string; issues?: Array<{ nodeId?: string; message: string }> }> {
+): Promise<
+  | { ok: true; version: number; warning?: string }
+  | { ok: false; error: string; issues?: Array<{ nodeId?: string; message: string }>; upgrade?: "metrics" }
+> {
   const ctx = await requireOrg();
   const { orgId } = ctx;
   if (await blockedFromEditingFlows(ctx, id)) return { ok: false, error: RANK_BLOCKS_FLOWS };
+
+  /**
+   * THE PLAN'S METRIC LIMIT, before anything is written. A flow shows one
+   * number per enabled metric; an older flow built on Output nodes shows one
+   * per Output node. Its own current numbers are left out of the count, so
+   * republishing an unchanged flow at the limit always works.
+   */
+  const draft = await getFlow(getDb(), orgId, id);
+  if (draft) {
+    const graph = parseGraph(draft.draftGraph);
+    const enabled = graph.metrics.filter((m) => m.enabled).length;
+    const metricsInFlow = enabled > 0 ? enabled : graph.nodes.filter((n) => n.type === "output").length;
+    try {
+      await assertCanPublish(getDb(), orgId, id, metricsInFlow);
+    } catch (e) {
+      if (e instanceof PlanLimitError) return { ok: false, error: e.message, upgrade: "metrics" };
+      throw e;
+    }
+  }
 
   // Publishing (validate + immutable version snapshot) is the only step that can
   // report failure. A validation error here means the flow was NOT published.
