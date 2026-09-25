@@ -1,4 +1,4 @@
-import { BoardLayout } from "@/app/dashboard/board-layout";
+import { BoardHarness } from "./harness";
 import { BoardControls, TileArea, ViewStrip, ViewTitle } from "@/app/dashboard/board-controls";
 import Link from "next/link";
 import { PageContainer, PageHeader } from "@/components/ui/page";
@@ -134,7 +134,17 @@ export default async function BoardLab({ searchParams }: { searchParams: Promise
               screenshotted like everything else on /design.
               `tabs={viewStrip}` for the same reason as the dashboard: the strip
               lives in the header's own zone now, not inside `BoardLayout`. */}
-          <PageHeader tabs={viewStrip} title={<ViewTitle viewId="v-demo" name="Dashboard" canEdit />} />
+          {/* THE "NEW GROUP" SLOT, as the dashboard's header carries it. The
+              button portals into `#board-new-group` (see board-layout.tsx), so
+              a page without the slot renders no button at all — which is how
+              this fixture lost it when the button moved into the header, and
+              why `pnpm board:drag`'s tab-row check went red with every class
+              in the product still correct. */}
+          <PageHeader
+            tabs={viewStrip}
+            title={<ViewTitle viewId="v-demo" name="Dashboard" canEdit />}
+            actions={<div id="board-new-group" className="flex items-center empty:hidden" />}
+          />
           {/* THE RANGE PRESS, AS A PLAIN LINK — the second half of the repro
               above. Pressing one is a client-side navigation on this same
               route, which is what the product's range pill does: the page
@@ -160,7 +170,9 @@ export default async function BoardLab({ searchParams }: { searchParams: Promise
             <FlowNameField name="Untitled flow" />
           </div>
           <TileArea count={TILES.length} columns={GROUPS.length}>
-            <BoardLayout tiles={TILES} groups={GROUPS} placements={PLACEMENTS} canEdit viewId={null} />
+            {/* Through the harness: its writes fail in place instead of
+                redirecting a session-less page to sign-in — see harness.tsx. */}
+            <BoardHarness tiles={TILES} groups={GROUPS} placements={PLACEMENTS} />
           </TileArea>
         </BoardControls>
       </PageContainer>

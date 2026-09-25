@@ -117,7 +117,15 @@ console.log("\nthe write fails, and the board says so instead of lying");
 console.log("\na metric reorders inside its own group");
 {
   await page.reload({ waitUntil: "networkidle" });
-  const { after } = await drag(g1[g1.length - 1], "g1", 30);
+  /**
+   * 8px, NOT 30: THE TOP QUARTER OF THE FIRST CARD. A slot changes hands only
+   * once the pointer is 26% of a card past the neighbour's midpoint
+   * (`SWITCH_DEADBAND` in board-drag.ts — asked for, because the plain midpoint
+   * rule claimed a drop far too early). With today's card that puts the first
+   * slot's edge right at ~30px, so 30 was a coin toss rather than a test of
+   * reordering; the top edge is where a person reaching for "first" aims.
+   */
+  const { after } = await drag(g1[g1.length - 1], "g1", 8);
   check(after.g1[0] === g1[g1.length - 1], "the last one can be dragged to the top", JSON.stringify(after.g1));
 }
 

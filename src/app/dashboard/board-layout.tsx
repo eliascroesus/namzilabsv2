@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { PortalSlot } from "@/components/portal-slot";
 
 /**
@@ -30,6 +30,46 @@ import {
   setTilePlacementsAction,
 } from "./board-actions";
 import { BoardColumn } from "./board-column";
+
+/**
+ * THE WRITES, AS A SEAM — `CustomBoard`'s `CanvasActions`, for the groups board.
+ *
+ * The dashboard never passes this; the defaults are the real server actions.
+ * It exists for `/design/board`, which has no session: there, a real write
+ * does not FAIL, it REDIRECTS — `requireOrg()` sends the browser to WorkOS
+ * sign-in — so `pnpm board:drag` was racing a page navigation after every drop
+ * and reading a board that had already gone. The fixture now injects writes
+ * that fail in place, which is also the only way that check can prove the
+ * failure path it exists to prove: the move is put back, and the board says so.
+ */
+export type BoardActions = {
+  place: typeof setTilePlacementsAction;
+  createGroup: typeof createGroupAction;
+  renameGroup: typeof renameGroupAction;
+  noteGroup: typeof setGroupNoteAction;
+  recolourGroup: typeof setGroupColorAction;
+  deleteGroup: typeof deleteGroupAction;
+  sortGroup: typeof setGroupSortAction;
+  moveGroups: typeof setGroupPositionsAction;
+};
+
+/*
+ * EACH DEFAULT DEFERS TO ITS ACTION AT CALL TIME, not at import. Referencing
+ * all eight while this module loads would make every partial mock of
+ * `board-actions` in the suite a load-time failure over an action its test
+ * never calls — the board touched each one only when it was used, and still
+ * does.
+ */
+const SERVER_ACTIONS: BoardActions = {
+  place: (...a) => setTilePlacementsAction(...a),
+  createGroup: (...a) => createGroupAction(...a),
+  renameGroup: (...a) => renameGroupAction(...a),
+  noteGroup: (...a) => setGroupNoteAction(...a),
+  recolourGroup: (...a) => setGroupColorAction(...a),
+  deleteGroup: (...a) => deleteGroupAction(...a),
+  sortGroup: (...a) => setGroupSortAction(...a),
+  moveGroups: (...a) => setGroupPositionsAction(...a),
+};
 import { DropGap, TileSlot } from "./board-tile-menu";
 import { ACCEPTS_ATTR, AXIS_ATTR, COLUMNS_LANE, LANE_ATTR, SCROLLER_ATTR, UNGROUPED, useBoardDrag } from "./board-drag";
 import { COLUMN_W, LANE_GAP, SCROLLER_BLEED } from "./board-shape";
@@ -72,6 +112,7 @@ export function BoardLayout({
   canEdit,
   viewId,
   connectedApps,
+  actions: actionOverrides,
 }: {
   tiles: BoardTile[];
   groups: BoardGroup[];
@@ -79,6 +120,8 @@ export function BoardLayout({
   canEdit: boolean;
   /** Connected app slugs, read only when a column's note names an app — see `CustomBoard`. */
   connectedApps?: string[];
+  /** Test seam only — see `BoardActions`. The dashboard leaves it unset. */
+  actions?: Partial<BoardActions>;
   /**
    * Which view this board IS. `null` is the default one.
    *
@@ -118,6 +161,7 @@ export function BoardLayout({
    * missing `.catch` comes back.
    */
   const settle = useSettle(setToast);
+  const act = useMemo<BoardActions>(() => ({ ...SERVER_ACTIONS, ...actionOverrides }), [actionOverrides]);
   const [busy, setBusy] = useState(false);
 
   const board = arrangeBoard(tiles, groups, placements);
@@ -165,23 +209,23 @@ export function BoardLayout({
       const undoKeys = new Set(next.map((n) => n.tileKey));
       applyPlacements(next);
       // Key-scoped revert: put back only what this patch touched.
-      settle(setTilePlacementsAction(next, viewId), () =>
+      settle(act.place(next, viewId), () =>
         setPlacements((prev) => [...prev.filter((p) => !undoKeys.has(p.tileKey)), ...undo]),
       );
     },
-    [board, placements, applyPlacements, settle, viewId],
+    [board, placements, applyPlacements, settle, viewId, act],
   );
 
   const addGroup = useCallback(async () => {
     setBusy(true);
     // NOT optimistic: the id is the server's to mint, and a column that appears
     // with a placeholder id cannot be dropped into until it is replaced.
-    const r = await createGroupAction("New group", viewId).catch(() => null);
+    const r = await act.createGroup("New group", viewId).catch(() => null);
     setBusy(false);
     if (!r) return setToast("Couldn't add a group — the page may be out of date. Reload and try again.");
     if (!r.ok) return setToast(r.error);
     setGroups((prev) => [...prev, r.group]);
-  }, [viewId]);
+  }, [viewId, act]);
 
   const renameGroup = useCallback((id: string, name: string) => {
     let undo: string | undefined;
@@ -189,10 +233,10 @@ export function BoardLayout({
       undo = prev.find((g) => g.id === id)?.name;
       return prev.map((g) => (g.id === id ? { ...g, name } : g));
     });
-    settle(renameGroupAction(id, name), () =>
+    settle(act.renameGroup(id, name), () =>
       setGroups((prev) => prev.map((g) => (g.id === id && undo != null ? { ...g, name: undo } : g))),
     );
-  }, [settle]);
+  }, [settle, act]);
 
   /* Optimistic like a rename, and cleared by an empty string like one. */
   const noteGroup = useCallback((id: string, note: string) => {
@@ -201,10 +245,10 @@ export function BoardLayout({
       undo = prev.find((g) => g.id === id)?.note ?? null;
       return prev.map((g) => (g.id === id ? { ...g, note: note || null } : g));
     });
-    settle(setGroupNoteAction(id, note), () =>
+    settle(act.noteGroup(id, note), () =>
       setGroups((prev) => prev.map((g) => (g.id === id ? { ...g, note: undo ?? null } : g))),
     );
-  }, [settle]);
+  }, [settle, act]);
 
   const recolourGroup = useCallback((id: string, color: string) => {
     let undo: string | undefined;
@@ -212,10 +256,10 @@ export function BoardLayout({
       undo = prev.find((g) => g.id === id)?.color;
       return prev.map((g) => (g.id === id ? { ...g, color } : g));
     });
-    settle(setGroupColorAction(id, color), () =>
+    settle(act.recolourGroup(id, color), () =>
       setGroups((prev) => prev.map((g) => (g.id === id && undo != null ? { ...g, color: undo } : g))),
     );
-  }, [settle]);
+  }, [settle, act]);
 
   /**
    * DELETING IS NOT OPTIMISTIC, and that is the RanksPanel rule applied to the
@@ -229,14 +273,14 @@ export function BoardLayout({
   const removeGroup = useCallback(
     async (id: string) => {
       setBusy(true);
-      const r = await deleteGroupAction(id, viewId).catch(() => null);
+      const r = await act.deleteGroup(id, viewId).catch(() => null);
       setBusy(false);
       if (!r) return setToast("Couldn't delete that group — the page may be out of date. Reload and try again.");
       if (!r.ok) return setToast(r.error);
       applyPlacements(r.moved.map((m) => ({ tileKey: m.tileKey, groupId: null, pos: m.pos })));
       setGroups((prev) => prev.filter((g) => g.id !== id));
     },
-    [applyPlacements, viewId],
+    [applyPlacements, viewId, act],
   );
 
   const setSort = useCallback((id: string, sortKey: GroupSortKey) => {
@@ -245,10 +289,10 @@ export function BoardLayout({
       undo = prev.find((g) => g.id === id)?.sortKey;
       return prev.map((g) => (g.id === id ? { ...g, sortKey } : g));
     });
-    settle(setGroupSortAction(id, sortKey), () =>
+    settle(act.sortGroup(id, sortKey), () =>
       setGroups((prev) => prev.map((g) => (g.id === id && undo != null ? { ...g, sortKey: undo } : g))),
     );
-  }, [settle]);
+  }, [settle, act]);
 
   /**
    * MOVE A COLUMN TO A POSITION IN THE ROW.
@@ -273,11 +317,11 @@ export function BoardLayout({
         undo = prev.find((g) => g.id === id)?.pos;
         return prev.map((g) => (g.id === id ? { ...g, pos } : g));
       });
-      settle(setGroupPositionsAction([{ id, pos }]), () =>
+      settle(act.moveGroups([{ id, pos }]), () =>
         setGroups((prev) => prev.map((g) => (g.id === id && undo != null ? { ...g, pos: undo } : g))),
       );
     },
-    [groups, settle],
+    [groups, settle, act],
   );
 
   const laneNames = groups.map((g) => ({ id: g.id, name: g.name }));

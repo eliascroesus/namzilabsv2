@@ -66,8 +66,22 @@ export function StartButtons({
       </Link>
       {/* Straight to Google rather than to the hosted sign-in page — see
           `src/app/auth/google/route.ts`, which swaps one query parameter on the
-          SDK's own authorize URL to get there. */}
-      <Link className={`${styles.btnPaper} ${tone === "dark" ? styles.btnPaperOnDark : ""}`} href="/auth/google">
+          SDK's own authorize URL to get there.
+
+          `prefetch={false}` IS LOAD-BEARING. In production `<Link>` fetches
+          every link that scrolls into view, and this one is not a page: the
+          route handler STARTS AN OAUTH FLOW — mints a PKCE verifier cookie and
+          redirects to WorkOS. So every visitor who merely saw this button began
+          a sign-in in the background, and the browser logged a blocked
+          cross-origin redirect on every landing view (`pnpm landing` against
+          production failed on exactly that). It could not show up locally: the
+          dev server never prefetches. The sign-up card's own Google button is
+          a plain `<a>`, which never did this. */}
+      <Link
+        className={`${styles.btnPaper} ${tone === "dark" ? styles.btnPaperOnDark : ""}`}
+        href="/auth/google"
+        prefetch={false}
+      >
         <GoogleMark size={20} />
         Start free with Google
       </Link>

@@ -1,5 +1,6 @@
 import { logoColor, sourceStyle } from "@/components/flow/controls/source-style";
 import { SOURCE_LOGOS } from "@/connectors/logos";
+import { uploadedIcon } from "@/connectors/app-icons";
 
 /**
  * A CONNECTOR'S REAL MARK, DRAWN ONCE.
@@ -48,9 +49,33 @@ export function BrandLogo({
   size?: number;
   className?: string;
 }) {
+  const s = sourceStyle(source);
+  /**
+   * AN UPLOADED ICON WINS — a file in `public/app-icons/` (see
+   * `connectors/app-icons.ts`). It is a picture, not a path list, so it is
+   * drawn as one: fitted into the same square with `object-contain`, never
+   * recoloured, because whoever uploaded it chose exactly those pixels.
+   */
+  const uploaded = uploadedIcon(source);
+  if (uploaded) {
+    return (
+      // A plain <img>: a 14-56px icon from our own origin gains nothing from
+      // the image optimiser and would pay a server round trip for it.
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={uploaded}
+        width={size}
+        height={size}
+        alt={s.label}
+        title={s.label}
+        draggable={false}
+        className={`inline-block shrink-0 object-contain${className ? ` ${className}` : ""}`}
+        style={{ width: size, height: size }}
+      />
+    );
+  }
   const logo = source ? SOURCE_LOGOS[source] : undefined;
   if (!logo) return null;
-  const s = sourceStyle(source);
   /** Only ever reaches a `currentColor` path — see the note above. */
   const ink = logoColor(s.color);
   return (
@@ -72,4 +97,14 @@ export function BrandLogo({
       ))}
     </svg>
   );
+}
+
+/**
+ * DOES THIS APP DRAW A REAL LOGO — built in, or uploaded? The one question
+ * `SourceMark` and the flow builder's step icon ask before choosing between
+ * `BrandLogo` and their own lettered fallback, asked here so an upload reaches
+ * both without either knowing where icons are kept.
+ */
+export function hasBrandLogo(source: string | null | undefined): boolean {
+  return Boolean(source && (uploadedIcon(source) || SOURCE_LOGOS[source]));
 }

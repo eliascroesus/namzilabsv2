@@ -15,8 +15,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { sourceStyle } from "./controls/source-style";
-import { SOURCE_LOGOS } from "@/connectors/logos";
-import { BrandLogo } from "@/components/brand-logo";
+import { BrandLogo, hasBrandLogo } from "@/components/brand-logo";
 import { NODE_ACCENT, glyphInk, nodeAccent } from "./node-accent";
 
 /**
@@ -92,7 +91,7 @@ export function NodeIcon({ type, source, variant, size = 34 }: { type: string; s
   // failed image rather than a step.
   if (type === "app" && source) {
     const s = sourceStyle(source);
-    const logo = SOURCE_LOGOS[source];
+    const logo = hasBrandLogo(source);
     /**
      * A CONNECTED STEP WEARS ITS APP'S REAL LOGO, BARE — no tile, brand colour,
      * the full size the tile used to take.

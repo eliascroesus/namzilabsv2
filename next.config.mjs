@@ -1,3 +1,6 @@
+import { fileURLToPath } from "node:url";
+import { scanAppIcons } from "./scripts/lib/app-icons.mjs";
+
 /**
  * SECURITY HEADERS — the audit's one substantive finding, and it was that the
  * app sent none at all.
@@ -104,6 +107,14 @@ const headers = [
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  /**
+   * THE APP LOGOS DROPPED INTO `public/app-icons/`, listed at build time — see
+   * `scripts/lib/app-icons.mjs` for why the build does the listing, and
+   * `src/connectors/app-icons.ts` for how a file finds its app.
+   */
+  env: {
+    APP_ICONS: JSON.stringify(scanAppIcons(fileURLToPath(new URL("./public/app-icons", import.meta.url)))),
+  },
   // The dev-tools button defaults to bottom-left — the exact pixels where the
   // navigation rail keeps the account avatar, so in every dev session the
   // overlay sat on top of a real control and swallowed its clicks. Dev-only

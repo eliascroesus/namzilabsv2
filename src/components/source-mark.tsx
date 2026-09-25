@@ -1,6 +1,5 @@
 import { brandNeedsDarkInk, sourceStyle } from "@/components/flow/controls/source-style";
-import { BrandLogo } from "@/components/brand-logo";
-import { SOURCE_LOGOS } from "@/connectors/logos";
+import { BrandLogo, hasBrandLogo } from "@/components/brand-logo";
 
 /**
  * A connector's brand tile, at list scale.
@@ -53,7 +52,7 @@ export function SourceMark({
   className?: string;
 }) {
   const s = sourceStyle(source);
-  const logo = source ? SOURCE_LOGOS[source] : undefined;
+  const logo = hasBrandLogo(source);
   /**
    * A LOGO IS DRAWN BARE, IN THE BRAND'S OWN COLOUR. The tile is for letters.
    *

@@ -1,4 +1,4 @@
-import { BoardLayout } from "@/app/dashboard/board-layout";
+import { BoardHarness } from "../board/harness";
 import type { CanvasTile } from "@/app/dashboard/custom-board";
 import { TemplatePreview } from "@/components/templates/template-preview";
 import { PageContainer, SectionHeading } from "@/components/ui/page";
@@ -114,7 +114,7 @@ export default function TemplatesDesignPage() {
 
       <SectionHeading className="mt-12">What the student&rsquo;s columns receive</SectionHeading>
       <div data-design-template-columns className="mt-3">
-        <BoardLayout tiles={[]} groups={COLUMNS} placements={[]} canEdit viewId={null} connectedApps={["calendly"]} />
+        <BoardHarness tiles={[]} groups={COLUMNS} placements={[]} connectedApps={["calendly"]} />
       </div>
     </PageContainer>
   );

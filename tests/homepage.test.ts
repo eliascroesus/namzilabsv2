@@ -1,6 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 // Logged-out session. Crucially, the homepage must NOT call the PKCE URL
 // functions during render (that was the 500 cause) — it only reads `user`.
@@ -67,6 +69,20 @@ describe("homepage (logged out)", () => {
   it("offers the Google door as well as the email one", async () => {
     const html = renderToStaticMarkup(await Home());
     expect(html).toContain('href="/auth/google"');
+  });
+
+  /**
+   * AND THAT DOOR IS NEVER PREFETCHED. `/auth/google` starts an OAuth flow, so
+   * a production `<Link>` prefetching it began a sign-in for every visitor who
+   * merely scrolled past the button (see start-buttons.tsx). The rendered HTML
+   * cannot show a prefetch setting, so this reads the source — bounded to the
+   * one element, so a `prefetch={false}` elsewhere in the file cannot satisfy it.
+   */
+  it("never prefetches the route that starts a Google sign-in", () => {
+    const src = readFileSync(join(process.cwd(), "src/components/marketing/snap/start-buttons.tsx"), "utf8");
+    const link = src.match(/<Link\b[^>]*href="\/auth\/google"[^>]*>/s)?.[0] ?? "";
+    expect(link, "the Google <Link> was not found — this check would pass vacuously").not.toBe("");
+    expect(link).toContain("prefetch={false}");
   });
 
   /**
