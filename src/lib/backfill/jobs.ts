@@ -2,6 +2,7 @@ import { and, asc, eq, inArray, lt, lte, ne, or, sql } from "drizzle-orm";
 import { backfillJobs, connections, sourceStreams } from "@/db/schema";
 import type { DB } from "@/db/types";
 import type { ImportCoverage } from "@/connectors/types";
+import { wakeSweeper } from "@/lib/sweep/wake";
 
 /**
  * E.8 / Phase 6 — the bookkeeping half of the backfill lane.
@@ -132,6 +133,9 @@ export async function requestBackfill(
   // not why: it is the same unit of work, and reviving it keeps the checkpoint,
   // so the retry RESUMES where the failure stopped instead of re-fetching
   // everything that already landed.
+  // Both paths below create due work (a revived job or a new one). The wake
+  // lands when this request ends — after whichever write happens.
+  wakeSweeper();
   const revived = await db
     .update(backfillJobs)
     .set({ status: "queued", detail: null, finishedAt: null, updatedAt: new Date() })
@@ -232,6 +236,7 @@ export async function startJob(db: DB, jobId: string, now = new Date()): Promise
     .returning();
   const job = rows[0];
   if (!job) return null;
+  wakeSweeper();
 
   await db
     .update(sourceStreams)
@@ -335,6 +340,8 @@ export async function finishJob(
     .returning();
   const job = rows[0];
   if (!job) return null;
+  // A finished import stops being due; the gate should stop waking for it.
+  wakeSweeper();
 
   // Freshly selected AFTER the update above, so this job participates with
   // its terminal status and the set is complete evidence: `window_floor` has

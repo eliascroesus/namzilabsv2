@@ -7,6 +7,7 @@ import { normalizeDatesDeep } from "@/lib/normalize-dates";
 import { extractIdentifiers } from "@/lib/identity/normalize";
 import { recordFields } from "@/lib/schema-registry/registry";
 import { effectiveEventTimeKey, eventTimeLive, readEventTime } from "@/lib/webhooks/event-time";
+import { wakeSweeper } from "@/lib/sweep/wake";
 
 export type ProcessResult = {
   /** Rows that did not exist before. */
@@ -397,6 +398,8 @@ export async function replayRawEvent(db: DB, rawEventId: string, orgId?: string)
       .update(connections)
       .set({ status: "active", lastError: null, updatedAt: new Date() })
       .where(and(eq(connections.id, raw2.connectionId), eq(connections.status, "error")));
+    // Back in the sweep and due at once — the gate's cached answer predates it.
+    wakeSweeper();
   }
   return result;
 }

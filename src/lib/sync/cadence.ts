@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { connections } from "@/db/schema";
 import type { DB } from "@/db/types";
+import { wakeSweeper } from "@/lib/sweep/wake";
 
 /**
  * H.1/H.2 + F.5 — adaptive sweep cadence.
@@ -177,6 +178,9 @@ export async function applyCadence(
       updatedAt: now,
     })
     .where(eq(connections.id, connectionId));
+  // The next due moment just moved — later after a sweep, EARLIER when a
+  // manual sync lands on a backed-off connection. Either way the gate re-reads.
+  wakeSweeper();
 }
 
 /**
@@ -190,4 +194,6 @@ export async function promoteToBaseCadence(db: DB, connectionId: string, now = n
     .update(connections)
     .set({ nextSweepAt: now, consecutiveNoOpSweeps: 0, updatedAt: now })
     .where(eq(connections.id, connectionId));
+  // Due NOW — the whole point — so the sweep gate must not sleep through it.
+  wakeSweeper();
 }

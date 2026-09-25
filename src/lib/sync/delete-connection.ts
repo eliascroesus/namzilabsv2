@@ -18,6 +18,7 @@ import { getConnector } from "@/connectors/registry";
 import { getConnectionCredentials } from "@/lib/credentials";
 import { revokeOAuthGrant } from "@/lib/oauth/flow";
 import { oauthProviderFor } from "@/lib/oauth/providers";
+import { wakeSweeper } from "@/lib/sweep/wake";
 
 /**
  * REMOVING A CONNECTION AND EVERYTHING SYNCED FROM IT. Irreversible.
@@ -252,6 +253,8 @@ export async function deleteConnectionData(
       updatedAt: now,
     })
     .where(and(eq(connections.id, id), eq(connections.orgId, orgId)));
+  // Out of the sweep: the gate's cached answer no longer describes it.
+  wakeSweeper();
 
   /**
    * Tell the dashboards BEFORE the data goes.

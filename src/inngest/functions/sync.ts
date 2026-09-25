@@ -10,6 +10,8 @@ import { mcpEnabled } from "@/lib/mcp/env";
 import { getJob, runnableJobsByProvider } from "@/lib/backfill/jobs";
 import { scanInvariants } from "@/lib/health/invariants";
 import { scanWebhookEventTime } from "@/lib/webhooks/event-time";
+import { sweepGateOpen } from "@/lib/sweep/gate";
+import { wakeSweeper } from "@/lib/sweep/wake";
 
 /**
  * How many providers may have a slice in flight from one dispatch tick.
@@ -189,6 +191,9 @@ export const recomputeStaleFlows = inngest.createFunction(
 export const materializeStale = inngest.createFunction(
   { id: "materialize-stale", retries: 2, triggers: [{ cron: "*/10 * * * *" }] },
   async ({ step }) => {
+    // THE GATE FIRST — see `lib/sweep/gate.ts` and the same line in reconcile.ts.
+    if (!(await sweepGateOpen(step))) return { skipped: "nothing due", dispatched: 0, recomputed: 0, pending: 0 };
+
     /**
      * Backfill dispatch: one narrow read, and an event per runnable job. It
      * was its own five-minute function; the only thing that changed is the
@@ -212,7 +217,13 @@ export const materializeStale = inngest.createFunction(
 
     // The backstop, last: anything the event path missed still recomputes —
     // fleet-wide, longest-stale first, under the pass's own time budget.
-    const swept = await step.run("materialize-stale", () => materializeStaleAll(getDb()));
+    const swept = await step.run("materialize-stale", async () => {
+      const r = await materializeStaleAll(getDb());
+      // What this tick did moved the next due moment; the next tick must
+      // recompute it rather than trust the gate's cached answer.
+      wakeSweeper();
+      return r;
+    });
     return { dispatched: dispatched.length, ...swept };
   },
 );

@@ -37,18 +37,41 @@ import { resultsEtag } from "@/lib/flow/results-etag";
  * The rungs, and how long without a human it takes to fall to each.
  *
  * 12s is the original cadence and stays the active one. The steps are wide
- * (5×, then 5×) rather than gradual: the point is to fall off a cliff once
- * nobody is there, and a gentle ramp would spend most of its time in the middle
- * still holding the database open.
+ * rather than gradual: the point is to fall off a cliff once nobody is there,
+ * and a gentle ramp would spend most of its time in the middle still holding
+ * the database open.
+ *
+ * THE LAST RUNG IS 15 MINUTES, AND IT WAS 5 — which was the bug. Neon
+ * suspends after five minutes WITHOUT a query, so a check every five minutes
+ * lands just as the window closes and the endpoint never sleeps: an idle tab on
+ * a second monitor held production awake around the clock, which on 25 Sep
+ * 2026 was a visible part of the bill. Fifteen leaves the compute ten minutes
+ * asleep between checks, and nobody is looking at the tab by definition — the
+ * rung is reached only after ten minutes with no pointer, key, scroll or focus.
  */
 const RUNGS = [
   { after: 0, every: 12_000 },
   { after: 2 * 60_000, every: 60_000 },
-  { after: 10 * 60_000, every: 5 * 60_000 },
+  { after: 10 * 60_000, every: 15 * 60_000 },
 ] as const;
 
-/** Pointer/keys/scroll: enough to notice a person, cheap enough to ignore. */
-const ACTIVITY = ["pointerdown", "keydown", "wheel", "touchstart"] as const;
+/**
+ * AN HOUR WITH NOBODY THERE AND IT STOPS ASKING. A wall screen still gets a
+ * check every fifteen minutes for its first hour; after that the chain simply
+ * does not reschedule, and the first sign of a person — any activity below, or
+ * the tab coming back — restarts it WITH an immediate check, so the numbers are
+ * current the moment somebody is actually there to read them.
+ */
+export const STOP_AFTER_MS = 60 * 60_000;
+
+/**
+ * Pointer/keys/scroll: enough to notice a person, cheap enough to ignore.
+ * `pointermove` joined on 25 Sep 2026 — somebody reading the board with a hand
+ * on the mouse is present, and without it they fell to the slow rungs for
+ * doing nothing but look. The handler only stamps a clock, so a stream of
+ * moves costs a `Date.now()` each.
+ */
+const ACTIVITY = ["pointerdown", "pointermove", "keydown", "wheel", "touchstart"] as const;
 
 export function FreshnessPoller({
   intervalMs = RUNGS[0].every,
@@ -108,6 +131,12 @@ export function FreshnessPoller({
         }
       }
       if (stop) return;
+      // Idle past the last hour: let the chain end. `onActivity`/`onVisible`
+      // start it again (and check at once) — see STOP_AFTER_MS.
+      if (Date.now() - lastActivity >= STOP_AFTER_MS) {
+        timer = null;
+        return;
+      }
       timer = setTimeout(tick, delay());
     };
     timer = setTimeout(tick, delay());
@@ -138,7 +167,8 @@ export function FreshnessPoller({
      * keystroke would be a far worse version of the problem this exists to fix.
      * The immediate check happens only when we had actually backed off, which is
      * the case where the reader is owed one: they have just come back to a page
-     * whose numbers may be up to five minutes old.
+     * whose numbers may be up to fifteen minutes old, or to a chain
+     * that had stopped after an hour and is started again here.
      */
     const onActivity = () => {
       const wasIdle = Date.now() - lastActivity >= RUNGS[1].after;

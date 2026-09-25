@@ -18,6 +18,7 @@ import {
 import type { DB } from "@/db/types";
 import { streamRefsOfGraph } from "@/lib/sync/streams";
 import { parseGraph } from "@/lib/flow/types";
+import { wakeSweeper } from "@/lib/sweep/wake";
 
 /**
  * Wipe synced and computed data so the product can be exercised from a clean
@@ -185,6 +186,8 @@ async function rearmConnections(db: DB): Promise<number> {
       updatedAt: new Date(),
     })
     .returning({ id: connections.id });
+  // A re-armed connection is due at once; tell the sweep gate.
+  wakeSweeper();
   return rows.length;
 }
 

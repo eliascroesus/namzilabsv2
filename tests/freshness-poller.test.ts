@@ -152,3 +152,77 @@ describe("FreshnessPoller seeded from the server render (C16)", () => {
     cleanup();
   });
 });
+
+/**
+ * THE CADENCE, AGAINST NEON'S CLOCK.
+ *
+ * Neon suspends after five minutes without a query, and on 25 Sep 2026 the
+ * idle rung was exactly five minutes — so an open tab nobody was looking at
+ * held production awake around the clock. These pin the three properties that
+ * fix it without costing a person anything: an idle tab never checks inside
+ * the five-minute window, an hour of nobody stops the checks, and the first
+ * sign of a person checks AT ONCE and goes back to twelve seconds.
+ */
+describe("FreshnessPoller's idle cadence", () => {
+  const listeners = new Map<string, () => void>();
+  let fetches: number[] = [];
+
+  beforeEach(() => {
+    listeners.clear();
+    fetches = [];
+    vi.stubGlobal("window", {
+      addEventListener: (name: string, fn: () => void) => listeners.set(name, fn),
+      removeEventListener: () => {},
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        fetches.push(Date.now());
+        return response(304, "tag");
+      }),
+    );
+  });
+
+  /** Moves the clock second by second, letting each poll finish before the next. */
+  async function advance(ms: number): Promise<void> {
+    for (let t = 0; t < ms; t += 1000) {
+      vi.advanceTimersByTime(1000);
+      for (let i = 0; i < 5; i++) await Promise.resolve();
+    }
+  }
+
+  const gaps = () => fetches.slice(1).map((t, i) => t - fetches[i]);
+
+  it("checks every 15 minutes once idle — never inside Neon's 5-minute window", async () => {
+    const cleanup = mount({ initialVersion: "v1" });
+    await advance(55 * 60_000);
+    const idleGaps = gaps().filter((_, i) => fetches[i + 1] - fetches[0] > 12 * 60_000);
+    expect(idleGaps.length, "no checks happened after the tab went idle — this would pass vacuously").toBeGreaterThan(0);
+    for (const gap of idleGaps) expect(gap).toBeGreaterThan(5 * 60_000);
+    expect(idleGaps.every((gap) => gap === 15 * 60_000)).toBe(true);
+    cleanup();
+  });
+
+  it("stops checking after an hour with nobody there", async () => {
+    const cleanup = mount({ initialVersion: "v1" });
+    await advance(70 * 60_000);
+    const after = fetches.length;
+    await advance(3 * 60 * 60_000);
+    expect(fetches.length).toBe(after);
+    cleanup();
+  });
+
+  it("checks at once when somebody comes back — even just moving the mouse — and speeds up again", async () => {
+    const cleanup = mount({ initialVersion: "v1" });
+    await advance(90 * 60_000);
+    const before = fetches.length;
+    expect(listeners.has("pointermove")).toBe(true);
+    listeners.get("pointermove")!();
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+    expect(fetches.length).toBe(before + 1);
+    await advance(60_000);
+    // Back on the 12-second rung: five more checks in the next minute.
+    expect(fetches.length - (before + 1)).toBe(5);
+    cleanup();
+  });
+});

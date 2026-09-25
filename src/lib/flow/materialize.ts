@@ -17,6 +17,7 @@ import { parseGraph, seedMetricFormat, seedMetricFacts, type TileSpec } from "./
 import { resolveRange, isForwardRange, parseCustomRange, MATERIALIZED_RANGES } from "@/lib/metrics/range";
 import { calendarDayRanges } from "@/lib/metrics/calendar";
 import { streamRefsOfGraph } from "@/lib/sync/streams";
+import { wakeSweeper } from "@/lib/sweep/wake";
 
 /**
  * Whether the graph carries a window that MOVES WITH THE CLOCK — a Filter's
@@ -269,6 +270,9 @@ export async function materializeFlow(
 ): Promise<{ ok: boolean; error?: string }> {
   const published = await getPublishedVersion(db, orgId, flowId);
   if (!published) return { ok: false, error: "Flow is not published." };
+  // Every path below writes this flow's rows — fresh, error or dropped — and
+  // each moves the sweep's next due moment. The wake lands when the request ends.
+  wakeSweeper();
   const { version, graph } = published;
 
   try {
@@ -645,6 +649,7 @@ export async function markStaleForSource(
     });
     if (uses) {
       await db.update(flowResults).set({ status: "stale" }).where(eq(flowResults.flowId, f.flowId));
+      wakeSweeper();
       affected.push(f.flowId);
     }
   }
@@ -1024,7 +1029,7 @@ const MATERIALIZE_BUDGET_MS = 45_000;
  * backstop alone bounds a permanently broken flow to four recomputes a day —
  * enough to self-heal, not enough to hammer a known-broken flow every pass.
  */
-const RESULT_MAX_AGE_MS = 6 * 60 * 60 * 1000;
+export const RESULT_MAX_AGE_MS = 6 * 60 * 60 * 1000;
 
 export async function expireAgedResults(db: DB, maxAgeMs = RESULT_MAX_AGE_MS, orgId?: string): Promise<number> {
   const cutoff = new Date(Date.now() - maxAgeMs);
@@ -1075,6 +1080,7 @@ export async function expireAgedResults(db: DB, maxAgeMs = RESULT_MAX_AGE_MS, or
     // must not write rows belonging to every other tenant.
     .where(orgId ? and(due, eq(flowResults.orgId, orgId)) : due)
     .returning({ flowId: flowResults.flowId });
+  if (rows.length > 0) wakeSweeper();
   return rows.length;
 }
 
@@ -1132,4 +1138,5 @@ async function upsertResult(
       target: [flowResults.flowId, flowResults.outputNodeId],
       set: { version, tile: tile as unknown as Record<string, unknown>, status, error, provenance: provenance ?? null, computedAt: now },
     });
+  wakeSweeper();
 }

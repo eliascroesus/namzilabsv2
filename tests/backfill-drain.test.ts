@@ -190,7 +190,11 @@ describe("the dashboard poller stops holding the database open for nobody", () =
     // it holds the endpoint awake indefinitely.
     expect(src).toMatch(/const RUNGS = \[/);
     expect(src).toMatch(/after: 2 \* 60_000, every: 60_000/);
-    expect(src).toMatch(/after: 10 \* 60_000, every: 5 \* 60_000/);
+    // Fifteen, not five: Neon sleeps after five quiet minutes, so a check every
+    // five landed just as it dozed off and it never slept at all.
+    expect(src).toMatch(/after: 10 \* 60_000, every: 15 \* 60_000/);
+    // And after an hour with nobody there, it stops asking altogether.
+    expect(src).toMatch(/export const STOP_AFTER_MS = 60 \* 60_000/);
   });
 
   it("resets to the fast rung on any sign of one, and checks immediately", () => {

@@ -27,6 +27,7 @@ import type { CanonicalEvent } from "@/connectors/types";
 import { claimCalls, isPaused } from "@/lib/provider-gateway/budget";
 import { pollOperation } from "@/lib/provider-gateway/operations";
 import { formatTime } from "@/lib/format";
+import { wakeSweeper } from "@/lib/sweep/wake";
 
 export type Connection = typeof connections.$inferSelect;
 
@@ -139,6 +140,8 @@ export async function createConnection(input: CreateConnectionInput): Promise<Co
       config: input.config ?? {},
     })
     .returning();
+  // A new connection is due on the next tick; the sweep gate must look again.
+  wakeSweeper();
 
   const connector = getConnector(input.source);
   const webhookUrl = webhookUrlFor(created.id);
@@ -303,6 +306,8 @@ export async function disableConnection(orgId: string, id: string): Promise<{ re
       updatedAt: now,
     })
     .where(and(eq(connections.id, id), eq(connections.orgId, orgId), ne(connections.status, "disabled")));
+  // Leaving the sweep moves its due time too; keep the gate's cached answer honest.
+  wakeSweeper();
   await db
     .update(sourceStreams)
     .set({ status: "disabled", updatedAt: now })
@@ -349,6 +354,11 @@ export async function reconnectConnection(orgId: string, id: string): Promise<{ 
   // nothing happened rather than un-tombstoning rows on a connection whose
   // disconnect is still in progress.
   if (rows.length === 0) return { restoredEvents: 0 };
+  // Re-armed, so due at once — and the jobs requeued below are too. Woken
+  // HERE, straight after the first write, so a later step that throws cannot
+  // leave the sweep gate asleep over a connection that is already live; the
+  // clear itself lands when this request ends.
+  wakeSweeper();
 
   await db
     .update(sourceStreams)

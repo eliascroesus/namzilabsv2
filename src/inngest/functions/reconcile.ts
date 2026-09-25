@@ -4,6 +4,8 @@ import { reconcileConnection, reconcileChanged, dueConnectionsForSweep } from "@
 import { expireAgedResults, markStaleForSource, materializeStaleAll } from "@/lib/flow/materialize";
 import { runnableJobForConnection } from "@/lib/backfill/jobs";
 import { runBackfillSlice } from "@/lib/backfill/run";
+import { sweepGateOpen } from "@/lib/sweep/gate";
+import { wakeSweeper } from "@/lib/sweep/wake";
 
 /**
  * C.4 — fan-out reconciliation.
@@ -28,6 +30,13 @@ export const reconcileAll = inngest.createFunction(
     triggers: [{ cron: "*/10 * * * *" }],
   },
   async ({ step }) => {
+    /*
+     * THE GATE FIRST — a cache read, not a query. Most ticks used to wake Neon
+     * only to learn that nothing was due; see `lib/sweep/gate.ts`. From the
+     * moment something IS due, this runs exactly as it always did.
+     */
+    if (!(await sweepGateOpen(step))) return { skipped: "nothing due", connections: 0, dispatched: 0 };
+
     const db = getDb();
     // Only ACTIVE connections are swept: "disabled" is the user's off switch,
     // and "error" means credentials/processing are broken — polling would burn
@@ -56,6 +65,9 @@ export const reconcileAll = inngest.createFunction(
         })),
       );
     }
+    // The gate said due: whatever it saw is being handled now, so its cached
+    // answer must not outlive this tick — the next one recomputes it.
+    wakeSweeper();
     return { connections: active.length, dispatched: active.length };
   },
 );

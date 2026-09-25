@@ -3,6 +3,7 @@ import { connections, usageLedger } from "@/db/schema";
 import type { DB } from "@/db/types";
 import { catalogEntry } from "@/connectors/catalog";
 import type { ObservedRateLimit } from "@/lib/http-client";
+import { wakeSweeper } from "@/lib/sweep/wake";
 
 /**
  * Workstream F (proactive) — provider-call governance.
@@ -533,6 +534,7 @@ export async function pauseConnection(
     .update(connections)
     .set({ pausedUntil: until, pausedReason: reason, updatedAt: now })
     .where(eq(connections.id, connectionId));
+  wakeSweeper();
   return until;
 }
 
@@ -565,6 +567,7 @@ export async function tripBreaker(
       updatedAt: now,
     })
     .where(eq(connections.id, connectionId));
+  wakeSweeper();
   return { pausedUntil: until, attempt };
 }
 
@@ -594,6 +597,8 @@ export async function recordSuccess(
       ...(clearError ? { lastError: null } : {}),
     })
     .where(eq(connections.id, connectionId));
+  // A lifted pause can make the connection due at once; tell the sweep gate.
+  wakeSweeper();
 }
 
 /**

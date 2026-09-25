@@ -26,6 +26,7 @@ import { distinctConnectionEventTypes } from "@/lib/metrics/compute";
 import { connectionImportStatus, type ImportStatus } from "@/lib/sync/import-status";
 import type { SourceOption } from "@/connectors/types";
 import { inngest } from "@/inngest/client";
+import { wakeSweeper } from "@/lib/sweep/wake";
 
 /**
  * The rank gate, on MUTATIONS only: viewing is not editing, so the list and
@@ -484,6 +485,7 @@ export async function refreshAllFlowsAction(): Promise<void> {
       .update(flowResults)
       .set({ status: "stale" })
       .where(and(eq(flowResults.orgId, orgId), inArray(flowResults.flowId, visibleIds)));
+    wakeSweeper();
   }
   await materializeStaleAll(db, { orgId });
   revalidatePath("/dashboard");
