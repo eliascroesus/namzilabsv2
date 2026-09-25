@@ -41,6 +41,19 @@ CONNECTOR_CATALOG.push({
   credentialFields: [],
 });
 registerConnector({ source: "acme", authType: "oauth2", verifySignature: () => false, poll: async () => ({ records: [], nextCursor: null }) });
+// The same provider behind an entry the owner has switched off.
+CONNECTOR_CATALOG.push({
+  source: "acme-off",
+  name: "Acme Off",
+  description: "t",
+  connect: "oauth",
+  oauthProvider: "acme",
+  off: "switched off for the test",
+  instant: false,
+  poll: true,
+  autoWebhook: false,
+  credentialFields: [],
+});
 
 const { GET: start } = await import("@/app/api/oauth/[provider]/start/route");
 const { GET: callback } = await import("@/app/api/oauth/[provider]/callback/route");
@@ -67,6 +80,18 @@ describe("/api/oauth/[provider]", () => {
     expect(loc.origin + loc.pathname).toBe("https://acme.test/authorize");
     expect(loc.searchParams.get("scope")).toBe("read");
     expect(res.headers.get("set-cookie")).toContain(OAUTH_STATE_COOKIE);
+  });
+  it("start refuses a source that cannot be connected, even by a typed URL", async () => {
+    // The card hides its button; the URL is the other door. Switched off, and
+    // configured-but-unregistered, both land back on the directory with a
+    // sentence — never on the provider's consent screen, never on a 500.
+    const off = await start(new Request("https://app.test/api/oauth/acme/start?source=acme-off"), params("acme"));
+    expect(off.status).toBe(307);
+    expect(off.headers.get("location")).toBe("https://app.test/integrations?error=oauth_unavailable");
+    expect(off.headers.get("set-cookie") ?? "").not.toContain(OAUTH_STATE_COOKIE);
+    process.env.ACME_CLIENT_ID = "";
+    const unconfigured = await start(new Request("https://app.test/api/oauth/acme/start?source=acme"), params("acme"));
+    expect(unconfigured.headers.get("location")).toBe("https://app.test/integrations?error=oauth_unavailable");
   });
   it("start refuses an unknown provider and a source that does not belong to the provider", async () => {
     const a = await start(new Request("https://app.test/api/oauth/nope/start?source=acme"), params("nope"));

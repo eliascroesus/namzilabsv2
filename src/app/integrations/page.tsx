@@ -7,7 +7,7 @@ import { AppShell } from "@/components/app-shell";
 import { integrationsErrorMessage } from "./error-messages";
 import { connectionRecordCounts, listConnections, webhookUrlFor } from "@/lib/connections";
 import { oauthProviderFor, sourceConnectable } from "@/lib/oauth/providers";
-import { CONNECTOR_CATALOG, catalogEntry, type ConnectorCatalogEntry } from "@/connectors/catalog";
+import { OFFERED_CONNECTORS, catalogEntry, type ConnectorCatalogEntry } from "@/connectors/catalog";
 import { AppDirectory, ConnectionRow, type DirectoryApp } from "./ConnectionRow";
 import { connectApiKeyAction } from "./actions";
 import { eventTimeNote, readEventTime } from "@/lib/webhooks/event-time";
@@ -116,7 +116,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
    * decides WHEN the dialog holding a form is on screen; it never has to know
    * what is inside one.
    */
-  const apps: DirectoryApp[] = CONNECTOR_CATALOG.map((entry) => {
+  const apps: DirectoryApp[] = OFFERED_CONNECTORS.map((entry) => {
     // Read once per entry: `sourceConnectable` reads process.env, which only
     // the server can do, and the answer decides whether this card gets an
     // action at all.

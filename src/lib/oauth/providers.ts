@@ -327,7 +327,8 @@ export function oauthProviderFor(source: string | null | undefined): OAuthProvid
  */
 export function sourceConnectable(source: string): boolean {
   const entry = catalogEntry(source);
-  if (!entry) return false;
+  // Switched off by the owner: never connectable, whatever the env holds.
+  if (!entry || entry.off) return false;
   for (const name of entry.requiresEnv ?? []) if (!process.env[name]) return false;
   const provider = oauthProviderFor(source);
   if (!provider) return true; // paste-a-key sources need nothing of ours

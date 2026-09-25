@@ -1,4 +1,4 @@
-import { CONNECTOR_CATALOG } from "@/connectors/catalog";
+import { OFFERED_CONNECTORS } from "@/connectors/catalog";
 
 /**
  * WHAT EACH SOURCE IS FOR, AND WHAT IT ACTUALLY GIVES YOU.
@@ -19,7 +19,7 @@ import { CONNECTOR_CATALOG } from "@/connectors/catalog";
  * written not to lie when it does: a connector with no entry still appears in
  * the index, still counts toward "All", and falls into `Data & docs` rather
  * than vanishing. `tests`-free code cannot catch that, but the count beside
- * "All" is read from CONNECTOR_CATALOG itself, so a missing entry shows up as
+ * "All" is read from the catalogue itself (its offered part), so a missing entry shows up as
  * the category counts failing to sum rather than as a source going missing.
  */
 export const CATEGORIES = [
@@ -138,7 +138,7 @@ export type IndexSource = {
 };
 
 /** Every catalogue entry, with its category and fields attached. */
-export const INDEX_SOURCES: IndexSource[] = CONNECTOR_CATALOG.map((entry) => ({
+export const INDEX_SOURCES: IndexSource[] = OFFERED_CONNECTORS.map((entry) => ({
   source: entry.source,
   name: entry.name,
   blurb: entry.description,

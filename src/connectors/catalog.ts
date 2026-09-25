@@ -343,6 +343,19 @@ export type ConnectorCatalogEntry = {
    * weeks of approvals to obtain.
    */
   requiresEnv?: readonly string[];
+  /**
+   * SWITCHED OFF BY THE OWNER — why, in words. Unlike `requiresEnv`, which
+   * waits for something outside this repo, this is a decision: the connector
+   * is not offered anywhere a new connection could start. No card on
+   * /integrations, no entry in the /docs index, not on the landing page or in
+   * its counts, and `sourceConnectable` answers false whatever the environment
+   * holds, so the OAuth start route refuses it too.
+   *
+   * THE ENTRY STAYS IN THE CATALOGUE on purpose: a connection made before the
+   * switch still resolves its name, mark and connector, and its guide page
+   * still answers a direct link. Delete the line to turn it back on.
+   */
+  off?: string;
   /** Manual webhook setup note shown on the connection page when not auto. */
   webhookSetup?: string;
 };
@@ -2392,6 +2405,7 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
     description: "Spend, impressions, clicks and conversions from Facebook and Instagram ads.",
     connect: "oauth",
     oauthProvider: "meta",
+    off: "Turned off by the owner on 25 Sep 2026; not offered until he turns it back on.",
     /**
      * NO WEBHOOK CARRIES REPORT DATA. Meta has webhooks, and none of them fire
      * when yesterday's spend is restated — which is the only change this
@@ -2752,6 +2766,16 @@ export const CONNECTOR_CATALOG: ConnectorCatalogEntry[] = [
     },
   },
 ];
+
+/**
+ * THE CONNECTORS ON OFFER — every entry the owner has not switched `off`.
+ *
+ * Anything that LISTS apps to a person (the directory, the landing page and its
+ * counts, the docs index) reads this. Anything that RESOLVES an app someone
+ * already has (`catalogEntry`, marks, the connector registry) keeps reading the
+ * whole catalogue, so switching a connector off never orphans a connection.
+ */
+export const OFFERED_CONNECTORS: ConnectorCatalogEntry[] = CONNECTOR_CATALOG.filter((c) => !c.off);
 
 export function catalogEntry(source: string): ConnectorCatalogEntry | undefined {
   return CONNECTOR_CATALOG.find((c) => c.source === source);

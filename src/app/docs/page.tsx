@@ -25,7 +25,8 @@ export const metadata: Metadata = {
  * not promoted to a page that implies it was verified.
  */
 export default function DocsIndexPage() {
-  const documented = CONNECTOR_CATALOG.filter((e) => e.guide).sort((a, b) => a.name.localeCompare(b.name));
+  // A switched-off connector's guide still answers a direct link, but is not listed.
+  const documented = CONNECTOR_CATALOG.filter((e) => e.guide && !e.off).sort((a, b) => a.name.localeCompare(b.name));
 
   return (
     <main className="mx-auto w-full max-w-2xl px-4 py-12">

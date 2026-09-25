@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { sourceConnectable } from "@/lib/oauth/providers";
-import { CONNECTOR_CATALOG } from "@/connectors/catalog";
+import { CONNECTOR_CATALOG, OFFERED_CONNECTORS, catalogEntry } from "@/connectors/catalog";
 
 afterEach(() => vi.unstubAllEnvs());
 
@@ -18,23 +18,39 @@ afterEach(() => vi.unstubAllEnvs());
  */
 describe("a source is only offered when it can actually be connected", () => {
   it("refuses an OAuth source whose client credentials are absent", () => {
-    vi.stubEnv("META_APP_ID", "");
-    vi.stubEnv("META_APP_SECRET", "");
-    expect(sourceConnectable("meta-ads")).toBe(false);
+    vi.stubEnv("TIKTOK_APP_ID", "");
+    vi.stubEnv("TIKTOK_APP_SECRET", "");
+    expect(sourceConnectable("tiktok-ads")).toBe(false);
   });
 
   it("allows it once both halves are present", () => {
-    vi.stubEnv("META_APP_ID", "app");
-    vi.stubEnv("META_APP_SECRET", "secret");
-    expect(sourceConnectable("meta-ads")).toBe(true);
+    vi.stubEnv("TIKTOK_APP_ID", "app");
+    vi.stubEnv("TIKTOK_APP_SECRET", "secret");
+    expect(sourceConnectable("tiktok-ads")).toBe(true);
   });
 
   it("refuses when only one half is configured", () => {
     // Half a credential is not a credential, and the failure it produces is the
     // same 500 as none at all.
+    vi.stubEnv("TIKTOK_APP_ID", "");
+    vi.stubEnv("TIKTOK_APP_SECRET", "secret");
+    expect(sourceConnectable("tiktok-ads")).toBe(false);
+  });
+
+  it("never offers a connector the owner switched off, whatever the environment holds", () => {
+    // Meta Ads, switched off 25 Sep 2026: fully configured is still off.
     vi.stubEnv("META_APP_ID", "app");
-    vi.stubEnv("META_APP_SECRET", "");
+    vi.stubEnv("META_APP_SECRET", "secret");
+    expect(catalogEntry("meta-ads")?.off).toBeTruthy();
     expect(sourceConnectable("meta-ads")).toBe(false);
+    // Not listed anywhere a new connection starts…
+    expect(OFFERED_CONNECTORS.some((e) => e.source === "meta-ads")).toBe(false);
+    // …but still resolvable, so a connection made before the switch keeps its
+    // name, mark and connector.
+    expect(catalogEntry("meta-ads")?.name).toBe("Meta Ads");
+    // And nothing else went with it.
+    expect(OFFERED_CONNECTORS.length).toBe(CONNECTOR_CATALOG.filter((e) => !e.off).length);
+    expect(OFFERED_CONNECTORS.length).toBeGreaterThan(30);
   });
 
   it("refuses Google Ads until someone confirms the Cloud project has real access", () => {

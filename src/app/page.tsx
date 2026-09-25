@@ -2,7 +2,7 @@ import Link from "next/link";
 import localFont from "next/font/local";
 import { Instrument_Serif } from "next/font/google";
 import { withAuth } from "@workos-inc/authkit-nextjs";
-import { CONNECTOR_CATALOG } from "@/connectors/catalog";
+import { OFFERED_CONNECTORS } from "@/connectors/catalog";
 import styles from "./snap.module.css";
 import { SnapNav } from "@/components/marketing/snap/nav";
 import { SourceRail } from "@/components/marketing/snap/rail";
@@ -78,8 +78,9 @@ import { NamzilabsLockup } from "@/components/namzilabs-logo";
  * beyond the nav pill. No linear top-to-bottom gradient; atmosphere is radial
  * blooms. No emoji, mascot, 3D render, stock photo, star rating, press badge
  * or testimonial — there are no customers to count yet, so the page counts
- * none. The source list and its count are read from CONNECTOR_CATALOG rather
- * than typed, so the page cannot advertise an integration that does not ship.
+ * none. The source list and its count are read from OFFERED_CONNECTORS rather
+ * than typed, so the page cannot advertise an integration that does not ship —
+ * or one the owner has switched off.
  */
 
 /**
@@ -411,7 +412,7 @@ export default async function Home() {
         {/* The rail is the bottom edge of the first screen — it is flush
             against the hero and starts scrolling at t=0, before anything else
             on the page animates. */}
-        <SourceRail sources={INDEX_SOURCES} count={CONNECTOR_CATALOG.length} id="rail" />
+        <SourceRail sources={INDEX_SOURCES} count={OFFERED_CONNECTORS.length} id="rail" />
         </div>
 
         {/* Everything from the rail down sits on the masked bloom. */}
@@ -625,9 +626,9 @@ export default async function Home() {
                     drops logos as it narrows and a count that did not follow
                     would be a number the page could be caught on. */}
                 <span className={`${styles.caption} ${styles.proofMore}`}>
-                  <span className={styles.moreXL}>+{CONNECTOR_CATALOG.length - 8} more</span>
-                  <span className={styles.moreMD}>+{CONNECTOR_CATALOG.length - 6} more</span>
-                  <span className={styles.moreSM}>+{CONNECTOR_CATALOG.length - 4} more</span>
+                  <span className={styles.moreXL}>+{OFFERED_CONNECTORS.length - 8} more</span>
+                  <span className={styles.moreMD}>+{OFFERED_CONNECTORS.length - 6} more</span>
+                  <span className={styles.moreSM}>+{OFFERED_CONNECTORS.length - 4} more</span>
                 </span>
               </div>
 
@@ -667,7 +668,7 @@ export default async function Home() {
               </p>
               <span className={`${styles.caption} ${styles.footerPill}`}>
                 <span className={styles.liveDot} aria-hidden />
-                Reading {CONNECTOR_CATALOG.length} sources
+                Reading {OFFERED_CONNECTORS.length} sources
               </span>
             </div>
 
