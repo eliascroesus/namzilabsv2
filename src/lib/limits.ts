@@ -33,12 +33,17 @@ const intEnv = (name: string, fallback: number): number => {
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : fallback;
 };
 
+/**
+ * The defaults sit ABOVE every plan's limit (Scale: 50 apps, 500 metrics —
+ * see lib/billing/plans.ts), so a customer can always reach what they pay
+ * for; these stay what they always were, the wall for a runaway script.
+ */
 export function connectionCap(): number {
-  return intEnv("MAX_CONNECTIONS_PER_ORG", 10);
+  return intEnv("MAX_CONNECTIONS_PER_ORG", 50);
 }
 
 export function flowCap(): number {
-  return intEnv("MAX_FLOWS_PER_ORG", 25);
+  return intEnv("MAX_FLOWS_PER_ORG", 200);
 }
 
 /**
