@@ -2,7 +2,11 @@ import { and, asc, eq } from "drizzle-orm";
 import { flowResults, flows } from "@/db/schema";
 import type { DB } from "@/db/types";
 import { PLANS } from "./plans";
+import type { ResolvedPlan } from "./resolve";
+import { isLockedRow } from "./lock-flag";
 import { billingEnabled, workspacePlan } from "./state";
+
+export { isLockedRow };
 
 /**
  * LOCKED METRICS — the numbers a workspace keeps on the board but cannot read
@@ -42,10 +46,14 @@ export async function lockedMetricKeys(db: DB, orgId: string, limit: number): Pr
   return new Set(rows.slice(limit).map((r) => metricKey(r.flowId, r.outputNodeId)));
 }
 
-/** The locked set for a workspace's current plan. Empty while billing is off. */
-export async function metricLocksFor(db: DB, orgId: string): Promise<Set<string>> {
+/**
+ * The locked set for a workspace's current plan. Empty while billing is off.
+ * A caller that has already read the plan (the dashboard, for its banner)
+ * passes it in rather than paying for the read twice.
+ */
+export async function metricLocksFor(db: DB, orgId: string, known?: ResolvedPlan | null): Promise<Set<string>> {
   if (!billingEnabled()) return new Set();
-  const { plan } = await workspacePlan(db, orgId);
+  const { plan } = known ?? (await workspacePlan(db, orgId));
   return lockedMetricKeys(db, orgId, PLANS[plan].limits.metrics);
 }
 
@@ -84,11 +92,12 @@ export function applyMetricLocks<T extends LockableRow>(rows: T[], locked: Set<s
   return rows.map((r) => (locked.has(metricKey(r.flowId, r.outputNodeId)) ? lockRow(r) : r));
 }
 
-/** A chart built from several metrics is locked when any one of them is. */
-export function anyLocked(keys: string[], locked: Set<string>): boolean {
-  return keys.some((k) => locked.has(k));
-}
-
-export function isLockedRow(row: unknown): boolean {
-  return Boolean(row && typeof row === "object" && (row as { locked?: unknown }).locked === true);
+/**
+ * A chart built from several metrics is locked when any one of them is —
+ * asked of the rows AFTER the locks ran, by whatever key the caller files them
+ * under. A key that resolves to nothing is not a lock (the chart refuses a
+ * missing member on its own terms).
+ */
+export function anyLocked(keys: string[], rowByKey: { get(key: string): unknown }): boolean {
+  return keys.some((k) => isLockedRow(rowByKey.get(k)));
 }

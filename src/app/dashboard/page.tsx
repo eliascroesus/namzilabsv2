@@ -47,7 +47,9 @@ import {
 } from "@/lib/board/types";
 import { importProgressByStreamRef } from "@/lib/backfill/jobs";
 import { calendarFlowTiles, resultsVersion, unpublishedFlowIds } from "@/lib/flow/materialize";
-import { applyMetricLocks, isLockedRow, lockRow, metricKey, metricLocksFor } from "@/lib/billing/locks";
+import { anyLocked, applyMetricLocks, isLockedRow, lockRow, metricKey, metricLocksFor } from "@/lib/billing/locks";
+import { billingEnabled, workspacePlan } from "@/lib/billing/state";
+import { PlanBanner } from "@/components/billing/plan-banner";
 import { versionedFlowTiles } from "@/lib/flow/tile-cache";
 import { listFlowNames } from "@/lib/flow/store";
 import { CalendarBoard, type CalendarMetric } from "@/components/calendar/calendar-board";
@@ -224,10 +226,24 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
    * A failed lock read shows the numbers rather than hiding the board: they
    * are the workspace's own data, and an outage must not look like a paywall.
    */
-  const metricLocksP = metricLocksFor(db, orgId).catch((e) => {
-    console.error("[dashboard] metric locks read failed", e);
-    return new Set<string>();
-  });
+  /**
+   * THE PLAN, READ ONCE — the banner says where the workspace stands, and the
+   * locks follow from the same answer. Null while billing is off (no banner,
+   * no locks) or if the read fails (no banner; the locks then try their own
+   * read and fail open like everything else here).
+   */
+  const planP = billingEnabled()
+    ? workspacePlan(db, orgId).catch((e) => {
+        console.error("[dashboard] plan read failed", e);
+        return null;
+      })
+    : Promise.resolve(null);
+  const metricLocksP = planP
+    .then((plan) => metricLocksFor(db, orgId, plan))
+    .catch((e) => {
+      console.error("[dashboard] metric locks read failed", e);
+      return new Set<string>();
+    });
 
   const boardSource = one(sp.source) || null;
   /**
@@ -918,7 +934,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         title: stored.name ?? `Output ${row.outputNodeId.slice(0, 8)}`,
         unitKey: `${stored.format ?? "number"}:${stored.currency ?? ""}:${stored.unit ?? ""}`,
         value,
-        attention: attentionOf(row, value),
+        // A locked metric has no number by design; it is not a broken one.
+        attention: isLockedRow(row) ? 0 : attentionOf(row, value),
         node: (
           <FlowTile
             key={`${row.flowId}:${row.outputNodeId}`}
@@ -1140,9 +1157,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
      * from the locked one, and drawing the funnel with a stage missing would
      * be both wrong and a hint at what is withheld.
      */
-    const composedFromLocked = [...(composeConfig.parts ?? []), ...(composeConfig.exits ?? [])].some((k) =>
-      isLockedRow(flowByKey.get(k)),
-    );
+    const composedFromLocked = anyLocked([...(composeConfig.parts ?? []), ...(composeConfig.exits ?? [])], flowByKey);
     const parts = resolveMembers(composeConfig.parts ?? []);
     /**
      * THE EXIT STRIP'S NUMBERS, DOWN THE IDENTICAL PATH.
@@ -1460,6 +1475,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     : undefined;
   const calendarNote = activeKind === "calendar" && activeView ? (notes.get(`view:${activeView}`)?.note ?? null) : null;
 
+  // Nothing at all while billing is off; otherwise the one line the plan may say.
+  const [planNow, lockedNow] = await Promise.all([planP, metricLocksP]);
+  const planBanner = (
+    <PlanBanner plan={planNow} lockedCount={lockedNow.size} welcome={one(sp.welcome) || null} dismissHref={qs({})} />
+  );
+
   return (
     /**
      * THE PROVIDER WRAPS THE SHELL, because the band left the page body.
@@ -1540,7 +1561,10 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
              it. Matched, the three add back to exactly 100dvh and nothing
              scrolls. The heading travels inside `EmptyBoard`, so this centres
              the pair rather than pinning a title to the top of an empty page. */
-          <div className="flex min-h-[calc(100dvh-70px-3rem)] items-center justify-center p-6 sm:min-h-[calc(100dvh-70px-4rem)]">
+          <div className="flex min-h-[calc(100dvh-70px-3rem)] flex-col items-center justify-center p-6 sm:min-h-[calc(100dvh-70px-4rem)]">
+            {/* A new workspace lands HERE straight from the plan step, so the
+                trial's welcome has to be able to say so on the empty page too. */}
+            <div className="w-full max-w-3xl empty:hidden">{planBanner}</div>
             <EmptyBoard
               rangeKey={rangeKey}
               source={boardSource}
@@ -1632,6 +1656,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             the modal unmounts on the redirect, so there was not even that.
             Dismissable by navigating back to the board without the param, the
             same shape the flows list uses for its own two. */}
+        {planBanner}
         {VIEW_ERRORS.map(([key, message]) =>
           one(sp.error) === key ? (
             <div

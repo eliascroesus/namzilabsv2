@@ -2,6 +2,8 @@ import Link from "next/link";
 import { Loader2, PencilLine } from "lucide-react";
 import { formatDateTime, formatMetricValue, relativeTime } from "@/lib/format";
 import { MetricCard } from "@/components/metric-card";
+import { LockedTile } from "@/components/billing/locked-tile";
+import { isLockedRow } from "@/lib/billing/lock-flag";
 import { StatusPill, type StatusPillProps } from "@/components/ui/badge";
 import { GroupBars, ImportProgress, Sparkbars, TargetBar } from "@/components/charts";
 import type { ImportCoverage } from "@/connectors/types";
@@ -127,6 +129,16 @@ export function FlowTile({
    */
   computing?: boolean;
 }) {
+  /**
+   * A METRIC THE PLAN DOES NOT INCLUDE draws its name and a lock, and nothing
+   * it measured. The server has already stripped the row (`lockRow`); this is
+   * the second wall — a row marked locked is never read for a figure here,
+   * even one that somehow still carries its numbers.
+   */
+  if (isLockedRow(row) || isLockedRow(row.tile)) {
+    const name = (row.tile as { name?: unknown } | null)?.name;
+    return <LockedTile name={typeof name === "string" ? name : "Metric"} />;
+  }
   const stored = (row.tile ?? {}) as Tile;
   /**
    * The dashboard's range, applied. Every range was derived from the run the

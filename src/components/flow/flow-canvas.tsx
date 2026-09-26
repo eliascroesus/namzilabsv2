@@ -4,6 +4,7 @@ import { Database, Plug, X } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { GET_STARTED_CTA, GetStartedCard } from "@/components/get-started-card";
 import { Modal, ModalTitle } from "@/components/ui/modal";
+import { UpgradeDialog } from "@/components/billing/upgrade-dialog";
 import { Toast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 
@@ -316,6 +317,8 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
    */
   const [publishedFp, setPublishedFp] = useState<string | null>(publishedFingerprint);
   const [publishError, setPublishError] = useState<string | null>(null);
+  // A publish refused because the plan's metrics are full — the upgrade dialog, not the error strip.
+  const [upgradeMessage, setUpgradeMessage] = useState<string | null>(null);
   const [publishIssues, setPublishIssues] = useState<Array<{ nodeId?: string; message: string }>>([]);
   const [publishWarning, setPublishWarning] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
@@ -1249,6 +1252,8 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
       setPublishedFp(graphFingerprint(shipped));
       if (r.warning) setPublishWarning(r.warning);
       else setReviewOpen(false);
+    } else if (r.upgrade) {
+      setUpgradeMessage(r.error);
     } else {
       setPublishError(r.error);
       setPublishIssues(r.issues ?? []);
@@ -2161,6 +2166,15 @@ function CanvasInner({ flowId, name: initialName, status, publishedVersion, publ
         onToggleEnabled={toggleEnabled}
         togglingEnabled={togglingEnabled}
       />
+
+      {upgradeMessage && (
+        <UpgradeDialog
+          title="Upgrade to publish"
+          message={upgradeMessage}
+          href="/dashboard/settings/billing?upgrade=metrics"
+          onClose={() => setUpgradeMessage(null)}
+        />
+      )}
 
       {publishError && !reviewOpen && (
         <div className="absolute left-1/2 top-chrome-band z-10 w-[min(560px,calc(100vw-2rem))] -translate-x-1/2 rounded-surface border border-danger-soft bg-danger-soft/50 px-4 py-3 text-sm text-danger-ink shadow-surface">

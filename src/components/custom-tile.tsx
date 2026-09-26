@@ -3,6 +3,7 @@
 import { AlertTriangle } from "lucide-react";
 import { formatMetricValue } from "@/lib/format";
 import { Card } from "@/components/ui/card";
+import { LockedTile } from "@/components/billing/locked-tile";
 import type { ChartFormat, GroupRow, SeriesPoint } from "@/components/charts";
 import { ChartFooter, ChartFrame } from "@/components/board-charts/frame";
 import { GoalBar, Sparkline } from "@/components/board-charts/scorecard";
@@ -341,6 +342,8 @@ export function CustomTile({
   }
 
   if (!source) return <DeadTile title={title} />;
+  // Past the plan's metrics: the name and a lock, never a figure — see `LockedTile`.
+  if (source.kind === "flow" && source.locked) return <LockedTile name={title} />;
   /**
    * ONLY THE SETTINGS THIS CHART USES. Switching a tile from bar to pie leaves
    * the old `color` in the bag, and the pie draws from `SLICE_ORDER` — so

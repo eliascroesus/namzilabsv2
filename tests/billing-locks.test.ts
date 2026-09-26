@@ -70,6 +70,13 @@ describe("which metrics lock", () => {
     vi.stubEnv("BILLING_ENABLED", "");
     expect((await metricLocksFor(db, "any")).size).toBe(0);
   });
+
+  it("uses a plan the caller already read, rather than reading it twice", async () => {
+    await metrics(7);
+    const growth = { plan: "growth", source: "manual", state: "granted", endsAt: null, lifetime: true } as const;
+    expect((await metricLocksFor(db, ORG, growth)).size).toBe(0);
+    expect((await metricLocksFor(db, ORG)).size).toBe(2);
+  });
 });
 
 describe("a locked row", () => {
@@ -108,9 +115,15 @@ describe("a locked row", () => {
   });
 
   it("locks a chart built from any locked metric", () => {
-    const locked = new Set([metricKey("f1", "o2")]);
-    expect(anyLocked([metricKey("f1", "o1"), metricKey("f1", "o2")], locked)).toBe(true);
-    expect(anyLocked([metricKey("f1", "o1")], locked)).toBe(false);
+    // Keyed the way the board keys its rows — by tile key — after the locks ran.
+    const rows = new Map<string, unknown>([
+      ["flow:f1:o1", { flowId: "f1", outputNodeId: "o1", tile: { name: "Calls", value: 3 } }],
+      ["flow:f1:o2", lockRow({ flowId: "f1", outputNodeId: "o2", tile: { name: "Cash", value: SENTINEL } })],
+    ]);
+    expect(anyLocked(["flow:f1:o1", "flow:f1:o2"], rows)).toBe(true);
+    expect(anyLocked(["flow:f1:o1"], rows)).toBe(false);
+    // A member that no longer resolves is the chart's own refusal, not a lock.
+    expect(anyLocked(["flow:gone:o9"], rows)).toBe(false);
   });
 });
 

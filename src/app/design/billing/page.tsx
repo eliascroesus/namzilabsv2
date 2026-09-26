@@ -1,7 +1,11 @@
+import { PlanBanner } from "@/components/billing/plan-banner";
 import { PlanPicker, type PlanPickerProps } from "@/components/billing/plan-picker";
 import { PlanStatus, type Usage } from "@/components/billing/plan-status";
-import { PageContainer, SectionHeading } from "@/components/ui/page";
+import { CustomTile } from "@/components/custom-tile";
+import { FlowTile } from "@/components/flow-tile";
+import { BOARD_GRID, PageContainer, SectionHeading } from "@/components/ui/page";
 import { describePlan } from "@/lib/billing/describe";
+import { lockRow } from "@/lib/billing/locks";
 import type { ResolvedPlan } from "@/lib/billing/resolve";
 
 export const dynamic = "force-dynamic";
@@ -36,6 +40,25 @@ const STATUSES: Array<{ name: string; plan: ResolvedPlan; usage: Usage[] }> = [
   { name: "Growth from a code", plan: plan({ plan: "growth", source: "code", state: "granted", endsAt: days(80) }), usage: usage(2, 7, 1, [10, 50, 5]) },
 ];
 
+/** One live metric beside two locked ones — the locked cards must sit in the grid like any other. */
+const flowRow = (id: string, name: string, value: number) => ({
+  flowId: id,
+  outputNodeId: "n1",
+  tile: { name, viz: "number", format: "number", precision: 0, value } as Record<string, unknown>,
+  status: "fresh",
+  error: null,
+  computedAt: new Date(NOW.getTime() - 3_600_000),
+});
+const LIVE = flowRow("f-live", "Booked calls", 42);
+const LOCKED = [lockRow(flowRow("f-l1", "Cash collected", 18250)), lockRow(flowRow("f-l2", "Show rate", 71))];
+
+const BANNERS: Array<{ name: string; plan: ResolvedPlan; lockedCount?: number; welcome?: string }> = [
+  { name: "Welcome to a trial", plan: plan({ plan: "growth", source: "trial", state: "trialing", endsAt: days(30) }), welcome: "trial" },
+  { name: "Trial, 3 days left", plan: plan({ plan: "growth", source: "trial", state: "trialing", endsAt: days(3) }) },
+  { name: "Payment failing", plan: plan({ plan: "growth", source: "subscription", state: "past_due" }) },
+  { name: "Downgraded, 4 locked", plan: plan({}), lockedCount: 4 },
+];
+
 const PICKERS: Array<{ name: string; props: PlanPickerProps }> = [
   { name: "Onboarding — trial available", props: { mode: "onboarding", current: "free", currentSource: "free", trialAvailable: true, next: "/dashboard" } },
   { name: "Onboarding — trial already used", props: { mode: "onboarding", current: "free", currentSource: "free", trialAvailable: false, next: "/dashboard" } },
@@ -56,6 +79,33 @@ export default function DesignBillingPage() {
             <figure key={s.name} data-case={s.name}>
               <figcaption className="mb-2 text-xs text-muted-foreground">{s.name}</figcaption>
               <PlanStatus description={describePlan(s.plan, NOW)} usage={s.usage} />
+            </figure>
+          ))}
+        </div>
+
+        <SectionHeading className="mt-14">Locked metrics</SectionHeading>
+        <figure data-case="Board with locked metrics" className="mt-4">
+          <figcaption className="mb-2 text-xs text-muted-foreground">Board — one live metric, two past the plan</figcaption>
+          <div className={BOARD_GRID}>
+            <FlowTile row={LIVE} />
+            {LOCKED.map((r) => (
+              <FlowTile key={r.flowId} row={r} />
+            ))}
+          </div>
+        </figure>
+        <figure data-case="Custom view with a locked chart" className="mt-6">
+          <figcaption className="mb-2 text-xs text-muted-foreground">Custom view — a locked line chart</figcaption>
+          <div className="h-64 max-w-xl">
+            <CustomTile chart="line" title="Cash collected" rangeKey="30d" source={{ kind: "flow", tile: LOCKED[0].tile, flowId: "f-l1", locked: true }} />
+          </div>
+        </figure>
+
+        <SectionHeading className="mt-14">Banners</SectionHeading>
+        <div className="mt-4 flex flex-col gap-2">
+          {BANNERS.map((b) => (
+            <figure key={b.name} data-case={b.name}>
+              <figcaption className="mb-2 text-xs text-muted-foreground">{b.name}</figcaption>
+              <PlanBanner plan={b.plan} lockedCount={b.lockedCount ?? 0} welcome={b.welcome} dismissHref="/design/billing" now={NOW} />
             </figure>
           ))}
         </div>
