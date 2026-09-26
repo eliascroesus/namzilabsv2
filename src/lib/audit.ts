@@ -105,7 +105,8 @@ type AuditAction =
   | "template.use"
   // ── What a workspace is on, and how it got there (see lib/billing) ───────
   | "billing.trial_start"
-  | "billing.code_redeem";
+  | "billing.code_redeem"
+  | "billing.referral_reward";
 
 /**
  * Enum values, counts and flags. Strings are permitted because provider slugs

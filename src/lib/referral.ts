@@ -155,13 +155,18 @@ export function attributable(
  * reads is worse than no field, because the next person to add a rung writes
  * one and wonders why it never appears.
  */
-export type Milestone = { at: number; reward: string };
+/**
+ * `months` IS WHAT PAYS, `reward` IS WHAT IS SAID — and a test holds them to
+ * the same number, because `lib/billing/referral-rewards.ts` grants exactly
+ * `months` of Growth the moment a rung is reached.
+ */
+export type Milestone = { at: number; months: number; reward: string };
 
 export const MILESTONES: Milestone[] = [
-  { at: 1, reward: "1 month free" },
-  { at: 3, reward: "3 months free" },
-  { at: 5, reward: "6 months free" },
-  { at: 10, reward: "1 year free" },
+  { at: 1, months: 1, reward: "1 month free" },
+  { at: 3, months: 3, reward: "3 months free" },
+  { at: 5, months: 6, reward: "6 months free" },
+  { at: 10, months: 12, reward: "1 year free" },
 ];
 
 /** Where somebody is on the ladder, and how far to the next rung. */

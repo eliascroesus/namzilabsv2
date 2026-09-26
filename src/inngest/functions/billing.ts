@@ -2,6 +2,7 @@ import { inngest } from "../client";
 import { getDb } from "@/db/client";
 import { PLANS, isPaidPlan } from "@/lib/billing/plans";
 import { reminderDue, sendBillingEmail, trialEmail, type ReminderKind } from "@/lib/billing/emails";
+import { grantReferralRewards } from "@/lib/billing/referral-rewards";
 
 const DAY = 86_400_000;
 
@@ -35,5 +36,26 @@ export const trialReminders = inngest.createFunction(
       });
     }
     return outcome;
+  },
+);
+
+/**
+ * REFERRAL REWARDS — worked out after a referral is recorded, never during
+ * the sign-in that recorded it: a Stripe credit is a network call a brand-new
+ * customer should not wait on. One run per referrer at a time, so two
+ * referrals landing together cannot both pay the same rung (the unique index
+ * would stop the second write anyway; this stops the second Stripe call).
+ * A failed credit throws nothing and records nothing; the next run pays it.
+ */
+export const referralRewards = inngest.createFunction(
+  {
+    id: "billing-referral-rewards",
+    retries: 3,
+    concurrency: { key: "event.data.referrerUserId", limit: 1 },
+    triggers: [{ event: "billing/referral.recorded" }],
+  },
+  async ({ event, step }) => {
+    const { referrerUserId } = event.data as { referrerUserId: string };
+    return step.run("grant-rewards", () => grantReferralRewards(getDb(), referrerUserId));
   },
 );

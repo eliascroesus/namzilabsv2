@@ -1,5 +1,6 @@
 import { desc, eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
+import { inngest } from "@/inngest/client";
 import { referralCodes, referrals } from "@/db/schema";
 import { attributable, normaliseCode, referralCode } from "@/lib/referral";
 
@@ -94,6 +95,14 @@ export async function recordReferral(input: {
       .values({ referrerUserId: referrerUserId!, referredUserId: input.newUserId, code })
       .onConflictDoNothing()
       .returning({ id: referrals.id });
+    if (written.length > 0) {
+      // The reward is worked out OFF this path (a Stripe credit is a network
+      // call) — see `lib/billing/referral-rewards.ts`. A lost event costs
+      // nothing permanent: the next referral's run pays every rung still due.
+      await inngest
+        .send({ name: "billing/referral.recorded", data: { referrerUserId: referrerUserId! } })
+        .catch((e) => console.error("[referral] reward scheduling failed", e));
+    }
     return written.length > 0;
   } catch (err) {
     console.error("[referral] attribution failed", err);
