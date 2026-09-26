@@ -74,6 +74,20 @@ const ENTRY_POINTS: Array<[file: string, fn: string, mustCall: string[]]> = [
   ["src/lib/mcp/context.ts", "withToolContext", ["assertFeature(", '"aiAssistant"']],
 ];
 
+describe("publishing with billing off", () => {
+  it("reads nothing for the plan check unless billing is on, and never lets that read throw to the builder", () => {
+    // The builder awaits publishFlowAction with no catch: a throw leaves
+    // Publish spinning on "Publishing…". The plan check's draft read must sit
+    // behind the flag AND inside a try that turns any failure into an answer.
+    const body = bodyOf("src/app/dashboard/flows/actions.ts", "publishFlowAction")!;
+    const gate = body.indexOf("billingEnabled()");
+    const read = body.indexOf("getFlow(");
+    expect(gate, "the plan check is not behind the flag").toBeGreaterThan(-1);
+    expect(read).toBeGreaterThan(gate);
+    expect(body.slice(gate, read), "the draft read is outside the try").toContain("try {");
+  });
+});
+
 describe("every entry point checks its limit inside the function that creates", () => {
   it("the check can fail: a function without the call is caught", () => {
     const body = bodyOf("fixture.ts", "make", "export async function make() { await createThing(); }\nexport async function other() { await assertCanAddApp(db, o); }");

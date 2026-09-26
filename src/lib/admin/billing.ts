@@ -1,6 +1,6 @@
 import { and, count, desc, eq, gt, inArray, isNull, like, lte, or } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { accessGrants, auditLog, billingSubscriptions, promoCodes, referrals, workspaceAcquisitions, workspaceOwners } from "@/db/schema";
+import { accessGrants, auditLog, billingSubscriptions, planPauses, promoCodes, referrals, workspaceAcquisitions, workspaceOwners } from "@/db/schema";
 import { requireStaff } from "@/lib/admin/access";
 import { monthlyEquivalent, isPaidPlan } from "@/lib/billing/plans";
 import type { ResolvedPlan } from "@/lib/billing/resolve";
@@ -22,6 +22,8 @@ export type BillingOverview = {
   trialsActive: number;
   launchStartedAt: Date | null;
   byPlan: Array<{ plan: string; n: number }>;
+  /** Apps paused because a plan shrank — the ones switching billing off would strand. */
+  planPaused: number;
 };
 
 export async function billingOverview(now = new Date()): Promise<BillingOverview> {
@@ -54,9 +56,12 @@ export async function billingOverview(now = new Date()): Promise<BillingOverview
     .orderBy(accessGrants.createdAt)
     .limit(1);
 
+  const [paused] = await db.select({ n: count() }).from(planPauses);
+
   const byPlan = new Map<string, number>();
   for (const s of paying) byPlan.set(s.plan ?? "unknown", (byPlan.get(s.plan ?? "unknown") ?? 0) + 1);
   return {
+    planPaused: Number(paused?.n ?? 0),
     paying: paying.length,
     mrr: Math.round(mrr),
     trialsActive: new Set([...trialGrantOrgs.map((g) => g.orgId), ...subs.filter((s) => s.status === "trialing").map((s) => s.orgId)]).size,

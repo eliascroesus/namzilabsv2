@@ -93,6 +93,16 @@ export function applyMetricLocks<T extends LockableRow>(rows: T[], locked: Set<s
 }
 
 /**
+ * The rows with every locked metric left out — for a view that has no locked
+ * state to draw (the calendar), where the only safe way to show a locked
+ * metric is not to show it at all.
+ */
+export function withoutLocked<T extends { flowId: string; outputNodeId: string }>(rows: T[], locked: Set<string>): T[] {
+  if (locked.size === 0) return rows;
+  return rows.filter((r) => !locked.has(metricKey(r.flowId, r.outputNodeId)));
+}
+
+/**
  * Whether any metric of this flow is locked. The editor draws every step's
  * last computed value, so a flow with a locked metric is not opened there.
  */

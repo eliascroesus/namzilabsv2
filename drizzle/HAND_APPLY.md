@@ -1414,7 +1414,7 @@ Eight NEW tables, nothing altered:
 - `plan_pauses` — apps paused because a plan shrank, so an upgrade resumes exactly those.
 - `tracking_links`, `link_clicks`, `workspace_acquisitions` — the `/go/<slug>` links and where each workspace came from.
 
-**Safe to paste before or after the deploy.** With billing off (`BILLING_ENABLED` unset) nothing a customer does needs these tables, and the few existing paths that touch them — deleting an app, making a workspace, the admin overview — carry on without them. What does NOT work until this is pasted: the admin overview's revenue and channel sections, the admin Links, Codes, Log and workspace pages, `/go/` links (they send visitors home), and — once billing is on — plans. Paste it into BOTH the dev branch and production.
+**Safe to paste before or after the deploy.** With billing off (`BILLING_ENABLED` unset) nothing a customer does needs these tables, and the few existing paths that touch them — deleting an app, making a workspace, the admin overview — carry on without them. What does NOT work until this is pasted: the admin overview's revenue and channel sections, the admin Links, Codes and workspace pages, `/go/` links (they send visitors home), and — once billing is on — plans. Paste it into BOTH the dev branch and production.
 
 ```sql
 CREATE TABLE IF NOT EXISTS "billing_subscriptions" (
@@ -1522,4 +1522,14 @@ where table_schema = 'public' and table_name in
   ('billing_subscriptions','promo_codes','access_grants','trial_claims','plan_pauses','tracking_links','link_clicks','workspace_acquisitions')
 order by 1;
 -- 8 rows
+```
+
+And that the pasted copy is the CURRENT one (0035 was reshaped before anyone pasted it):
+
+```sql
+select table_name, column_name from information_schema.columns
+where table_schema = 'public' and (table_name, column_name) in
+  (('link_clicks', 'day'), ('link_clicks', 'clicks'), ('access_grants', 'referrer_user_id'))
+order by 1, 2;
+-- 3 rows. Fewer means an older draft was pasted: stop and ask before going on.
 ```

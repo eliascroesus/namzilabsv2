@@ -17,6 +17,7 @@ const WHAT: Record<string, string> = {
   "admin.link_create": "Created a link",
   "admin.link_archive": "Archived a link",
   "admin.launch_trials": "Started launch trials",
+  "admin.resume_pauses": "Resumed apps paused by plans",
   "billing.trial_start": "Started a trial",
   "billing.code_redeem": "Redeemed a code",
   "billing.referral_reward": "Referral reward",

@@ -47,7 +47,7 @@ import {
 } from "@/lib/board/types";
 import { importProgressByStreamRef } from "@/lib/backfill/jobs";
 import { calendarFlowTiles, resultsVersion, unpublishedFlowIds } from "@/lib/flow/materialize";
-import { anyLocked, applyMetricLocks, isLockedRow, lockRow, metricKey, metricLocksFor } from "@/lib/billing/locks";
+import { anyLocked, applyMetricLocks, isLockedRow, lockRow, metricLocksFor, withoutLocked } from "@/lib/billing/locks";
 import { billingEnabled, workspacePlan } from "@/lib/billing/state";
 import { PlanBanner } from "@/components/billing/plan-banner";
 import { versionedFlowTiles } from "@/lib/flow/tile-cache";
@@ -715,14 +715,13 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         // A missing hint costs a subtitle, never the board.
       }
       const locked = await metricLocksP;
-      calendarMetrics = calRows
+      // A LOCKED METRIC IS NOT ON THE CALENDAR AT ALL: the calendar has no
+      // locked state to draw, and its day values are exactly what is withheld.
+      calendarMetrics = withoutLocked(calRows, locked)
         // THE SAME RANK GATE THE BOARD APPLIES. A metric hidden from a member on
         // one view must be hidden on every other way of looking at it, or the
         // restriction is decoration.
         .filter((r) => access.canSeeMetric(`flow:${r.flowId}`))
-        // A LOCKED METRIC IS NOT ON THE CALENDAR AT ALL: the calendar has no
-        // locked state to draw, and its day values are exactly what is withheld.
-        .filter((r) => !locked.has(metricKey(r.flowId, r.outputNodeId)))
         .map((r) => {
           const stored = (r.tile ?? {}) as Record<string, unknown> & { byDay?: CalendarMetric["days"] };
           return {

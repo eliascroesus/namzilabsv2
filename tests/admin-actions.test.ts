@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import ts from "typescript";
 import { eq } from "drizzle-orm";
 import { createTestDb } from "./helpers/testdb";
-import { accessGrants, auditLog, billingSubscriptions, promoCodes, referrals, trackingLinks, workspaceOwners } from "@/db/schema";
+import { accessGrants, auditLog, billingSubscriptions, connections, planPauses, promoCodes, referrals, trackingLinks, workspaceOwners } from "@/db/schema";
 import type { DB } from "@/db/types";
 
 /**
@@ -217,10 +217,44 @@ describe("launch trials", () => {
     expectEnumOnly(a.detail);
   });
 
-  it("will not start while billing is off — the 30 days would run out before anyone is charged", async () => {
+  it("runs BEFORE billing is switched on, so no workspace is on Free at the moment it comes on", async () => {
     vi.stubEnv("BILLING_ENABLED", "");
-    expect(await run(actions.startLaunchTrialsAction())).toBe("/admin?error=billing_off");
-    expect(await db.select().from(accessGrants).where(eq(accessGrants.kind, "launch"))).toHaveLength(0);
+    await db.insert(referrals).values({ referrerUserId: "u3", referredUserId: "u_new", code: "abcdefgh" });
+    expect(await run(actions.startLaunchTrialsAction())).toBe("/admin?launched=2&rewarded=1");
+    // Switched on: both workspaces are already on Growth, and the reward is already paid.
+    vi.stubEnv("BILLING_ENABLED", "1");
+    expect((await workspacePlan(db, "org_free")).plan).toBe("growth");
+    expect(await run(actions.startLaunchTrialsAction())).toBe("/admin?launched=0&rewarded=0");
+  });
+});
+
+describe("switching billing off", () => {
+  async function planPausedApp(orgId: string) {
+    const { PLAN_PAUSE_UNTIL } = await import("@/lib/billing/pauses");
+    const [c] = await db
+      .insert(connections)
+      .values({ orgId, source: "webhook", name: "Paused", status: "active", authType: "secret", pausedUntil: PLAN_PAUSE_UNTIL, pausedReason: "Paused on the Free plan — upgrade to resume syncing." })
+      .returning({ id: connections.id });
+    await db.insert(planPauses).values({ connectionId: c.id, orgId });
+    return c.id;
+  }
+
+  it("lifts every app a plan paused — their pause would otherwise never fall due", async () => {
+    vi.stubEnv("BILLING_ENABLED", "");
+    const a = await planPausedApp("org_x");
+    const b = await planPausedApp("org_y");
+    expect(await run(actions.resumePlanPausesAction())).toBe("/admin?resumed=2");
+    const rows = await db.select({ id: connections.id, pausedUntil: connections.pausedUntil }).from(connections);
+    for (const id of [a, b]) expect(rows.find((r) => r.id === id)?.pausedUntil).toBeNull();
+    expect(await db.select().from(planPauses)).toHaveLength(0);
+    const [audit] = await audits("admin.resume_pauses");
+    expectEnumOnly(audit.detail);
+  });
+
+  it("is refused while billing is on, where each workspace's plan decides what stays paused", async () => {
+    await planPausedApp("org_x");
+    expect(await run(actions.resumePlanPausesAction())).toBe("/admin?error=billing_on");
+    expect(await db.select().from(planPauses)).toHaveLength(1);
   });
 });
 

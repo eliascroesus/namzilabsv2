@@ -29,6 +29,7 @@ import type { SourceOption } from "@/connectors/types";
 import { inngest } from "@/inngest/client";
 import { wakeSweeper } from "@/lib/sweep/wake";
 import { PlanLimitError, assertCanPublish } from "@/lib/billing/limits";
+import { billingEnabled } from "@/lib/billing/state";
 
 /**
  * The rank gate, on MUTATIONS only: viewing is not editing, so the list and
@@ -514,16 +515,21 @@ export async function publishFlowAction(
    * per Output node. Its own current numbers are left out of the count, so
    * republishing an unchanged flow at the limit always works.
    */
-  const draft = await getFlow(getDb(), orgId, id);
-  if (draft) {
-    const graph = parseGraph(draft.draftGraph);
-    const enabled = graph.metrics.filter((m) => m.enabled).length;
-    const metricsInFlow = enabled > 0 ? enabled : graph.nodes.filter((n) => n.type === "output").length;
+  // Only while billing is on — and never able to throw: the builder awaits
+  // this with no catch, so an escaped error would leave Publish spinning.
+  if (billingEnabled()) {
     try {
-      await assertCanPublish(getDb(), orgId, id, metricsInFlow);
+      const draft = await getFlow(getDb(), orgId, id);
+      if (draft) {
+        const graph = parseGraph(draft.draftGraph);
+        const enabled = graph.metrics.filter((m) => m.enabled).length;
+        const metricsInFlow = enabled > 0 ? enabled : graph.nodes.filter((n) => n.type === "output").length;
+        await assertCanPublish(getDb(), orgId, id, metricsInFlow);
+      }
     } catch (e) {
       if (e instanceof PlanLimitError) return { ok: false, error: e.message, upgrade: "metrics" };
-      throw e;
+      console.error("[publish] plan check failed", e);
+      return { ok: false, error: "Couldn't check this flow against your plan just now. Try publishing again." };
     }
   }
 

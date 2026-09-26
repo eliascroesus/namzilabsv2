@@ -114,7 +114,8 @@ type AuditAction =
   | "admin.code_toggle"
   | "admin.link_create"
   | "admin.link_archive"
-  | "admin.launch_trials";
+  | "admin.launch_trials"
+  | "admin.resume_pauses";
 
 /**
  * Enum values, counts and flags. Strings are permitted because provider slugs

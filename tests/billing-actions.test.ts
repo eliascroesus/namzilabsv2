@@ -159,6 +159,26 @@ describe("paying and managing", () => {
   });
 });
 
+describe("who may change the plan", () => {
+  it("refuses a member who is neither the owner, an admin, nor given the right by a rank — and writes nothing", async () => {
+    const saved = { userId: ctx.userId, role: ctx.role };
+    ctx.userId = "user_member";
+    ctx.role = undefined;
+    try {
+      const refused = "/dashboard/settings/billing?error=role";
+      expect(await run(actions.choosePlanAction(form({ plan: "growth" })))).toBe(refused);
+      expect(await run(actions.startCheckoutAction(form({ plan: "scale", interval: "month" })))).toBe(refused);
+      expect(await run(actions.openPortalAction())).toBe(refused);
+      expect(await run(actions.redeemCodeAction(form({ code: "STUDENTS30" })))).toBe(refused);
+      expect(await db.select().from(accessGrants)).toHaveLength(0);
+      expect(hoisted.checkout).toHaveLength(0);
+    } finally {
+      ctx.userId = saved.userId;
+      ctx.role = saved.role;
+    }
+  });
+});
+
 describe("redeemCodeAction", () => {
   it("grants the code's plan and says so", async () => {
     expect(await run(actions.redeemCodeAction(form({ code: "students30" })))).toBe("/dashboard/settings/billing?code=ok");

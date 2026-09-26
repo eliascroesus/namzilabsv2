@@ -7,7 +7,7 @@ import { getDb } from "@/db/client";
 import { planPauses, promoCodes, referrals } from "@/db/schema";
 import { requireStaff } from "@/lib/admin/access";
 import { recordAudit } from "@/lib/audit";
-import { applyPlan } from "@/lib/billing/pauses";
+import { applyPlan, resumePlanPauses } from "@/lib/billing/pauses";
 import { isPaidPlan, TRIAL_DAYS } from "@/lib/billing/plans";
 import { grantReferralRewards } from "@/lib/billing/referral-rewards";
 import { billingEnabled, grantPlan, normaliseCode, revokeGrant } from "@/lib/billing/state";
@@ -176,13 +176,16 @@ const rowsOf = <T,>(r: unknown): T[] => (Array.isArray(r) ? r : ((r as { rows?: 
  * `launch`), once. One statement for the whole fleet, so the button cannot
  * time out on a large one: a workspace with a live subscription or any grant
  * in force is skipped, and the unique index on (org) where kind = 'launch'
- * makes a second press a no-op. Then every referral reward earned before
- * billing was switched on is paid, as `grantReferralRewards` only pays while
- * it is on.
+ * makes a second press a no-op. Then every referral reward earned so far is
+ * paid (`grantReferralRewards` otherwise pays only while billing is on).
+ *
+ * PRESSED BEFORE BILLING IS SWITCHED ON, AND ONCE AFTER. Granting first means
+ * no workspace is ever on Free at the moment billing comes on — members past
+ * one seat would be sent to /seat, metrics past five locked, apps past three
+ * paused. The second press picks up any workspace made in between.
  */
 export async function startLaunchTrialsAction(): Promise<void> {
   const staff = await requireStaff();
-  if (!billingEnabled()) redirect("/admin?error=billing_off");
   const db = getDb();
   const now = new Date();
   const endsAt = new Date(now.getTime() + TRIAL_DAYS * 86_400_000);
@@ -215,11 +218,30 @@ export async function startLaunchTrialsAction(): Promise<void> {
   const referrers = await db.selectDistinct({ userId: referrals.referrerUserId }).from(referrals);
   let rewarded = 0;
   for (const { userId } of referrers) {
-    const out = await grantReferralRewards(db, userId, { now }).catch(() => []);
+    const out = await grantReferralRewards(db, userId, { now, evenIfBillingOff: true }).catch(() => []);
     rewarded += out.filter((o) => o.form !== "failed").length;
   }
 
   await recordAudit(db, { action: "admin.launch_trials", actorId: staff.userId, detail: { granted: granted.length, rewarded } });
   revalidatePath("/admin");
   redirect(`/admin?launched=${granted.length}&rewarded=${rewarded}`);
+}
+
+/**
+ * THE KILL SWITCH'S OTHER HALF. Switching BILLING_ENABLED off stops every
+ * limit at once — but an app a plan already paused stays paused: its year-9999
+ * pause never falls due, and only a plan change lifts it. This lifts all of
+ * them (with billing off, `resumePlanPauses` resumes everything it recorded).
+ * Refused while billing is on, where the plan decides what stays paused.
+ */
+export async function resumePlanPausesAction(): Promise<void> {
+  const staff = await requireStaff();
+  if (billingEnabled()) redirect("/admin?error=billing_on");
+  const db = getDb();
+  const orgs = await db.selectDistinct({ orgId: planPauses.orgId }).from(planPauses);
+  let resumed = 0;
+  for (const { orgId } of orgs) resumed += await resumePlanPauses(db, orgId).catch(() => 0);
+  await recordAudit(db, { action: "admin.resume_pauses", actorId: staff.userId, detail: { resumed, workspaces: orgs.length } });
+  revalidatePath("/admin");
+  redirect(`/admin?resumed=${resumed}`);
 }

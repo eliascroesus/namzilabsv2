@@ -9,7 +9,7 @@ import { resolveOrgNames } from "@/lib/admin/org-names";
 import { MinorStats, PrimaryStat, Workspace, When } from "@/components/admin/bits";
 import { GrowthSection } from "@/components/admin/growth-section";
 import { FunnelTable } from "@/components/admin/funnel-table";
-import { startLaunchTrialsAction } from "@/app/admin/actions";
+import { resumePlanPausesAction, startLaunchTrialsAction } from "@/app/admin/actions";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { billingOverview, growthFunnel } from "@/lib/admin/billing";
 import { billingEnabled } from "@/lib/billing/state";
@@ -34,6 +34,8 @@ const fmt = new Intl.NumberFormat("en-GB");
 
 type SP = Record<string, string | string[] | undefined>;
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : (v ?? ""));
+/** A count from the URL, or null — never the text itself, so a crafted link prints nothing here. */
+const count = (v: string | string[] | undefined): number | null => (/^\d{1,7}$/.test(one(v)) ? Number(one(v)) : null);
 const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 
 export default async function AdminOverviewPage({ searchParams }: { searchParams: Promise<SP> }) {
@@ -53,7 +55,9 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
     });
   const [money, funnel] = [await soft(billingOverview()), await soft(growthFunnel())];
   const billingOn = billingEnabled();
-  const launched = one(sp.launched);
+  const launched = count(sp.launched);
+  const rewarded = count(sp.rewarded);
+  const resumed = count(sp.resumed);
   const [broken, newWorkspaces, growth] = [await brokenConnections(), await recentWorkspaces(), await fleetGrowth(30)];
   const totals = totalsFrom(growth);
   /**
@@ -119,15 +123,21 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
           MRR is list price: a yearly plan counts a twelfth a month, and
           discounts or referral credits are not netted off. Stripe's own
           dashboard is the ledger; this is the pulse. */}
-      {launched !== "" && (
+      {launched !== null && (
         <p role="status" className="mt-6 rounded-card border border-success-soft bg-success-soft/50 p-4 text-sm text-success-ink">
-          Launch trials: {launched} {launched === "1" ? "workspace" : "workspaces"} got 30 days of Growth
-          {one(sp.rewarded) && one(sp.rewarded) !== "0" ? `, and ${one(sp.rewarded)} referral rewards were paid` : ""}.
+          Launch trials: {launched} {launched === 1 ? "workspace" : "workspaces"} got 30 days of Growth
+          {rewarded ? `, and ${rewarded} referral ${rewarded === 1 ? "reward was" : "rewards were"} paid` : ""}.
+          {billingOn ? "" : " Now switch BILLING_ENABLED on, then press it once more to catch any workspace made in between."}
         </p>
       )}
-      {one(sp.error) === "billing_off" && (
+      {resumed !== null && (
+        <p role="status" className="mt-6 rounded-card border border-success-soft bg-success-soft/50 p-4 text-sm text-success-ink">
+          {resumed} {resumed === 1 ? "app" : "apps"} paused by a plan {resumed === 1 ? "is" : "are"} syncing again.
+        </p>
+      )}
+      {one(sp.error) === "billing_on" && (
         <p role="alert" className="mt-6 rounded-card border border-danger-soft bg-danger-soft/50 p-4 text-sm text-danger-ink">
-          Switch billing on (BILLING_ENABLED) before starting launch trials — otherwise their 30 days run out before anyone could be charged.
+          While billing is on, plan pauses follow each workspace&rsquo;s plan — switch BILLING_ENABLED off first.
         </p>
       )}
       {!money || !funnel ? (
@@ -146,21 +156,39 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
             <span className="text-xs text-muted-foreground">list price, a month</span>
           </Card>
           <PrimaryStat label="On a trial" value={money.trialsActive} hint="in-app, launch and card trials" />
+          {/* PRESS BEFORE THE FLIP, AND ONCE AFTER. Granting first means no
+              workspace is ever on Free at the moment billing comes on (members
+              past one seat would be sent to /seat, metrics past five locked);
+              the second press catches any workspace made in between. Each
+              workspace only ever gets one launch trial, so pressing again is safe. */}
           <Card className="flex flex-col justify-between gap-2">
             <span className="text-xs uppercase tracking-wide text-muted-foreground">Launch trials</span>
-            {money.launchStartedAt ? (
-              <span className="text-sm">Started {money.launchStartedAt.toISOString().slice(0, 10)}</span>
-            ) : billingOn ? (
-              <form action={startLaunchTrialsAction}>
-                <SubmitButton size="sm" pendingLabel="Starting…">
-                  Start launch trials
+            {money.launchStartedAt ? <span className="text-sm">First run {money.launchStartedAt.toISOString().slice(0, 10)}</span> : null}
+            <form action={startLaunchTrialsAction}>
+              <SubmitButton size="sm" pendingLabel="Starting…">
+                {money.launchStartedAt ? "Run launch trials again" : "Start launch trials"}
+              </SubmitButton>
+            </form>
+            <span className="text-xs text-muted-foreground">
+              30 days of Growth for every workspace without a plan, once each. Press it before switching billing on, and once after.
+            </span>
+          </Card>
+          {/* THE KILL SWITCH'S OTHER HALF. Turning billing off stops every limit,
+              but an app a plan already paused stays paused — its pause never
+              falls due. This lifts them all. */}
+          {!billingOn && money.planPaused > 0 ? (
+            <Card className="flex flex-col justify-between gap-2">
+              <span className="text-xs uppercase tracking-wide text-muted-foreground">Paused by a plan</span>
+              <span className="text-sm">
+                {money.planPaused} {money.planPaused === 1 ? "app" : "apps"} still paused
+              </span>
+              <form action={resumePlanPausesAction}>
+                <SubmitButton size="sm" variant="default" pendingLabel="Resuming…">
+                  Resume them all
                 </SubmitButton>
               </form>
-            ) : (
-              <span className="text-xs text-muted-foreground">Available once BILLING_ENABLED is on.</span>
-            )}
-            <span className="text-xs text-muted-foreground">30 days of Growth for every workspace without a plan, once.</span>
-          </Card>
+            </Card>
+          ) : null}
         </div>
       </section>
       )}

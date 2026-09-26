@@ -5,7 +5,7 @@ import { createTestDb } from "./helpers/testdb";
 import { flowResults, flows } from "@/db/schema";
 import type { DB } from "@/db/types";
 import { grantPlan } from "@/lib/billing/state";
-import { anyLocked, applyMetricLocks, flowHasLockedMetric, lockRow, lockedMetricKeys, metricKey, metricLocksFor } from "@/lib/billing/locks";
+import { anyLocked, applyMetricLocks, flowHasLockedMetric, lockRow, lockedMetricKeys, metricKey, metricLocksFor, withoutLocked } from "@/lib/billing/locks";
 
 /**
  * LOCKED MEANS THE NUMBERS NEVER LEAVE THE SERVER.
@@ -173,13 +173,43 @@ describe("every consumer of the tile reads applies the locks", () => {
     expect(consumers.length).toBeGreaterThanOrEqual(2);
   });
 
-  it("and each one of them locks", () => {
-    const missing = files("src")
+  /**
+   * PER READ, NOT PER FILE. A file that reads stored tiles twice and locks
+   * once passed the old check — deleting the dashboard's calendar filter left
+   * it green, because the board's lock was still in the same file. Every read
+   * now needs its own lock: `applyMetricLocks(` on the rows, or `withoutLocked(`
+   * for a view that drops locked metrics instead of drawing them locked.
+   */
+  const occurrences = (src: string, re: RegExp) => (src.match(new RegExp(re.source, "g")) ?? []).length;
+  // Comments stripped: a note that mentions a lock must not count as one.
+  const code = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "").replace(/\{\/\*[\s\S]*?\*\/\}/g, "");
+  const LOCKS = /\b(applyMetricLocks|withoutLocked)\(/;
+
+  it("and each read in them locks its own rows", () => {
+    const short = files("src")
       .filter((f) => !EXEMPT.has(f))
-      .filter((f) => {
-        const src = readFileSync(f, "utf8");
-        return READS.test(src) && !/\b(applyMetricLocks|metricLocksFor)\(/.test(src);
+      .flatMap((f) => {
+        const src = code(readFileSync(f, "utf8"));
+        const reads = occurrences(src, READS);
+        const locks = occurrences(src, LOCKS);
+        return reads > locks ? [`${f}: ${reads} reads, ${locks} locks`] : [];
       });
-    expect(missing, "these read stored tile numbers without applying the plan's metric locks").toEqual([]);
+    expect(short, "these read stored tile numbers more often than they apply the plan's metric locks").toEqual([]);
+  });
+
+  it("the count can fail", () => {
+    const src = "const a = applyMetricLocks(await versionedFlowTiles(db)); const b = await calendarFlowTiles(db);";
+    expect(occurrences(src, READS)).toBeGreaterThan(occurrences(src, LOCKS));
+  });
+});
+
+describe("withoutLocked", () => {
+  it("drops locked metrics from a view that has no locked state to draw", () => {
+    const rows = [
+      { flowId: "f1", outputNodeId: "o1" },
+      { flowId: "f1", outputNodeId: "o2" },
+    ];
+    expect(withoutLocked(rows, new Set([metricKey("f1", "o2")]))).toEqual([rows[0]]);
+    expect(withoutLocked(rows, new Set())).toEqual(rows);
   });
 });

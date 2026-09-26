@@ -134,8 +134,8 @@ describe("the audit trail records the acts that matter", () => {
     // records as "widening a union is when it bites".
     const declared = new Set([...audit.matchAll(/^\s*\| "([a-z._]+)";?$/gm)].map((m) => m[1]));
     // 23 governance acts, plus billing.trial_start and billing.code_redeem (25 Sep 2026),
-    // plus billing.referral_reward and the seven admin.* acts (26 Sep 2026).
-    expect(declared.size, "the AuditAction union could not be parsed — this check would pass vacuously").toBe(33);
+    // plus billing.referral_reward and the eight admin.* acts (26 Sep 2026).
+    expect(declared.size, "the AuditAction union could not be parsed — this check would pass vacuously").toBe(34);
     for (const site of callSites()) {
       for (const [, action] of site.text.matchAll(/action: "([a-z._]+)"/g)) {
         expect(declared, `${site.file} writes ${action}, which is not in the AuditAction union`).toContain(action);

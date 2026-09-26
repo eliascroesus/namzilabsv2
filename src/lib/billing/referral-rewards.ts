@@ -94,9 +94,14 @@ async function paidRungs(db: DB, referrerUserId: string): Promise<Set<number>> {
 export async function grantReferralRewards(
   db: DB,
   referrerUserId: string,
-  opts: { now?: Date; client?: StripeClient } = {},
+  /**
+   * `evenIfBillingOff`: the admin's launch run, pressed BEFORE billing is
+   * switched on, pays what was earned so far. Every other caller waits for
+   * billing, so months are not spent while nothing is being charged for.
+   */
+  opts: { now?: Date; client?: StripeClient; evenIfBillingOff?: boolean } = {},
 ): Promise<RewardOutcome[]> {
-  if (!billingEnabled()) return [];
+  if (!billingEnabled() && !opts.evenIfBillingOff) return [];
   const now = opts.now ?? new Date();
   const reached = await reachedRungs(db, referrerUserId);
   if (reached.length === 0) return [];

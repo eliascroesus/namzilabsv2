@@ -34,6 +34,7 @@ import { clearMembershipCache } from "@/lib/mcp/workspace";
 import { AggregateSchema, parseDefinition } from "@/lib/metrics/types";
 import { computeAggregate } from "@/lib/metrics/compute";
 import { resolveRange } from "@/lib/metrics/range";
+import { grantPlan } from "@/lib/billing/state";
 
 const authInfo = (over = {}) => ({ token: "t", clientId: "client:c1", scopes: [], expiresAt: Math.floor(Date.now() / 1000) + 3600, extra: { userId: "user_1", orgIdClaim: "org_a", bindingKey: "client:c1", ...over } });
 const member = (role = "member") => memberships.mockImplementation(async () => ({ data: [{ id: "m", userId: "user_1", organizationId: "org_a", role: { slug: role }, status: "active" }] }));
@@ -374,5 +375,33 @@ describe("get_metric_days", () => {
     await db.insert(rankAssignments).values({ orgId: "org_a", userId: "user_1", rankId: "r1" });
     member("member");
     expect((await getMetricDaysTool.handler({ id: `flow:${flowId}:n1`, from: "2026-09-01", to: "2026-09-02" } as never, { authInfo: authInfo() })).isError).toBe(true);
+  });
+});
+
+describe("a metric the plan locks", () => {
+  /**
+   * The AI tools only run on Scale (billing on), whose limit is 500 metrics —
+   * so the lock matters here for the 501st. Pinned by BEHAVIOUR, not by the
+   * consumer scan: deleting the lock inside the calendar read must fail this.
+   */
+  it("is not read from the calendar store by the AI tools", async () => {
+    vi.stubEnv("BILLING_ENABLED", "1");
+    try {
+      member("admin");
+      await grantPlan(db, { orgId: "org_a", plan: "scale", kind: "manual", endsAt: null, grantedBy: "staff" });
+      const [earlier] = await db.insert(flows).values({ orgId: "org_a", name: "Earlier", status: "published", publishedVersion: 1 }).returning();
+      await db.insert(flowResults).values(
+        Array.from({ length: 500 }, (_, i) => ({ orgId: "org_a", flowId: earlier.id, version: 1, outputNodeId: `e${i}`, status: "fresh", tile: { name: `E${i}` }, createdAt: new Date("2026-01-01") })),
+      );
+      // Published last: the 501st metric, past Scale's 500.
+      await db.update(flowResults).set({ createdAt: new Date("2027-01-01") }).where(eq(flowResults.flowId, flowId));
+
+      const day = await getMetricTool.handler({ id: `flow:${flowId}:n1`, day: "2026-09-01" } as never, { authInfo: authInfo() });
+      expect(JSON.stringify(day)).not.toMatch(/"value":2\b/);
+      const days = await getMetricDaysTool.handler({ id: `flow:${flowId}:n1`, from: "2026-08-30", to: "2026-09-03" } as never, { authInfo: authInfo() });
+      expect(JSON.stringify(days)).not.toMatch(/"value":2\b/);
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });
