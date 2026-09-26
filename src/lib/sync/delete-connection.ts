@@ -21,6 +21,13 @@ import { revokeOAuthGrant } from "@/lib/oauth/flow";
 import { oauthProviderFor } from "@/lib/oauth/providers";
 import { wakeSweeper } from "@/lib/sweep/wake";
 
+
+/** Postgres `undefined_table` (42P01), on the error or the driver's wrapped cause. */
+function isUndefinedTable(e: unknown): boolean {
+  const codeOf = (x: unknown) => (x && typeof x === "object" ? (x as { code?: unknown }).code : undefined);
+  return codeOf(e) === "42P01" || codeOf((e as { cause?: unknown } | null)?.cause) === "42P01";
+}
+
 /**
  * REMOVING A CONNECTION AND EVERYTHING SYNCED FROM IT. Irreversible.
  *
@@ -299,7 +306,15 @@ export async function deleteConnectionData(
   rows.stream_fields = await count(db.delete(streamFields).where(eq(streamFields.connectionId, id)).returning({ id: streamFields.id }));
   rows.backfill_jobs = await count(db.delete(backfillJobs).where(eq(backfillJobs.connectionId, id)).returning({ id: backfillJobs.id }));
   // The foreign key would cascade this too; named anyway so the count says so.
-  rows.plan_pauses = await count(db.delete(planPauses).where(eq(planPauses.connectionId, id)).returning({ id: planPauses.connectionId }));
+  // Tolerant of the table not existing yet (migration 0035 unapplied): a
+  // delete that stopped here would leave the events gone and the connection
+  // row standing. Only "no such table" is forgiven; any other error still throws.
+  rows.plan_pauses = await count(db.delete(planPauses).where(eq(planPauses.connectionId, id)).returning({ id: planPauses.connectionId })).catch(
+    (e: unknown) => {
+      if (isUndefinedTable(e)) return 0;
+      throw e;
+    },
+  );
 
   rows.connections = await count(
     db.delete(connections).where(and(eq(connections.id, id), eq(connections.orgId, orgId))).returning({ id: connections.id }),

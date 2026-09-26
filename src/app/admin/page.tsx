@@ -14,6 +14,7 @@ import { SubmitButton } from "@/components/ui/submit-button";
 import { billingOverview, growthFunnel } from "@/lib/admin/billing";
 import { billingEnabled } from "@/lib/billing/state";
 import Link from "next/link";
+import { unstable_rethrow } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +39,19 @@ const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD",
 export default async function AdminOverviewPage({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams;
   const fleet = await fleetOverview();
-  const [money, funnel] = [await billingOverview(), await growthFunnel()];
+  /**
+   * THE NEW TABLES MAY NOT EXIST YET. This page is older than migration 0035,
+   * and the deploy can land before the owner pastes it — so a failed read
+   * here renders a note rather than taking the whole overview down. A Next
+   * navigation error (the 404 for non-staff) is never swallowed.
+   */
+  const soft = async <T,>(p: Promise<T>): Promise<T | null> =>
+    p.catch((e: unknown) => {
+      unstable_rethrow(e);
+      console.error("[admin] billing read failed", e);
+      return null;
+    });
+  const [money, funnel] = [await soft(billingOverview()), await soft(growthFunnel())];
   const billingOn = billingEnabled();
   const launched = one(sp.launched);
   const [broken, newWorkspaces, growth] = [await brokenConnections(), await recentWorkspaces(), await fleetGrowth(30)];
@@ -117,6 +130,12 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
           Switch billing on (BILLING_ENABLED) before starting launch trials — otherwise their 30 days run out before anyone could be charged.
         </p>
       )}
+      {!money || !funnel ? (
+        <p role="alert" className="mt-6 rounded-card border border-warn/25 bg-warn-soft p-4 text-sm text-warn-ink">
+          Revenue, trials and links need migration 0035 — paste it (see drizzle/HAND_APPLY.md) and this fills in.
+        </p>
+      ) : null}
+      {money && (
       <section className="mt-8">
         <SectionHeading>Revenue</SectionHeading>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -144,7 +163,9 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
           </Card>
         </div>
       </section>
+      )}
 
+      {funnel && (
       <section className="mt-8">
         <div className="flex items-baseline justify-between gap-4">
           <SectionHeading>Where customers come from</SectionHeading>
@@ -157,6 +178,7 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
           empty="No sign-ups recorded yet. Make a tracking link to see where they come from."
         />
       </section>
+      )}
 
       <GrowthSection series={growth} totals={totals} />
 

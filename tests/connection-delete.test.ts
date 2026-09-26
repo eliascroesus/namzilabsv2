@@ -243,6 +243,19 @@ describe("nothing is left behind", () => {
   });
 });
 
+describe("before migration 0035 is applied", () => {
+  it("still deletes a connection when the plan_pauses table does not exist yet", async () => {
+    // The code can deploy before the owner pastes the migration. A delete that
+    // stopped half way — events gone, connection row still there — would be
+    // worse than either outcome, so a missing plan_pauses table counts as zero.
+    const conn = await connection();
+    await db.execute(sql`drop table plan_pauses`);
+    const res = await deleteConnectionData(db, ORG, conn.id, "Sheet");
+    expect(res.removed).toBe(true);
+    expect(res.rows.plan_pauses).toBe(0);
+  });
+});
+
 describe("who is allowed to delete what", () => {
   it("refuses a connection belonging to another org", async () => {
     const conn = await connection();
