@@ -48,12 +48,18 @@ function whatToSay(plan: ResolvedPlan, lockedCount: number, welcome: string | nu
       text: `Your last payment for ${name} didn't go through. Update your card to keep your plan — Stripe will try again in the meantime.`,
       action: { href: BILLING, label: "Update card" },
     };
-  if (plan.source === "trial" && plan.endsAt) {
+  // Any free time about to run out — a trial, a launch gift, a code, a referral
+  // reward — is worth a week's notice; a lifetime grant never runs out.
+  if (plan.source !== "subscription" && plan.plan !== "free" && plan.endsAt && !plan.lifetime) {
     const left = daysLeft(plan.endsAt, now);
+    const when = left <= 1 ? "within a day" : `in ${left} days`;
     if (left <= 7)
       return {
         tone: "warn",
-        text: `Your ${name} trial ends ${left <= 1 ? "within a day" : `in ${left} days`}. Add a card to keep it — you won't be charged until it ends.`,
+        text:
+          plan.source === "trial"
+            ? `Your ${name} trial ends ${when}. Add a card to keep it — you won't be charged until it ends.`
+            : `Your free ${name} ends ${when}. Add a card to keep it — you won't be charged until then.`,
         action: { href: BILLING, label: "Add a card" },
       };
     return null;

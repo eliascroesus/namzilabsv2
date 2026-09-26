@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { requireStaff } from "@/lib/admin/access";
+import { AdminTabs } from "@/components/admin/admin-tabs";
 
 export const dynamic = "force-dynamic";
 
@@ -29,21 +30,14 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <Link href="/admin" className="text-sm font-semibold">
             Namzilabs admin
           </Link>
-          <nav className="flex items-center gap-4 text-sm text-muted-foreground">
-            <Link href="/admin" className="hover:text-foreground">
-              Overview
-            </Link>
-            <Link href="/admin/search" className="hover:text-foreground">
-              Look up
-            </Link>
-          </nav>
+          <AdminTabs />
           {/*
             Who is looking. On a surface that reads every tenant, "which staff
             account am I signed in as" should never be a question — it is the
             one thing that makes an audit row meaningful afterwards.
           */}
-          <span className="ml-auto truncate text-xs text-muted-foreground">{staff.email}</span>
-          <Link href="/dashboard" className="text-xs text-muted-foreground hover:text-foreground">
+          <span className="ml-auto hidden truncate text-xs text-muted-foreground md:inline">{staff.email}</span>
+          <Link href="/dashboard" className="ml-auto shrink-0 text-xs text-muted-foreground hover:text-foreground md:ml-0">
             Back to app
           </Link>
         </div>

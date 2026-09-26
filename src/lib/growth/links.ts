@@ -63,26 +63,39 @@ export function safeDestination(raw: string | null | undefined): string | null {
   return s;
 }
 
+/**
+ * Why a link was refused, as a CODE — the admin page maps it to a sentence,
+ * so no text from a URL is ever printed on a staff page.
+ */
+export type LinkError = "slug" | "tags" | "campaign" | "destination" | "taken";
+export const LINK_ERRORS: Record<LinkError, string> = {
+  slug: "The slug needs 2–48 lower-case letters, numbers or dashes.",
+  tags: "Give the link a source (like instagram) and a medium (like social).",
+  campaign: "The campaign can use letters, numbers, dashes and underscores.",
+  destination: "The destination must be a page on this site, like / or /pricing.",
+  taken: "There is already a link with that slug.",
+};
+
 export async function createLink(
   db: DB,
   input: { label: string; slug: string; source: string; medium: string; campaign?: string | null; destination?: string | null; createdBy: string },
-): Promise<{ ok: true; link: TrackingLink } | { ok: false; error: string }> {
+): Promise<{ ok: true; link: TrackingLink } | { ok: false; error: LinkError }> {
   const slug = normaliseSlug(input.slug);
-  if (!slug) return { ok: false, error: "The slug needs 2–48 lower-case letters, numbers or dashes." };
+  if (!slug) return { ok: false, error: "slug" };
   const source = tag(input.source);
   const medium = tag(input.medium);
-  if (!source || !medium) return { ok: false, error: "Give the link a source (like instagram) and a medium (like social)." };
+  if (!source || !medium) return { ok: false, error: "tags" };
   const campaign = input.campaign?.trim() ? tag(input.campaign) : null;
-  if (input.campaign?.trim() && !campaign) return { ok: false, error: "The campaign can use letters, numbers, dashes and underscores." };
+  if (input.campaign?.trim() && !campaign) return { ok: false, error: "campaign" };
   const destination = safeDestination(input.destination);
-  if (!destination) return { ok: false, error: "The destination must be a page on this site, like / or /pricing." };
+  if (!destination) return { ok: false, error: "destination" };
   const label = input.label.trim() || slug;
   const [link] = await db
     .insert(trackingLinks)
     .values({ slug, label, source, medium, campaign, destination, createdBy: input.createdBy })
     .onConflictDoNothing()
     .returning();
-  if (!link) return { ok: false, error: `There is already a link at /go/${slug}.` };
+  if (!link) return { ok: false, error: "taken" };
   return { ok: true, link };
 }
 

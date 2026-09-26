@@ -94,6 +94,14 @@ describe("the plan banner", () => {
     expect(h).toContain('href="/dashboard/settings/billing"');
   });
 
+  it("warns before any free time runs out — a launch gift or a code, not only a trial", () => {
+    const h = banner({ plan: { plan: "growth", source: "launch", state: "granted", endsAt: days(5), lifetime: false } });
+    expect(h).toContain("Your free Growth ends in 5 days");
+    expect(h).toContain("Add a card");
+    expect(banner({ plan: { plan: "growth", source: "code", state: "granted", endsAt: days(40), lifetime: false } })).toBe("");
+    expect(banner({ plan: { plan: "scale", source: "manual", state: "granted", endsAt: null, lifetime: true } })).toBe("");
+  });
+
   it("is red while a payment is failing", () => {
     const h = banner({ plan: { plan: "growth", source: "subscription", state: "past_due", endsAt: null, lifetime: false } });
     expect(h).toContain('role="alert"');

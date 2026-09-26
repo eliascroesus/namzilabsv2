@@ -202,20 +202,26 @@ describe("nothing reads the fleet without passing the gate", () => {
   });
 });
 
-describe("the admin surface is read-only", () => {
-  it("issues no writes anywhere", () => {
+describe("the admin surface writes in one place", () => {
+  it("writes only through app/admin/actions.ts, where every act is gated and audited", () => {
     /**
-     * v1 is deliberately look-but-do-not-touch: nothing to get wrong, nothing
-     * to abuse, and the whole surface can be reasoned about as a set of
-     * SELECTs. Adding an action means adding its own gate and its own audit
-     * row — and deleting this test on purpose, rather than by accident.
+     * v1 was look-but-do-not-touch, and this test said so: adding an action
+     * would mean adding its own gate and its own audit row, and changing this
+     * test on purpose. That happened on 26 Sep 2026 — the owner can now grant
+     * and revoke plans, make codes and links and start launch trials. Every
+     * one lives in ONE file, each gated by requireStaff() as its first
+     * statement and each leaving an admin.* audit row (both pinned in
+     * tests/admin-actions.test.ts). Everything else here is still SELECTs.
      */
+    const ACTIONS = "src/app/admin/actions.ts";
     for (const file of [...walk(join(process.cwd(), "src/lib/admin")), ...walk(join(process.cwd(), "src/app/admin"))]) {
-      const src = code(readFileSync(file, "utf8"));
       const rel = file.slice(process.cwd().length + 1);
+      if (rel === ACTIONS) continue;
+      const src = code(readFileSync(file, "utf8"));
       expect(src, `${rel} writes to the database`).not.toMatch(/\.insert\(|\.update\(|\.delete\(/);
       expect(src, `${rel} declares a server action`).not.toMatch(/"use server"/);
     }
+    expect(readFileSync(join(process.cwd(), ACTIONS), "utf8")).toMatch(/^"use server";/);
   });
 
   it("shows no customer content, only shape", () => {

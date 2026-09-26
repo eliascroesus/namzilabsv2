@@ -28,7 +28,7 @@ export function Workspace({ orgId, names }: { orgId: string | null; names: OrgNa
   if (!orgId) return <span className="text-muted-foreground">—</span>;
   const name = names.get(orgId);
   return (
-    <Link href={`/admin/search?q=${encodeURIComponent(orgId)}`} className="group inline-flex flex-col gap-0.5">
+    <Link href={`/admin/workspaces/${encodeURIComponent(orgId)}`} className="group inline-flex flex-col gap-0.5">
       <span className="text-sm font-medium text-foreground group-hover:underline">
         {/* A workspace whose name would not resolve is almost always one that
             has been deleted — the audit log outlives the tenant, deliberately.

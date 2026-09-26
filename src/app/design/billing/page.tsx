@@ -1,3 +1,4 @@
+import { FunnelTable } from "@/components/admin/funnel-table";
 import { PlanBanner } from "@/components/billing/plan-banner";
 import { PlanPicker, type PlanPickerProps } from "@/components/billing/plan-picker";
 import { PlanStatus, type Usage } from "@/components/billing/plan-status";
@@ -109,6 +110,17 @@ export default function DesignBillingPage() {
             </figure>
           ))}
         </div>
+
+        <SectionHeading className="mt-14">Admin — where customers come from</SectionHeading>
+        <figure data-case="Admin funnel" className="mt-4">
+          <FunnelTable
+            rows={[
+              { key: "instagram", name: "instagram", clicks: 412, signups: 38, connected: 29, metric: 22, trials: 17, paying: 6 },
+              { key: "facebook", name: "facebook", clicks: 980, signups: 41, connected: 20, metric: 12, trials: 9, paying: 2 },
+              { key: "direct", name: "Direct (no link)", clicks: null, signups: 57, connected: 40, metric: 31, trials: 25, paying: 11 },
+            ]}
+          />
+        </figure>
 
         <SectionHeading className="mt-14">Plan picker</SectionHeading>
         <div className="mt-4 flex flex-col gap-14">

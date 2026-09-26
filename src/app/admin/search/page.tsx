@@ -3,10 +3,10 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { InfoTip } from "@/components/ui/info-tip";
-import { StatusPill } from "@/components/ui/badge";
 import { TableShell, Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
 import { requireStaff } from "@/lib/admin/access";
 import { findWorkspaces, workspaceCard, type WorkspaceCard } from "@/lib/admin/lookup";
+import { WorkspaceCardView } from "@/components/admin/workspace-card";
 
 export const dynamic = "force-dynamic";
 
@@ -29,72 +29,6 @@ export const dynamic = "force-dynamic";
  */
 
 const LIMIT = 5;
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-baseline justify-between gap-4 py-1">
-      <span className="text-xs text-muted-foreground">{label}</span>
-      <span className="text-sm tabular-nums">{value}</span>
-    </div>
-  );
-}
-
-function Workspace({ card }: { card: WorkspaceCard }) {
-  const broken = card.connections.filter((c) => c.status === "error" || c.syncStatus === "error").length;
-  return (
-    <Card className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="text-md font-semibold">{card.name ?? "(name unavailable)"}</h3>
-        {broken > 0 ? <StatusPill tone="danger">{broken} broken</StatusPill> : <StatusPill tone="success">healthy</StatusPill>}
-      </div>
-      <p className="font-mono text-xs text-muted-foreground">{card.orgId}</p>
-
-      <div className="border-t border-border pt-2">
-        <Row label="Owner" value={card.ownerEmail ?? card.ownerUserId ?? "unknown"} />
-        <Row label="Members" value={card.members === null ? "unknown" : String(card.members)} />
-        <Row label="Created" value={card.claimedAt ? card.claimedAt.toISOString().slice(0, 10) : "unknown"} />
-      </div>
-
-      <div className="border-t border-border pt-2">
-        <Row label="Connections" value={String(card.connections.length)} />
-        <Row label="Flows" value={String(card.flows)} />
-        <Row label="Metrics" value={String(card.metrics)} />
-        <Row label="Board tiles" value={String(card.tiles)} />
-        <Row label="Events" value={String(card.events)} />
-        <Row label="AI assistants" value={String(card.aiGrants)} />
-      </div>
-
-      {card.connections.length > 0 ? (
-        <div className="border-t border-border pt-2">
-          <SectionHeading>Apps</SectionHeading>
-          <ul className="flex flex-wrap gap-1.5">
-            {card.connections.map((c, i) => (
-              <li key={`${c.source}-${i}`}>
-                <StatusPill tone={c.status === "error" || c.syncStatus === "error" ? "danger" : "pending"}>
-                  {c.source}
-                </StatusPill>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-
-      {card.recentGovernance.length > 0 ? (
-        <div className="border-t border-border pt-2">
-          <SectionHeading>Recent governance</SectionHeading>
-          <ul className="space-y-1">
-            {card.recentGovernance.map((g, i) => (
-              <li key={`${g.action}-${i}`} className="flex justify-between gap-4 text-xs">
-                <span className="font-mono">{g.action}</span>
-                <span className="text-muted-foreground">{g.at.toISOString().slice(0, 16).replace("T", " ")}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-    </Card>
-  );
-}
 
 export default async function AdminSearchPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   await requireStaff();
@@ -156,7 +90,7 @@ export default async function AdminSearchPage({ searchParams }: { searchParams: 
       {cards.length > 0 ? (
         <div className="mt-6 grid gap-4 lg:grid-cols-2">
           {cards.map((card) => (
-            <Workspace key={card.orgId} card={card} />
+            <WorkspaceCardView key={card.orgId} card={card} link />
           ))}
         </div>
       ) : null}

@@ -8,6 +8,12 @@ import { totalsFrom } from "@/lib/admin/growth";
 import { resolveOrgNames } from "@/lib/admin/org-names";
 import { MinorStats, PrimaryStat, Workspace, When } from "@/components/admin/bits";
 import { GrowthSection } from "@/components/admin/growth-section";
+import { FunnelTable } from "@/components/admin/funnel-table";
+import { startLaunchTrialsAction } from "@/app/admin/actions";
+import { SubmitButton } from "@/components/ui/submit-button";
+import { billingOverview, growthFunnel } from "@/lib/admin/billing";
+import { billingEnabled } from "@/lib/billing/state";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
@@ -25,8 +31,16 @@ export const dynamic = "force-dynamic";
 
 const fmt = new Intl.NumberFormat("en-GB");
 
-export default async function AdminOverviewPage() {
+type SP = Record<string, string | string[] | undefined>;
+const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : (v ?? ""));
+const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+
+export default async function AdminOverviewPage({ searchParams }: { searchParams: Promise<SP> }) {
+  const sp = await searchParams;
   const fleet = await fleetOverview();
+  const [money, funnel] = [await billingOverview(), await growthFunnel()];
+  const billingOn = billingEnabled();
+  const launched = one(sp.launched);
   const [broken, newWorkspaces, growth] = [await brokenConnections(), await recentWorkspaces(), await fleetGrowth(30)];
   const totals = totalsFrom(growth);
   /**
@@ -87,6 +101,62 @@ export default async function AdminOverviewPage() {
           ]}
         />
       </div>
+
+      {/* ── MONEY AND WHERE IT COMES FROM ─────────────────────────────────
+          MRR is list price: a yearly plan counts a twelfth a month, and
+          discounts or referral credits are not netted off. Stripe's own
+          dashboard is the ledger; this is the pulse. */}
+      {launched !== "" && (
+        <p role="status" className="mt-6 rounded-card border border-success-soft bg-success-soft/50 p-4 text-sm text-success-ink">
+          Launch trials: {launched} {launched === "1" ? "workspace" : "workspaces"} got 30 days of Growth
+          {one(sp.rewarded) && one(sp.rewarded) !== "0" ? `, and ${one(sp.rewarded)} referral rewards were paid` : ""}.
+        </p>
+      )}
+      {one(sp.error) === "billing_off" && (
+        <p role="alert" className="mt-6 rounded-card border border-danger-soft bg-danger-soft/50 p-4 text-sm text-danger-ink">
+          Switch billing on (BILLING_ENABLED) before starting launch trials — otherwise their 30 days run out before anyone could be charged.
+        </p>
+      )}
+      <section className="mt-8">
+        <SectionHeading>Revenue</SectionHeading>
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <PrimaryStat label="Paying" value={money.paying} hint={money.byPlan.map((p) => `${p.n} ${p.plan}`).join(" · ") || "none yet"} />
+          <Card className="flex flex-col gap-1.5">
+            <span className="text-xs uppercase tracking-wide text-muted-foreground">MRR</span>
+            <span className="stat-numeral text-display-sm font-semibold leading-none tabular-nums">{usd.format(money.mrr)}</span>
+            <span className="text-xs text-muted-foreground">list price, a month</span>
+          </Card>
+          <PrimaryStat label="On a trial" value={money.trialsActive} hint="in-app, launch and card trials" />
+          <Card className="flex flex-col justify-between gap-2">
+            <span className="text-xs uppercase tracking-wide text-muted-foreground">Launch trials</span>
+            {money.launchStartedAt ? (
+              <span className="text-sm">Started {money.launchStartedAt.toISOString().slice(0, 10)}</span>
+            ) : billingOn ? (
+              <form action={startLaunchTrialsAction}>
+                <SubmitButton size="sm" pendingLabel="Starting…">
+                  Start launch trials
+                </SubmitButton>
+              </form>
+            ) : (
+              <span className="text-xs text-muted-foreground">Available once BILLING_ENABLED is on.</span>
+            )}
+            <span className="text-xs text-muted-foreground">30 days of Growth for every workspace without a plan, once.</span>
+          </Card>
+        </div>
+      </section>
+
+      <section className="mt-8">
+        <div className="flex items-baseline justify-between gap-4">
+          <SectionHeading>Where customers come from</SectionHeading>
+          <Link href="/admin/links" className="text-xs text-muted-foreground underline-offset-4 hover:underline">
+            Links and their funnels
+          </Link>
+        </div>
+        <FunnelTable
+          rows={funnel.sources.map((r) => ({ key: r.source, name: r.source === "direct" ? "Direct (no link)" : r.source, ...r }))}
+          empty="No sign-ups recorded yet. Make a tracking link to see where they come from."
+        />
+      </section>
 
       <GrowthSection series={growth} totals={totals} />
 

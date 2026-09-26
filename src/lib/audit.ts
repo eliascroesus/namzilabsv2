@@ -106,7 +106,15 @@ type AuditAction =
   // ── What a workspace is on, and how it got there (see lib/billing) ───────
   | "billing.trial_start"
   | "billing.code_redeem"
-  | "billing.referral_reward";
+  | "billing.referral_reward"
+  // ── The owner's back office (see app/admin/actions.ts) ───────────────────
+  | "admin.grant"
+  | "admin.revoke"
+  | "admin.code_create"
+  | "admin.code_toggle"
+  | "admin.link_create"
+  | "admin.link_archive"
+  | "admin.launch_trials";
 
 /**
  * Enum values, counts and flags. Strings are permitted because provider slugs

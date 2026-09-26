@@ -98,7 +98,9 @@ describe("every server action is gated", () => {
         const rest = src.slice(m.index);
         const next = rest.indexOf("\nexport ", 1);
         const body = next === -1 ? rest : rest.slice(0, next);
-        if (/requireOrg\(\)|withAuth\(/.test(body)) continue;
+        // `requireStaff()` is `withAuth()` plus the ADMIN_EMAILS allowlist — a
+        // stricter gate, not a missing one (see src/lib/admin/access.ts).
+        if (/requireOrg\(\)|withAuth\(|requireStaff\(\)/.test(body)) continue;
         if (UNGATED_BY_DESIGN[name]) continue;
         naked.push(`${rel} :: ${name}`);
       }
@@ -119,11 +121,20 @@ describe("every server action is gated", () => {
     for (const file of ACTION_FILES) {
       const src = code(readFileSync(file, "utf8"));
       const rel = file.slice(root.length + 1);
+      // Staff act on whichever workspace they name — that is the back office's
+      // job, and every act there is gated by requireStaff() as its FIRST
+      // statement and audited (tests/admin-actions.test.ts). No customer can
+      // reach it.
+      if (rel === "src/app/admin/actions.ts") continue;
       for (const key of ["orgId", "organizationId", "org_id", "tenantId"]) {
         // `switchOrgAction` is the one place an org id legitimately arrives
         // from a form, because WorkOS validates it — see UNGATED_BY_DESIGN.
         if (rel === "src/app/actions.ts" && key === "organizationId") continue;
-        expect(src, `${rel} reads ${key} from a form`).not.toContain(`formData.get("${key}")`);
+        // Any spelling of reading it: `formData.get("orgId")`, `fd.get('orgId')`,
+        // or a helper like `str(formData, "orgId")` — a helper must not be
+        // what makes this check pass.
+        const read = new RegExp(`\\.get\\(\\s*["']${key}["']\\s*\\)|\\(\\s*\\w+\\s*,\\s*["']${key}["']\\s*\\)`);
+        expect(src, `${rel} reads ${key} from a form`).not.toMatch(read);
       }
     }
   });
