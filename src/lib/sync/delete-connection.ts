@@ -13,6 +13,7 @@ import {
   usageLedger,
 } from "@/db/schema";
 import type { DB } from "@/db/types";
+import { isUndefinedTableError } from "@/lib/db-errors";
 import { FLEET_CONNECTION_ID, FLEET_ORG_ID } from "@/lib/provider-gateway/budget";
 import { markStaleForSource } from "@/lib/flow/materialize";
 import { getConnector } from "@/connectors/registry";
@@ -21,12 +22,6 @@ import { revokeOAuthGrant } from "@/lib/oauth/flow";
 import { oauthProviderFor } from "@/lib/oauth/providers";
 import { wakeSweeper } from "@/lib/sweep/wake";
 
-
-/** Postgres `undefined_table` (42P01), on the error or the driver's wrapped cause. */
-function isUndefinedTable(e: unknown): boolean {
-  const codeOf = (x: unknown) => (x && typeof x === "object" ? (x as { code?: unknown }).code : undefined);
-  return codeOf(e) === "42P01" || codeOf((e as { cause?: unknown } | null)?.cause) === "42P01";
-}
 
 /**
  * REMOVING A CONNECTION AND EVERYTHING SYNCED FROM IT. Irreversible.
@@ -311,7 +306,7 @@ export async function deleteConnectionData(
   // row standing. Only "no such table" is forgiven; any other error still throws.
   rows.plan_pauses = await count(db.delete(planPauses).where(eq(planPauses.connectionId, id)).returning({ id: planPauses.connectionId })).catch(
     (e: unknown) => {
-      if (isUndefinedTable(e)) return 0;
+      if (isUndefinedTableError(e)) return 0;
       throw e;
     },
   );

@@ -76,12 +76,12 @@ CREATE TABLE IF NOT EXISTS "tracking_links" (
   CONSTRAINT "tracking_links_slug_unique" UNIQUE("slug")
 );--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "link_clicks" (
-  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
   "link_id" uuid NOT NULL,
-  "at" timestamp with time zone DEFAULT now() NOT NULL,
+  "day" date NOT NULL,
+  "clicks" integer DEFAULT 0 NOT NULL,
+  CONSTRAINT "link_clicks_pk" PRIMARY KEY("link_id","day"),
   CONSTRAINT "link_clicks_link_id_tracking_links_id_fk" FOREIGN KEY ("link_id") REFERENCES "public"."tracking_links"("id") ON DELETE cascade ON UPDATE no action
 );--> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "link_clicks_link_at_idx" ON "link_clicks" USING btree ("link_id","at");--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "workspace_acquisitions" (
   "org_id" text PRIMARY KEY NOT NULL,
   "link_id" uuid,

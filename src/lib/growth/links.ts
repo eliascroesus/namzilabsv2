@@ -1,4 +1,4 @@
-import { and, count, eq, gte, inArray, isNull } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 import {
   accessGrants,
   billingSubscriptions,
@@ -116,8 +116,12 @@ export async function linkBySlug(db: DB, raw: string): Promise<TrackingLink | nu
   return link ?? null;
 }
 
+/** One more click on today's counter for this link (UTC days). */
 export async function recordClick(db: DB, linkId: string, at = new Date()): Promise<void> {
-  await db.insert(linkClicks).values({ linkId, at });
+  await db
+    .insert(linkClicks)
+    .values({ linkId, day: at.toISOString().slice(0, 10), clicks: 1 })
+    .onConflictDoUpdate({ target: [linkClicks.linkId, linkClicks.day], set: { clicks: sql`${linkClicks.clicks} + 1` } });
 }
 
 /** Where the visitor lands: the destination, with the link's utm tags added where it has none of its own. */
@@ -199,9 +203,9 @@ const PAYING = ["active", "past_due"];
 export async function linkFunnel(db: DB, opts: { since?: Date } = {}): Promise<{ links: LinkFunnelRow[]; sources: SourceFunnelRow[] }> {
   const allLinks = await db.select().from(trackingLinks);
   const clickRows = await db
-    .select({ linkId: linkClicks.linkId, n: count() })
+    .select({ linkId: linkClicks.linkId, n: sql<number>`coalesce(sum(${linkClicks.clicks}), 0)::int` })
     .from(linkClicks)
-    .where(opts.since ? gte(linkClicks.at, opts.since) : undefined)
+    .where(opts.since ? gte(linkClicks.day, opts.since.toISOString().slice(0, 10)) : undefined)
     .groupBy(linkClicks.linkId);
   const clicks = new Map(clickRows.map((r) => [r.linkId, Number(r.n)]));
 

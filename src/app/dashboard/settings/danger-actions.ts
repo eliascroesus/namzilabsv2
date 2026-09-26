@@ -9,6 +9,7 @@ import { getDb } from "@/db/client";
 import { workspaceOwners } from "@/db/schema";
 import { requireOrg } from "@/lib/auth";
 import { destroyUserData, destroyWorkspaceData } from "@/lib/destroy";
+import { cancelForDeletion, SubscriptionNotCancelled } from "@/lib/billing/stripe";
 import { recordAudit } from "@/lib/audit";
 
 /**
@@ -59,6 +60,8 @@ async function isOwner(orgId: string, userId: string): Promise<boolean> {
 }
 
 const back = (msg: string) => redirect(`/dashboard/settings?danger_error=${encodeURIComponent(msg.slice(0, 200))}`);
+const NOT_CANCELLED =
+  "We couldn't cancel the subscription with Stripe, so nothing was deleted. Try again in a minute, or cancel it from Plan & billing first.";
 
 /**
  * HAND THE WORKSPACE TO SOMEBODY ELSE.
@@ -126,7 +129,15 @@ export async function deleteWorkspaceAction(formData: FormData): Promise<void> {
 
   // OURS FIRST — see rule 4. A half-finished sweep leaves a workspace that can
   // be deleted again; a deleted org leaves data nobody can reach.
-  const result = await destroyWorkspaceData(getDb(), orgId);
+  let result: Awaited<ReturnType<typeof destroyWorkspaceData>>;
+  try {
+    result = await destroyWorkspaceData(getDb(), orgId);
+  } catch (e) {
+    // Stripe would not stop the billing, so NOTHING was deleted — see
+    // `cancelForDeletion`. Said plainly rather than as an error page.
+    if (e instanceof SubscriptionNotCancelled) back(NOT_CANCELLED);
+    throw e;
+  }
   console.info("[destroy] workspace", orgId, JSON.stringify(result.rows));
 
   /**
@@ -189,6 +200,22 @@ export async function deleteAccountAction(formData: FormData): Promise<void> {
     .listOrganizationMemberships({ userId, statuses: ["active"] })
     .then((r) => r.data)
     .catch(() => []);
+
+  /**
+   * STOP EVERY SUBSCRIPTION BEFORE DESTROYING ANY WORKSPACE. Destroying them
+   * one by one would leave the first gone and the second still billing if
+   * Stripe refused on the second; cancelling all of them first means a refusal
+   * deletes nothing at all.
+   */
+  for (const m of memberships) {
+    if (!(await isOwner(m.organizationId, userId))) continue;
+    try {
+      await cancelForDeletion(getDb(), m.organizationId);
+    } catch (e) {
+      if (e instanceof SubscriptionNotCancelled) redirect(`/dashboard/profile?danger_error=${encodeURIComponent(NOT_CANCELLED)}`);
+      throw e;
+    }
+  }
 
   for (const m of memberships) {
     if (await isOwner(m.organizationId, userId)) {

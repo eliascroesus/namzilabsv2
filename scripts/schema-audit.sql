@@ -200,9 +200,9 @@ WITH expected (tbl, col) AS (
     ('flows', 'published_version'),
     ('flows', 'created_at'),
     ('flows', 'updated_at'),
-    ('link_clicks', 'id'),
     ('link_clicks', 'link_id'),
-    ('link_clicks', 'at'),
+    ('link_clicks', 'day'),
+    ('link_clicks', 'clicks'),
     ('mcp_bindings', 'binding_key'),
     ('mcp_bindings', 'user_id'),
     ('mcp_bindings', 'org_id'),
@@ -408,7 +408,7 @@ ORDER BY
   col;
 
 -- ---------------------------------------------------------------------------
--- QUERY 2 (optional) — indexes (61 expected).
+-- QUERY 2 (optional) — indexes (60 expected).
 -- A missing index never breaks a query, it only makes it slow, so this is
 -- separate and can be ignored while chasing a real outage.
 -- ---------------------------------------------------------------------------
@@ -451,7 +451,6 @@ WITH expected (tbl, idx) AS (
     ('flow_versions', 'flow_versions_flow_version_uq'),
     ('flow_versions', 'flow_versions_org_idx'),
     ('flows', 'flows_org_idx'),
-    ('link_clicks', 'link_clicks_link_at_idx'),
     ('mcp_bindings', 'mcp_bindings_user_idx'),
     ('mcp_bindings', 'mcp_bindings_expires_idx'),
     ('mcp_calls', 'mcp_calls_org_at_idx'),

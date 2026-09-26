@@ -109,6 +109,24 @@ describe("/go/<slug>", () => {
   });
 });
 
+describe("counting clicks", () => {
+  it("keeps one counter per link per day, so the table grows with the calendar, not with traffic", async () => {
+    const l = await link();
+    const day1 = new Date("2026-10-01T09:00:00Z");
+    await links.recordClick(db, l.id, day1);
+    await links.recordClick(db, l.id, new Date("2026-10-01T23:59:00Z"));
+    await links.recordClick(db, l.id, day1);
+    await links.recordClick(db, l.id, new Date("2026-10-02T00:01:00Z"));
+    const rows = (await db.select().from(linkClicks).where(eq(linkClicks.linkId, l.id))).sort((a, b) => a.day.localeCompare(b.day));
+    expect(rows.map((r) => [r.day, r.clicks])).toEqual([
+      ["2026-10-01", 3],
+      ["2026-10-02", 1],
+    ]);
+    expect((await links.linkFunnel(db)).links[0].clicks).toBe(4);
+    expect((await links.linkFunnel(db, { since: new Date("2026-10-02T00:00:00Z") })).links[0].clicks).toBe(1);
+  });
+});
+
 describe("recording where a new workspace came from", () => {
   const jarWith = (value?: string) => {
     const store = new Map(value ? [[links.SOURCE_COOKIE, value]] : []);

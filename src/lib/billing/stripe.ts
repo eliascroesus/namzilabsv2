@@ -2,6 +2,7 @@ import Stripe from "stripe";
 import { eq } from "drizzle-orm";
 import { billingSubscriptions } from "@/db/schema";
 import type { DB } from "@/db/types";
+import { isUndefinedTableError } from "@/lib/db-errors";
 import { PLANS, planForLookupKey, type Interval, type PaidPlanId } from "./plans";
 import { applyPlan } from "./pauses";
 
@@ -218,4 +219,53 @@ export async function syncCheckoutSession(db: DB, sessionId: string, client: Str
   const subscriptionId = typeof session.subscription === "string" ? session.subscription : (session.subscription?.id ?? null);
   if (!subscriptionId) return { orgId: session.client_reference_id ?? null };
   return syncSubscription(db, subscriptionId, client);
+}
+
+/** Statuses after which a subscription can no longer charge anybody. */
+const FINISHED = new Set(["canceled", "incomplete_expired"]);
+
+/** Stripe would not cancel a deleted workspace's subscription — so nothing was deleted. */
+export class SubscriptionNotCancelled extends Error {
+  constructor(
+    readonly orgId: string,
+    readonly cause: unknown,
+  ) {
+    super(`Stripe did not cancel the subscription for ${orgId}`);
+    this.name = "SubscriptionNotCancelled";
+  }
+}
+
+/**
+ * THE WORKSPACE IS BEING DELETED: stop charging for it, now.
+ *
+ * Called before a single row goes. Cancels immediately (no proration, no
+ * final invoice — they chose to delete). A subscription Stripe no longer has
+ * counts as cancelled. Anything else Stripe says THROWS, on purpose: the
+ * deletion stops before anything is gone, because a customer billed every
+ * month for a workspace that no longer exists is worse than a delete that
+ * asks them to try again. No billing table yet (migration 0035 unapplied)
+ * means nothing was ever billed. Returns whether Stripe was asked.
+ */
+export async function cancelForDeletion(db: DB, orgId: string, client?: StripeClient): Promise<boolean> {
+  let row: { subscriptionId: string | null; status: string | null } | undefined;
+  try {
+    [row] = await db
+      .select({ subscriptionId: billingSubscriptions.stripeSubscriptionId, status: billingSubscriptions.status })
+      .from(billingSubscriptions)
+      .where(eq(billingSubscriptions.orgId, orgId))
+      .limit(1);
+  } catch (e) {
+    if (isUndefinedTableError(e)) return false;
+    throw e;
+  }
+  if (!row?.subscriptionId || FINISHED.has(row.status ?? "")) return false;
+  try {
+    await (client ?? stripeClient()).subscriptions.cancel(row.subscriptionId, { invoice_now: false, prorate: false });
+  } catch (e) {
+    if ((e as { code?: unknown } | null)?.code !== "resource_missing") throw new SubscriptionNotCancelled(orgId, e);
+  }
+  // Marked here so a second pass (the account delete cancels every workspace
+  // before destroying any) does not ask Stripe to cancel it again.
+  await db.update(billingSubscriptions).set({ status: "canceled", updatedAt: new Date() }).where(eq(billingSubscriptions.orgId, orgId));
+  return true;
 }

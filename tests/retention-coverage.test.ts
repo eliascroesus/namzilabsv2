@@ -178,6 +178,49 @@ const TABLES: Record<string, Classification> = {
       "delete somebody's earned rewards.",
   },
 
+  // ── Plans, billing and growth (migration 0035) ─────────────────────────────
+  billing_subscriptions: {
+    kind: "bounded",
+    by:
+      "at most one row per workspace — `org_id` is the primary key and every Stripe event rewrites it in place " +
+      "(the mirror of Stripe's own copy, never a history). Deleting the workspace cancels the subscription and removes it",
+  },
+  access_grants: {
+    kind: "bounded",
+    by:
+      "a handful per workspace, each behind a deliberate act: one trial, one per code redeemed (unique per code), one " +
+      "per referral rung (unique per rung), one launch trial (unique), and the grants staff make by hand. Revoking " +
+      "marks a row rather than adding one, and nothing is written per request",
+  },
+  trial_claims: {
+    kind: "bounded",
+    by: "at most one row per PERSON, ever — `user_id` is the primary key, which is the rule it exists to enforce",
+  },
+  promo_codes: {
+    kind: "bounded",
+    by: "one row per access code staff create in the admin panel; switching one off updates it in place",
+  },
+  plan_pauses: {
+    kind: "bounded",
+    by:
+      "at most one row per connection (`connection_id` is the primary key), written when a plan shrinks and deleted " +
+      "when it grows back or the connection goes",
+  },
+  tracking_links: {
+    kind: "bounded",
+    by: "one row per tracking link staff create; archiving marks the row rather than removing it",
+  },
+  link_clicks: {
+    kind: "bounded",
+    by:
+      "one COUNTER per link per UTC day that saw a click — (link_id, day) is the primary key and a click is an " +
+      "increment, so it grows with the calendar and the number of links, never with traffic",
+  },
+  workspace_acquisitions: {
+    kind: "bounded",
+    by: "at most one row per workspace (`org_id` is the primary key), written once when the workspace is made",
+  },
+
   // ── Known gaps ────────────────────────────────────────────────────────────
   raw_events: {
     kind: "gap",

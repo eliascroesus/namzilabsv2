@@ -11,6 +11,7 @@ import {
   uniqueIndex,
   index,
   primaryKey,
+  date,
 } from "drizzle-orm/pg-core";
 
 /**
@@ -1617,17 +1618,23 @@ export const trackingLinks = pgTable("tracking_links", {
   archivedAt: timestamp("archived_at", { withTimezone: true }),
 });
 
-/** ONE ROW PER HUMAN CLICK. No IP, no user agent — a count, not a profile. */
+/**
+ * CLICKS ON A TRACKING LINK, COUNTED PER DAY — one row per link per UTC day
+ * that saw a human click, so the table grows with the calendar rather than
+ * with traffic and needs no pruning. No IP, no user agent: a count, not a
+ * profile.
+ */
 export const linkClicks = pgTable(
   "link_clicks",
   {
-    id: uuid("id").defaultRandom().primaryKey(),
     linkId: uuid("link_id")
       .notNull()
       .references(() => trackingLinks.id, { onDelete: "cascade" }),
-    at: timestamp("at", { withTimezone: true }).defaultNow().notNull(),
+    /** The UTC day the clicks landed on. */
+    day: date("day", { mode: "string" }).notNull(),
+    clicks: integer("clicks").default(0).notNull(),
   },
-  (t) => [index("link_clicks_link_at_idx").on(t.linkId, t.at)],
+  (t) => [primaryKey({ name: "link_clicks_pk", columns: [t.linkId, t.day] })],
 );
 
 /**

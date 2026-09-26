@@ -48,6 +48,10 @@ function declared(): Array<{ name: string; cols: string[] }> {
  * indefensible, which is why the two are tested in the same suite run.
  */
 const SURVIVES_DELETION: Record<string, string> = {
+  trial_claims:
+    "the one-trial-per-PERSON rule lives here, keyed by user id; deleting it with a workspace would let anybody " +
+    "delete and recreate a workspace to start another free trial. It goes with the person instead, when they " +
+    "delete their account (destroyUserData).",
   audit_log:
     "the governance audit trail must outlive the workspace it describes, or deleting a workspace erases the " +
     "record of who deleted it. Holds no personal data and no user content — see tests/audit.test.ts, which " +

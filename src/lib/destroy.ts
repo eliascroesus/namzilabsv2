@@ -1,6 +1,8 @@
 import { eq, inArray } from "drizzle-orm";
 import {
+  accessGrants,
   backfillJobs,
+  billingSubscriptions,
   connections,
   dashboardGroups,
   dashboardNotes,
@@ -17,6 +19,7 @@ import {
   mcpCalls,
   mcpGrants,
   metrics,
+  planPauses,
   rankAssignments,
   rawEvents,
   referralCodes,
@@ -25,8 +28,10 @@ import {
   streamFields,
   syncState,
   testRuns,
+  trialClaims,
   usageLedger,
   userProfiles,
+  workspaceAcquisitions,
   workspaceOwners,
   workspaceRanks,
   workspaceSettings,
@@ -35,6 +40,7 @@ import {
 } from "@/db/schema";
 import type { DB } from "@/db/types";
 import { isUndefinedTableError } from "@/lib/db-errors";
+import { cancelForDeletion, type StripeClient } from "@/lib/billing/stripe";
 import { deleteConnectionData } from "@/lib/sync/delete-connection";
 
 /**
@@ -120,6 +126,14 @@ const ORG_TABLES = [
   { name: "source_streams", table: sourceStreams },
   { name: "backfill_jobs", table: backfillJobs },
   { name: "usage_ledger", table: usageLedger },
+  // Plans (migration 0035, so `late`). The Stripe subscription is cancelled
+  // BEFORE any of this runs — see `destroyWorkspaceData`. `trial_claims` is
+  // deliberately absent: it is the PERSON's, and outliving the workspace is
+  // what stops delete-and-recreate from buying a second trial.
+  { name: "access_grants", table: accessGrants, late: true },
+  { name: "billing_subscriptions", table: billingSubscriptions, late: true },
+  { name: "workspace_acquisitions", table: workspaceAcquisitions, late: true },
+  { name: "plan_pauses", table: planPauses, late: true },
   { name: "connections", table: connections },
 ] as const;
 
@@ -130,8 +144,16 @@ export const DESTROYED_ORG_TABLES: readonly string[] = ORG_TABLES.map((t) => t.n
  * Remove a workspace's every row. The caller has already established WHO is
  * asking and that they named the thing.
  */
-export async function destroyWorkspaceData(db: DB, orgId: string): Promise<DestroyResult> {
+export async function destroyWorkspaceData(db: DB, orgId: string, opts: { stripe?: StripeClient } = {}): Promise<DestroyResult> {
   const rows: Record<string, number> = {};
+
+  /**
+   * STOP CHARGING FIRST. A live Stripe subscription is cancelled before a
+   * single row goes, and a refusal from Stripe throws HERE — so a delete that
+   * could not stop the billing deletes nothing, and says so, rather than
+   * leaving a customer paying every month for a workspace that is gone.
+   */
+  await cancelForDeletion(db, orgId, opts.stripe);
 
   /**
    * CONNECTIONS FIRST, THROUGH THEIR OWN PATH. Each one asks its provider to
@@ -247,6 +269,9 @@ export async function destroyUserData(db: DB, userId: string): Promise<Record<st
   await late("workspace_templates", () =>
     db.delete(workspaceTemplates).where(eq(workspaceTemplates.createdBy, userId)).returning(),
   );
+  // Their one trial. Kept when a WORKSPACE is deleted (see ORG_TABLES); gone
+  // with the person, whose account — and so whose next sign-up — is new.
+  await late("trial_claims", () => db.delete(trialClaims).where(eq(trialClaims.userId, userId)).returning());
 
   return rows;
 }
