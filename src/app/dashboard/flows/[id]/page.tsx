@@ -10,6 +10,8 @@ import { Tour } from "@/components/tour";
 import { FLOW_TOUR_KEY, FLOW_TOUR_STEPS, shouldOfferFlowTour } from "@/lib/tour";
 import { flows } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
+import { flowHasLockedMetric, metricLocksFor } from "@/lib/billing/locks";
+import { LockedFlow } from "@/components/billing/locked-flow";
 
 export const dynamic = "force-dynamic";
 
@@ -52,6 +54,22 @@ export default async function FlowEditorPage({ params }: { params: Promise<{ id:
   // where "hidden on the dashboard" would otherwise quietly leak.
   const access = await requestAccess(orgId, userId, role);
   if (!access.canSeeMetric(`flow:${id}`)) notFound();
+
+  /**
+   * A FLOW THE PLAN LOCKS IS NOT OPENED HERE — for the reason the note above
+   * gives: the editor draws every step's last computed value, which would
+   * show a locked metric's numbers by the side door. The workspace sees what
+   * the dashboard's locked tile says instead, and the way out. Fails open,
+   * like every lock read: an outage must not look like a paywall.
+   */
+  const locked = await metricLocksFor(getDb(), orgId).catch(() => new Set<string>());
+  if (flowHasLockedMetric(locked, id)) {
+    return (
+      <AppShell userId={userId} orgId={orgId} userEmail={auth.user.email}>
+        <LockedFlow name={flow.name} />
+      </AppShell>
+    );
+  }
 
   /**
    * WHAT THE DASHBOARD IS ACTUALLY COMPUTING FROM, so the toolbar can say

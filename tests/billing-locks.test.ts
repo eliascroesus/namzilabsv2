@@ -5,7 +5,7 @@ import { createTestDb } from "./helpers/testdb";
 import { flowResults, flows } from "@/db/schema";
 import type { DB } from "@/db/types";
 import { grantPlan } from "@/lib/billing/state";
-import { anyLocked, applyMetricLocks, lockRow, lockedMetricKeys, metricKey, metricLocksFor } from "@/lib/billing/locks";
+import { anyLocked, applyMetricLocks, flowHasLockedMetric, lockRow, lockedMetricKeys, metricKey, metricLocksFor } from "@/lib/billing/locks";
 
 /**
  * LOCKED MEANS THE NUMBERS NEVER LEAVE THE SERVER.
@@ -124,6 +124,32 @@ describe("a locked row", () => {
     expect(anyLocked(["flow:f1:o1"], rows)).toBe(false);
     // A member that no longer resolves is the chart's own refusal, not a lock.
     expect(anyLocked(["flow:gone:o9"], rows)).toBe(false);
+  });
+});
+
+describe("a flow whose metric is locked", () => {
+  it("is known by any of its metrics being locked", () => {
+    const locked = new Set([metricKey("f2", "o1")]);
+    expect(flowHasLockedMetric(locked, "f2")).toBe(true);
+    expect(flowHasLockedMetric(locked, "f1")).toBe(false);
+    // A prefix is not a match: flow "f" is not flow "f2".
+    expect(flowHasLockedMetric(locked, "f")).toBe(false);
+  });
+
+  it("is not opened in the editor, which draws every step's last computed value", () => {
+    const src = readFileSync("src/app/dashboard/flows/[id]/page.tsx", "utf8");
+    const gate = src.indexOf("flowHasLockedMetric(");
+    expect(gate, "the editor never asks whether the flow is locked").toBeGreaterThan(-1);
+    // Asked before anything that renders the canvas.
+    expect(gate).toBeLessThan(src.indexOf("<FlowCanvas"));
+  });
+
+  it("cannot be copied into an unlocked flow — the copy would carry every step's stored values", () => {
+    const src = readFileSync("src/app/dashboard/flows/actions.ts", "utf8");
+    const body = src.slice(src.indexOf("export async function duplicateFlowAction"), src.indexOf("export async function saveDraftAction"));
+    const gate = body.indexOf("flowHasLockedMetric(");
+    expect(gate, "duplicating never asks whether the flow is locked").toBeGreaterThan(-1);
+    expect(gate).toBeLessThan(body.indexOf("saveDraft("));
   });
 });
 

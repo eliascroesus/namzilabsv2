@@ -1,6 +1,7 @@
 "use server";
 
 import { PublishBlocked } from "@/lib/flow/store";
+import { flowHasLockedMetric, metricLocksFor } from "@/lib/billing/locks";
 import { redirect } from "next/navigation";
 import { revalidatePath, updateTag } from "next/cache";
 import { eq, and, inArray } from "drizzle-orm";
@@ -124,6 +125,10 @@ export async function duplicateFlowAction(id: string): Promise<{ ok: true; id: s
   const db = getDb();
   const src = await getFlow(db, orgId, id);
   if (!src) return { ok: false, error: "Flow not found." };
+  // A copy carries every step's stored values into a flow the plan has not
+  // locked — the side door around a locked metric. Fails open, like every lock read.
+  if (flowHasLockedMetric(await metricLocksFor(db, orgId).catch(() => new Set<string>()), id))
+    return { ok: false, error: "This flow is past your plan, so it can't be copied. Upgrade to unlock it." };
   let copy;
   try {
     copy = await createFlow(db, orgId, `${src.name} (copy)`);

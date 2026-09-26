@@ -93,6 +93,16 @@ export function applyMetricLocks<T extends LockableRow>(rows: T[], locked: Set<s
 }
 
 /**
+ * Whether any metric of this flow is locked. The editor draws every step's
+ * last computed value, so a flow with a locked metric is not opened there.
+ */
+export function flowHasLockedMetric(locked: Set<string>, flowId: string): boolean {
+  const prefix = `${flowId}:`;
+  for (const k of locked) if (k.startsWith(prefix)) return true;
+  return false;
+}
+
+/**
  * A chart built from several metrics is locked when any one of them is —
  * asked of the rows AFTER the locks ran, by whatever key the caller files them
  * under. A key that resolves to nothing is not a lock (the chart refuses a
