@@ -27,10 +27,15 @@ let close: () => Promise<void>;
 const ORG = "org_pay";
 const DAY = 86_400_000;
 
-type Recorded = { checkout: Record<string, unknown>[]; customers: Record<string, unknown>[]; portal: Record<string, unknown>[] };
+type Recorded = {
+  checkout: Record<string, unknown>[];
+  customers: Record<string, unknown>[];
+  portal: Record<string, unknown>[];
+  retrieves: Array<{ id: string; params?: Record<string, unknown> }>;
+};
 
 function fakeStripe(subscriptions: Record<string, unknown> = {}): { client: StripeClient; calls: Recorded } {
-  const calls: Recorded = { checkout: [], customers: [], portal: [] };
+  const calls: Recorded = { checkout: [], customers: [], portal: [], retrieves: [] };
   const prices: Record<string, string> = { growth_monthly: "price_gm", growth_yearly: "price_gy", scale_monthly: "price_sm", scale_yearly: "price_sy" };
   const client = {
     prices: {
@@ -60,8 +65,10 @@ function fakeStripe(subscriptions: Record<string, unknown> = {}): { client: Stri
       },
     },
     subscriptions: {
-      retrieve: async (id: string) => {
+      retrieve: async (id: string, params?: Record<string, unknown>) => {
+        calls.retrieves.push({ id, params });
         const s = subscriptions[id];
+        if (s === "gone") throw Object.assign(new Error(`No such subscription: '${id}'`), { code: "resource_missing" });
         if (!s) throw new Error(`no such subscription ${id}`);
         return s;
       },
@@ -198,6 +205,26 @@ describe("syncSubscription", () => {
     await syncSubscription(db, "sub_old", client);
     const [row] = await db.select().from(billingSubscriptions).where(eq(billingSubscriptions.orgId, ORG));
     expect(row).toMatchObject({ stripeSubscriptionId: "sub_1", status: "active" });
+  });
+
+  it("reads the subscription as Stripe sends it — the price is included, and expanding a non-id property is an error", async () => {
+    const { client, calls } = fakeStripe({ sub_1: sub() });
+    await ensureCustomer(db, ORG, who, client);
+    await syncSubscription(db, "sub_1", client);
+    const expand = (calls.retrieves[0].params?.expand ?? []) as string[];
+    expect(expand.some((e) => /items\.data\.price$/.test(e))).toBe(false);
+  });
+
+  it("marks a subscription Stripe no longer has as canceled, instead of failing that event forever", async () => {
+    const { client } = fakeStripe({ sub_1: sub() });
+    await ensureCustomer(db, ORG, who, client);
+    await syncSubscription(db, "sub_1", client);
+    expect((await workspacePlan(db, ORG)).plan).toBe("growth");
+    const gone = fakeStripe({ sub_1: "gone" });
+    await expect(syncSubscription(db, "sub_1", gone.client)).resolves.toMatchObject({ orgId: ORG });
+    const [row] = await db.select().from(billingSubscriptions).where(eq(billingSubscriptions.orgId, ORG));
+    expect(row.status).toBe("canceled");
+    expect((await workspacePlan(db, ORG)).plan).toBe("free");
   });
 
   it("records a price it does not recognise without granting a plan", async () => {

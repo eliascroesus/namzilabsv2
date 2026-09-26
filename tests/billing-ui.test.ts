@@ -35,6 +35,10 @@ describe("describePlan", () => {
     expect(describePlan(plan({ plan: "growth", source: "subscription", state: "past_due" }), NOW)).toMatchObject({ tone: "danger" });
     expect(describePlan(plan({ plan: "growth", source: "code", state: "granted", endsAt: days(90) }), NOW).detail).toMatch(/free until December 30/);
     expect(describePlan(plan({ plan: "scale", source: "manual", state: "granted", lifetime: true }), NOW).detail).toMatch(/for life/);
+    // A subscriber given a higher plan for a while keeps paying underneath — no card to add.
+    const over = describePlan({ ...plan({ plan: "scale", source: "code", state: "granted", endsAt: days(30) }), subscribed: true }, NOW).detail;
+    expect(over).not.toMatch(/Add a card/);
+    expect(over).toMatch(/subscription carries on/);
   });
 });
 
@@ -82,6 +86,13 @@ describe("the plan picker", () => {
     expect(h).toContain("Current plan");
     expect(h).toContain("Switch to Scale");
     expect(h).toContain("Cancel subscription");
+  });
+
+  it("sends a workspace that already pays to the portal for every paid plan, even under a code", () => {
+    const h = html({ mode: "settings", current: "scale", currentSource: "code", subscribed: true, trialAvailable: false });
+    expect(h).not.toContain("Add a card");
+    expect(h).not.toContain("Choose Growth");
+    expect(h).toContain("Switch to Growth");
   });
 
   it("asks a trialing workspace to add a card to keep its plan", () => {

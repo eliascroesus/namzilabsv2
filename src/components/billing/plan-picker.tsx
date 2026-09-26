@@ -37,6 +37,12 @@ export type PlanPickerProps = {
   trialAvailable: boolean;
   /** A lifetime grant: nothing at or below it is for sale. */
   lifetime?: boolean;
+  /**
+   * A live Stripe subscription exists, even if a code or grant is what the
+   * workspace is on right now. Every paid-plan act then goes to the portal —
+   * Checkout would start a second subscription.
+   */
+  subscribed?: boolean;
   /** Onboarding: where to go once a plan is chosen. */
   next?: string;
   /** Where a failed access code sends them back to, with the reason. */
@@ -78,7 +84,7 @@ function ctaFor(plan: PlanId, props: PlanPickerProps, interval: Interval, offers
   const portal = (label: string, note?: string): Cta => ({ kind: "form", action: openPortalAction, fields: {}, label, pending: "Opening…", note });
   const checkout = (label: string, note?: string): Cta => ({ kind: "form", action: startCheckoutAction, fields: payFields, label, pending: "Opening checkout…", note });
 
-  if (currentSource === "subscription") {
+  if (currentSource === "subscription" || props.subscribed) {
     if (plan === current) return portal("Manage billing");
     if (plan === "free") return portal("Cancel subscription", "You keep your plan until the period ends");
     return portal(`Switch to ${name}`, "Prorated by Stripe");

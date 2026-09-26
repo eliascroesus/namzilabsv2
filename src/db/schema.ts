@@ -1563,6 +1563,12 @@ export const accessGrants = pgTable(
     endsAt: timestamp("ends_at", { withTimezone: true }),
     promoCodeId: uuid("promo_code_id").references(() => promoCodes.id, { onDelete: "set null" }),
     referralRung: integer("referral_rung"),
+    /**
+     * WHO EARNED a referral reward. A rung pays once per PERSON — the workspace
+     * it lands on can change (a second workspace starts paying, ownership
+     * moves), so uniqueness is keyed here rather than on the org.
+     */
+    referrerUserId: text("referrer_user_id"),
     grantedBy: text("granted_by"),
     note: text("note"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -1573,7 +1579,7 @@ export const accessGrants = pgTable(
     index("access_grants_org_idx").on(t.orgId),
     index("access_grants_code_idx").on(t.promoCodeId),
     uniqueIndex("access_grants_org_code_uq").on(t.orgId, t.promoCodeId).where(sql`promo_code_id is not null`),
-    uniqueIndex("access_grants_org_rung_uq").on(t.orgId, t.referralRung).where(sql`referral_rung is not null`),
+    uniqueIndex("access_grants_referrer_rung_uq").on(t.referrerUserId, t.referralRung).where(sql`referral_rung is not null`),
     uniqueIndex("access_grants_org_launch_uq").on(t.orgId).where(sql`kind = 'launch'`),
   ],
 );

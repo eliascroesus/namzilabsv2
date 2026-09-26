@@ -28,7 +28,9 @@ const TONES: Record<Tone, string> = {
 
 type Said = { tone: Tone; text: string; action?: { href: string; label: string }; dismissable?: boolean };
 
-function whatToSay(plan: ResolvedPlan, lockedCount: number, welcome: string | null | undefined, now: Date): Said | null {
+type BannerPlan = ResolvedPlan & { subscribed?: boolean };
+
+function whatToSay(plan: BannerPlan, lockedCount: number, welcome: string | null | undefined, now: Date): Said | null {
   const name = PLANS[plan.plan].name;
   if (welcome === "trial" && plan.source === "trial")
     return {
@@ -50,7 +52,9 @@ function whatToSay(plan: ResolvedPlan, lockedCount: number, welcome: string | nu
     };
   // Any free time about to run out — a trial, a launch gift, a code, a referral
   // reward — is worth a week's notice; a lifetime grant never runs out.
-  if (plan.source !== "subscription" && plan.plan !== "free" && plan.endsAt && !plan.lifetime) {
+  // Not for a workspace that already pays: when a grant on top of its plan
+  // ends, its subscription simply carries on — there is no card to add.
+  if (plan.source !== "subscription" && !plan.subscribed && plan.plan !== "free" && plan.endsAt && !plan.lifetime) {
     const left = daysLeft(plan.endsAt, now);
     const when = left <= 1 ? "within a day" : `in ${left} days`;
     if (left <= 7)
@@ -80,7 +84,7 @@ export function PlanBanner({
   dismissHref,
   now = new Date(),
 }: {
-  plan: ResolvedPlan | null;
+  plan: BannerPlan | null;
   lockedCount: number;
   /** `?welcome=` — set once by the plan step or a redeemed code. */
   welcome?: string | null;

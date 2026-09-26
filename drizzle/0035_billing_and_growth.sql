@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS "access_grants" (
   "ends_at" timestamp with time zone,
   "promo_code_id" uuid,
   "referral_rung" integer,
+  "referrer_user_id" text,
   "granted_by" text,
   "note" text,
   "created_at" timestamp with time zone DEFAULT now() NOT NULL,
@@ -47,7 +48,7 @@ CREATE TABLE IF NOT EXISTS "access_grants" (
 CREATE INDEX IF NOT EXISTS "access_grants_org_idx" ON "access_grants" USING btree ("org_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "access_grants_code_idx" ON "access_grants" USING btree ("promo_code_id");--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "access_grants_org_code_uq" ON "access_grants" USING btree ("org_id","promo_code_id") WHERE promo_code_id is not null;--> statement-breakpoint
-CREATE UNIQUE INDEX IF NOT EXISTS "access_grants_org_rung_uq" ON "access_grants" USING btree ("org_id","referral_rung") WHERE referral_rung is not null;--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "access_grants_referrer_rung_uq" ON "access_grants" USING btree ("referrer_user_id","referral_rung") WHERE referral_rung is not null;--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "access_grants_org_launch_uq" ON "access_grants" USING btree ("org_id") WHERE kind = 'launch';--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "trial_claims" (
   "user_id" text PRIMARY KEY NOT NULL,

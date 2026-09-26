@@ -21,7 +21,7 @@
 -- ============================================================================
 
 -- ---------------------------------------------------------------------------
--- QUERY 1 — tables and columns (41 tables, 358 columns).
+-- QUERY 1 — tables and columns (41 tables, 359 columns).
 -- This is the one to run. Self-contained; nothing above is needed.
 -- ---------------------------------------------------------------------------
 WITH expected (tbl, col) AS (
@@ -34,6 +34,7 @@ WITH expected (tbl, col) AS (
     ('access_grants', 'ends_at'),
     ('access_grants', 'promo_code_id'),
     ('access_grants', 'referral_rung'),
+    ('access_grants', 'referrer_user_id'),
     ('access_grants', 'granted_by'),
     ('access_grants', 'note'),
     ('access_grants', 'created_at'),
@@ -417,7 +418,7 @@ WITH expected (tbl, idx) AS (
     ('access_grants', 'access_grants_org_idx'),
     ('access_grants', 'access_grants_code_idx'),
     ('access_grants', 'access_grants_org_code_uq'),
-    ('access_grants', 'access_grants_org_rung_uq'),
+    ('access_grants', 'access_grants_referrer_rung_uq'),
     ('access_grants', 'access_grants_org_launch_uq'),
     ('audit_log', 'audit_log_org_at_idx'),
     ('audit_log', 'audit_log_actor_at_idx'),

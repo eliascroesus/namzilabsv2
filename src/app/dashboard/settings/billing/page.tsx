@@ -54,7 +54,7 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
   }
 
   const [plan, trialed, apps, metrics, members, customer, governs] = await Promise.all([
-    workspacePlan(db, orgId).catch(() => FREE),
+    workspacePlan(db, orgId).catch(() => ({ ...FREE, subscribed: false })),
     hasTrialed(db, userId).catch(() => true),
     countApps(db, orgId).catch(() => 0),
     countMetrics(db, orgId).catch(() => 0),
@@ -125,6 +125,7 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
             current={plan.plan}
             currentSource={plan.source}
             lifetime={plan.lifetime}
+            subscribed={plan.subscribed}
             trialAvailable={!trialed}
             readOnly={!governs}
             defaultInterval={customer?.interval === "year" ? "year" : "month"}

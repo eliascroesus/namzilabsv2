@@ -172,6 +172,26 @@ describe("a workspace that pays through Stripe", () => {
     expect(calls).toHaveLength(1);
   });
 
+  it("pays a rung once per PERSON — not again when the workspace it lands on changes", async () => {
+    // Before the beforeEach subscription: the reward first lands on a free workspace…
+    await db.delete(billingSubscriptions);
+    await referred(1);
+    expect((await grantReferralRewards(db, REFERRER, { now: NOW, client: fakeStripe().client }))[0]).toMatchObject({ rung: 1, form: "grant" });
+    // …then the referrer's other workspace starts paying, and the target moves to it.
+    await db.insert(workspaceOwners).values({ orgId: "org_paying_later", userId: REFERRER, source: "created" });
+    await db.insert(billingSubscriptions).values({
+      orgId: "org_paying_later",
+      stripeCustomerId: "cus_later",
+      stripeSubscriptionId: "sub_later",
+      plan: "growth",
+      interval: "month",
+      status: "active",
+    });
+    const { client, calls } = fakeStripe();
+    expect(await grantReferralRewards(db, REFERRER, { now: NOW, client })).toEqual([]);
+    expect(calls).toHaveLength(0);
+  });
+
   it("prefers the workspace that pays when its owner has two", async () => {
     await db.insert(workspaceOwners).values({ orgId: "org_older_free", userId: REFERRER, source: "created", claimedAt: new Date("2026-01-01") });
     await referred(1);

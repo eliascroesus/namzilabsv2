@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createTestDb } from "./helpers/testdb";
-import { billingSubscriptions } from "@/db/schema";
+import { eq } from "drizzle-orm";
+import { accessGrants, billingSubscriptions } from "@/db/schema";
 import type { DB } from "@/db/types";
 
 /**
@@ -66,8 +67,17 @@ describe("whether a reminder is still due", () => {
   });
 
   it("sends the ended note only to a workspace now on Free", async () => {
+    // A trial that began 31 days ago has run out.
+    await startTrial(db, { orgId: ORG, userId: "u", plan: "growth", now: new Date(Date.now() - 31 * 86_400_000) });
     expect(await reminderDue(db, ORG, "ended")).toBe(true);
     await grantPlan(db, { orgId: ORG, plan: "scale", kind: "code", endsAt: null, grantedBy: null });
+    expect(await reminderDue(db, ORG, "ended")).toBe(false);
+  });
+
+  it("says nothing to a workspace that was deleted before its trial ran out", async () => {
+    await startTrial(db, { orgId: ORG, userId: "u", plan: "growth", now: new Date(Date.now() - 31 * 86_400_000) });
+    // Deleting a workspace sweeps its grants (see destroyWorkspaceData).
+    await db.delete(accessGrants).where(eq(accessGrants.orgId, ORG));
     expect(await reminderDue(db, ORG, "ended")).toBe(false);
   });
 });

@@ -165,7 +165,26 @@ export async function syncSubscription(
   subscriptionId: string,
   client: StripeClient = stripeClient(),
 ): Promise<{ orgId: string | null }> {
-  const s = (await client.subscriptions.retrieve(subscriptionId, { expand: ["items.data.price"] })) as Stripe.Subscription;
+  // No `expand`: a subscription item's price is always sent in full, and asking
+  // Stripe to expand a property that is not an id is an error — which would
+  // fail every webhook and every return from Checkout.
+  let s: Stripe.Subscription;
+  try {
+    s = (await client.subscriptions.retrieve(subscriptionId)) as Stripe.Subscription;
+  } catch (e) {
+    if ((e as { code?: unknown } | null)?.code !== "resource_missing") throw e;
+    // STRIPE NO LONGER HAS IT (a data-deletion request, a deleted test object).
+    // Retrying cannot change that, so it ends here as canceled rather than as
+    // an event that fails for three days and leaves the plan standing.
+    const ended = await db
+      .update(billingSubscriptions)
+      .set({ status: "canceled", updatedAt: new Date() })
+      .where(eq(billingSubscriptions.stripeSubscriptionId, subscriptionId))
+      .returning({ orgId: billingSubscriptions.orgId });
+    const orgId = ended[0]?.orgId ?? null;
+    if (orgId) await applyPlan(db, orgId).catch(() => {});
+    return { orgId };
+  }
   const customerId = typeof s.customer === "string" ? s.customer : s.customer.id;
   let orgId: string | null = s.metadata?.org_id ?? null;
   if (!orgId) {

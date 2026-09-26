@@ -102,6 +102,10 @@ describe("the plan banner", () => {
     expect(banner({ plan: { plan: "scale", source: "manual", state: "granted", endsAt: null, lifetime: true } })).toBe("");
   });
 
+  it("does not ask a workspace that already pays to add a card when a grant on top of its plan runs out", () => {
+    expect(banner({ plan: { plan: "scale", source: "code", state: "granted", endsAt: days(3), lifetime: false, subscribed: true } })).toBe("");
+  });
+
   it("is red while a payment is failing", () => {
     const h = banner({ plan: { plan: "growth", source: "subscription", state: "past_due", endsAt: null, lifetime: false } });
     expect(h).toContain('role="alert"');

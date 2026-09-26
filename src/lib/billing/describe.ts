@@ -34,7 +34,7 @@ const GRANT_REASON: Record<string, string> = {
   manual: "courtesy of Namzilabs",
 };
 
-export function describePlan(p: ResolvedPlan, now = new Date()): PlanDescription {
+export function describePlan(p: ResolvedPlan & { subscribed?: boolean }, now = new Date()): PlanDescription {
   const name = PLANS[p.plan].name;
   if (p.plan === "free") {
     const { apps, metrics } = PLANS.free.limits;
@@ -80,9 +80,10 @@ export function describePlan(p: ResolvedPlan, now = new Date()): PlanDescription
   }
   const reason = GRANT_REASON[p.source] ?? GRANT_REASON.manual;
   if (p.lifetime) return { title: name, detail: `${name} is yours for life, ${reason}.`, tone: "positive", badge: "Lifetime" };
+  const after = p.subscribed ? "Your subscription carries on underneath, as before." : "Add a card any time to keep it after that.";
   return {
     title: name,
-    detail: `${name} is free until ${p.endsAt ? planDate(p.endsAt, now) : "the end of your free time"}, ${reason}. Add a card any time to keep it after that.`,
+    detail: `${name} is free until ${p.endsAt ? planDate(p.endsAt, now) : "the end of your free time"}, ${reason}. ${after}`,
     tone: "positive",
     badge: "Free access",
   };

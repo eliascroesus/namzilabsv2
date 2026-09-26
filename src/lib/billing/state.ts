@@ -13,8 +13,18 @@ export function billingEnabled(): boolean {
   return /^(1|true|yes|on)$/i.test(process.env.BILLING_ENABLED ?? "");
 }
 
+/**
+ * `subscribed`: a live Stripe subscription exists, WHICHEVER candidate won. A
+ * subscriber given a higher plan by a code still pays underneath, and anything
+ * that would open Checkout must send them to the billing portal instead — or
+ * Stripe starts a second subscription on the same customer.
+ */
+export type WorkspacePlan = ResolvedPlan & { subscribed: boolean };
+
+const LIVE_STATUSES = new Set(["active", "trialing", "past_due"]);
+
 /** Everything a workspace holds, resolved to one plan. */
-export async function workspacePlan(db: DB, orgId: string, now = new Date()): Promise<ResolvedPlan> {
+export async function workspacePlan(db: DB, orgId: string, now = new Date()): Promise<WorkspacePlan> {
   const [sub] = await db
     .select({
       plan: billingSubscriptions.plan,
@@ -50,7 +60,7 @@ export async function workspacePlan(db: DB, orgId: string, now = new Date()): Pr
   const grants: GrantInput[] = grantRows.flatMap((g) =>
     isPaidPlan(g.plan) ? [{ plan: g.plan, kind: g.kind as GrantKind, startsAt: g.startsAt, endsAt: g.endsAt, revokedAt: g.revokedAt }] : [],
   );
-  return resolvePlan({ subscription, grants, now });
+  return { ...resolvePlan({ subscription, grants, now }), subscribed: sub != null && LIVE_STATUSES.has(sub.status ?? "") };
 }
 
 export type GrantRow = typeof accessGrants.$inferSelect;

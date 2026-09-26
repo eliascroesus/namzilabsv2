@@ -41,6 +41,15 @@ async function mustGovern(ctx: OrgContext): Promise<void> {
 async function checkoutUrl(ctx: OrgContext, plan: PaidPlanId, interval: Interval): Promise<string> {
   const db = getDb();
   const current = await workspacePlan(db, ctx.orgId);
+  // ONE SUBSCRIPTION PER WORKSPACE. A workspace that already pays changes plan
+  // in the portal; Checkout here would start a second subscription on the
+  // same customer, and both would charge.
+  if (current.subscribed) {
+    return createPortal(db, ctx.orgId, `${appBase()}${BILLING_PAGE}`).catch((e: unknown) => {
+      console.error("[billing] portal failed", e);
+      return `${BILLING_PAGE}?error=no_billing`;
+    });
+  }
   const trialEnd =
     current.source === "trial"
       ? current.endsAt

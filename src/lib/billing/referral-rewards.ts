@@ -27,9 +27,10 @@ import { stripeClient, type StripeClient } from "./stripe";
  * the first month AND the next three, as the ladder reads — not three months
  * overlapping the one already running.
  *
- * ONCE PER RUNG PER WORKSPACE, by the unique index on (org, referral_rung): a
- * credit is recorded as a referral row with no time in it, so both kinds of
- * reward claim the same slot. Anything that fails records nothing, and the
+ * ONCE PER RUNG PER PERSON, by the unique index on (referrer_user_id,
+ * referral_rung) — not per workspace, because the workspace a reward lands on
+ * can change. A credit is recorded as a referral row with no time in it, so
+ * both kinds of reward claim the same slot. Anything that fails records nothing, and the
  * next run — the next referral, or the admin's launch run — pays it then.
  */
 
@@ -81,11 +82,12 @@ async function freeTimeEnds(db: DB, orgId: string, now: Date): Promise<Date> {
   return latest;
 }
 
-async function paidRungs(db: DB, orgId: string): Promise<Set<number>> {
+/** Rungs already paid to this PERSON, on whichever workspace they landed. */
+async function paidRungs(db: DB, referrerUserId: string): Promise<Set<number>> {
   const rows = await db
     .select({ rung: accessGrants.referralRung })
     .from(accessGrants)
-    .where(and(eq(accessGrants.orgId, orgId), isNotNull(accessGrants.referralRung)));
+    .where(and(eq(accessGrants.referrerUserId, referrerUserId), isNotNull(accessGrants.referralRung)));
   return new Set(rows.map((r) => r.rung!));
 }
 
@@ -101,15 +103,15 @@ export async function grantReferralRewards(
   const target = await rewardTarget(db, referrerUserId);
   if (!target) return [];
 
-  const paid = await paidRungs(db, target.orgId);
+  const paid = await paidRungs(db, referrerUserId);
   const due = reached.filter((m) => !paid.has(m.at));
   const out: RewardOutcome[] = [];
   let client = opts.client;
 
   for (const m of due) {
     const outcome = target.customerId
-      ? await creditRung(db, target.orgId, target.customerId, m, now, () => (client ??= stripeClient()))
-      : await grantRung(db, target.orgId, m, now);
+      ? await creditRung(db, target.orgId, referrerUserId, target.customerId, m, now, () => (client ??= stripeClient()))
+      : await grantRung(db, target.orgId, referrerUserId, m, now);
     // Null: a concurrent run paid this rung first. Nothing to say twice.
     if (!outcome) continue;
     out.push(outcome);
@@ -130,7 +132,7 @@ async function reachedRungs(db: DB, userId: string): Promise<Milestone[]> {
   return MILESTONES.filter((m) => n >= m.at);
 }
 
-async function grantRung(db: DB, orgId: string, m: Milestone, now: Date): Promise<RewardOutcome | null> {
+async function grantRung(db: DB, orgId: string, referrerUserId: string, m: Milestone, now: Date): Promise<RewardOutcome | null> {
   const startsAt = await freeTimeEnds(db, orgId, now);
   const written = await db
     .insert(accessGrants)
@@ -141,6 +143,7 @@ async function grantRung(db: DB, orgId: string, m: Milestone, now: Date): Promis
       startsAt,
       endsAt: addMonths(startsAt, m.months),
       referralRung: m.at,
+      referrerUserId,
       note: `Referral reward: ${m.reward} for ${m.at} ${m.at === 1 ? "invite" : "invites"}`,
     })
     .onConflictDoNothing()
@@ -153,6 +156,7 @@ async function grantRung(db: DB, orgId: string, m: Milestone, now: Date): Promis
 async function creditRung(
   db: DB,
   orgId: string,
+  referrerUserId: string,
   customerId: string,
   m: Milestone,
   now: Date,
@@ -164,7 +168,9 @@ async function creditRung(
       customerId,
       { amount: -amountCents, currency: "usd", description: `Referral reward: ${m.reward} (${m.at} ${m.at === 1 ? "invite" : "invites"})` },
       // Stripe keeps a key for 24 hours — long enough to cover a retried run.
-      { idempotencyKey: `referral-reward:${orgId}:${m.at}` },
+      // Keyed by the PERSON and the rung, like the rows: the same reward can
+      // never be two credits, whichever workspace it lands on.
+      { idempotencyKey: `referral-reward:${referrerUserId}:${m.at}` },
     );
     const written = await db
       .insert(accessGrants)
@@ -177,6 +183,7 @@ async function creditRung(
         startsAt: now,
         endsAt: now,
         referralRung: m.at,
+        referrerUserId,
         note: `Referral reward: ${m.reward} as a $${amountCents / 100} Stripe credit (${txn.id})`,
       })
       .onConflictDoNothing()

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createTestDb } from "./helpers/testdb";
-import { accessGrants, promoCodes, workspaceOwners } from "@/db/schema";
+import { accessGrants, billingSubscriptions, promoCodes, workspaceOwners } from "@/db/schema";
 import type { DB } from "@/db/types";
 
 /**
@@ -141,6 +141,15 @@ describe("paying and managing", () => {
     const [grant] = await db.select().from(accessGrants);
     await run(actions.startCheckoutAction(form({ plan: "growth", interval: "month" })));
     expect(hoisted.checkout[0].trialEnd).toEqual(grant.endsAt);
+  });
+
+  it("never opens a second subscription: a workspace that already pays goes to the billing portal", async () => {
+    await db.insert(billingSubscriptions).values({ orgId: ctx.orgId, stripeCustomerId: "cus_live", stripeSubscriptionId: "sub_live", plan: "growth", interval: "month", status: "active" });
+    // …even when a code has since given it a higher plan, which is when the picker used to offer Checkout.
+    await db.insert(accessGrants).values({ orgId: ctx.orgId, plan: "scale", kind: "code", endsAt: new Date(Date.now() + 30 * 86_400_000) });
+    expect(await run(actions.startCheckoutAction(form({ plan: "growth", interval: "month" })))).toBe("https://billing.stripe.test/p_1");
+    expect(await run(actions.choosePlanAction(form({ plan: "scale", interval: "year" })))).toBe("https://billing.stripe.test/p_1");
+    expect(hoisted.checkout).toHaveLength(0);
   });
 
   it("charges at once for a plan above the one it was given", async () => {

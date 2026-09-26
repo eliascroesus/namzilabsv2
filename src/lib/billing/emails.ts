@@ -1,3 +1,5 @@
+import { and, eq } from "drizzle-orm";
+import { accessGrants } from "@/db/schema";
 import type { DB } from "@/db/types";
 import { PLANS } from "./plans";
 import { workspacePlan } from "./state";
@@ -63,7 +65,16 @@ export function trialEmail(kind: ReminderKind, input: { planName: string; endsAt
  */
 export async function reminderDue(db: DB, orgId: string, kind: ReminderKind): Promise<boolean> {
   const plan = await workspacePlan(db, orgId);
-  return kind === "ended" ? plan.plan === "free" : plan.source === "trial";
+  if (kind !== "ended") return plan.source === "trial";
+  if (plan.plan !== "free") return false;
+  // A deleted workspace is "on Free" too — but its grants went with it, so a
+  // missing trial grant means there is nobody left to tell.
+  const [trial] = await db
+    .select({ id: accessGrants.id })
+    .from(accessGrants)
+    .where(and(eq(accessGrants.orgId, orgId), eq(accessGrants.kind, "trial")))
+    .limit(1);
+  return trial != null;
 }
 
 /** Resend, from `BILLING_EMAIL_FROM`. Unconfigured is a quiet no-op, never an error. */
