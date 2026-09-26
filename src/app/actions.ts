@@ -13,6 +13,7 @@ import { recordAudit } from "@/lib/audit";
 import { boardHref } from "@/lib/board/href";
 import { REFERRAL_COOKIE } from "@/lib/referral";
 import { recordReferral } from "@/lib/referral-store";
+import { recordAcquisition } from "@/lib/growth/links";
 import { afterWorkspaceCreated } from "@/lib/billing/onboard";
 import { TEMPLATE_COOKIE } from "@/lib/templates/cookie";
 import { getTemplateByCode, normaliseTemplateCode, templatePath, templateTakenBy } from "@/lib/templates/store";
@@ -129,6 +130,9 @@ export async function createOrganizationAction(formData: FormData): Promise<void
 
   const landing = await startFromTemplate(formData.get("template"), org.id, auth.user.id);
   await creditReferral(auth.user.id, auth.user.createdAt);
+  // Which tracking link (if any) brought them — snapshotted once, and it
+  // cannot fail the sign-up: see `recordAcquisition`.
+  await recordAcquisition(getDb(), { orgId: org.id, jar: await cookies() });
   // The access code a visitor brought, and — once billing is on — the plan
   // step. Built so it cannot fail the sign-up: see `afterWorkspaceCreated`.
   const next = await afterWorkspaceCreated(getDb(), { orgId: org.id, landing, jar: await cookies() });
