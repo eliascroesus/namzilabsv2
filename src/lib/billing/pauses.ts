@@ -1,6 +1,7 @@
 import { and, asc, eq, gte, inArray, ne } from "drizzle-orm";
 import { connections, planPauses } from "@/db/schema";
 import type { DB } from "@/db/types";
+import { formatTime } from "@/lib/format";
 import { wakeSweeper } from "@/lib/sweep/wake";
 import { PLANS, type PlanId } from "./plans";
 import { billingEnabled, workspacePlan } from "./state";
@@ -23,6 +24,18 @@ export const PLAN_PAUSE_UNTIL = new Date("9999-12-31T00:00:00.000Z");
 
 export function isPlanPause(until: Date | null | undefined): boolean {
   return until != null && until.getTime() >= PLAN_PAUSE_UNTIL.getTime();
+}
+
+/**
+ * THE LINE A PAUSED APP SHOWS ON THE INTEGRATIONS LIST. An ordinary pause (a
+ * breaker, a rate limit) retries on its own, so it says when. A plan pause
+ * does not retry until the plan changes — "Retries automatically around
+ * 12:00 AM" under a year-9999 marker would be a promise nothing keeps.
+ */
+export function pausedNote(until: Date | null | undefined, reason: string | null | undefined, now = new Date()): string | undefined {
+  if (!until || until.getTime() <= now.getTime()) return undefined;
+  if (isPlanPause(until)) return `${reason ?? "Paused by your plan — upgrade to resume syncing."} Nothing is lost — it catches up as soon as you upgrade.`;
+  return `${reason ?? "Waiting before the next attempt."} Retries automatically around ${formatTime(until)} — nothing is lost.`;
 }
 
 function reasonFor(plan: PlanId): string {

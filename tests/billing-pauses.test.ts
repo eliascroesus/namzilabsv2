@@ -4,7 +4,7 @@ import { createTestDb } from "./helpers/testdb";
 import { connections, planPauses } from "@/db/schema";
 import type { DB } from "@/db/types";
 import { grantPlan } from "@/lib/billing/state";
-import { PLAN_PAUSE_UNTIL, applyPlan, enforceAppLimit, isPlanPause, resumePlanPauses } from "@/lib/billing/pauses";
+import { PLAN_PAUSE_UNTIL, applyPlan, enforceAppLimit, isPlanPause, pausedNote, resumePlanPauses } from "@/lib/billing/pauses";
 
 /**
  * APPS OVER THE PLAN'S LIMIT STOP SYNCING — AND RESUME THE MOMENT THEY FIT.
@@ -134,5 +134,27 @@ describe("the sweep applies the limit before it polls", () => {
     const step = one.slice(one.indexOf('step.run("reconcile"'), one.indexOf('step.run("reconcile"') + 700);
     expect(step).toContain("enforceAppLimit(");
     expect(step.indexOf("enforceAppLimit(")).toBeLessThan(step.indexOf("reconcileConnection("));
+  });
+});
+
+describe("what a paused app says on the Integrations list", () => {
+  const NOW = new Date("2026-10-01T12:00:00Z");
+
+  it("tells a plan-paused app it resumes on upgrade — never a retry time in the year 9999", () => {
+    const note = pausedNote(PLAN_PAUSE_UNTIL, "Paused on the Free plan — upgrade to resume syncing.", NOW)!;
+    expect(note).toContain("upgrade to resume");
+    expect(note).toMatch(/nothing is lost/i);
+    expect(note).not.toMatch(/Retries automatically|9999|12:00/);
+  });
+
+  it("keeps the retry time for an ordinary pause", () => {
+    const note = pausedNote(new Date(NOW.getTime() + 3_600_000), "Rate limited by the provider.", NOW)!;
+    expect(note).toContain("Rate limited by the provider.");
+    expect(note).toContain("Retries automatically around");
+  });
+
+  it("says nothing once a pause has passed", () => {
+    expect(pausedNote(new Date(NOW.getTime() - 1000), "x", NOW)).toBeUndefined();
+    expect(pausedNote(null, null, NOW)).toBeUndefined();
   });
 });

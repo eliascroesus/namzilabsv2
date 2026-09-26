@@ -17,7 +17,7 @@ import { SubmitButton } from "@/components/ui/submit-button";
 import { Input, NO_AUTOFILL } from "@/components/ui/input";
 import { FieldLabel } from "@/components/ui/field";
 import { EmptyState } from "@/components/ui/empty-state";
-import { formatTime } from "@/lib/format";
+import { pausedNote } from "@/lib/billing/pauses";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -247,11 +247,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
                 // out a breaker window, and the one page users actually visit
                 // said nothing. Preformatted on the server so the client row
                 // renders one stable string (no hydration-time re-clocking).
-                pausedNote={
-                  c.pausedUntil && c.pausedUntil.getTime() > Date.now()
-                    ? `${c.pausedReason ?? "Waiting before the next attempt."} Retries automatically around ${formatTime(c.pausedUntil)} — nothing is lost.`
-                    : undefined
-                }
+                pausedNote={pausedNote(c.pausedUntil, c.pausedReason)}
                 lastError={c.status === "error" ? (c.lastError ?? undefined) : undefined}
                 // Webhook-capable sources carry their inbound URL right here.
                 // It used to live only on the connection page, which meant a

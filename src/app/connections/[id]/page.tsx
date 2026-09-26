@@ -22,13 +22,15 @@ import type { CanonicalEvent } from "@/connectors/types";
 import { eventTimeChoice, eventTimeNote, readEventTime } from "@/lib/webhooks/event-time";
 import { EventTimePicker } from "./EventTimePicker";
 import { PageContainer, PageHeader, SectionHeading } from "@/components/ui/page";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { StatusPill } from "@/components/ui/badge";
 import { Table, TableShell, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SourceMark } from "@/components/source-mark";
 import { formatDate, formatDateTime, formatTime } from "@/lib/format";
+import { cn } from "@/lib/utils";
+import { isPlanPause } from "@/lib/billing/pauses";
 import { History, RefreshCw, RotateCcw, Wand2, type LucideIcon } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -131,9 +133,22 @@ export default async function ConnectionPage({
           }
         />
 
-        {/* F.3/F.6: a paused connection is never a dead end — it says WHY and
-            WHEN it resumes, and it retries itself with no human action. */}
-        {conn.pausedUntil && new Date(conn.pausedUntil).getTime() > Date.now() ? (
+        {/* PAUSED BY THE PLAN is the one pause that does not retry itself: it
+            lifts when the workspace upgrades, so it says that and links there
+            instead of printing a retry time in the year 9999. */}
+        {isPlanPause(conn.pausedUntil ? new Date(conn.pausedUntil) : null) ? (
+          <div className="mt-4 flex flex-col gap-3 rounded-card border border-brand-soft-line bg-brand-soft p-4 text-sm text-foreground sm:flex-row sm:items-center sm:justify-between">
+            <p>
+              <b>Paused by your plan.</b> {conn.pausedReason ?? "Upgrade to resume syncing."} Nothing is lost — webhook data still
+              arrives, and it catches up the moment you upgrade.
+            </p>
+            <Link href="/dashboard/settings/billing?upgrade=apps" className={cn(buttonVariants({ variant: "default" }), "shrink-0")}>
+              See plans
+            </Link>
+          </div>
+        ) : /* F.3/F.6: a paused connection is never a dead end — it says WHY and
+            WHEN it resumes, and it retries itself with no human action. */
+        conn.pausedUntil && new Date(conn.pausedUntil).getTime() > Date.now() ? (
           <div className="mt-4 rounded-card border border-warn-soft bg-warn-soft/50 p-4 text-sm text-warn-ink">
             <b>Paused, retrying automatically.</b>{" "}
             {conn.pausedReason ?? "Waiting before the next attempt."} Next attempt around{" "}
